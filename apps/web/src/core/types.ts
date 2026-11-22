@@ -60,8 +60,11 @@ export type Command =
   | { cmd: 'end_draft' }
   | { cmd: 'recall'; pin: string }
   | { cmd: 'fast'; on: boolean }
-  | { cmd: 'set_wind'; wind: number } // Test Yard only
-  | { cmd: 'give_up' };
+  | { cmd: 'set_wind'; wind: number } // Test Yard only; real core: unsupported (see CoreApi.features)
+  | { cmd: 'give_up' } // real core: unsupported (see CoreApi.features)
+  | { cmd: 'shove_off' } // clear the picked Hob's buried Loophole
+  | { cmd: 'pass' }
+  | { cmd: 'doodad'; id: string; room?: string };
 
 export interface CommandResult {
   ok: boolean;
@@ -100,6 +103,33 @@ export interface BlockView {
   maxHp: number;
   falling?: boolean;
   shimmer?: boolean; // weakly held (view hint from the core)
+  c: number; // castle grid column (for queries such as Lean Lines)
+  r: number; // castle grid row, 0 = Footing
+  root?: boolean; // the boss weak spot
+  battered?: boolean; // Fatigue: hurt block with one less side reach
+  held?: boolean; // held up by Hetty's Ridgepole
+  peephole?: boolean;
+}
+
+export interface RoomView {
+  side: Side;
+  id: number; // Nook index
+  x: number; y: number; w: number; h: number; // bottom-left, cells
+  loophole?: { x: number; y: number; w: number; h: number };
+  intact: boolean;
+  flap: boolean; // Loophole Flap down until the next Weather Front
+  lid: boolean; // Pot Lid
+}
+
+export interface PropView {
+  id: number;
+  side: 0 | 1 | 2; // 2 = level object
+  kind: string; // cage_bar, captive, shell (crock), ...
+  tag?: string;
+  x: number; // feet centre, cells
+  y: number;
+  hp: number;
+  maxHp: number;
 }
 
 export interface KettleView {
@@ -110,6 +140,7 @@ export interface KettleView {
   size: number; // 32
   hp: number;
   maxHp: number;
+  lid?: boolean; // Pot Lid on the Kettle Room
 }
 
 export interface HobView {
@@ -173,6 +204,7 @@ export type BattleEvent =
   | { t: 'boom'; x: number; y: number; r: number }
   | { t: 'squall'; n: number }
   | { t: 'squall_warn'; left: number }
+  | { t: 'note'; text: string; x?: number; y?: number; sound?: string; status?: boolean }
   | { t: 'end'; winner: Side | -1; how: string };
 
 export interface DraftChip {
@@ -195,6 +227,8 @@ export interface DraftView {
 
 export interface ResultView {
   winner: Side | -1;
+  howKey?: string; // the core's `how` id (clean_sweep, kettle_pop, squall, double_pop, rescue, round_cap, total_hp)
+  round?: number;
   how: 'Clean Sweep' | 'Kettle Pop' | 'Sudden Squall' | 'Doze Off' | 'Give Up' | string;
   pennants: boolean[]; // campaign: 3
   goals: string[];
@@ -225,6 +259,8 @@ export interface HudView {
   fire: 'locked' | 'ready' | 'dug' | 'flight' | 'use' | 'fast';
   canWalk: boolean;
   thinking?: boolean; // Rival think pose
+  doodads: { id: string; name: string; card: string }[]; // the active side's Doodads left
+  canPass: boolean;
 }
 
 export interface Snapshot {
@@ -243,6 +279,9 @@ export interface Snapshot {
   hobs: HobView[];
   shells: ShellView[];
   pins: PinView[];
+  rooms: RoomView[];
+  props: PropView[];
+  fatigue: [boolean, boolean];
   forts: [{ x: number; y: number; w: number; h: number }, { x: number; y: number; w: number; h: number }];
   events: BattleEvent[]; // since the last snapshot
   hud: HudView;
@@ -263,6 +302,9 @@ export interface LevelInfo {
   goals: [string, string, string];
   crewSize: number;
   draft: boolean;
+  draftPool: number;
+  draftPicks: number;
+  doodads: string[]; // Doodads the player brings to this level
 }
 
 export interface HobInfo {
@@ -281,15 +323,29 @@ export interface BlueprintCheck {
   problems: { col: number; row: number; why: string }[];
 }
 
+export interface CoreFeatures {
+  setWind: boolean; // Test Yard wind slider
+  giveUp: boolean; // Couch Duel Give up
+}
+
 export interface CoreApi {
   readonly name: string;
   readonly version: string;
+  /** Rules version (cp_version().rules); saves from another rules version are not replayed. */
+  readonly rules: number;
+  readonly features: CoreFeatures;
   levels(): LevelInfo[];
   hobs(): HobInfo[];
   starterForts(): Blueprint[];
   /** The fort the Workshop starts from. */
   defaultBlueprint(): Blueprint;
   checkBlueprint(bp: Blueprint): BlueprintCheck;
+  /** Can this fort seat `seats` Hobs? The core validator decides. */
+  checkFort(bp: Blueprint, seats: number): { ok: boolean; why?: string };
+  /** A content Blueprint the core accepts for `seats` Hobs. */
+  fortFor(seats: number): Blueprint | undefined;
+  /** Lean Lines query: blocks that would fall if (c, r) of that side broke. Changes nothing. */
+  leanLines(side: Side, c: number, r: number): [number, number][];
   newBattle(setup: BattleSetup): void;
   command(c: Command): CommandResult;
   /** Advance the sim by whole ticks at 120 Hz. */
@@ -297,7 +353,13 @@ export interface CoreApi {
   snapshot(): Snapshot;
   /** Opaque save of the live battle (commands plus seed); the layout is never in it. */
   saveBattle(): string;
+  /** Replays a save. Throws a SaveError when it is from another version or does not replay. */
   loadBattle(data: string): void;
 }
 
 export const TICK_HZ = 120;
+
+/** A battle save that cannot be resumed (old version, corrupt, or it replays to a different state). */
+export class SaveError extends Error {
+  constructor(message: string, readonly why: 'version' | 'corrupt' | 'mismatch') { super(message); this.name = 'SaveError'; }
+}

@@ -147,12 +147,26 @@ jobs:
             CODE_SIGNING_ALLOWED=NO > build/xcodebuild-test.log 2>&1
           status=$?
           set -e
-          tail -n 80 build/xcodebuild-test.log
+          grep -E "Test Case .* (passed|failed|skipped)|Executed [0-9]+ test" build/xcodebuild-test.log || true
+          tail -n 40 build/xcodebuild-test.log
           if [ "$status" -ne 0 ] && grep -q "is not currently configured for the test action" build/xcodebuild-test.log; then
             echo "::notice::Scheme has no tests yet, skipping tests."
             exit 0
           fi
           exit "$status"
+
+      - name: Check the real core was linked and tested
+        if: steps.check.outputs.core == 'true'
+        working-directory: apps/ios
+        run: |
+          grep -q "Linking the real core" build/xcodebuild-build.log || { echo "::error::The build used the stand-in core, not CastleCore.xcframework."; exit 1; }
+          for t in testRealCoreWhenLinked testRefusedSetupIsReported; do
+            if ! grep -qE "Test Case .*${t}\]' passed" build/xcodebuild-test.log; then
+              echo "::error::Real-core test ${t} did not pass (skipped or missing)."
+              exit 1
+            fi
+          done
+          echo "Real core linked and real-core tests passed."
 
       - name: Zip simulator app
         if: steps.check.outputs.app == 'true'

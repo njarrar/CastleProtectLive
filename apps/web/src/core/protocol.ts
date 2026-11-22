@@ -71,13 +71,13 @@ export interface PReply {
 export type PPhase = 'draft' | 'plan' | 'resolve' | 'settle' | 'ended';
 export type Box = [number, number, number, number];
 
-export interface PBlock { c: number; r: number; x: number; y: number; mat: string; hp: number; max: number; peephole: boolean; root: boolean }
+export interface PBlock { c: number; r: number; x: number; y: number; mat: string; hp: number; max: number; peephole: boolean; root: boolean; battered: boolean }
 export interface PRoom { kind: 'nook'; id: number; c: number; r: number; box: Box; intact: boolean; flap: boolean; lid: boolean; loophole: Box }
 export interface PCastle {
   side: PSide; x: number; base_y: number; cols: number; rows: number; block: number;
   blocks: PBlock[]; rooms: PRoom[];
   kettle: { hp: number; max: number; box: Box; room: Box; c: number; r: number; lid: boolean; intact: boolean };
-  steam: number; steam_turn: number;
+  steam: number; steam_turn: number; fatigue: boolean;
   shimmer: [number, number][]; held: [number, number][];
 }
 export interface PHob {
@@ -94,7 +94,7 @@ export interface PGhost {
   index: number; side: PSide; hob: number; shot: string; angle: number; power: number; round: number;
   pin: [number, number] | null; self_hit: boolean; recalled: boolean; points: [number, number][];
 }
-export interface PHandShell { id: string; name: string | null; match: string | null; weight: number | null; dud: boolean | null; card: unknown }
+export interface PHandShell { id: string; name: string | null; match: string | null; weight: string | number | null; dud: boolean | null; card: unknown }
 export interface PHud {
   turn: number; round: number; round_cap: number; side: PSide;
   wind: number; forecast: number; front_rounds_left: number;
@@ -122,7 +122,7 @@ export interface PSnapshot {
   castles: [PCastle, PCastle]; hobs: PHob[]; shells: PShell[]; props: PProp[];
   preview: [number, number][]; ghosts: PGhost[];
   hud: PHud; draft: PDraft | null; events: PEvent[];
-  result: PResult | null; hash: string; last_ai?: unknown;
+  result: PResult | null; hash: string; last_ai?: unknown[];
 }
 
 /** What castle-wasm (wasm-bindgen, target web) exports. */
@@ -132,6 +132,9 @@ export interface WasmGame {
   snapshot(): string;
   free(): void;
 }
+/** cp_version(): {"sim":"0.1.0","rules":1,"tick_hz":120} */
+export interface PVersion { sim: string; rules: number; tick_hz: number }
+
 export interface WasmModule {
   default: (input?: unknown) => Promise<unknown>;
   Game: new (content_json: string, level_json: string, seed: bigint) => WasmGame;
