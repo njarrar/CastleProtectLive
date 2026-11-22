@@ -213,7 +213,11 @@ fn shell_cost(b: &Battle, c: &Cand) -> i64 {
         cost /= 10;
     }
     let is_match = def.match_class.as_deref() == Some(b.hobs[c.hob as usize].class.as_str());
-    let rest = if is_match && def.kind == ShotKind::Trick { 0 } else { def.weight.rest() };
+    let rest = if is_match && def.kind == ShotKind::Trick {
+        0
+    } else {
+        def.weight.rest()
+    };
     cost + rest as i64 * 60
 }
 
@@ -251,7 +255,16 @@ fn targets(k: &Battle, side: u8, units: &mut i64) -> Vec<(i32, i32, i32)> {
 }
 
 /// Find the best angle and power for a probe to land at (tx, ty).
-fn solve_aim(w: &Battle, side: u8, hob: u8, shot: usize, tx: i32, ty: i32, units: &mut i64, budget: i64) -> Option<(i32, i32, i32)> {
+fn solve_aim(
+    w: &Battle,
+    side: u8,
+    hob: u8,
+    shot: usize,
+    tx: i32,
+    ty: i32,
+    units: &mut i64,
+    budget: i64,
+) -> Option<(i32, i32, i32)> {
     let def = &w.content.shots[shot];
     let (lx, ly) = w.launch_point(hob);
     let front = w.castles[side as usize].front_dir();
@@ -259,7 +272,12 @@ fn solve_aim(w: &Battle, side: u8, hob: u8, shot: usize, tx: i32, ty: i32, units
         let a = atan2_t((ly - ty) as i64, (tx - lx) as i64);
         return Some((a.clamp(0, 1800), 80, 0));
     }
-    let angles: &[i32] = if def.flight.kind == FlightKind::Roller || def.flight.kind == FlightKind::Dig { &[150, 300, 450] } else { &[250, 400, 550, 700] };
+    let angles: &[i32] =
+        if def.flight.kind == FlightKind::Roller || def.flight.kind == FlightKind::Dig {
+            &[150, 300, 450]
+        } else {
+            &[250, 400, 550, 700]
+        };
     let mut best: Option<(i32, i32, i32)> = None;
     for &a0 in angles {
         let angle = if front > 0 { a0 } else { 1800 - a0 };
@@ -280,7 +298,9 @@ fn solve_aim(w: &Battle, side: u8, hob: u8, shot: usize, tx: i32, ty: i32, units
                 local = Some((p, miss));
             }
             let short = match hit {
-                Some(Hit::Block { side: s, .. }) | Some(Hit::Kettle(s)) if s != side => reach < want - 4,
+                Some(Hit::Block { side: s, .. }) | Some(Hit::Kettle(s)) if s != side => {
+                    reach < want - 4
+                }
                 _ => reach < want,
             };
             if short {
@@ -302,7 +322,14 @@ fn solve_aim(w: &Battle, side: u8, hob: u8, shot: usize, tx: i32, ty: i32, units
 }
 
 /// Run one candidate through the real sim on a copy of the knowledge view.
-fn sim_candidate(k: &Battle, side: u8, c: &Cand, angle: i32, power: i32, units: &mut i64) -> Option<Battle> {
+fn sim_candidate(
+    k: &Battle,
+    side: u8,
+    c: &Cand,
+    angle: i32,
+    power: i32,
+    units: &mut i64,
+) -> Option<Battle> {
     let mut w = k.clone();
     let s = side as usize;
     w.sel[s].hob = c.hob;
@@ -332,20 +359,35 @@ pub fn draft_choice(b: &Battle, side: u8) -> Option<String> {
         Preset::Fair => 30,
         Preset::Stubborn => 60,
     };
-    let mine: Vec<&String> = b.hobs.iter().filter(|h| h.side == side).map(|h| &h.class).collect();
-    let theirs: Vec<&String> = b.hobs.iter().filter(|h| h.side != side).map(|h| &h.class).collect();
+    let mine: Vec<&String> = b
+        .hobs
+        .iter()
+        .filter(|h| h.side == side)
+        .map(|h| &h.class)
+        .collect();
+    let theirs: Vec<&String> = b
+        .hobs
+        .iter()
+        .filter(|h| h.side != side)
+        .map(|h| &h.class)
+        .collect();
     // the Rival takes its wish at its first chance
     if let Some(w) = &b.draft.wish {
-        if b.control[side as usize] != Control::Human && b.draft.pool.contains(w) && b.draft.picks[side as usize].is_empty() {
+        if b.control[side as usize] != Control::Human
+            && b.draft.pool.contains(w)
+            && b.draft.picks[side as usize].is_empty()
+        {
             return Some(w.clone());
         }
     }
     let mut best: Option<(i64, String)> = None;
     for id in &b.draft.pool {
-        let Some(d) = b.content.shot(id) else { continue };
+        let Some(d) = b.content.shot(id) else {
+            continue;
+        };
         let val = |classes: &Vec<&String>| -> i64 {
             let mut v = d.value as i64;
-            if d.match_class.as_ref().is_some_and(|m| classes.iter().any(|c| *c == m)) {
+            if d.match_class.as_ref().is_some_and(|m| classes.contains(&m)) {
                 v += 10;
             }
             if d.dud {
@@ -370,9 +412,19 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
     let mut units: i64 = 0;
 
     // dig out a buried Hob with Shove Off when that is the only way to fire
-    let usable: Vec<u8> = k.hobs.iter().filter(|h| h.side == side && k.can_fire_hob(side, h.id)).map(|h| h.id).collect();
+    let usable: Vec<u8> = k
+        .hobs
+        .iter()
+        .filter(|h| h.side == side && k.can_fire_hob(side, h.id))
+        .map(|h| h.id)
+        .collect();
     if usable.is_empty() {
-        if let Some(h) = k.hobs.iter().find(|h| h.side == side && h.alive() && !h.dummy && h.buried).map(|h| h.id) {
+        if let Some(h) = k
+            .hobs
+            .iter()
+            .find(|h| h.side == side && h.alive() && !h.dummy && h.buried)
+            .map(|h| h.id)
+        {
             let cmd = json!({"cmd": "shove_off", "hob": h});
             if k.command(&cmd)["ok"] == json!(true) {
                 out.push(cmd);
@@ -386,7 +438,12 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
 
     let tg = targets(&k, side, &mut units);
     let mut cands: Vec<Cand> = vec![];
-    let hobs: Vec<u8> = k.hobs.iter().filter(|h| h.side == side && k.can_fire_hob(side, h.id)).map(|h| h.id).collect();
+    let hobs: Vec<u8> = k
+        .hobs
+        .iter()
+        .filter(|h| h.side == side && k.can_fire_hob(side, h.id))
+        .map(|h| h.id)
+        .collect();
     for &h in &hobs {
         let hob = &k.hobs[h as usize];
         let mut shots: Vec<String> = vec!["plain".into()];
@@ -401,22 +458,48 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
             }
         }
         for sh in shots {
-            let Some(id) = k.shot_for(h, &sh) else { continue };
-            let Some(ix) = k.shot_index(&id) else { continue };
+            let Some(id) = k.shot_for(h, &sh) else {
+                continue;
+            };
+            let Some(ix) = k.shot_index(&id) else {
+                continue;
+            };
             let def = &k.content.shots[ix];
             if def.weight == Weight::H && k.turns_taken[s] == 0 && side == k.first_side {
                 continue;
             }
             if def.flight.kind == FlightKind::SelfTarget {
-                cands.push(Cand { hob: h, shot: sh.clone(), shot_ix: ix, target: -1, angle: hob.angle, power: hob.power, miss: 0, score: 0, dial: None });
+                cands.push(Cand {
+                    hob: h,
+                    shot: sh.clone(),
+                    shot_ix: ix,
+                    target: -1,
+                    angle: hob.angle,
+                    power: hob.power,
+                    miss: 0,
+                    score: 0,
+                    dial: None,
+                });
                 continue;
             }
             for &(key, tx, ty) in &tg {
                 if units > t.budget / 2 {
                     break;
                 }
-                if let Some((a, p, miss)) = solve_aim(&solve_world, side, h, ix, tx, ty, &mut units, t.budget / 2) {
-                    cands.push(Cand { hob: h, shot: sh.clone(), shot_ix: ix, target: key, angle: a, power: p, miss, score: 0, dial: None });
+                if let Some((a, p, miss)) =
+                    solve_aim(&solve_world, side, h, ix, tx, ty, &mut units, t.budget / 2)
+                {
+                    cands.push(Cand {
+                        hob: h,
+                        shot: sh.clone(),
+                        shot_ix: ix,
+                        target: key,
+                        angle: a,
+                        power: p,
+                        miss,
+                        score: 0,
+                        dial: None,
+                    });
                 }
             }
         }
@@ -428,15 +511,25 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
         if units > t.budget && !scored.is_empty() {
             break;
         }
-        let Some(after) = sim_candidate(&k, side, &c, c.angle, c.power, &mut units) else { continue };
+        let Some(after) = sim_candidate(&k, side, &c, c.angle, c.power, &mut units) else {
+            continue;
+        };
         let mut sc = score_result(&k, &after, side, &t) - shell_cost(&k, &c);
         let mut n = 1;
         for j in 0..t.jitter {
             if units > t.budget {
                 break;
             }
-            let da = if j % 2 == 0 { t.angle_floor } else { -t.angle_floor };
-            let dp = if j % 2 == 0 { -(t.power_floor / 10).max(1) } else { (t.power_floor / 10).max(1) };
+            let da = if j % 2 == 0 {
+                t.angle_floor
+            } else {
+                -t.angle_floor
+            };
+            let dp = if j % 2 == 0 {
+                -(t.power_floor / 10).max(1)
+            } else {
+                (t.power_floor / 10).max(1)
+            };
             if let Some(w2) = sim_candidate(&k, side, &c, c.angle + da, c.power + dp, &mut units) {
                 sc += score_result(&k, &w2, side, &t) - shell_cost(&k, &c);
                 n += 1;
@@ -446,7 +539,12 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
         c2.score = sc / n;
         scored.push(c2);
     }
-    scored.sort_by(|a, b| b.score.cmp(&a.score).then(a.hob.cmp(&b.hob)).then(a.target.cmp(&b.target)));
+    scored.sort_by(|a, b| {
+        b.score
+            .cmp(&a.score)
+            .then(a.hob.cmp(&b.hob))
+            .then(a.target.cmp(&b.target))
+    });
 
     // Doodads: mend when walls are hurt and no shot pays more
     let best_score = scored.first().map(|c| c.score).unwrap_or(-1);
@@ -456,7 +554,8 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
     }
 
     // nothing worth firing: walk toward the rival and try once more
-    if best_score <= 0 && k.castles[s].steam >= 20 && k.castles[s].steam_turn == 0 && out.is_empty() {
+    if best_score <= 0 && k.castles[s].steam >= 20 && k.castles[s].steam_turn == 0 && out.is_empty()
+    {
         let dx = 40 * k.castles[s].front_dir();
         let cmd = json!({"cmd": "walk", "dx": dx});
         if k.command(&cmd)["ok"] == json!(true) {
@@ -529,12 +628,19 @@ fn apply_error(b: &mut Battle, side: u8, c: &Cand, t: &Tuning) -> (i32, i32) {
     let nrm = |rng: &mut crate::rng::Sfc32, sigma: i64| -> i64 { rng.normal_q16() * sigma / 65536 };
     let (mut ba, mut bp) = match mem.offsets.iter().find(|o| o.0 == c.target) {
         None => {
-            let k = if mem.offsets.is_empty() { 100 } else { t.k_same } as i64;
+            let k = if mem.offsets.is_empty() {
+                100
+            } else {
+                t.k_same
+            } as i64;
             (nrm(rng, sa * k / 100), nrm(rng, sp * k / 100))
         }
         Some(&(_, oa, op)) => {
             let cpct = rng.range(t.c_low, t.c_high) as i64;
-            (oa as i64 * (100 - cpct) / 100 + nrm(rng, fa), op as i64 * (100 - cpct) / 100 + nrm(rng, fp))
+            (
+                oa as i64 * (100 - cpct) / 100 + nrm(rng, fa),
+                op as i64 * (100 - cpct) / 100 + nrm(rng, fp),
+            )
         }
     };
     if mem.own_walked {
@@ -547,7 +653,9 @@ fn apply_error(b: &mut Battle, side: u8, c: &Cand, t: &Tuning) -> (i32, i32) {
         bp += sp * t.k_walk as i64 / 100 * (mem.target_walked as i64 / 32).min(4) / 2;
     }
     if let Some(lw) = mem.last_wind {
-        ba += (t.wind_skill * (wind - lw).abs() * 10) as i64 * if (ba >= 0) == (wind >= lw) { 1 } else { -1 } / 10;
+        ba += (t.wind_skill * (wind - lw).abs() * 10) as i64
+            * if (ba >= 0) == (wind >= lw) { 1 } else { -1 }
+            / 10;
     }
     ba = ba.clamp(-sa * 5 / 2, sa * 5 / 2);
     bp = bp.clamp(-sp * 5 / 2, sp * 5 / 2);
@@ -579,7 +687,9 @@ fn doodad_choice(k: &Battle, side: u8, best: i64, preset: Preset) -> Option<Valu
         return None;
     }
     for d in &k.doodads[s] {
-        let Some(def) = k.content.doodad(d) else { continue };
+        let Some(def) = k.content.doodad(d) else {
+            continue;
+        };
         match &def.effect {
             crate::content::DoodadEffect::MendBlocks { count, hp } => {
                 let cs = &k.castles[s];
@@ -592,8 +702,16 @@ fn doodad_choice(k: &Battle, side: u8, best: i64, preset: Preset) -> Option<Valu
                     })
                     .collect();
                 deficits.sort_by(|a, b| b.cmp(a));
-                let gain: i64 = deficits.iter().take(*count as usize).map(|x| *x as i64).sum();
-                let worth = if preset == Preset::Cozy { gain * 4 } else { gain * 6 };
+                let gain: i64 = deficits
+                    .iter()
+                    .take(*count as usize)
+                    .map(|x| *x as i64)
+                    .sum();
+                let worth = if preset == Preset::Cozy {
+                    gain * 4
+                } else {
+                    gain * 6
+                };
                 if gain >= 60 && worth > best {
                     return Some(json!({"cmd": "doodad", "doodad": d}));
                 }
@@ -601,7 +719,12 @@ fn doodad_choice(k: &Battle, side: u8, best: i64, preset: Preset) -> Option<Valu
             crate::content::DoodadEffect::Lid => {
                 // lid the kettle when the rival's last pin sat next to it
                 let o = 1 - s;
-                let pin = k.ghosts.iter().rev().find(|g| g.side as usize == o).and_then(|g| g.pin);
+                let pin = k
+                    .ghosts
+                    .iter()
+                    .rev()
+                    .find(|g| g.side as usize == o)
+                    .and_then(|g| g.pin);
                 if let Some((px, py)) = pin {
                     let (x0, y0, x1, y1) = k.castles[s].room_box(&k.castles[s].kettle);
                     let near = px >= x0 - 32 && px <= x1 + 32 && py >= y0 - 32 && py <= y1 + 32;

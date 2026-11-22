@@ -58,7 +58,13 @@ pub enum Hit {
 pub enum FlyOut {
     Moving,
     Apex,
-    Contact { hit: Hit, cx: i32, cy: i32, px: i32, py: i32 },
+    Contact {
+        hit: Hit,
+        cx: i32,
+        cy: i32,
+        px: i32,
+        py: i32,
+    },
 }
 
 pub fn gravity_q() -> Fx {
@@ -68,7 +74,14 @@ pub fn gravity_q() -> Fx {
 impl Battle {
     /// What a shell from `side` meets at cell (x, y). Own blocks, Hobs and
     /// kettle never block own shots.
-    pub fn collide(&self, side: u8, x: i32, y: i32, skip: Option<(u8, i32, i32)>, rollers: bool) -> Option<Hit> {
+    pub fn collide(
+        &self,
+        side: u8,
+        x: i32,
+        y: i32,
+        skip: Option<(u8, i32, i32)>,
+        rollers: bool,
+    ) -> Option<Hit> {
         if x < 0 || x >= self.terrain.w {
             return Some(Hit::Off);
         }
@@ -76,7 +89,13 @@ impl Battle {
             return Some(Hit::Terrain);
         }
         for (pi, p) in self.props.iter().enumerate() {
-            if p.hp > 0 && x >= p.x - 6 && x <= p.x + 6 && y >= p.y - 10 && y <= p.y && (rollers || !p.stops_rollers || p.side != side) {
+            if p.hp > 0
+                && x >= p.x - 6
+                && x <= p.x + 6
+                && y >= p.y - 10
+                && y <= p.y
+                && (rollers || !p.stops_rollers || p.side != side)
+            {
                 return Some(Hit::Prop(pi));
             }
         }
@@ -89,7 +108,11 @@ impl Battle {
                     if skip == Some((cs.side, c, r)) {
                         return None;
                     }
-                    return Some(Hit::Block { side: cs.side, c, r });
+                    return Some(Hit::Block {
+                        side: cs.side,
+                        c,
+                        r,
+                    });
                 }
             }
         }
@@ -165,7 +188,13 @@ impl Battle {
                 if let Some(hit) = self.collide(a.side, cx, cy, a.skip, false) {
                     a.x = nx;
                     a.y = ny;
-                    return FlyOut::Contact { hit, cx, cy, px, py };
+                    return FlyOut::Contact {
+                        hit,
+                        cx,
+                        cy,
+                        px,
+                        py,
+                    };
                 }
                 if a.skip.is_some() && beam {
                     // left the skipped block?
@@ -214,7 +243,13 @@ impl Battle {
 
     /// Run a lone probe in free flight to its first contact or trigger point.
     /// Returns the path (sampled cells) and the end point. Costs ticks.
-    pub fn probe_path(&self, mut a: Actor, max_ticks: i32, stop_at_apex: bool, units: &mut i64) -> (Vec<(i32, i32)>, (i32, i32), Option<Hit>) {
+    pub fn probe_path(
+        &self,
+        mut a: Actor,
+        max_ticks: i32,
+        stop_at_apex: bool,
+        units: &mut i64,
+    ) -> (Vec<(i32, i32)>, (i32, i32), Option<Hit>) {
         let mut path = vec![(cell(a.x), cell(a.y))];
         for t in 0..max_ticks {
             *units += 1;

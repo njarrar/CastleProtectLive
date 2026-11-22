@@ -7,6 +7,9 @@ const MEADOW_D = [90, 165, 85];
 const LOAM = [154, 100, 64];
 const LOAM_D = [122, 74, 46];
 const INK = [43, 30, 46];
+// terrain material codes: 1 Loam, 2 Clay, 3 Rock, 4 Bedrock, 5 Mud (6 Water is drawn see-through)
+const MATS: Record<number, number[]> = { 2: [217, 164, 65], 3: [142, 150, 160], 4: [90, 74, 66], 5: [110, 90, 62] };
+const solid = (c: number) => c >= 1 && c <= 5;
 
 export class TerrainLayer {
   w = 0;
@@ -55,21 +58,30 @@ export class TerrainLayer {
     const C = t.chunk;
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const ch of t.chunks) {
-      let i = 0;
-      let v = 0;
-      let left = ch.rle[0] ?? C * C;
-      for (let y = ch.cy * C; y < ch.cy * C + C; y++)
-        for (let x = ch.cx * C; x < ch.cx * C + C; x++) {
-          while (left === 0 && i < ch.rle.length - 1) { i++; v ^= 1; left = ch.rle[i]; }
-          left--;
-          if (y < this.h && x < this.w) this.mask[y * this.w + x] = v;
+      const x0 = ch.x ?? ch.cx * C, y0 = ch.y ?? ch.cy * C;
+      const w = ch.w ?? C, hh = ch.h ?? C;
+      if (ch.cells) {
+        for (let row = 0; row < hh; row++) {
+          const y = y0 + row;
+          if (y < 0 || y >= this.h) continue;
+          for (let col = 0; col < w; col++) {
+            const x = x0 + col;
+            if (x < this.w) this.mask[y * this.w + x] = ch.cells[row * w + col];
+          }
         }
-      minX = Math.min(minX, ch.cx * C);
-      maxX = Math.max(maxX, ch.cx * C + C);
-      minY = Math.min(minY, ch.cy * C);
-      maxY = Math.max(maxY, ch.cy * C + C);
+      } else if (ch.rle) {
+        let i = 0, v = 0, left = ch.rle[0] ?? w * hh;
+        for (let y = y0; y < y0 + hh; y++)
+          for (let x = x0; x < x0 + w; x++) {
+            while (left === 0 && i < ch.rle.length - 1) { i++; v ^= 1; left = ch.rle[i]; }
+            left--;
+            if (y < this.h && x < this.w) this.mask[y * this.w + x] = v;
+          }
+      }
+      minX = Math.min(minX, x0); maxX = Math.max(maxX, x0 + w);
+      minY = Math.min(minY, y0); maxY = Math.max(maxY, y0 + hh);
     }
-    this.paint(minX, Math.max(0, minY - 12), Math.min(this.w, maxX), Math.min(this.h, maxY + 2));
+    this.paint(Math.max(0, minX), Math.max(0, minY - 12), Math.min(this.w, maxX), Math.min(this.h, maxY + 2));
   }
 
   private paint(x0: number, y0: number, x1: number, y1: number): void {
@@ -78,16 +90,19 @@ export class TerrainLayer {
     const W = this.w, H = this.h, m = this.mask;
     for (let x = x0; x < x1; x++) {
       let top = 0;
-      for (let y = H - 1; y >= 0; y--) if (m[y * W + x]) { top = y; break; }
+      for (let y = H - 1; y >= 0; y--) if (solid(m[y * W + x])) { top = y; break; }
       this.tops[x] = top;
       for (let y = y0; y < y1; y++) {
         const p = ((H - 1 - y) * W + x) * 4;
-        if (!m[y * W + x]) { d[p + 3] = 0; continue; }
+        const code = m[y * W + x];
+        if (code === 6) { d[p] = 95; d[p + 1] = 168; d[p + 2] = 220; d[p + 3] = 170; continue; }
+        if (!solid(code)) { d[p + 3] = 0; continue; }
         // depth below the open air straight above
         let depth = 0;
-        while (depth < 14 && y + depth + 1 < H && m[(y + depth + 1) * W + x]) depth++;
+        while (depth < 14 && y + depth + 1 < H && solid(m[(y + depth + 1) * W + x])) depth++;
         let c: number[];
-        if (depth < 2) c = INK;
+        if (code !== 1 && depth >= 2) c = MATS[code] ?? LOAM;
+        else if (depth < 2) c = INK;
         else if (depth < 8) c = MEADOW;
         else if (depth < 11) c = MEADOW_D;
         else if (this.soil) {

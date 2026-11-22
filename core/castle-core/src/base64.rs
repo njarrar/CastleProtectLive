@@ -9,8 +9,16 @@ pub fn encode(data: &[u8]) -> String {
         let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
         out.push(ALPHA[(n >> 18) as usize & 63] as char);
         out.push(ALPHA[(n >> 12) as usize & 63] as char);
-        out.push(if ch.len() > 1 { ALPHA[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if ch.len() > 2 { ALPHA[n as usize & 63] as char } else { '=' });
+        out.push(if ch.len() > 1 {
+            ALPHA[(n >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if ch.len() > 2 {
+            ALPHA[n as usize & 63] as char
+        } else {
+            '='
+        });
     }
     out
 }
@@ -18,7 +26,7 @@ pub fn encode(data: &[u8]) -> String {
 pub fn decode(s: &str) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(s.len() / 4 * 3);
     let bytes: Vec<u8> = s.bytes().filter(|c| !c.is_ascii_whitespace()).collect();
-    if bytes.len() % 4 != 0 {
+    if !bytes.len().is_multiple_of(4) {
         return None;
     }
     let val = |c: u8| -> Option<u32> { ALPHA.iter().position(|a| *a == c).map(|p| p as u32) };

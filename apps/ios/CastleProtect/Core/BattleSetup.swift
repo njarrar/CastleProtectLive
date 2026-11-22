@@ -1,0 +1,120 @@
+import Foundation
+
+// What the app asks for when it starts a battle. CoreGame turns it into the
+// core's setup (CoreSetup); the core fills in everything else from the level.
+
+enum GameMode: String, Codable, Sendable, CaseIterable {
+    case campaign, skirmish, duel, yard
+}
+
+enum Preset: String, Codable, Sendable, CaseIterable, Identifiable {
+    case cozy, fair, stubborn
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+}
+
+enum WindSetting: String, Codable, Sendable, CaseIterable, Identifiable {
+    case off, light, full
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+}
+
+enum WinBy: String, Codable, Sendable, CaseIterable, Identifiable {
+    case knockout, volley
+    var id: String { rawValue }
+    var label: String { self == .knockout ? "Knockout" : "Volley Points" }
+}
+
+enum ShellRule: String, Codable, Sendable, CaseIterable, Identifiable {
+    case draft, quick, plain
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .draft: return "Draft"
+        case .quick: return "Quick Pick"
+        case .plain: return "Plain only"
+        }
+    }
+}
+
+enum Seats: String, Codable, Sendable, CaseIterable, Identifiable {
+    case sideBySide = "side_by_side", oneSeat = "one_seat"
+    var id: String { rawValue }
+    var label: String { self == .sideBySide ? "Side by side" : "One seat" }
+}
+
+enum HelpLevel: String, Codable, Sendable, CaseIterable, Identifiable {
+    case none, some, lots
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+    /// Gold plus marks shown openly beside a name.
+    var marks: String {
+        switch self {
+        case .none: return ""
+        case .some: return "+"
+        case .lots: return "++"
+        }
+    }
+}
+
+/// What a battle is, as the app asks for it. The core fills in everything else.
+struct BattleSetup: Codable, Equatable, Sendable {
+    var mode: GameMode = .campaign
+    var level: String?
+    var map: String?
+    var preset: Preset = .fair
+    var seed: UInt64 = 1
+    var rounds: Int = 15
+    var wind: WindSetting = .light
+    var shells: ShellRule = .draft
+    var winBy: WinBy = .knockout
+    var seats: Seats = .sideBySide
+    var names: [String] = []
+    var help: [HelpLevel] = []
+    /// Starter Box fort per side ("box_1"...), duel only.
+    var forts: [String] = []
+
+    static func campaign(_ level: String, preset: Preset, seed: UInt64) -> BattleSetup {
+        BattleSetup(mode: .campaign, level: level, preset: preset, seed: seed)
+    }
+}
+
+extension WindSetting {
+    /// Wind range for the core's setup. Off is calm; Light and Full widen the range.
+    var coreWind: CoreWind {
+        switch self {
+        case .off: return CoreWind(min: 0, max: 0, fronts: nil, frontRounds: nil)
+        case .light: return CoreWind(min: 0, max: 3, fronts: nil, frontRounds: nil)
+        case .full: return CoreWind(min: 2, max: 7, fronts: nil, frontRounds: nil)
+        }
+    }
+}
+
+extension BattleSetup {
+    /// Starter Box forts on the Couch Duel setup screen, by core kit id.
+    static let kits = ["box_1": "kit_oak", "box_2": "kit_stone", "box_3": "kit_reed"]
+
+    /// The core's battle setup (`level_json` for `cp_new`), with only the fields API.md lists.
+    func coreSetup() -> CoreSetup {
+        let rummage: CoreRummage? = shells == .plain ? CoreRummage(pool: 0, picks: 0, source: nil) : nil
+        switch mode {
+        case .campaign:
+            return CoreSetup(level: level ?? "1-1", mode: "campaign",
+                             sides: [CoreSideConfig(control: "human"), CoreSideConfig(control: "ai", preset: preset.rawValue)])
+        case .skirmish:
+            return CoreSetup(level: map ?? "d1", mode: "skirmish",
+                             sides: [CoreSideConfig(control: "human"), CoreSideConfig(control: "ai", preset: preset.rawValue)],
+                             firstTurn: .coin, roundCap: rounds, wind: wind.coreWind, rummage: rummage)
+        case .duel:
+            let sides = (0..<2).map { i in
+                CoreSideConfig(control: "human",
+                               kit: i < forts.count ? Self.kits[forts[i]] : nil,
+                               name: i < names.count ? names[i] : "Player \(i + 1)")
+            }
+            return CoreSetup(level: map ?? "d1", mode: "couch", sides: sides, firstTurn: .coin,
+                             roundCap: rounds, wind: wind.coreWind, rummage: rummage)
+        case .yard:
+            return CoreSetup(level: map ?? "d1", mode: "test_yard")
+        }
+    }
+}

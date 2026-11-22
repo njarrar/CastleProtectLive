@@ -358,6 +358,10 @@ export function battleScreen(app: App, route: Route): Screen {
           fx.texts.push({ x: e.x, y: e.y + 40, text: 'Bonk!', life: 1.4, max: 1.4, big: true, color: '#FFD23F' });
           play('bonk');
           break;
+        case 'boom':
+          fx.booms.push({ x: e.x, y: e.y, t: 0, size: e.r > 40 ? 'large' : e.r > 22 ? 'medium' : 'small' });
+          fx.shake = Math.min(12, fx.shake + e.r / 6);
+          break;
         case 'kettle_pop': play('pop'); fx.texts.push({ x: snap.forts[e.side].x + snap.forts[e.side].w / 2, y: snap.forts[e.side].y + 80, text: 'Kettle Pop!', life: 2, max: 2, big: true, color: '#4FE3C1' }); break;
         case 'squall_warn': if (e.left === 3) showBanner('Squall in 3', 'slate'); break;
         case 'squall': if (e.n === 1) { showBanner('Sudden Squall', 'slate'); play('squall'); } break;
@@ -448,7 +452,7 @@ export function battleScreen(app: App, route: Route): Screen {
       if (pipsEl[side].dataset.k !== pk) {
         pipsEl[side].dataset.k = pk;
         pipsEl[side].replaceChildren(...crew.map((c) => h('span', {
-          class: `pip ${side ? 'diamond' : 'round'} ${c.state === 'bonked' ? 'bonked' : ''}`,
+          class: `pip ${side ? 'p-diamond' : 'p-round'} ${c.state === 'bonked' ? 'bonked' : ''}`,
           style: `--c:${CLASS_COLOR[c.cls]};--f:${Math.round((100 * c.hp) / c.maxHp)}%`,
           title: `${c.name} ${c.hp}`,
         }, side ? CLASS_ICON[c.cls] : '')));
@@ -468,7 +472,7 @@ export function battleScreen(app: App, route: Route): Screen {
     if (ck !== hudKey) {
       hudKey = ck;
       hobsEl.replaceChildren(...crew.map((c) => {
-        const pu = sprites.url(`portrait_${hobSpriteName(c.id, c.cls)}_${me === 0 ? 'blue' : 'orange'}`);
+        const pu = sprites.url(`portrait_${hobSpriteName(c.def ?? c.id, c.cls)}_${me === 0 ? 'blue' : 'orange'}`);
         const b = btn(h('span', { class: 'face' }, pu ? h('img', { src: pu, alt: '' }) : CLASS_ICON[c.cls]), () => { send({ cmd: 'pick_hob', id: c.id }); }, `hob ${c.id === hd.hob ? 'on' : ''} ${c.state}`, {
           'aria-label': `${c.name}, ${c.cls}, ${c.hp} HP${c.state === 'rest' ? ', needs a rest' : ''}`,
           style: `--c:${CLASS_COLOR[c.cls]};--f:${Math.round((360 * c.hp) / c.maxHp)}deg`,

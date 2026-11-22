@@ -123,7 +123,7 @@ struct DuelOptions: Codable, Equatable, Sendable {
     var names = ["Player 1", "Player 2"]
     var help: [HelpLevel] = [.none, .none]
     var forts = ["box_2", "box_1"]
-    var map = "two_tumps"
+    var map = "d1"
     var winBy = WinBy.knockout
     var rounds = 15
     var wind = WindSetting.light
@@ -153,7 +153,7 @@ struct DuelOptions: Codable, Equatable, Sendable {
 }
 
 struct SkirmishOptions: Codable, Equatable, Sendable {
-    var map = "two_tumps"
+    var map = "d1"
     var preset = Preset.fair
     var rounds = 15
     var wind = WindSetting.light

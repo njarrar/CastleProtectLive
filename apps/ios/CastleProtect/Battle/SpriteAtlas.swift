@@ -146,8 +146,10 @@ enum SpriteImages {
 
     /// The art name for a Hob from its core id or name ("hob_marge", "Marge Dumpling", "Old Thumper").
     nonisolated static func hobArtName(id: String, name: String) -> String? {
-        let hay = (id + " " + name).lowercased()
-        return hobNames.first { hay.contains($0) }
+        let def = id.lowercased()
+        if hobNames.contains(def) { return def }
+        let words = (id + " " + name).lowercased().split { !$0.isLetter }.map(String.init)
+        return hobNames.first { words.contains($0) }
     }
 
     nonisolated static func team(_ side: Int) -> String { side == 0 ? "blue" : "orange" }
@@ -157,10 +159,11 @@ enum SpriteImages {
         return image("portrait_\(art)_\(team(side))")
     }
 
-    /// Tray icon for a shot chip: `icon_<id>`, else by kind.
+    /// Tray icon for a shot chip: `icon_<shot id>`, else by kind.
     static func shotIcon(_ chip: ShotChip) -> UIImage? {
-        let key = chip.id.replacingOccurrences(of: "shell_", with: "")
-        if let img = image("icon_\(key)") { return img }
+        for key in [chip.art, chip.id, chip.art.components(separatedBy: "_").first ?? ""] where !key.isEmpty {
+            if let img = image("icon_\(key)") { return img }
+        }
         switch chip.kind {
         case "plain": return image("icon_clodpot")
         case "doodad": return image("icon_mend_bucket")

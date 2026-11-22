@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Couch Duel Starter Box",
+  "type": "object",
+  "required": [
+    "map",
+    "kits"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "map": {
+      "type": "string"
+    },
+    "kits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "blueprint",
+          "crew",
+          "doodads",
+          "shells"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "blueprint": {
+            "type": "string"
+          },
+          "crew": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "doodads": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2
+          },
+          "shells": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "minItems": 3,
+      "maxItems": 3
+    }
+  }
+}

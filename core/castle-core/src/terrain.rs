@@ -135,7 +135,11 @@ impl Terrain {
                 if v == AIR || self.mats.liquid[v as usize] {
                     continue;
                 }
-                let p = if heavy { self.mats.heavy_carve_pct[v as usize] } else { self.mats.carve_pct[v as usize] };
+                let p = if heavy {
+                    self.mats.heavy_carve_pct[v as usize]
+                } else {
+                    self.mats.carve_pct[v as usize]
+                };
                 if p <= 0 {
                     continue;
                 }

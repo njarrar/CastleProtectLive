@@ -18,7 +18,11 @@ fn golden_replays_match() {
     }
     let expected = std::fs::read_to_string(expected_path).expect("tests/golden/expected.txt");
     assert!(!lines.contains("error:"), "a replay failed: {lines}");
-    assert_eq!(lines.trim(), expected.trim(), "golden hashes changed; if the rules change was meant, run with UPDATE_GOLDEN=1");
+    assert_eq!(
+        lines.trim(),
+        expected.trim(),
+        "golden hashes changed; if the rules change was meant, run with UPDATE_GOLDEN=1"
+    );
 }
 
 #[test]

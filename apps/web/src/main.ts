@@ -28,13 +28,17 @@ async function boot(): Promise<void> {
   app.register('settings', settingsScreen);
 
   // Deep links for testing and sharing: #map, #duel, #skirmish, #yard, #workshop, #settings, #level=1-1
+  const route = (): Route => {
   const hash = location.hash.slice(1);
   let start: Route = { to: 'title' };
   if (hash === 'map' || hash === 'duel' || hash === 'skirmish' || hash === 'workshop' || hash === 'modes') start = { to: hash };
   else if (hash === 'settings') start = { to: 'settings', back: { to: 'map' } };
   else if (hash === 'yard') start = { to: 'battle', setup: yardSetup(app) };
   else if (hash.startsWith('level=')) start = { to: 'prebattle', level: hash.slice(6) };
-  app.go(start);
+  return start;
+  };
+  app.go(route());
+  window.addEventListener('hashchange', () => app.go(route()));
   document.documentElement.dataset.ready = 'true';
   document.documentElement.dataset.core = core.name;
   (window as unknown as { castleApp?: App }).castleApp = app;

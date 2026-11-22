@@ -34,7 +34,11 @@ pub fn pct(v: Fx, p: i32) -> Fx {
 pub fn accel_q(cells_per_s2: i64) -> Fx {
     let num = cells_per_s2 * (FX_ONE as i64);
     let den = TICKS_PER_SEC * TICKS_PER_SEC;
-    let r = if num >= 0 { (num + den / 2) / den } else { -((-num + den / 2) / den) };
+    let r = if num >= 0 {
+        (num + den / 2) / den
+    } else {
+        -((-num + den / 2) / den)
+    };
     r as i32
 }
 
@@ -62,7 +66,10 @@ pub fn rotate(vx: Fx, vy: Fx, tenths: i32) -> (Fx, Fx) {
     let s = sin_t(tenths) as i64;
     let x = vx as i64;
     let y = vy as i64;
-    (((x * c - y * s) >> FX_SHIFT) as i32, ((x * s + y * c) >> FX_SHIFT) as i32)
+    (
+        ((x * c - y * s) >> FX_SHIFT) as i32,
+        ((x * s + y * c) >> FX_SHIFT) as i32,
+    )
 }
 
 /// Integer square root (floor) by Newton steps.
@@ -71,7 +78,7 @@ pub fn isqrt(n: u64) -> u64 {
         return n;
     }
     let mut x = n;
-    let mut y = (x + 1) / 2;
+    let mut y = x.div_ceil(2);
     while y < x {
         x = y;
         y = (x + n / x) / 2;

@@ -20,7 +20,9 @@ unsafe fn read_str<'a>(p: *const c_char) -> &'a str {
 }
 
 fn out(s: String) -> *mut c_char {
-    CString::new(s.replace('\0', "")).map(|c| c.into_raw()).unwrap_or(ptr::null_mut())
+    CString::new(s.replace('\0', ""))
+        .map(|c| c.into_raw())
+        .unwrap_or(ptr::null_mut())
 }
 
 static mut LAST_NEW_ERROR: Option<CString> = None;
@@ -32,9 +34,16 @@ static mut LAST_NEW_ERROR: Option<CString> = None;
 /// # Safety
 /// The string arguments must be NULL or valid NUL terminated UTF-8.
 #[no_mangle]
-pub unsafe extern "C" fn cp_new(content_json: *const c_char, level_json: *const c_char, seed: u64) -> *mut CpGame {
+pub unsafe extern "C" fn cp_new(
+    content_json: *const c_char,
+    level_json: *const c_char,
+    seed: u64,
+) -> *mut CpGame {
     match Game::new(read_str(content_json), read_str(level_json), seed) {
-        Ok(game) => Box::into_raw(Box::new(CpGame { game, last_error: None })),
+        Ok(game) => Box::into_raw(Box::new(CpGame {
+            game,
+            last_error: None,
+        })),
         Err(e) => {
             LAST_NEW_ERROR = CString::new(e).ok();
             ptr::null_mut()
@@ -48,7 +57,9 @@ pub unsafe extern "C" fn cp_new(content_json: *const c_char, level_json: *const 
 /// `handle` must come from `cp_new`; `json` must be valid UTF-8 or NULL.
 #[no_mangle]
 pub unsafe extern "C" fn cp_command(handle: *mut CpGame, json: *const c_char) -> *mut c_char {
-    let Some(h) = handle.as_mut() else { return out("{\"ok\":false,\"reason\":\"null_handle\"}".into()) };
+    let Some(h) = handle.as_mut() else {
+        return out("{\"ok\":false,\"reason\":\"null_handle\"}".into());
+    };
     out(h.game.command(read_str(json)))
 }
 
@@ -58,7 +69,9 @@ pub unsafe extern "C" fn cp_command(handle: *mut CpGame, json: *const c_char) ->
 /// `handle` must come from `cp_new`.
 #[no_mangle]
 pub unsafe extern "C" fn cp_step(handle: *mut CpGame, ticks: i32) -> *mut c_char {
-    let Some(h) = handle.as_mut() else { return out("{}".into()) };
+    let Some(h) = handle.as_mut() else {
+        return out("{}".into());
+    };
     out(h.game.step(ticks))
 }
 
@@ -68,7 +81,9 @@ pub unsafe extern "C" fn cp_step(handle: *mut CpGame, ticks: i32) -> *mut c_char
 /// `handle` must come from `cp_new`.
 #[no_mangle]
 pub unsafe extern "C" fn cp_snapshot(handle: *mut CpGame) -> *mut c_char {
-    let Some(h) = handle.as_mut() else { return out("{}".into()) };
+    let Some(h) = handle.as_mut() else {
+        return out("{}".into());
+    };
     out(h.game.snapshot())
 }
 
@@ -156,7 +171,18 @@ mod tests {
     #[test]
     fn header_lists_every_function() {
         let h = include_str!("../include/castle_core.h");
-        for f in ["cp_new", "cp_command", "cp_step", "cp_snapshot", "cp_free_string", "cp_free", "cp_last_error", "cp_version", "cp_golden_hashes", "cp_daily_seed"] {
+        for f in [
+            "cp_new",
+            "cp_command",
+            "cp_step",
+            "cp_snapshot",
+            "cp_free_string",
+            "cp_free",
+            "cp_last_error",
+            "cp_version",
+            "cp_golden_hashes",
+            "cp_daily_seed",
+        ] {
             assert!(h.contains(f), "header misses {f}");
         }
     }

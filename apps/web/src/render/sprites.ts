@@ -100,6 +100,6 @@ const BY_CLASS: Record<string, string> = {
 };
 const NAMES = new Set(['marge', 'quill', 'jax', 'grub', 'bobbin', 'hetty', 'thumper', 'nan']);
 export function hobSpriteName(id: string, cls: string): string {
-  const bare = id.replace(/^p2_/, '');
+  const bare = id.replace(/^p2_/, '').replace(/^old_thumper$/, 'thumper');
   return NAMES.has(bare) ? bare : BY_CLASS[cls] ?? 'marge';
 }

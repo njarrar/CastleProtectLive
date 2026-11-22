@@ -46,6 +46,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var tonight = [0, 0]
 
     let bridge: any CoreBridge
+    let catalog: ContentCatalog
+    let game: CoreGame
     let store: SaveStore
     let haptics = Haptics()
     let sound = SoundEngine()
@@ -56,15 +58,20 @@ final class AppModel: ObservableObject {
         let useStandIn = isUITesting || arguments.contains("-useStandIn")
         if isUITesting {
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("CastleProtectUITest", isDirectory: true)
-            store = SaveStore(directory: dir)
-            store.eraseAll()
+            let testStore = SaveStore(directory: dir)
+            testStore.eraseAll()
+            store = testStore
         } else {
             store = SaveStore()
         }
-        bridge = CoreFactory.make(preferStandIn: useStandIn)
+        let bridge = CoreFactory.make(preferStandIn: useStandIn)
+        let catalog = ContentCatalog.load()
+        self.bridge = bridge
+        self.catalog = catalog
+        game = CoreGame(bridge: bridge, catalog: catalog)
         let loaded = store.load()
         save = loaded
-        campaign = bridge.campaign(pennants: loaded.progress.pennants)
+        campaign = catalog.campaign(pennants: loaded.progress.pennants)
         screen = loaded.firstRunDone ? .map : .title
         showResume = loaded.firstRunDone && loaded.battle != nil
         applySettings()
@@ -98,7 +105,7 @@ final class AppModel: ObservableObject {
     /// Battle save at every turn start (UX 8.1): the core's own bytes plus a line for the resume card.
     func autosave() {
         guard let s = session, s.snapshot.result == nil, s.snapshot.phase != .draft else { return }
-        let core = bridge.save()
+        let core = game.save()
         guard !core.isEmpty else { return }
         let snap = s.snapshot
         save.battle = BattleSave(core: core, setup: s.setup, title: s.title, round: snap.round,
@@ -118,7 +125,7 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshCampaign() {
-        campaign = bridge.campaign(pennants: save.progress.pennants)
+        campaign = catalog.campaign(pennants: save.progress.pennants)
     }
 
     // MARK: App life
@@ -176,7 +183,7 @@ final class AppModel: ObservableObject {
         setup.wind = options.wind
         setup.winBy = options.winBy
         setup.shells = options.shells
-        let mapName = bridge.maps().first { $0.id == options.map }?.name ?? "Skirmish"
+        let mapName = catalog.maps.first { $0.id == options.map }?.name ?? "Skirmish"
         let sheet = LevelInfo(id: "skirmish", name: mapName, state: "open", rival: "Rival (AI)",
                               habit: "Plays \(options.preset.label).", goals: ["Win"],
                               hasDraft: options.shells == .draft, roundCap: options.rounds)
@@ -203,9 +210,8 @@ final class AppModel: ObservableObject {
 
     private func begin(_ setup: BattleSetup, title: String, sheet: LevelInfo?) {
         endSession(abandon: true)
-        let reply = bridge.send(.newBattle(setup))
-        guard reply.ok else {
-            notice = "This fight could not start (\(reply.reason ?? "unknown"))."
+        if let error = game.start(setup) {
+            notice = "This fight could not start (\(error))."
             return
         }
         let s = makeSession(setup: setup, title: title)
@@ -214,14 +220,13 @@ final class AppModel: ObservableObject {
         if let sheet {
             preBattle = sheet
         } else {
-            s.quickPick()
             s.endDraft()
             screen = .battle
         }
     }
 
     private func makeSession(setup: BattleSetup, title: String) -> BattleSession {
-        let s = BattleSession(bridge: bridge, setup: setup, title: title)
+        let s = BattleSession(game: game, setup: setup, title: title)
         s.settings = save.settings
         s.isPad = UIDevice.current.userInterfaceIdiom == .pad
         s.onTurnStarted = { [weak self] _ in self?.autosave() }
@@ -248,7 +253,9 @@ final class AppModel: ObservableObject {
     private func endSession(abandon: Bool) {
         guard let s = session else { return }
         s.stop()
-        if abandon && s.snapshot.result == nil { bridge.send(.abandon) }
+        // The core keeps nothing between battles; the battle save (if any) stays in SaveData.
+        _ = abandon
+        game.end()
         session = nil
     }
 
@@ -335,7 +342,7 @@ final class AppModel: ObservableObject {
         showResume = false
         guard let saved = save.battle else { return }
         endSession(abandon: false)
-        guard bridge.load(saved.core) else {
+        guard game.load(saved.core) else {
             notice = "This fight could not be saved."
             save.battle = nil
             persist()
@@ -355,46 +362,46 @@ final class AppModel: ObservableObject {
 
     // MARK: Events from the core
 
-    private func handle(_ events: [CoreEvent], _ snap: BattleSnapshot) {
-        let coreSendsCues = events.contains { $0.type == "audio" }
-        let coreSendsHaptics = events.contains { $0.type == "haptic" }
+    /// Sounds, haptics and screen reader lines for what the core says happened.
+    private func handle(_ events: [BattleEvent], _ snap: BattleSnapshot) {
         for e in events {
             switch e.type {
-            case "audio":
-                sound.play(e.cue)
-            case "haptic":
-                haptics.play(e.cue)
-            case "announce":
-                announce(e.text)
             case "turn":
                 let side = e.side >= 0 ? e.side : snap.activeSide
                 let who = snap.isDuel ? "\(snap.name(side))'s turn" : (snap.isHuman(side) ? "Your turn" : "\(snap.name(side)) aims")
                 announce("\(who). Wind \(abs(snap.wind)) \(snap.wind >= 0 ? "right" : "left").")
-                if !coreSendsCues { sound.play(snap.isHuman(side) ? "turn_yours" : "turn_theirs") }
+                sound.play(snap.isHuman(side) && !snap.isDuel ? "turn_yours" : (side == 0 ? "turn_yours" : "turn_theirs"))
+            case "end":
+                let win = snap.isDuel || e.side == 0
+                sound.play(win ? "win_fanfare" : "loss_sting")
+                if e.text == "kettle_pop" { haptics.play(.kettlePop) }
+            case "squall_warn":
+                if !e.text.isEmpty { announce(e.text) }
+                sound.play("squall_warn")
             default:
-                if !coreSendsCues, let cue = Self.fallbackCue(e) { sound.play(cue) }
-                if !coreSendsHaptics, let kind = Self.fallbackHaptic(e, snap: snap) { haptics.play(kind) }
+                if let cue = Self.cue(for: e) { sound.play(cue) }
+                if let kind = Self.haptic(for: e, snap: snap) { haptics.play(kind) }
             }
         }
     }
 
-    /// Used only when a core build sends raw events without audio cues.
-    static func fallbackCue(_ e: CoreEvent) -> String? {
+    static func cue(for e: BattleEvent) -> String? {
         switch e.type {
         case "fire": return "fire_launch"
         case "hit": return e.amount > 40 ? "blast_large" : "blast_small"
         case "break", "fall": return "block_break"
         case "bonk": return "hob_bonk"
         case "kettle_pop": return "kettle_pop"
-        case "squall_warn": return "squall_warn"
         default: return nil
         }
     }
 
-    static func fallbackHaptic(_ e: CoreEvent, snap: BattleSnapshot) -> Haptics.Kind? {
+    static func haptic(for e: BattleEvent, snap: BattleSnapshot) -> Haptics.Kind? {
         switch e.type {
         case "hit": return e.amount > 40 ? .blastLarge : .blastSmall
         case "fall": return .chunk
+        case "thump": return .thump
+        case "threaded": return .threaded
         case "bonk": return e.side == 0 && !snap.isDuel ? .bonkYours : .bonkTheirs
         case "kettle_pop": return .kettlePop
         default: return nil

@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Battle setup (level_json for cp_new)",
+  "type": "object",
+  "required": [
+    "level"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "level": {
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "campaign",
+        "skirmish",
+        "couch",
+        "test_yard"
+      ]
+    },
+    "sides": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "control": {
+            "enum": [
+              "human",
+              "ai"
+            ]
+          },
+          "preset": {
+            "enum": [
+              "cozy",
+              "fair",
+              "stubborn"
+            ]
+          },
+          "crew": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5
+          },
+          "blueprint": {
+            "type": "string"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "doodads": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2
+          },
+          "kit": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "steam": {
+            "type": "integer"
+          },
+          "aim": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          }
+        }
+      }
+    },
+    "first_turn": {
+      "oneOf": [
+        {
+          "enum": [
+            0,
+            1
+          ]
+        },
+        {
+          "const": "coin"
+        }
+      ]
+    },
+    "round_cap": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 40
+    },
+    "squall": {
+      "type": "boolean"
+    },
+    "wind": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min": {
+          "type": "integer"
+        },
+        "max": {
+          "type": "integer"
+        },
+        "fronts": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "front_rounds": {
+          "type": "integer"
+        }
+      }
+    },
+    "rummage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pool": {
+          "type": "integer"
+        },
+        "picks": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "puff_up": {
+      "type": "boolean"
+    }
+  }
+}

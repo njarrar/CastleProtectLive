@@ -1,0 +1,1612 @@
+{
+  "awaiting": "human",
+  "castles": [
+    {
+      "base_y": 390,
+      "block": 16,
+      "blocks": [
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 344,
+          "y": 374
+        },
+        {
+          "battered": false,
+          "c": 1,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 360,
+          "y": 374
+        },
+        {
+          "battered": false,
+          "c": 2,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 376,
+          "y": 374
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 392,
+          "y": 374
+        },
+        {
+          "battered": false,
+          "c": 4,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 408,
+          "y": 374
+        },
+        {
+          "battered": false,
+          "c": 5,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 424,
+          "y": 374
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 440,
+          "y": 374
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 1,
+          "root": false,
+          "x": 344,
+          "y": 358
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 1,
+          "root": false,
+          "x": 392,
+          "y": 358
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 1,
+          "root": false,
+          "x": 440,
+          "y": 358
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 2,
+          "root": false,
+          "x": 344,
+          "y": 342
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 2,
+          "root": false,
+          "x": 392,
+          "y": 342
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 2,
+          "root": false,
+          "x": 440,
+          "y": 342
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 344,
+          "y": 326
+        },
+        {
+          "battered": false,
+          "c": 1,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 360,
+          "y": 326
+        },
+        {
+          "battered": false,
+          "c": 2,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 376,
+          "y": 326
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 392,
+          "y": 326
+        },
+        {
+          "battered": false,
+          "c": 4,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 408,
+          "y": 326
+        },
+        {
+          "battered": false,
+          "c": 5,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 424,
+          "y": 326
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 440,
+          "y": 326
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 4,
+          "root": false,
+          "x": 344,
+          "y": 310
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 4,
+          "root": false,
+          "x": 392,
+          "y": 310
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 4,
+          "root": false,
+          "x": 440,
+          "y": 310
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 5,
+          "root": false,
+          "x": 344,
+          "y": 294
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 5,
+          "root": false,
+          "x": 392,
+          "y": 294
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 5,
+          "root": false,
+          "x": 440,
+          "y": 294
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 344,
+          "y": 278
+        },
+        {
+          "battered": false,
+          "c": 1,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 360,
+          "y": 278
+        },
+        {
+          "battered": false,
+          "c": 2,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 376,
+          "y": 278
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 392,
+          "y": 278
+        },
+        {
+          "battered": false,
+          "c": 4,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 408,
+          "y": 278
+        },
+        {
+          "battered": false,
+          "c": 5,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 424,
+          "y": 278
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 50,
+          "mat": "timber",
+          "max": 50,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 440,
+          "y": 278
+        }
+      ],
+      "cols": 7,
+      "fatigue": false,
+      "held": [],
+      "kettle": {
+        "box": [
+          365,
+          354,
+          385,
+          373
+        ],
+        "c": 1,
+        "hp": 300,
+        "intact": true,
+        "lid": false,
+        "max": 300,
+        "r": 1,
+        "room": [
+          360,
+          342,
+          391,
+          373
+        ]
+      },
+      "rooms": [
+        {
+          "box": [
+            360,
+            294,
+            391,
+            325
+          ],
+          "c": 1,
+          "flap": false,
+          "id": 0,
+          "intact": true,
+          "kind": "nook",
+          "lid": false,
+          "loophole": [
+            392,
+            306,
+            407,
+            311
+          ],
+          "r": 4
+        },
+        {
+          "box": [
+            408,
+            294,
+            439,
+            325
+          ],
+          "c": 4,
+          "flap": false,
+          "id": 1,
+          "intact": true,
+          "kind": "nook",
+          "lid": false,
+          "loophole": [
+            440,
+            306,
+            455,
+            311
+          ],
+          "r": 4
+        },
+        {
+          "box": [
+            408,
+            342,
+            439,
+            373
+          ],
+          "c": 4,
+          "flap": false,
+          "id": 2,
+          "intact": true,
+          "kind": "nook",
+          "lid": false,
+          "loophole": [
+            440,
+            354,
+            455,
+            359
+          ],
+          "r": 1
+        }
+      ],
+      "rows": 7,
+      "shimmer": [],
+      "side": 0,
+      "steam": 100,
+      "steam_turn": 0,
+      "x": 344
+    },
+    {
+      "base_y": 429,
+      "block": 16,
+      "blocks": [
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 1244,
+          "y": 413
+        },
+        {
+          "battered": false,
+          "c": 1,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 1260,
+          "y": 413
+        },
+        {
+          "battered": false,
+          "c": 2,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 1276,
+          "y": 413
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 1292,
+          "y": 413
+        },
+        {
+          "battered": false,
+          "c": 4,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 1308,
+          "y": 413
+        },
+        {
+          "battered": false,
+          "c": 5,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 1324,
+          "y": 413
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 400,
+          "mat": "footing",
+          "max": 400,
+          "peephole": false,
+          "r": 0,
+          "root": false,
+          "x": 1340,
+          "y": 413
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 1,
+          "root": false,
+          "x": 1244,
+          "y": 397
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 1,
+          "root": false,
+          "x": 1292,
+          "y": 397
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 1,
+          "root": false,
+          "x": 1340,
+          "y": 397
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 2,
+          "root": false,
+          "x": 1244,
+          "y": 381
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 2,
+          "root": false,
+          "x": 1292,
+          "y": 381
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 2,
+          "root": false,
+          "x": 1340,
+          "y": 381
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 1244,
+          "y": 365
+        },
+        {
+          "battered": false,
+          "c": 1,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 1260,
+          "y": 365
+        },
+        {
+          "battered": false,
+          "c": 2,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 1276,
+          "y": 365
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 1292,
+          "y": 365
+        },
+        {
+          "battered": false,
+          "c": 4,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 1308,
+          "y": 365
+        },
+        {
+          "battered": false,
+          "c": 5,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 1324,
+          "y": 365
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 3,
+          "root": false,
+          "x": 1340,
+          "y": 365
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 4,
+          "root": false,
+          "x": 1244,
+          "y": 349
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 4,
+          "root": false,
+          "x": 1292,
+          "y": 349
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 4,
+          "root": false,
+          "x": 1340,
+          "y": 349
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 5,
+          "root": false,
+          "x": 1244,
+          "y": 333
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 5,
+          "root": false,
+          "x": 1292,
+          "y": 333
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 5,
+          "root": false,
+          "x": 1340,
+          "y": 333
+        },
+        {
+          "battered": false,
+          "c": 0,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 1244,
+          "y": 317
+        },
+        {
+          "battered": false,
+          "c": 1,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 1260,
+          "y": 317
+        },
+        {
+          "battered": false,
+          "c": 2,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 1276,
+          "y": 317
+        },
+        {
+          "battered": false,
+          "c": 3,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 1292,
+          "y": 317
+        },
+        {
+          "battered": false,
+          "c": 4,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 1308,
+          "y": 317
+        },
+        {
+          "battered": false,
+          "c": 5,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 1324,
+          "y": 317
+        },
+        {
+          "battered": false,
+          "c": 6,
+          "hp": 30,
+          "mat": "wicker",
+          "max": 30,
+          "peephole": false,
+          "r": 6,
+          "root": false,
+          "x": 1340,
+          "y": 317
+        }
+      ],
+      "cols": 7,
+      "fatigue": false,
+      "held": [],
+      "kettle": {
+        "box": [
+          1313,
+          393,
+          1333,
+          412
+        ],
+        "c": 4,
+        "hp": 300,
+        "intact": true,
+        "lid": false,
+        "max": 300,
+        "r": 1,
+        "room": [
+          1308,
+          381,
+          1339,
+          412
+        ]
+      },
+      "rooms": [
+        {
+          "box": [
+            1308,
+            333,
+            1339,
+            364
+          ],
+          "c": 4,
+          "flap": false,
+          "id": 0,
+          "intact": true,
+          "kind": "nook",
+          "lid": false,
+          "loophole": [
+            1292,
+            345,
+            1307,
+            350
+          ],
+          "r": 4
+        },
+        {
+          "box": [
+            1260,
+            333,
+            1291,
+            364
+          ],
+          "c": 1,
+          "flap": false,
+          "id": 1,
+          "intact": true,
+          "kind": "nook",
+          "lid": false,
+          "loophole": [
+            1244,
+            345,
+            1259,
+            350
+          ],
+          "r": 4
+        },
+        {
+          "box": [
+            1260,
+            381,
+            1291,
+            412
+          ],
+          "c": 1,
+          "flap": false,
+          "id": 2,
+          "intact": true,
+          "kind": "nook",
+          "lid": false,
+          "loophole": [
+            1244,
+            393,
+            1259,
+            398
+          ],
+          "r": 1
+        }
+      ],
+      "rows": 7,
+      "shimmer": [],
+      "side": 1,
+      "steam": 120,
+      "steam_turn": 0,
+      "x": 1244
+    }
+  ],
+  "draft": null,
+  "events": [],
+  "full": true,
+  "ghosts": [],
+  "hash": "a45ba75f3eb1caf8",
+  "hobs": [
+    {
+      "aim": {
+        "angle": 450,
+        "power": 62
+      },
+      "buried": false,
+      "can_fire": true,
+      "class": "lobber",
+      "clatter": false,
+      "cover": true,
+      "def": "marge",
+      "dummy": false,
+      "grudge": false,
+      "hp": 120,
+      "id": 0,
+      "knack": "grand_dumpling",
+      "knack_uses": 2,
+      "max": 120,
+      "name": "Marge Dumpling",
+      "nook": 0,
+      "plain": "clodpot",
+      "rest": 0,
+      "side": 0,
+      "state": "seated",
+      "x": 375,
+      "y": 325
+    },
+    {
+      "aim": {
+        "angle": 1350,
+        "power": 60
+      },
+      "buried": false,
+      "can_fire": false,
+      "class": "lobber",
+      "clatter": false,
+      "cover": true,
+      "def": "hedge_snipper",
+      "dummy": false,
+      "grudge": false,
+      "hp": 120,
+      "id": 1,
+      "knack": "grand_dumpling",
+      "knack_uses": 2,
+      "max": 120,
+      "name": "Hedge Snipper",
+      "nook": 0,
+      "plain": "clodpot",
+      "rest": 0,
+      "side": 1,
+      "state": "seated",
+      "x": 1323,
+      "y": 364
+    },
+    {
+      "aim": {
+        "angle": 1350,
+        "power": 60
+      },
+      "buried": false,
+      "can_fire": false,
+      "class": "dummy",
+      "clatter": false,
+      "cover": true,
+      "def": "straw_stuffer",
+      "dummy": true,
+      "grudge": false,
+      "hp": 60,
+      "id": 2,
+      "knack": null,
+      "knack_uses": 0,
+      "max": 60,
+      "name": "Straw Stuffer",
+      "nook": 1,
+      "plain": "",
+      "rest": 0,
+      "side": 1,
+      "state": "seated",
+      "x": 1275,
+      "y": 364
+    }
+  ],
+  "hud": {
+    "control": [
+      "human",
+      "ai"
+    ],
+    "crew": [
+      [
+        {
+          "class": "lobber",
+          "hp_pct": 100,
+          "id": 0,
+          "rest": 0,
+          "state": "seated"
+        }
+      ],
+      [
+        {
+          "class": "lobber",
+          "hp_pct": 100,
+          "id": 1,
+          "rest": 0,
+          "state": "seated"
+        },
+        {
+          "class": "dummy",
+          "hp_pct": 100,
+          "id": 2,
+          "rest": 0,
+          "state": "seated"
+        }
+      ]
+    ],
+    "doodads": [
+      [],
+      []
+    ],
+    "forecast": 0,
+    "front_rounds_left": 3,
+    "hands": [
+      [],
+      []
+    ],
+    "kettle_pct": [
+      100,
+      100
+    ],
+    "names": [
+      "Left",
+      "Sir Pudge"
+    ],
+    "puff_up": [
+      true,
+      false
+    ],
+    "round": 1,
+    "round_cap": 8,
+    "score": [
+      0,
+      0
+    ],
+    "selected": {
+      "hob": 0,
+      "shot": "plain"
+    },
+    "side": 0,
+    "squall": false,
+    "squall_round": 0,
+    "squall_warning": null,
+    "steam": [
+      100,
+      120
+    ],
+    "steam_turn_left": 40,
+    "turn": 1,
+    "wind": 0
+  },
+  "last_ai": [],
+  "level": "1-1",
+  "map": {
+    "chunk": 256,
+    "h": 720,
+    "w": 1600
+  },
+  "mode": "campaign",
+  "phase": "plan",
+  "preview": [
+    [
+      375,
+      309
+    ],
+    [
+      383,
+      300
+    ],
+    [
+      392,
+      291
+    ],
+    [
+      401,
+      283
+    ],
+    [
+      410,
+      275
+    ],
+    [
+      418,
+      267
+    ],
+    [
+      427,
+      259
+    ],
+    [
+      436,
+      251
+    ],
+    [
+      445,
+      244
+    ],
+    [
+      453,
+      237
+    ],
+    [
+      462,
+      230
+    ],
+    [
+      471,
+      223
+    ],
+    [
+      480,
+      216
+    ],
+    [
+      488,
+      209
+    ],
+    [
+      497,
+      203
+    ],
+    [
+      506,
+      196
+    ],
+    [
+      515,
+      190
+    ],
+    [
+      524,
+      184
+    ],
+    [
+      532,
+      178
+    ],
+    [
+      541,
+      173
+    ],
+    [
+      550,
+      167
+    ],
+    [
+      559,
+      162
+    ],
+    [
+      567,
+      157
+    ],
+    [
+      576,
+      152
+    ],
+    [
+      585,
+      147
+    ],
+    [
+      594,
+      142
+    ],
+    [
+      602,
+      138
+    ],
+    [
+      611,
+      134
+    ],
+    [
+      620,
+      130
+    ],
+    [
+      629,
+      126
+    ],
+    [
+      638,
+      122
+    ],
+    [
+      646,
+      118
+    ],
+    [
+      655,
+      115
+    ],
+    [
+      664,
+      111
+    ],
+    [
+      673,
+      108
+    ],
+    [
+      681,
+      105
+    ],
+    [
+      690,
+      102
+    ],
+    [
+      699,
+      100
+    ],
+    [
+      708,
+      97
+    ],
+    [
+      716,
+      95
+    ],
+    [
+      725,
+      93
+    ],
+    [
+      734,
+      91
+    ],
+    [
+      743,
+      89
+    ],
+    [
+      752,
+      87
+    ],
+    [
+      760,
+      86
+    ],
+    [
+      769,
+      85
+    ],
+    [
+      778,
+      83
+    ],
+    [
+      787,
+      82
+    ],
+    [
+      795,
+      82
+    ],
+    [
+      804,
+      81
+    ],
+    [
+      813,
+      81
+    ],
+    [
+      822,
+      80
+    ],
+    [
+      830,
+      80
+    ],
+    [
+      839,
+      80
+    ],
+    [
+      848,
+      80
+    ],
+    [
+      857,
+      81
+    ],
+    [
+      866,
+      81
+    ],
+    [
+      874,
+      82
+    ],
+    [
+      883,
+      83
+    ],
+    [
+      892,
+      84
+    ],
+    [
+      901,
+      85
+    ],
+    [
+      909,
+      86
+    ],
+    [
+      918,
+      88
+    ],
+    [
+      927,
+      90
+    ],
+    [
+      936,
+      91
+    ],
+    [
+      944,
+      93
+    ],
+    [
+      953,
+      96
+    ],
+    [
+      962,
+      98
+    ],
+    [
+      971,
+      100
+    ],
+    [
+      980,
+      103
+    ],
+    [
+      988,
+      106
+    ],
+    [
+      997,
+      109
+    ],
+    [
+      1006,
+      112
+    ],
+    [
+      1015,
+      116
+    ],
+    [
+      1023,
+      119
+    ],
+    [
+      1032,
+      123
+    ],
+    [
+      1041,
+      127
+    ],
+    [
+      1050,
+      131
+    ],
+    [
+      1058,
+      135
+    ],
+    [
+      1067,
+      139
+    ],
+    [
+      1076,
+      144
+    ],
+    [
+      1085,
+      148
+    ],
+    [
+      1093,
+      153
+    ],
+    [
+      1102,
+      158
+    ],
+    [
+      1111,
+      164
+    ],
+    [
+      1120,
+      169
+    ],
+    [
+      1129,
+      174
+    ],
+    [
+      1137,
+      180
+    ],
+    [
+      1146,
+      186
+    ],
+    [
+      1155,
+      192
+    ],
+    [
+      1164,
+      198
+    ],
+    [
+      1172,
+      205
+    ],
+    [
+      1181,
+      211
+    ],
+    [
+      1190,
+      218
+    ],
+    [
+      1199,
+      225
+    ],
+    [
+      1207,
+      232
+    ],
+    [
+      1216,
+      239
+    ],
+    [
+      1225,
+      246
+    ],
+    [
+      1234,
+      254
+    ],
+    [
+      1243,
+      261
+    ],
+    [
+      1251,
+      269
+    ],
+    [
+      1260,
+      277
+    ],
+    [
+      1269,
+      286
+    ],
+    [
+      1278,
+      294
+    ],
+    [
+      1286,
+      302
+    ],
+    [
+      1295,
+      311
+    ],
+    [
+      1301,
+      317
+    ],
+    [
+      1301,
+      317
+    ]
+  ],
+  "props": [],
+  "result": null,
+  "shells": [],
+  "side": 0,
+  "terrain": {
+    "chunks": []
+  },
+  "tick": 0
+}

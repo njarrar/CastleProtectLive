@@ -274,10 +274,11 @@ function block(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, b: BlockView, a
 
 function kettle(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, k: KettleView, t: number, glow: boolean) {
   if (sprites.has('kettle_full')) {
-    const [rx, ry] = toScreen(r, cam, k.x, k.y + k.size);
-    sprites.draw(ctx, 'kettle_room', rx, ry, cam.s * (k.size / 32), false, glow ? 0.6 : 1);
+    const room = k.room ?? { x: k.x, y: k.y, w: k.size, h: k.size };
+    const [rx, ry] = toScreen(r, cam, room.x, room.y + room.h);
+    sprites.draw(ctx, 'kettle_room', rx, ry, cam.s * (room.w / 32), false, glow ? 0.6 : 1);
     const pct = k.hp / k.maxHp;
-    const [fx0, fy0] = toScreen(r, cam, k.x + k.size / 2, k.y);
+    const [fx0, fy0] = toScreen(r, cam, room.x + room.w / 2, room.y);
     if (k.hp > 0) sprites.draw(ctx, 'kettle_halo', fx0, fy0 - 14 * cam.s, cam.s * (0.8 + 0.08 * Math.sin(t * 3)), false, 0.7);
     sprites.draw(ctx, `kettle_${k.hp <= 0 ? 'popped' : pct <= 0.25 ? 'critical' : pct <= 0.5 ? 'hurt' : 'full'}`, fx0 - 4 * cam.s * (k.side ? -1 : 1), fy0, cam.s * KETTLE_SCALE, k.side === 1);
     return;
@@ -318,7 +319,7 @@ function hob(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, h: HobView, picke
   if (x < r.x - s || x > r.x + r.w + s || y < r.y - s * 2 || y > r.y + r.h + s) return;
   const bonked = h.state === 'bonked';
   const team = h.side === 0 ? 'blue' : 'orange';
-  const nm = hobSpriteName(h.id, h.cls);
+  const nm = hobSpriteName(h.def ?? h.id, h.cls);
   const pose = bonked ? `bonked_${Math.floor(t * 1.5) % 2}`
     : firing && picked ? `fire_${Math.floor(t * 6) % 2}`
     : h.hp < h.maxHp * 0.3 ? `hit_${Math.floor(t * 2) % 2}`

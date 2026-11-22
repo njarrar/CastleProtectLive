@@ -112,7 +112,7 @@ struct DuelSetupView: View {
     private var rulesCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Picker("Map", selection: $options.map) {
-                ForEach(model.bridge.maps()) { m in Text(m.name).tag(m.id) }
+                ForEach(model.catalog.maps) { m in Text(m.name).tag(m.id) }
             }
             row("Win by") {
                 Picker("Win by", selection: $options.winBy) {

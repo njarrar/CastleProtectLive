@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Classes",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "id",
+      "name",
+      "hp",
+      "plain",
+      "role"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "hp": {
+        "type": "integer",
+        "minimum": 80,
+        "maximum": 140
+      },
+      "plain": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string"
+      }
+    }
+  }
+}

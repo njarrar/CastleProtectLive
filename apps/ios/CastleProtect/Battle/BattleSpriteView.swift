@@ -218,7 +218,7 @@ final class LensLayer {
                 let bonked = h.bonked || h.hp <= 0
                 let selected = h.id == snap.selectedHob && fort.side == snap.activeSide
                 var frame: SpriteSheet.Frame?
-                if useArt, let art = SpriteImages.hobArtName(id: h.id, name: h.name) {
+                if useArt, let art = SpriteImages.hobArtName(id: h.def, name: h.name) {
                     let pose: String
                     let n: Int
                     if bonked {

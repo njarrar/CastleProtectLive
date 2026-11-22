@@ -1,71 +1,115 @@
 package games.castleprotect.core
 
 /**
- * The only door between the app and the game rules.
+ * The only door between the app and the game rules (core/API.md).
  *
- * The app sends commands as JSON and reads a frame snapshot as JSON. It never
- * computes rules itself. Two implementations exist:
+ * One [CoreGame] is one battle handle (`cp_new` ... `cp_free`). The app sends
+ * commands as JSON and reads frame snapshots as JSON. It never computes rules.
+ *
+ * Implementations:
  *  - [NativeCore]: the shared Rust core through JNI (libcastle_jni.so + libcastle_ffi.so).
- *  - [FakeCore]: a small stand-in used only when the native library is not in the APK,
- *    so screens can be built and tested before the core lands.
+ *  - FixtureCore (debug builds only, src/debug): replays core/fixtures when the native
+ *    library is missing, so screens can be exercised. It holds no game rules.
  *
- * All calls are made from the sim thread owned by GameSession, except [query],
- * which GameSession also serialises onto the same lock.
+ * Every call on a game is made from the one sim thread GameSession owns.
  */
-interface CoreBridge {
-    /** Human readable name, shown in Settings > About. */
-    val name: String
-
-    /** Send one command, for example {"cmd":"aim","angle":620,"power":74}. Returns {"ok":true} or {"ok":false,"reason":"key"}. */
+interface CoreGame : AutoCloseable {
+    /** One command object or an array of them. Returns the reply JSON. */
     fun command(json: String): String
 
-    /** Advance the sim by wall-clock milliseconds. The core steps whole 120 Hz ticks. */
-    fun advance(ms: Int)
+    /** Advance whole 120 Hz ticks. Returns {"tick":n,"phase":"..."}. */
+    fun step(ticks: Int): String
 
-    /** Current frame snapshot as JSON. Events in it are drained by this call. */
-    fun snapshot(): String
+    /** The frame snapshot as UTF-8 JSON bytes. Drains events and dirty terrain chunks. */
+    fun snapshot(): ByteArray
 
-    /** Menu data off the hot path: {"q":"campaign"}, {"q":"level","id":"1-3"}, {"q":"roster"}. */
-    fun query(json: String): String
+    override fun close()
+}
 
-    /** Full save (progress plus the battle in play, if any) as an opaque string. */
-    fun save(): String
+class CoreException(message: String) : Exception(message)
 
-    /** Restore from [save] output. Returns false if the data was refused. */
-    fun load(data: String): Boolean
-
-    fun close()
+interface CoreFactory {
+    /** Shown in Settings > About. */
+    val name: String
+    /** True for the debug fixture player. Its saves go to their own file. */
+    val standIn: Boolean
+    /** Starts a battle from a setup (core/schema/setup.schema.json). Throws [CoreException] with the core's reason. */
+    fun newGame(setupJson: String, seed: Long): CoreGame
 }
 
 object Core {
-    /** Picks the native core when its libraries are packaged, else the stand-in. */
-    fun create(): CoreBridge = NativeCore.tryCreate() ?: FakeCore()
+    /**
+     * The native core when its libraries are packaged. In debug builds only, the
+     * fixture player when they are not. Release builds get null and show an error
+     * (and the release Gradle build fails without the native core anyway).
+     */
+    fun factory(ctx: android.content.Context): CoreFactory? = NativeCore.factory() ?: CoreFallback.factory(ctx)
 }
 
-/** Small helpers so command JSON is written in one place. */
+/** Command JSON, written in one place. Names and fields are those of core/API.md. */
 object Cmd {
-    fun aim(angleTenths: Int, power: Int) = """{"cmd":"aim","angle":$angleTenths,"power":$power}"""
-    const val FIRE = """{"cmd":"fire"}"""
-    const val READY = """{"cmd":"ready"}"""
-    const val END_DRAFT = """{"cmd":"end_draft"}"""
+    private fun q(s: String) = JsonText.quote(s)
+
+    // Rummage (phase draft)
+    fun pickShell(shell: String) = """{"cmd":"pick_shell","shell":${q(shell)}}"""
     const val QUICK_PICK = """{"cmd":"quick_pick"}"""
-    const val ABANDON = """{"cmd":"abandon"}"""
-    const val RECALL = """{"cmd":"recall"}"""
+    const val END_DRAFT = """{"cmd":"end_draft"}"""
+
+    // Turn (phase plan)
+    fun pickHob(hob: Int) = """{"cmd":"pick_hob","hob":$hob}"""
+    fun pickShot(shot: String) = """{"cmd":"pick_shot","shot":${q(shot)}}"""
+    fun aim(angle: Int, power: Int) = """{"cmd":"aim","angle":$angle,"power":$power}"""
+    fun recall(ghost: Int) = """{"cmd":"recall","ghost":$ghost}"""
     fun walk(dx: Int) = """{"cmd":"walk","dx":$dx}"""
-    fun pickHob(id: String) = """{"cmd":"pick_hob","id":${q(id)}}"""
-    fun pickShell(id: String) = """{"cmd":"pick_shell","id":${q(id)}}"""
-    fun draftPick(id: String) = """{"cmd":"draft_pick","id":${q(id)}}"""
-    fun speed(x: Int) = """{"cmd":"speed","x":$x}"""
-    fun newBattle(
-        mode: String, level: String? = null, preset: String = "fair",
-        names: List<String> = emptyList(), seats: String = "side_by_side",
-        rounds: Int = 15, wind: String = "light", draft: Boolean = true, seed: Long = System.nanoTime(),
-    ): String {
-        val sb = StringBuilder("""{"cmd":"new_battle","mode":${q(mode)},"preset":${q(preset)},"seats":${q(seats)},""")
-        sb.append(""""rounds":$rounds,"wind":${q(wind)},"draft":$draft,"seed":$seed""")
-        if (level != null) sb.append(""","level":${q(level)}""")
-        if (names.isNotEmpty()) sb.append(""","names":[${names.joinToString(",") { q(it) }}]""")
-        return sb.append("}").toString()
+    fun shoveOff(hob: Int) = """{"cmd":"shove_off","hob":$hob}"""
+    const val FIRE = """{"cmd":"fire"}"""
+    fun doodad(id: String) = """{"cmd":"doodad","doodad":${q(id)}}"""
+    const val PASS = """{"cmd":"pass"}"""
+    const val AI_TURN = """{"cmd":"ai_turn"}"""
+
+    // Queries
+    const val LOG = """{"cmd":"log"}"""
+    const val HASH = """{"cmd":"hash"}"""
+    const val TERRAIN_ALL = """{"cmd":"terrain_all"}"""
+}
+
+/**
+ * A battle the app can start again: the setup sent to `cp_new`, the seed, and how
+ * the app should present it. Rematch and Carry on both start from this.
+ */
+data class BattleSpec(
+    val setup: String,
+    val seed: Long,
+    /** campaign, skirmish or couch: decides menus and the Results screen. */
+    val kind: String,
+    val level: String,
+    /** Couch Duel: side_by_side shows the hand-off card between turns. */
+    val seats: String = "one_seat",
+) {
+    fun withSeed(s: Long) = copy(seed = s)
+
+    companion object {
+        fun newSeed(): Long = System.nanoTime() and 0x7FFF_FFFF_FFFFL
+
+        fun campaign(level: String, preset: String, seed: Long = newSeed()) = BattleSpec(
+            """{"level":${JsonText.quote(level)},"mode":"campaign","sides":[{"control":"human"},{"control":"ai","preset":${JsonText.quote(preset)}}]}""",
+            seed, "campaign", level,
+        )
+
+        /** wind: 0 calm, 1 light, 2 gusty. Plain only turns the Rummage off. */
+        fun skirmish(level: String, preset: String, roundCap: Int, wind: Int, plainOnly: Boolean, seed: Long = newSeed()) = BattleSpec(
+            """{"level":${JsonText.quote(level)},"mode":"skirmish","sides":[{"control":"human"},{"control":"ai","preset":${JsonText.quote(preset)}}],""" +
+                """"round_cap":$roundCap,"wind":${windJson(wind)}${if (plainOnly) ""","rummage":{"pool":0,"picks":0}""" else ""}}""",
+            seed, "skirmish", level,
+        )
+
+        fun couch(level: String, names: List<String>, roundCap: Int, wind: Int, plainOnly: Boolean, seats: String, seed: Long = newSeed()) = BattleSpec(
+            """{"level":${JsonText.quote(level)},"mode":"couch","sides":[""" +
+                names.take(2).joinToString(",") { """{"control":"human","name":${JsonText.quote(JsonText.takeCodePoints(it, 12))}}""" } +
+                """],"round_cap":$roundCap,"wind":${windJson(wind)}${if (plainOnly) ""","rummage":{"pool":0,"picks":0}""" else ""}}""",
+            seed, "couch", level, seats,
+        )
+
+        private fun windJson(w: Int) = when (w) { 0 -> """{"min":0,"max":0}"""; 2 -> """{"min":2,"max":6}"""; else -> """{"min":0,"max":3}""" }
     }
-    fun q(s: String) = org.json.JSONObject.quote(s)
 }

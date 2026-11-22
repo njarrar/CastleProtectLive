@@ -26,6 +26,10 @@ struct BattleView: View {
     @EnvironmentObject private var model: AppModel
     @ObservedObject var session: BattleSession
 
+    init(session: BattleSession) {
+        self.session = session
+    }
+
     var body: some View {
         GeometryReader { geo in
             let insets = geo.safeAreaInsets
@@ -380,7 +384,6 @@ struct SpeedButton: View {
 struct PauseCard: View {
     @EnvironmentObject private var model: AppModel
     @ObservedObject var session: BattleSession
-    @State private var confirmGiveUp = false
 
     init(session: BattleSession) {
         self.session = session
@@ -402,19 +405,11 @@ struct PauseCard: View {
                     Button("Settings") { model.showSettings = true }.buttonStyle(PaperButtonStyle())
                     Button("Map") { model.leaveToMap() }.buttonStyle(PaperButtonStyle())
                 }
-                if session.hud.isDuel {
-                    Button("Give up (\(session.hud.activeName))") { confirmGiveUp = true }
-                        .buttonStyle(PaperButtonStyle())
-                }
             }
             .padding(24)
             .frame(maxWidth: 420)
             .panel(corner: 24)
             .padding(24)
-        }
-        .confirmationDialog("Give up this duel?", isPresented: $confirmGiveUp) {
-            Button("Give up", role: .destructive) { session.giveUp() }
-            Button("Keep playing", role: .cancel) {}
         }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)

@@ -17,8 +17,12 @@ impl Battle {
         let side = self.side;
         let s = side as usize;
         let sel = &self.sel[s];
-        let Some(id) = self.shot_for(sel.hob, &sel.shot) else { return vec![] };
-        let Some(ix) = self.shot_index(&id) else { return vec![] };
+        let Some(id) = self.shot_for(sel.hob, &sel.shot) else {
+            return vec![];
+        };
+        let Some(ix) = self.shot_index(&id) else {
+            return vec![];
+        };
         let def = &self.content.shots[ix];
         if def.flight.kind == FlightKind::SelfTarget {
             return vec![];
@@ -33,20 +37,25 @@ impl Battle {
         if self.rules.full_preview_first_shot && !self.first_shot_done[s] {
             share = 100;
         }
-        let stop_at_apex = def.triggers.iter().any(|t| t.on == TriggerOn::Apex) && def.flight.apex_gravity_pct.is_none();
+        let stop_at_apex = def.triggers.iter().any(|t| t.on == TriggerOn::Apex)
+            && def.flight.apex_gravity_pct.is_none();
         let a = self.aim_probe(side, sel.hob, ix, h.angle, h.power);
         let mut units = 0;
         let (path, _, _) = self.probe_path(a, 900, stop_at_apex, &mut units);
         // cut by path length
         let mut total: i64 = 0;
         for w in path.windows(2) {
-            total += crate::math::isqrt((((w[1].0 - w[0].0) as i64).pow(2) + ((w[1].1 - w[0].1) as i64).pow(2)) as u64) as i64;
+            total += crate::math::isqrt(
+                (((w[1].0 - w[0].0) as i64).pow(2) + ((w[1].1 - w[0].1) as i64).pow(2)) as u64,
+            ) as i64;
         }
         let limit = total * share as i64 / 100;
         let mut run: i64 = 0;
         let mut out = vec![path[0]];
         for w in path.windows(2) {
-            run += crate::math::isqrt((((w[1].0 - w[0].0) as i64).pow(2) + ((w[1].1 - w[0].1) as i64).pow(2)) as u64) as i64;
+            run += crate::math::isqrt(
+                (((w[1].0 - w[0].0) as i64).pow(2) + ((w[1].1 - w[0].1) as i64).pow(2)) as u64,
+            ) as i64;
             if run > limit {
                 break;
             }
@@ -180,7 +189,10 @@ impl Battle {
             "score": [self.stats[0].score, self.stats[1].score],
             "puff_up": [self.puff_up_allowed[0] && !self.puff_up_used[0], self.puff_up_allowed[1] && !self.puff_up_used[1]],
         });
-        let draft = if self.phase == Phase::Draft || !self.draft.pool.is_empty() || !self.draft.picks[0].is_empty() {
+        let draft = if self.phase == Phase::Draft
+            || !self.draft.pool.is_empty()
+            || !self.draft.picks[0].is_empty()
+        {
             json!({"pool": self.draft.pool, "picks": self.draft.picks, "next": self.draft.next, "picks_each": self.draft.picks_each, "wish": self.draft.wish})
         } else {
             Value::Null

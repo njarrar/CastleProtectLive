@@ -72,9 +72,15 @@ export interface TerrainChunk {
   cx: number;
   cy: number;
   rev: number;
-  // Run-length rows of the chunk, row-major from its bottom-left cell:
-  // alternating counts of empty and solid cells, starting with empty.
-  rle: number[];
+  // Area in y-up cells (bottom-left origin). Absent: the square chunk at cx, cy.
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  // Either material codes, row-major from the bottom row (0 air, 1 Loam, 2 Clay,
+  // 3 Rock, 4 Bedrock, 5 Mud, 6 Water), or run-length rows of empty and Loam starting with empty.
+  cells?: Uint8Array;
+  rle?: number[];
 }
 export interface TerrainView {
   width: number;
@@ -281,6 +287,8 @@ export interface CoreApi {
   levels(): LevelInfo[];
   hobs(): HobInfo[];
   starterForts(): Blueprint[];
+  /** The fort the Workshop starts from. */
+  defaultBlueprint(): Blueprint;
   checkBlueprint(bp: Blueprint): BlueprintCheck;
   newBattle(setup: BattleSetup): void;
   command(c: Command): CommandResult;

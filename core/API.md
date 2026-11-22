@@ -12,8 +12,9 @@ snapshots as JSON. Same calls on all three platforms:
 | `void cp_free_string(char*)` | (not needed) | Free any string the C ABI returned |
 | `void cp_free(CpGame*)` | `game.free()` | Free the battle |
 | `char* cp_last_error(CpGame*)` | | Last error text, or NULL |
-| `char* cp_version(void)` | `cp_version()` | `{"sim":"0.1.0","tick_hz":120}` |
+| `char* cp_version(void)` | `cp_version()` | `{"sim":"0.1.0","rules":1,"tick_hz":120}` |
 | `char* cp_golden_hashes(void)` | `golden_hashes()` | Golden replay hashes, one `name hash` line each |
+| `uint64_t cp_daily_seed(const char* date)` | `daily_seed(date)` | Daily Dust-up seed from the local date text (`2026-11-22`) and the rules version |
 | | `default_content()` | The built in content bundle as JSON |
 
 All strings are UTF-8. Every `char*` the C ABI returns must go back through
@@ -23,7 +24,11 @@ handle.
 JSON Schemas for everything below live in `core/schema/`:
 `setup.schema.json`, `command.schema.json`, `reply.schema.json`,
 `snapshot.schema.json`. Sample files the apps can test against live in
-`core/fixtures/`.
+`core/fixtures/` (made by `cargo run -p castle-core --example make_fixtures`):
+`setup_1_1.json` (the setup), `commands_1_1.json` (seed and the commands),
+`replies_1_1.json` (the replies), `snapshot_plan.json` (full snapshot after
+the commands), `snapshot_lean.json` (lean snapshot mid flight),
+`snapshot_after_shot.json` (full snapshot after the shot settles).
 
 ## Units and coordinates
 
@@ -205,10 +210,10 @@ Terrain material codes (from `content/materials.json`): 0 air, 1 Loam,
 
 ```json
 {"side": 0, "x": 344, "base_y": 390, "cols": 7, "rows": 7, "block": 16,
- "blocks": [{"c": 0, "r": 0, "x": 344, "y": 374, "mat": "footing", "hp": 400, "max": 400, "peephole": false, "root": false}],
+ "blocks": [{"c": 0, "r": 0, "x": 344, "y": 374, "mat": "footing", "hp": 400, "max": 400, "peephole": false, "root": false, "battered": false}],
  "rooms": [{"kind": "nook", "id": 0, "c": 1, "r": 4, "box": [360, 278, 391, 309], "intact": true, "flap": false, "lid": false, "loophole": [392, 290, 407, 295]}],
  "kettle": {"hp": 300, "max": 300, "box": [366, 337, 386, 357], "room": [360, 326, 391, 357], "c": 1, "r": 1, "lid": false, "intact": true},
- "steam": 100, "steam_turn": 0,
+ "steam": 100, "steam_turn": 0, "fatigue": false,
  "shimmer": [[c, r]], "held": [[c, r]]}
 ```
 
@@ -217,7 +222,10 @@ Footing. `blocks` lists standing blocks only. `rooms` are the Nooks (`id` is
 the Nook index; Hobs refer to it). `box` and `loophole` are world boxes
 `[x0, y0, x1, y1]` inclusive. `flap`: Loophole Flap is down until the
 Weather Front changes. `lid`: Pot Lid. `shimmer`: blocks at the end of
-their reach. `held`: blocks Hetty's Ridgepole holds up.
+their reach. `held`: blocks Hetty's Ridgepole holds up. `fatigue`: true from
+round 10; then a block below full HP is `battered` and reaches one block
+less to the side (Cobble 1 becomes 0, wood 2 becomes 1). `root`: the boss
+weak spot block.
 
 ### hobs[]
 
@@ -320,6 +328,8 @@ Every event has `t` (type) and `tick`. Positions are world cells.
 | `prop`, `prop_wake`, `prop_break` | `x`, `y`, `shot`/`kind` | Crock or turnip lands; crock wakes; a prop breaks |
 | `grudge`, `clatter` | `hob` | Passives switched on |
 | `regrow` | `side`, `c`, `r` | Boss hedge regrows |
+| `column` | `side`, `c`, `r` | Lid Lifter blast up a column |
+| `fatigue` | `round` | Fatigue starts (round 10): battered blocks lose side reach |
 | `miss` | `x`, `y` | A shell left the map |
 | `pass` | `side` | |
 | `win` | `winner`, `how`, `round`, `pennants` | Battle over |
@@ -337,6 +347,8 @@ kettle), `double_pop`, `rescue`, `round_cap` (1-1: Sir Pudge dozes off),
   seeded from the seed and its name.
 - `ai_turn` expands into plain commands in the log; replaying the log with
   no AI gives the same hash.
+- Daily seed: `cp_daily_seed(date)` hashes the date text and
+  `RULES_VERSION`. No content delay.
 - Golden replays (`castle-core/tests/golden/*.json`) and their hashes
   (`expected.txt`) must match on every platform.
 

@@ -1,0 +1,20 @@
+{
+  "awaiting": "none",
+  "events": [],
+  "full": false,
+  "phase": "resolve",
+  "shells": [
+    [
+      1,
+      506,
+      196,
+      356,
+      "clodpot"
+    ]
+  ],
+  "side": 0,
+  "terrain": {
+    "chunks": []
+  },
+  "tick": 30
+}

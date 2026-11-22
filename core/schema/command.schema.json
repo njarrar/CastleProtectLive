@@ -1,0 +1,353 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Command (cp_command input)",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/command"
+    },
+    {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/command"
+      }
+    }
+  ],
+  "$defs": {
+    "command": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "cmd",
+            "shell"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "pick_shell"
+            },
+            "shell": {
+              "type": "string"
+            },
+            "side": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "quick_pick"
+            },
+            "side": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "end_draft"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd",
+            "hob"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "pick_hob"
+            },
+            "hob": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd",
+            "shot"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "pick_shot"
+            },
+            "shot": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "aim"
+            },
+            "angle": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1800
+            },
+            "power": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd",
+            "ghost"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "recall"
+            },
+            "ghost": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd",
+            "dx"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "walk"
+            },
+            "dx": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd",
+            "hob"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "shove_off"
+            },
+            "hob": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "fire"
+            },
+            "dial": {
+              "enum": [
+                "puff_up",
+                "rebuild",
+                "hops3"
+              ]
+            },
+            "target": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd",
+            "doodad"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "doodad"
+            },
+            "doodad": {
+              "type": "string"
+            },
+            "targets": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "room": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "pass"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "ai_turn"
+            },
+            "preset": {
+              "enum": [
+                "cozy",
+                "fair",
+                "stubborn"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd",
+            "c",
+            "r"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "lean_lines"
+            },
+            "side": {
+              "type": "integer"
+            },
+            "c": {
+              "type": "integer"
+            },
+            "r": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "shimmer"
+            },
+            "side": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd",
+            "rows"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "validate_blueprint"
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "seats": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "hash"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "log"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "terrain_all"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

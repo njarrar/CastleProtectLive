@@ -81,6 +81,7 @@ export class MockCore implements CoreApi {
   levels() { return LEVELS; }
   hobs() { return HOBS; }
   starterForts() { return STARTER_FORTS; }
+  defaultBlueprint() { return structuredClone(DEFAULT_BLUEPRINT); }
 
   checkBlueprint(bp: Blueprint): BlueprintCheck {
     const problems: BlueprintCheck['problems'] = [];

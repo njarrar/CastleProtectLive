@@ -64,11 +64,18 @@ pub struct Castle {
 }
 
 fn glyph_mat(content: &Content, g: char) -> Option<usize> {
-    content.materials.blocks.iter().position(|m| m.glyph.starts_with(g))
+    content
+        .materials
+        .blocks
+        .iter()
+        .position(|m| m.glyph.starts_with(g))
 }
 
 /// Parse a blueprint into slots (row 0 = bottom). Front faces right.
-fn parse(content: &Content, bp: &Blueprint) -> Result<(i32, i32, Vec<Slot>, Vec<(i32, i32)>, (i32, i32)), String> {
+fn parse(
+    content: &Content,
+    bp: &Blueprint,
+) -> Result<(i32, i32, Vec<Slot>, Vec<(i32, i32)>, (i32, i32)), String> {
     let rows = bp.rows.len() as i32;
     if rows == 0 {
         return Err("no rows".into());
@@ -78,7 +85,10 @@ fn parse(content: &Content, bp: &Blueprint) -> Result<(i32, i32, Vec<Slot>, Vec<
         return Err("rows differ in width".into());
     }
     if cols > MAX_W || rows > MAX_H || cols < 3 || rows < 3 {
-        return Err(format!("grid {}x{} outside 3x3 to {}x{}", cols, rows, MAX_W, MAX_H));
+        return Err(format!(
+            "grid {}x{} outside 3x3 to {}x{}",
+            cols, rows, MAX_W, MAX_H
+        ));
     }
     let mut slots = vec![Slot::Empty; (cols * rows) as usize];
     let mut nook_cells: Vec<Vec<(i32, i32)>> = vec![vec![]; 5];
@@ -102,12 +112,24 @@ fn parse(content: &Content, bp: &Blueprint) -> Result<(i32, i32, Vec<Slot>, Vec<
                 'r' => {
                     let m = glyph_mat(content, 't').ok_or("no timber")?;
                     let hp = content.materials.blocks[m].hp;
-                    Slot::Block(Block { mat: m as u8, hp, max: hp, peephole: false, root: true })
+                    Slot::Block(Block {
+                        mat: m as u8,
+                        hp,
+                        max: hp,
+                        peephole: false,
+                        root: true,
+                    })
                 }
                 _ => {
                     let m = glyph_mat(content, g).ok_or(format!("unknown glyph {g}"))?;
                     let hp = content.materials.blocks[m].hp;
-                    Slot::Block(Block { mat: m as u8, hp, max: hp, peephole: false, root: false })
+                    Slot::Block(Block {
+                        mat: m as u8,
+                        hp,
+                        max: hp,
+                        peephole: false,
+                        root: false,
+                    })
                 }
             };
         }
@@ -140,7 +162,11 @@ fn parse(content: &Content, bp: &Blueprint) -> Result<(i32, i32, Vec<Slot>, Vec<
 }
 
 fn is_block(slots: &[Slot], cols: i32, rows: i32, c: i32, r: i32) -> bool {
-    c >= 0 && r >= 0 && c < cols && r < rows && matches!(slots[(r * cols + c) as usize], Slot::Block(_))
+    c >= 0
+        && r >= 0
+        && c < cols
+        && r < rows
+        && matches!(slots[(r * cols + c) as usize], Slot::Block(_))
 }
 
 /// The Workshop validator. `seats` is how many Hobs must be seated.
@@ -189,7 +215,10 @@ pub fn validate_blueprint(content: &Content, bp: &Blueprint, seats: i32) -> Resu
     if nooks.len() > 5 {
         return Err("at most 5 Nooks".into());
     }
-    let used = slots[cols as usize..].iter().filter(|s| !matches!(s, Slot::Empty)).count() as i32;
+    let used = slots[cols as usize..]
+        .iter()
+        .filter(|s| !matches!(s, Slot::Empty))
+        .count() as i32;
     if used > BUDGET {
         return Err(format!("Block Budget {} over {}", used, BUDGET));
     }
@@ -197,14 +226,20 @@ pub fn validate_blueprint(content: &Content, bp: &Blueprint, seats: i32) -> Resu
 }
 
 impl Castle {
-    pub fn from_blueprint(content: &Content, bp: &Blueprint, side: u8, steam: i32) -> Result<Castle, String> {
+    pub fn from_blueprint(
+        content: &Content,
+        bp: &Blueprint,
+        side: u8,
+        steam: i32,
+    ) -> Result<Castle, String> {
         let (cols, rows, mut slots, mut nooks, mut k) = parse(content, bp)?;
         if side == 1 {
             // mirror so the front faces left
             let mut m = slots.clone();
             for r in 0..rows {
                 for c in 0..cols {
-                    m[(r * cols + (cols - 1 - c)) as usize] = slots[(r * cols + c) as usize].clone();
+                    m[(r * cols + (cols - 1 - c)) as usize] =
+                        slots[(r * cols + c) as usize].clone();
                 }
             }
             slots = m;
@@ -213,7 +248,13 @@ impl Castle {
             }
             k.0 = cols - 2 - k.0;
         }
-        let room = |p: (i32, i32)| Room { c: p.0, r: p.1, flap: false, lid: false, buried_tick: -1 };
+        let room = |p: (i32, i32)| Room {
+            c: p.0,
+            r: p.1,
+            flap: false,
+            lid: false,
+            buried_tick: -1,
+        };
         Ok(Castle {
             side,
             x: 0,
@@ -309,8 +350,17 @@ impl Castle {
         let (c, r) = (room.c, room.r);
         let left = [(c - 1, r), (c - 1, r + 1)];
         let right = [(c + 2, r), (c + 2, r + 1)];
-        let (back, front) = if self.side == 0 { (left, right) } else { (right, left) };
-        [[(c, r - 1), (c + 1, r - 1)], [(c, r + 2), (c + 1, r + 2)], back, front]
+        let (back, front) = if self.side == 0 {
+            (left, right)
+        } else {
+            (right, left)
+        };
+        [
+            [(c, r - 1), (c + 1, r - 1)],
+            [(c, r + 2), (c + 1, r + 2)],
+            back,
+            front,
+        ]
     }
 
     /// Intact: every block on all four sides stands. `excuse` skips one wall side
@@ -333,7 +383,11 @@ impl Castle {
     /// Loophole rect in world cells: a slot 6 cells tall at chest height in the
     /// front wall of the Nook.
     pub fn loophole_rect(&self, room: &Room) -> (i32, i32, i32, i32) {
-        let fc = if self.side == 0 { room.c + 2 } else { room.c - 1 };
+        let fc = if self.side == 0 {
+            room.c + 2
+        } else {
+            room.c - 1
+        };
         let (x0, _, x1, y1) = self.slot_box(fc, room.r);
         // floor of the nook is y1 of row r; chest is 14 to 20 cells above it
         (x0, y1 - 19, x1, y1 - 14)
@@ -446,14 +500,24 @@ impl Castle {
     }
 
     /// Lean Lines: which blocks would fall if the block at (c, r) broke.
-    pub fn lean_lines(&self, content: &Content, c: i32, r: i32, held: &[(i32, i32)]) -> Vec<(i32, i32)> {
+    pub fn lean_lines(
+        &self,
+        content: &Content,
+        c: i32,
+        r: i32,
+        held: &[(i32, i32)],
+    ) -> Vec<(i32, i32)> {
         if !self.has_block(c, r) {
             return vec![];
         }
         let mut copy = self.clone();
         let i = copy.idx(c, r);
         copy.slots[i] = Slot::Empty;
-        let mut all: Vec<(i32, i32)> = copy.falling_chunks(content, held).into_iter().flatten().collect();
+        let mut all: Vec<(i32, i32)> = copy
+            .falling_chunks(content, held)
+            .into_iter()
+            .flatten()
+            .collect();
         all.sort_by_key(|p| (p.1, p.0));
         all
     }
@@ -465,7 +529,8 @@ impl Castle {
         for r in 1..self.rows {
             for c in 0..self.cols {
                 if let (Some(b), Some(v)) = (self.block(c, r), reach[self.idx(c, r)]) {
-                    let lim = content.materials.blocks[b.mat as usize].side_support - if self.fatigue && b.hp < b.max { 1 } else { 0 };
+                    let lim = content.materials.blocks[b.mat as usize].side_support
+                        - if self.fatigue && b.hp < b.max { 1 } else { 0 };
                     if v > 0 && v == lim {
                         out.push((c, r));
                     }

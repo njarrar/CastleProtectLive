@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hobs",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "id",
+      "name",
+      "class",
+      "hp"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "class": {
+        "type": "string"
+      },
+      "hp": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "knack": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "passive": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "preview_bonus",
+              "thread_bonus",
+              "plain_override",
+              "broad_back",
+              "hop_dial",
+              "ridgepole",
+              "old_grudge",
+              "clatter_call"
+            ]
+          },
+          "pct": {
+            "type": "integer"
+          },
+          "shot": {
+            "type": "string"
+          },
+          "max": {
+            "type": "integer"
+          }
+        }
+      },
+      "passive_name": {
+        "type": "string"
+      },
+      "player": {
+        "type": "boolean"
+      },
+      "dummy": {
+        "type": "boolean"
+      }
+    }
+  }
+}

@@ -14,7 +14,9 @@ fn fifty_bot_battles_finish() {
         let lvl = &levels[i as usize % levels.len()];
         let p0 = presets[i as usize % 3];
         let p1 = presets[(i as usize / 3) % 3];
-        let setup = format!(r#"{{"level":"{lvl}","mode":"skirmish","sides":[{{"control":"ai","preset":"{p0}"}},{{"control":"ai","preset":"{p1}"}}]}}"#);
+        let setup = format!(
+            r#"{{"level":"{lvl}","mode":"skirmish","sides":[{{"control":"ai","preset":"{p0}"}},{{"control":"ai","preset":"{p1}"}}]}}"#
+        );
         let mut b = Battle::new(content.clone(), &setup, 1000 + i).expect("setup");
         let mut guard = 0;
         while b.phase != Phase::Ended && guard < 120 {
@@ -22,7 +24,10 @@ fn fifty_bot_battles_finish() {
             let _ = b.snapshot();
             guard += 1;
         }
-        let r = b.result.as_ref().unwrap_or_else(|| panic!("battle {i} on {lvl} did not end"));
+        let r = b
+            .result
+            .as_ref()
+            .unwrap_or_else(|| panic!("battle {i} on {lvl} did not end"));
         *ends.entry(r.how.clone()).or_insert(0) += 1;
     }
     println!("ends: {ends:?}");

@@ -13,7 +13,9 @@ impl Game {
     /// cp_new. `content_json` may be "" for the built in content.
     #[wasm_bindgen(constructor)]
     pub fn new(content_json: &str, level_json: &str, seed: u64) -> Result<Game, JsValue> {
-        castle_core::Game::new(content_json, level_json, seed).map(|inner| Game { inner }).map_err(|e| JsValue::from_str(&e))
+        castle_core::Game::new(content_json, level_json, seed)
+            .map(|inner| Game { inner })
+            .map_err(|e| JsValue::from_str(&e))
     }
 
     /// cp_command

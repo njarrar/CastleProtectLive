@@ -98,7 +98,7 @@ struct BlastEffect: Equatable {
 /// and hands the latest snapshot to the renderer and the HUD.
 @MainActor
 final class BattleSession: ObservableObject {
-    let bridge: any CoreBridge
+    let game: CoreGame
     let setup: BattleSetup
     let title: String
 
@@ -119,7 +119,7 @@ final class BattleSession: ObservableObject {
 
     var onTurnStarted: ((BattleSession) -> Void)?
     var onEnded: ((BattleSession, BattleResult) -> Void)?
-    var onEvents: (([CoreEvent], BattleSnapshot) -> Void)?
+    var onEvents: (([BattleEvent], BattleSnapshot) -> Void)?
     var onLocalHaptic: ((Haptics.Kind) -> Void)?
 
     private var driver: Task<Void, Never>?
@@ -137,11 +137,11 @@ final class BattleSession: ObservableObject {
     private var viewSize: CGSize = .zero
     private var viewInsets = Insets()
 
-    init(bridge: any CoreBridge, setup: BattleSetup, title: String) {
-        self.bridge = bridge
+    init(game: CoreGame, setup: BattleSetup, title: String) {
+        self.game = game
         self.setup = setup
         self.title = title
-        if let s = bridge.currentSnapshot() {
+        if let s = game.frame() {
             snapshot = s
             hud = HudState(s)
             lastTurnSeq = s.phase == .draft ? -1 : s.turnSeq
@@ -177,11 +177,11 @@ final class BattleSession: ObservableObject {
         } else if now > lastNanos {
             let ms = Int((now - lastNanos) / 1_000_000)
             if ms > 0 {
-                bridge.advance(milliseconds: min(ms, 250))
+                game.advance(milliseconds: min(ms, 250))
                 lastNanos += UInt64(ms) * 1_000_000
             }
         }
-        guard let snap = bridge.currentSnapshot() else { return }
+        guard let snap = game.frame() else { return }
         apply(snap)
     }
 
@@ -231,6 +231,7 @@ final class BattleSession: ObservableObject {
             squallWarned = true
             text = "Squall in 3"
         }
+        game.rivalFast = settings.rivalTurnsFast
         showBanner(text)
         onTurnStarted?(self)
     }
@@ -295,7 +296,7 @@ final class BattleSession: ObservableObject {
             fineTuneOpen = false
         }
         guard g.isDragging else { return }
-        bridge.send(.aim(angle: g.angleTenths, power: g.power))
+        game.send(.aim(angle: g.angleTenths, power: g.power))
         if g.power >= 100 && !hitFullPower {
             hitFullPower = true
             onLocalHaptic?(.tick)
@@ -316,7 +317,7 @@ final class BattleSession: ObservableObject {
             restoreAim()
             return
         }
-        bridge.send(.aim(angle: g.angleTenths, power: g.power))
+        game.send(.aim(angle: g.angleTenths, power: g.power))
         dragEndedAt = DispatchTime.now().uptimeNanoseconds
         fineTuneOpen = true
         scheduleFold()
@@ -338,13 +339,13 @@ final class BattleSession: ObservableObject {
         if restore || !g.isDragging || g.isInCancelRing {
             if g.isDragging { restoreAim() }
         } else {
-            bridge.send(.aim(angle: g.angleTenths, power: g.power))
+            game.send(.aim(angle: g.angleTenths, power: g.power))
         }
     }
 
     private func restoreAim() {
         guard let before = aimBeforeDrag, before.set else { return }
-        bridge.send(.aim(angle: before.angle, power: before.power))
+        game.send(.aim(angle: before.angle, power: before.power))
     }
 
     // MARK: HUD actions
@@ -357,7 +358,7 @@ final class BattleSession: ObservableObject {
     }
 
     private func sendFire() {
-        let reply = bridge.send(.fire)
+        let reply = game.send(.fire())
         if reply.ok {
             fineTuneOpen = false
             onLocalHaptic?(.fire)
@@ -375,7 +376,7 @@ final class BattleSession: ObservableObject {
             onLocalHaptic?(.illegal)
             return
         }
-        let reply = bridge.send(.aim(angle: angle, power: power))
+        let reply = game.send(.aim(angle: angle, power: power))
         onLocalHaptic?(reply.ok ? .tick : .illegal)
         scheduleFold()
         tick()
@@ -387,59 +388,55 @@ final class BattleSession: ObservableObject {
     }
 
     func recall() {
-        bridge.send(.recall)
+        game.recall()
         fineTuneOpen = true
         scheduleFold()
     }
 
     func pickHob(_ id: String) {
-        let ok = bridge.send(.pickHob(id)).ok
+        let ok = game.send(.pickHob(hob: Int(id) ?? -1)).ok
         onLocalHaptic?(ok ? .tick : .illegal)
         tick()
     }
 
     func pickShot(_ id: String) {
-        let ok = bridge.send(.pickShot(id)).ok
+        let ok = game.send(.pickShot(shot: id)).ok
         onLocalHaptic?(ok ? .tick : .illegal)
         tick()
     }
 
-    /// One Walk step; the HUD repeats it while the key is held.
+    /// One Walk step of 4 cells (1 Steam); the HUD repeats it while the key is held.
     @discardableResult
-    func walk(_ dx: Int) -> Bool {
-        let ok = bridge.send(.walk(dx: dx)).ok
+    func walk(_ dir: Int) -> Bool {
+        let ok = game.send(.walk(dx: dir * 4)).ok
         if !ok { onLocalHaptic?(.illegal) }
         return ok
     }
 
     func speedUp() {
-        bridge.send(.speed(hud.speed >= 2 ? 1 : 2))
+        game.speed = game.speed >= 2 ? 1 : 2
+        tick()
     }
 
     func ready() {
-        bridge.send(.ready)
+        game.ready()
         tick()
     }
 
     func draftPick(_ id: String) {
-        let ok = bridge.send(.draftPick(id)).ok
+        let ok = game.send(.pickShell(shell: id)).ok
         onLocalHaptic?(ok ? .tick : .illegal)
         tick()
     }
 
     func quickPick() {
-        bridge.send(.quickPick)
+        game.send(.quickPick())
         tick()
     }
 
     func endDraft() {
-        bridge.send(.endDraft)
+        game.send(.endDraft)
         tick()
-    }
-
-    func giveUp() {
-        bridge.send(.giveUp)
-        resume()
     }
 
     private func scheduleFold() {

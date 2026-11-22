@@ -102,7 +102,7 @@ export const STARTER_FORTS: Blueprint[] = [
   makeFort('Box 3', 6, 5, (c) => (c % 2 ? 'timber' : 'wicker'), 5),
 ];
 
-export const DEFAULT_BLUEPRINT: Blueprint = makeFort('Oak Lump', 5, 5, (_c, r) => (r === 0 ? 'timber' : 'wicker'), 5);
+export const DEFAULT_BLUEPRINT: Blueprint = { id: 'default', ...makeFort('Oak Lump', 5, 5, (_c, r) => (r === 0 ? 'timber' : 'wicker'), 5) };
 
 export function levelFort(id: string): Blueprint {
   const n = Number(id.split('-')[1] ?? 1);

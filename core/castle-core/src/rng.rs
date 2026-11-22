@@ -31,7 +31,12 @@ impl Sfc32 {
         let mut s = seed ^ name_hash(stream);
         let x = splitmix(&mut s);
         let y = splitmix(&mut s);
-        let mut r = Sfc32 { a: x as u32, b: (x >> 32) as u32, c: y as u32, d: 1 };
+        let mut r = Sfc32 {
+            a: x as u32,
+            b: (x >> 32) as u32,
+            c: y as u32,
+            d: 1,
+        };
         for _ in 0..12 {
             r.next_u32();
         }
@@ -43,7 +48,7 @@ impl Sfc32 {
         self.d = self.d.wrapping_add(1);
         self.a = self.b ^ (self.b >> 9);
         self.b = self.c.wrapping_add(self.c << 3);
-        self.c = (self.c << 21) | (self.c >> 11);
+        self.c = self.c.rotate_left(21);
         self.c = self.c.wrapping_add(t);
         t
     }

@@ -1,0 +1,36 @@
+{
+  "commands": [
+    {
+      "cmd": "pick_hob",
+      "hob": 0
+    },
+    {
+      "cmd": "pick_shot",
+      "shot": "plain"
+    },
+    {
+      "angle": 450,
+      "cmd": "aim",
+      "power": 62
+    },
+    {
+      "c": 0,
+      "cmd": "lean_lines",
+      "r": 1,
+      "side": 1
+    }
+  ],
+  "first_snapshot_terrain_chunks": 21,
+  "seed": 42,
+  "then": [
+    {
+      "cmd": "fire"
+    },
+    {
+      "step": 30
+    },
+    {
+      "step": 2000
+    }
+  ]
+}

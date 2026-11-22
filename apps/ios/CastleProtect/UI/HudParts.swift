@@ -143,7 +143,7 @@ struct HobPortrait: View {
         Button(action: action) {
             ZStack {
                 Circle().fill(Theme.paper)
-                if let img = SpriteImages.portrait(id: hob.id, name: hob.name, side: side) {
+                if let img = SpriteImages.portrait(id: hob.def, name: hob.name, side: side) {
                     Image(uiImage: img).resizable().scaledToFit().padding(4)
                         .saturation(down ? 0 : 1)
                 } else {

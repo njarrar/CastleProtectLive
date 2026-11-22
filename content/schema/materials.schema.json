@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Materials",
+  "type": "object",
+  "required": [
+    "terrain",
+    "blocks",
+    "hob",
+    "kettle"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "terrain": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "solid",
+          "carve_pct"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 254
+          },
+          "solid": {
+            "type": "boolean"
+          },
+          "loose": {
+            "type": "boolean"
+          },
+          "liquid": {
+            "type": "boolean"
+          },
+          "carve_pct": {
+            "type": "integer"
+          },
+          "heavy_carve_pct": {
+            "type": "integer"
+          },
+          "bore_pct": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "glyph",
+          "hp",
+          "cost",
+          "side_support",
+          "crush_pct",
+          "mult"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "glyph": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1
+          },
+          "hp": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "cost": {
+            "type": "integer"
+          },
+          "side_support": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "crush_pct": {
+            "type": "integer"
+          },
+          "never_falls": {
+            "type": "boolean"
+          },
+          "mult": {
+            "type": "object",
+            "required": [],
+            "additionalProperties": false,
+            "properties": {
+              "blast": {
+                "type": "integer"
+              },
+              "pierce": {
+                "type": "integer"
+              },
+              "dig": {
+                "type": "integer"
+              },
+              "fire": {
+                "type": "integer"
+              },
+              "crush": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "hob": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "blast": {
+          "type": "integer"
+        },
+        "pierce": {
+          "type": "integer"
+        },
+        "dig": {
+          "type": "integer"
+        },
+        "fire": {
+          "type": "integer"
+        },
+        "crush": {
+          "type": "integer"
+        }
+      }
+    },
+    "kettle": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "blast": {
+          "type": "integer"
+        },
+        "pierce": {
+          "type": "integer"
+        },
+        "dig": {
+          "type": "integer"
+        },
+        "fire": {
+          "type": "integer"
+        },
+        "crush": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

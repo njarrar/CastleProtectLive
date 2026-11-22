@@ -1,0 +1,45 @@
+{
+  "commands": [
+    {
+      "can_fire": true,
+      "ok": true
+    },
+    {
+      "ok": true
+    },
+    {
+      "angle": 450,
+      "ok": true,
+      "power": 62
+    },
+    {
+      "falls": [
+        [
+          0,
+          2
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          5
+        ],
+        [
+          0,
+          6
+        ]
+      ],
+      "ok": true,
+      "side": 1
+    }
+  ],
+  "fire": {
+    "ok": true
+  }
+}

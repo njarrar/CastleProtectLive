@@ -2,7 +2,7 @@
 // Legality comes from core.checkBlueprint; the editor only shows what the core says.
 import type { App, Screen } from '../app';
 import { play } from '../audio/sfx';
-import { DEFAULT_BLUEPRINT } from '../core/content';
+import { blueprintToRows } from '../core/bp';
 import type { Blueprint, BlueprintCell } from '../core/types';
 import { sprites } from '../render/sprites';
 import { btn, h } from '../ui/dom';
@@ -13,7 +13,8 @@ const COLS = 8;
 const ROWS = 10;
 
 export function workshopScreen(app: App): Screen {
-  let bp: Blueprint = structuredClone(app.progress.blueprint ?? DEFAULT_BLUEPRINT);
+  const fresh = () => structuredClone(app.progress.blueprint ?? app.core.defaultBlueprint());
+  let bp: Blueprint = fresh();
   bp.cols = COLS;
   bp.rows = ROWS;
   let tool: Tool = 'cobble';
@@ -33,16 +34,25 @@ export function workshopScreen(app: App): Screen {
     if (tool === 'erase') {
       const hit = cellAt(c, r);
       if (hit?.kind === 'kettle') bp.cells = bp.cells.filter((x) => x.kind !== 'kettle');
+      else if (hit?.kind === 'nook') bp.cells = bp.cells.filter((x) => !(x.kind === 'nook' && x.room === hit.room));
       else bp.cells = bp.cells.filter((x) => !(x.col === c && x.row === r));
-    } else if (tool === 'kettle') {
+    } else if (tool === 'kettle' || tool === 'nook') {
+      // Rooms are 2 x 2. One Kettle Room; Nooks are numbered 1 to 5 (seat order).
       if (c + 1 >= COLS || r + 1 >= ROWS) { undo.pop(); return; }
-      bp.cells = bp.cells.filter((x) => x.kind !== 'kettle');
-      const room = [[c, r], [c + 1, r], [c, r + 1], [c + 1, r + 1]];
-      bp.cells = bp.cells.filter((x) => !room.some(([a, b]) => a === x.col && b === x.row));
-      for (const [a, b] of room) bp.cells.push({ col: a, row: b, kind: 'kettle' });
+      let room: number | undefined;
+      if (tool === 'kettle') bp.cells = bp.cells.filter((x) => x.kind !== 'kettle');
+      else {
+        const used = new Set(bp.cells.filter((x) => x.kind === 'nook').map((x) => x.room));
+        room = [1, 2, 3, 4, 5].find((n) => !used.has(n));
+        if (!room) { undo.pop(); status.textContent = 'Five Nooks at most.'; return; }
+      }
+      const box = [[c, r], [c + 1, r], [c, r + 1], [c + 1, r + 1]];
+      if (bp.cells.some((x) => (x.kind === 'nook' || x.kind === 'kettle') && box.some(([a, b]) => a === x.col && b === x.row))) { undo.pop(); return; }
+      bp.cells = bp.cells.filter((x) => !box.some(([a, b]) => a === x.col && b === x.row));
+      for (const [a, b] of box) bp.cells.push({ col: a, row: b, kind: tool, room });
     } else {
       const hit = cellAt(c, r);
-      if (hit?.kind === 'kettle') { undo.pop(); return; }
+      if (hit?.kind === 'kettle' || hit?.kind === 'nook') { undo.pop(); return; }
       bp.cells = bp.cells.filter((x) => !(x.col === c && x.row === r));
       bp.cells.push({ col: c, row: r, kind: tool });
     }
@@ -54,8 +64,10 @@ export function workshopScreen(app: App): Screen {
   let painting = false;
   let lastCell = '';
   function paint(): void {
-    const check = app.core.checkBlueprint(bp);
-    const bad = new Set(check.problems.map((p) => key(p.col, p.row)));
+    bp.rowsText = undefined;
+    const check = app.core.checkBlueprint(trim(bp));
+    const minC = Math.min(COLS, ...bp.cells.map((x) => x.col));
+    const bad = new Set(check.problems.map((p) => key(p.col + minC, p.row)));
     gridEl.replaceChildren();
     for (let r = ROWS - 1; r >= 0; r--) {
       for (let c = 0; c < COLS; c++) {
@@ -65,7 +77,7 @@ export function workshopScreen(app: App): Screen {
           class: `cell ${cell ? cell.kind : 'empty'} ${bad.has(key(c, r)) && cell ? 'bad' : ''}`,
           role: 'gridcell', 'data-c': c, 'data-r': r, 'aria-label': `Column ${c + 1}, row ${r + 1}${cell ? `, ${cell.kind}` : ''}`,
           style: img ? `background-image:url(${img})` : undefined,
-        }, cell?.kind === 'nook' ? 'N' : cell?.kind === 'kettle' ? '♨' : '');
+        }, cell?.kind === 'nook' ? String(cell.room ?? 'N') : cell?.kind === 'kettle' ? '♨' : '');
         gridEl.append(el);
       }
     }
@@ -90,7 +102,7 @@ export function workshopScreen(app: App): Screen {
     try { gridEl.setPointerCapture(e.pointerId); } catch { /* ok */ }
   });
   gridEl.addEventListener('pointermove', (e) => {
-    if (!painting || tool === 'kettle') return;
+    if (!painting || tool === 'kettle' || tool === 'nook') return;
     const c = cellFromEvent(e);
     if (!c || key(...c) === lastCell) return;
     lastCell = key(...c);
@@ -113,7 +125,9 @@ export function workshopScreen(app: App): Screen {
   function save(): void {
     const t = trim(bp);
     if (!app.core.checkBlueprint(t).ok) return;
-    t.name = t.name || 'My Fort';
+    t.name = t.name && t.name !== 'Home fort' ? t.name : 'My Fort';
+    t.rowsText = blueprintToRows(t);
+    delete t.id;
     app.progress.blueprint = t;
     void app.saveProgress();
     dirty = false;
@@ -131,8 +145,8 @@ export function workshopScreen(app: App): Screen {
     h('div', { class: 'ws-body' }, h('div', { class: 'gridwrap' }, gridEl), status),
     palette,
     h('footer', { class: 'pinned' },
-      btn('Revert', () => { snapshotState(); bp = structuredClone(app.progress.blueprint ?? DEFAULT_BLUEPRINT); bp.cols = COLS; bp.rows = ROWS; paint(); }, 'secondary'),
-      btn('Test Yard', () => { if (dirty) save(); const s = yardSetup(app); s.sides[0].blueprint = trim(bp); app.go({ to: 'battle', setup: s }); }, 'team'),
+      btn('Revert', () => { snapshotState(); bp = fresh(); bp.cols = COLS; bp.rows = ROWS; paint(); }, 'secondary'),
+      btn('Test Yard', () => { if (dirty) save(); const s = yardSetup(app); const tb = trim(bp); tb.rowsText = blueprintToRows(tb); delete tb.id; s.sides[0].blueprint = tb; app.go({ to: 'battle', setup: s }); }, 'team'),
       saveBtn,
     ),
   );

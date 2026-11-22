@@ -226,8 +226,8 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .kettle[data-state=hurt] { background: #FFF0C2; } .kettle[data-state=critical] { border-color: var(--danger); border-width: 3px; }
 .pips { display: flex; gap: 3px; }
 .pip { width: 20px; height: 20px; border: 2px solid var(--ink); background: linear-gradient(to top, var(--blue) var(--f), #fff var(--f)); font-size: 10px; display: grid; place-items: center; color: #fff; }
-.pip.round { border-radius: 50%; }
-.pip.diamond { transform: rotate(45deg) scale(0.85); background: var(--c); border-color: var(--orange); }
+.pip.p-round { border-radius: 50%; }
+.pip.p-diamond { transform: rotate(45deg) scale(0.85); background: var(--c); border-color: var(--orange); }
 .pip.bonked { opacity: 0.35; }
 .round { border: 2px solid var(--ink); border-radius: 999px; padding: 2px 12px; background: #fff; font-size: 15px; }
 .round.squall { background: var(--slate); color: #fff; }
@@ -337,3 +337,5 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .hud.tall.flight .dockplate .tray, .hud.tall.flight .dockplate .hobs { opacity: 0.25; transform: none; }
 @media (min-width: 700px) { .hud.tall .btn.shot { width: 64px; height: 64px; font-size: 11px; } .hud.tall .fire { width: 96px; height: 96px; } }
 .draft[hidden], [hidden] { display: none !important; }
+/* keep the centring transform while pressed, or the press slides off the node */
+.node:active { transform: translate(-50%, -47%) scale(1.04); }

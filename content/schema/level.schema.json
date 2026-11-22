@@ -1,0 +1,402 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Level (one file per level in content/levels)",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "type",
+    "size",
+    "width",
+    "height",
+    "ground",
+    "pads"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "enum": [
+        "siege",
+        "rescue",
+        "grand_fort",
+        "skirmish"
+      ]
+    },
+    "size": {
+      "enum": [
+        "P",
+        "S",
+        "M",
+        "L"
+      ]
+    },
+    "width": {
+      "enum": [
+        1200,
+        1600,
+        2400,
+        3200
+      ]
+    },
+    "height": {
+      "const": 720
+    },
+    "ground": {
+      "type": "object",
+      "required": [
+        "points"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "minItems": 2
+        },
+        "loam_depth": {
+          "type": "integer"
+        },
+        "clay_depth": {
+          "type": "integer"
+        },
+        "patches": {
+          "type": "array",
+          "items": {
+            "type": "array"
+          }
+        }
+      }
+    },
+    "water": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "x0",
+          "x1",
+          "level"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "x0": {
+            "type": "integer"
+          },
+          "x1": {
+            "type": "integer"
+          },
+          "level": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "pads": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "type": "integer"
+          }
+        }
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "player": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "habit": {
+          "type": "string"
+        },
+        "blueprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "crew": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 6
+        },
+        "crew_size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 5
+        },
+        "aim": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 5
+        },
+        "doodads": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "loose_shells": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "rival": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "habit": {
+          "type": "string"
+        },
+        "blueprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "crew": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 6
+        },
+        "crew_size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 5
+        },
+        "aim": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 5
+        },
+        "doodads": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "loose_shells": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "round_cap": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 40
+        },
+        "squall": {
+          "type": "boolean"
+        },
+        "cap_win": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "wind": {
+          "type": "object",
+          "required": [],
+          "additionalProperties": false,
+          "properties": {
+            "min": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "max": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "fronts": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -10,
+                "maximum": 10
+              }
+            },
+            "front_rounds": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "first_turn": {
+          "enum": [
+            0,
+            1,
+            2
+          ]
+        },
+        "steam": {
+          "type": "integer"
+        },
+        "rummage": {
+          "type": "object",
+          "required": [],
+          "additionalProperties": false,
+          "properties": {
+            "pool": {
+              "type": "integer"
+            },
+            "picks": {
+              "type": "integer"
+            },
+            "source": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "full_preview_first_shot": {
+          "type": "boolean"
+        },
+        "preview_pct": {
+          "type": "integer"
+        },
+        "objective": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "regrow": {
+          "type": "boolean"
+        }
+      }
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "x",
+          "hp"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "cage_bar",
+              "captive",
+              "prop"
+            ]
+          },
+          "x": {
+            "type": "integer"
+          },
+          "lift": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "tag": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "pennants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "enum": [
+              "win",
+              "win_by_round",
+              "no_hob_bonked",
+              "kettle_above_pct",
+              "hits_in_a_row",
+              "kettle_pop",
+              "bonk_with_each_hob",
+              "bonk_with_knack",
+              "bonk_with_trick",
+              "use_tricks",
+              "hits_from_spots",
+              "captive_safe",
+              "root_by_round",
+              "hill_half"
+            ]
+          },
+          "value": {
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "maxItems": 3
+    },
+    "map_note": {
+      "type": "string"
+    },
+    "new_thing": {
+      "type": "string"
+    }
+  }
+}

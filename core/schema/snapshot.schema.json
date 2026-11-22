@@ -1,0 +1,882 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Frame snapshot (cp_snapshot output)",
+  "type": "object",
+  "required": [
+    "tick",
+    "phase",
+    "side",
+    "awaiting",
+    "full",
+    "terrain",
+    "shells",
+    "events"
+  ],
+  "properties": {
+    "tick": {
+      "type": "integer"
+    },
+    "phase": {
+      "enum": [
+        "draft",
+        "plan",
+        "resolve",
+        "settle",
+        "ended"
+      ]
+    },
+    "side": {
+      "type": "integer"
+    },
+    "awaiting": {
+      "enum": [
+        "human",
+        "ai",
+        "none"
+      ]
+    },
+    "full": {
+      "type": "boolean"
+    },
+    "level": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string"
+    },
+    "map": {
+      "type": "object",
+      "required": [
+        "w",
+        "h",
+        "chunk"
+      ],
+      "properties": {
+        "w": {
+          "type": "integer"
+        },
+        "h": {
+          "type": "integer"
+        },
+        "chunk": {
+          "type": "integer"
+        }
+      }
+    },
+    "terrain": {
+      "type": "object",
+      "required": [
+        "chunks"
+      ],
+      "properties": {
+        "chunks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "cx",
+              "cy",
+              "x",
+              "y",
+              "w",
+              "h",
+              "data"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "cx": {
+                "type": "integer"
+              },
+              "cy": {
+                "type": "integer"
+              },
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              },
+              "w": {
+                "type": "integer"
+              },
+              "h": {
+                "type": "integer"
+              },
+              "data": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "castles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "side",
+          "x",
+          "base_y",
+          "cols",
+          "rows",
+          "block",
+          "blocks",
+          "rooms",
+          "kettle",
+          "steam",
+          "steam_turn"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "side": {
+            "type": "integer"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "base_y": {
+            "type": "integer"
+          },
+          "cols": {
+            "type": "integer"
+          },
+          "rows": {
+            "type": "integer"
+          },
+          "block": {
+            "type": "integer"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "c",
+                "r",
+                "x",
+                "y",
+                "mat",
+                "hp",
+                "max"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "c": {
+                  "type": "integer"
+                },
+                "r": {
+                  "type": "integer"
+                },
+                "x": {
+                  "type": "integer"
+                },
+                "y": {
+                  "type": "integer"
+                },
+                "mat": {
+                  "type": "string"
+                },
+                "hp": {
+                  "type": "integer"
+                },
+                "max": {
+                  "type": "integer"
+                },
+                "peephole": {
+                  "type": "boolean"
+                },
+                "root": {
+                  "type": "boolean"
+                },
+                "battered": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "rooms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "id",
+                "c",
+                "r",
+                "box",
+                "intact",
+                "flap",
+                "lid",
+                "loophole"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "nook"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "c": {
+                  "type": "integer"
+                },
+                "r": {
+                  "type": "integer"
+                },
+                "box": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "minItems": 4,
+                  "maxItems": 4
+                },
+                "intact": {
+                  "type": "boolean"
+                },
+                "flap": {
+                  "type": "boolean"
+                },
+                "lid": {
+                  "type": "boolean"
+                },
+                "loophole": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "minItems": 4,
+                  "maxItems": 4
+                }
+              }
+            }
+          },
+          "kettle": {
+            "type": "object",
+            "required": [
+              "hp",
+              "max",
+              "box",
+              "room",
+              "lid",
+              "intact"
+            ],
+            "properties": {
+              "hp": {
+                "type": "integer"
+              },
+              "max": {
+                "type": "integer"
+              },
+              "box": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 4,
+                "maxItems": 4
+              },
+              "room": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 4,
+                "maxItems": 4
+              },
+              "c": {
+                "type": "integer"
+              },
+              "r": {
+                "type": "integer"
+              },
+              "lid": {
+                "type": "boolean"
+              },
+              "intact": {
+                "type": "boolean"
+              }
+            }
+          },
+          "steam": {
+            "type": "integer"
+          },
+          "steam_turn": {
+            "type": "integer"
+          },
+          "shimmer": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "held": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "fatigue": {
+            "type": "boolean"
+          }
+        }
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "hobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "side",
+          "def",
+          "name",
+          "class",
+          "hp",
+          "max",
+          "state",
+          "x",
+          "y",
+          "rest",
+          "knack_uses",
+          "buried",
+          "cover",
+          "can_fire",
+          "aim"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "side": {
+            "type": "integer"
+          },
+          "def": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "class": {
+            "type": "string"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "max": {
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "seated",
+              "open",
+              "dropped",
+              "tumbled",
+              "squashed",
+              "bonked"
+            ]
+          },
+          "nook": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "rest": {
+            "type": "integer"
+          },
+          "knack": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "knack_uses": {
+            "type": "integer"
+          },
+          "plain": {
+            "type": "string"
+          },
+          "buried": {
+            "type": "boolean"
+          },
+          "cover": {
+            "type": "boolean"
+          },
+          "dummy": {
+            "type": "boolean"
+          },
+          "grudge": {
+            "type": "boolean"
+          },
+          "clatter": {
+            "type": "boolean"
+          },
+          "can_fire": {
+            "type": "boolean"
+          },
+          "aim": {
+            "type": "object",
+            "required": [
+              "angle",
+              "power"
+            ],
+            "properties": {
+              "angle": {
+                "type": "integer"
+              },
+              "power": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "shells": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "minItems": 5,
+        "maxItems": 5
+      }
+    },
+    "props": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "side",
+          "kind",
+          "x",
+          "y",
+          "hp",
+          "max"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "side": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "max": {
+            "type": "integer"
+          },
+          "shot": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "preview": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        },
+        "minItems": 2,
+        "maxItems": 2
+      }
+    },
+    "ghosts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "index",
+          "side",
+          "hob",
+          "shot",
+          "angle",
+          "power",
+          "round",
+          "pin",
+          "points"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "side": {
+            "type": "integer"
+          },
+          "hob": {
+            "type": "integer"
+          },
+          "shot": {
+            "type": "string"
+          },
+          "angle": {
+            "type": "integer"
+          },
+          "power": {
+            "type": "integer"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "pin": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "self_hit": {
+            "type": "boolean"
+          },
+          "recalled": {
+            "type": "boolean"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        }
+      }
+    },
+    "hud": {
+      "type": "object",
+      "required": [
+        "turn",
+        "round",
+        "round_cap",
+        "side",
+        "wind",
+        "forecast",
+        "front_rounds_left",
+        "steam",
+        "steam_turn_left",
+        "kettle_pct",
+        "crew",
+        "squall_warning",
+        "squall_round",
+        "hands",
+        "doodads",
+        "selected"
+      ],
+      "properties": {
+        "turn": {
+          "type": "integer"
+        },
+        "round": {
+          "type": "integer"
+        },
+        "round_cap": {
+          "type": "integer"
+        },
+        "side": {
+          "type": "integer"
+        },
+        "wind": {
+          "type": "integer"
+        },
+        "forecast": {
+          "type": "integer"
+        },
+        "front_rounds_left": {
+          "type": "integer"
+        },
+        "steam": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "steam_turn_left": {
+          "type": "integer"
+        },
+        "kettle_pct": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "crew": {
+          "type": "array"
+        },
+        "squall_warning": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "squall_round": {
+          "type": "integer"
+        },
+        "squall": {
+          "type": "boolean"
+        },
+        "hands": {
+          "type": "array"
+        },
+        "doodads": {
+          "type": "array"
+        },
+        "selected": {
+          "type": "object",
+          "properties": {
+            "hob": {
+              "type": "integer"
+            },
+            "shot": {
+              "type": "string"
+            }
+          }
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "control": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "human",
+              "ai"
+            ]
+          }
+        },
+        "score": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "puff_up": {
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "draft": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "pool",
+            "picks",
+            "next",
+            "picks_each",
+            "wish"
+          ],
+          "properties": {
+            "pool": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "picks": {
+              "type": "array"
+            },
+            "next": {
+              "type": "integer"
+            },
+            "picks_each": {
+              "type": "integer"
+            },
+            "wish": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "t",
+          "tick"
+        ],
+        "properties": {
+          "t": {
+            "enum": [
+              "draft_start",
+              "draft_pick",
+              "draft_end",
+              "battle_start",
+              "round_start",
+              "turn_start",
+              "front",
+              "squall_warning",
+              "squall_round",
+              "squall",
+              "fire",
+              "walk",
+              "shove_off",
+              "split",
+              "explode",
+              "carve",
+              "mound",
+              "hit",
+              "break",
+              "collapse",
+              "big_drop",
+              "drop",
+              "climb",
+              "bonk",
+              "threaded",
+              "kettle_pop",
+              "castle_drop",
+              "thump",
+              "buried",
+              "dug_out",
+              "lid",
+              "lid_block",
+              "mend",
+              "rebuild",
+              "puff_up",
+              "prop",
+              "prop_wake",
+              "prop_break",
+              "grudge",
+              "clatter",
+              "regrow",
+              "miss",
+              "pass",
+              "win",
+              "column",
+              "fatigue"
+            ]
+          },
+          "tick": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "result": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "winner",
+            "how",
+            "round",
+            "pennants"
+          ],
+          "properties": {
+            "winner": {
+              "type": "integer"
+            },
+            "how": {
+              "enum": [
+                "clean_sweep",
+                "kettle_pop",
+                "squall",
+                "double_pop",
+                "rescue",
+                "round_cap",
+                "total_hp"
+              ]
+            },
+            "round": {
+              "type": "integer"
+            },
+            "pennants": {
+              "type": "array",
+              "items": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "last_ai": {
+      "type": "array"
+    },
+    "hash": {
+      "type": "string"
+    }
+  }
+}

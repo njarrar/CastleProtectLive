@@ -33,17 +33,27 @@ impl Battle {
     fn triggers(&self, shot: usize, on: TriggerOn) -> Vec<Effect> {
         let def = &self.content.shots[shot];
         let dial = self.cur.as_ref().and_then(|c| c.dial.clone());
-        let exact: Vec<&Trigger> = def.triggers.iter().filter(|t| t.on == on && t.dial.is_some() && t.dial == dial).collect();
+        let exact: Vec<&Trigger> = def
+            .triggers
+            .iter()
+            .filter(|t| t.on == on && t.dial.is_some() && t.dial == dial)
+            .collect();
         if !exact.is_empty() {
             return exact.iter().flat_map(|t| t.effects.clone()).collect();
         }
-        def.triggers.iter().filter(|t| t.on == on && t.dial.is_none()).flat_map(|t| t.effects.clone()).collect()
+        def.triggers
+            .iter()
+            .filter(|t| t.on == on && t.dial.is_none())
+            .flat_map(|t| t.effects.clone())
+            .collect()
     }
 
     pub fn resolve_tick(&mut self) {
         let ids: Vec<u32> = self.actors.iter().map(|a| a.id).collect();
         for id in ids {
-            let Some(idx) = self.actors.iter().position(|a| a.id == id) else { continue };
+            let Some(idx) = self.actors.iter().position(|a| a.id == id) else {
+                continue;
+            };
             let mut a = self.actors[idx].clone();
             if a.done {
                 continue;
@@ -99,7 +109,13 @@ impl Battle {
                         }
                     }
                 }
-                FlyOut::Contact { hit, cx, cy, px, py } => self.contact(a, hit, cx, cy, px, py),
+                FlyOut::Contact {
+                    hit,
+                    cx,
+                    cy,
+                    px,
+                    py,
+                } => self.contact(a, hit, cx, cy, px, py),
             },
             Mode::Roll { dir } => self.roll_tick(a, dir),
             Mode::Bore { dx, dy } => self.bore_tick(a, dx, dy),
@@ -119,7 +135,8 @@ impl Battle {
             if cs.side == side {
                 continue;
             }
-            let grow = |b: (i32, i32, i32, i32)| (b.0 - BLOCK, b.1 - BLOCK, b.2 + BLOCK, b.3 + BLOCK);
+            let grow =
+                |b: (i32, i32, i32, i32)| (b.0 - BLOCK, b.1 - BLOCK, b.2 + BLOCK, b.3 + BLOCK);
             if cs.kettle.lid {
                 let b = grow(cs.room_box(&cs.kettle));
                 if x >= b.0 && x <= b.2 && y >= b.1 && y <= b.3 {
@@ -173,7 +190,11 @@ impl Battle {
                     }
                 }
                 if let Some((ni, flap)) = found {
-                    let seated = self.hobs.iter().find(|h| h.side == side && h.alive() && h.nook == Some(ni as u8)).map(|h| h.id);
+                    let seated = self
+                        .hobs
+                        .iter()
+                        .find(|h| h.side == side && h.alive() && h.nook == Some(ni as u8))
+                        .map(|h| h.id);
                     if let (false, Some(hid)) = (flap, seated) {
                         self.castles[side as usize].nooks[ni].flap = true;
                         hit = Hit::Hob(hid);
@@ -265,7 +286,11 @@ impl Battle {
             c.threaded_now = threaded;
         }
         let effs = self.triggers(a.shot, TriggerOn::Impact);
-        let (ix, iy) = if matches!(hit, Hit::Terrain | Hit::Water) { (px, py) } else { (cx, cy) };
+        let (ix, iy) = if matches!(hit, Hit::Terrain | Hit::Water) {
+            (px, py)
+        } else {
+            (cx, cy)
+        };
         self.run_effects(&effs, a, ix, iy, Some(hit), false);
         if let Some(c) = self.cur.as_mut() {
             c.threaded_now = false;
@@ -285,7 +310,9 @@ impl Battle {
             match self.collide(a.side, nx, y, None, true) {
                 None => {}
                 Some(Hit::Terrain) => {
-                    if self.collide(a.side, nx, y - 1, None, true).is_none() && (f.motor || a.roll_speed > FX_ONE / 2) {
+                    if self.collide(a.side, nx, y - 1, None, true).is_none()
+                        && (f.motor || a.roll_speed > FX_ONE / 2)
+                    {
                         ny = y - 1;
                         climbed += 1;
                     } else {
@@ -344,7 +371,11 @@ impl Battle {
         let effs = self.triggers(a.shot, TriggerOn::Stop);
         self.mark_pin(x, y);
         // Roller hop: burst one block up so it meets the first Body row
-        let yy = if matches!(hit, Some(Hit::Block { .. })) { y - 4 } else { y };
+        let yy = if matches!(hit, Some(Hit::Block { .. })) {
+            y - 4
+        } else {
+            y
+        };
         self.run_effects(&effs, a, x, yy, hit, false);
         a.done = true;
     }
@@ -356,11 +387,20 @@ impl Battle {
             a.y += dy;
             let (x, y) = (cell(a.x), cell(a.y));
             if x < 0 || x >= self.terrain.w || y >= self.terrain.h {
-                return self.bore_stop(a, x.clamp(0, self.terrain.w - 1), y.min(self.terrain.h - 1), None, true);
+                return self.bore_stop(
+                    a,
+                    x.clamp(0, self.terrain.w - 1),
+                    y.min(self.terrain.h - 1),
+                    None,
+                    true,
+                );
             }
             match self.collide(a.side, x, y, a.skip, false) {
                 Some(Hit::Block { side, c, r }) => {
-                    let mat = self.castles[side as usize].block(c, r).map(|b| b.mat as usize).unwrap_or(0);
+                    let mat = self.castles[side as usize]
+                        .block(c, r)
+                        .map(|b| b.mat as usize)
+                        .unwrap_or(0);
                     if self.content.materials.blocks[mat].never_falls {
                         return self.bore_stop(a, x, y, Some(Hit::Block { side, c, r }), true);
                     }
@@ -384,7 +424,11 @@ impl Battle {
                 }
                 Some(Hit::Terrain) | Some(Hit::Water) => {
                     let v = self.terrain.get(x, y);
-                    let bp = if v == 255 { 0 } else { self.terrain.mats.bore_pct[v as usize] };
+                    let bp = if v == 255 {
+                        0
+                    } else {
+                        self.terrain.mats.bore_pct[v as usize]
+                    };
                     if bp <= 0 {
                         return self.bore_stop(a, x, y, None, true);
                     }
@@ -396,7 +440,9 @@ impl Battle {
                         return self.bore_stop(a, x, y, None, false);
                     }
                 }
-                Some(Hit::Kettle(s)) => return self.bore_stop(a, x, y, Some(Hit::Kettle(s)), false),
+                Some(Hit::Kettle(s)) => {
+                    return self.bore_stop(a, x, y, Some(Hit::Kettle(s)), false)
+                }
                 Some(Hit::Prop(p)) => return self.bore_stop(a, x, y, Some(Hit::Prop(p)), false),
                 Some(Hit::Off) => {
                     a.done = true;
@@ -423,7 +469,15 @@ impl Battle {
     }
 
     /// Run effect parts at a point. Returns true if the parent shell ends.
-    pub fn run_effects(&mut self, effs: &[Effect], a: &Actor, x: i32, y: i32, direct: Option<Hit>, half: bool) -> bool {
+    pub fn run_effects(
+        &mut self,
+        effs: &[Effect],
+        a: &Actor,
+        x: i32,
+        y: i32,
+        direct: Option<Hit>,
+        half: bool,
+    ) -> bool {
         if a.probe {
             return true;
         }
@@ -437,7 +491,16 @@ impl Battle {
                 break;
             }
             match e {
-                Effect::Explode { dmg, dtype, band, carve_pct, mat_bonus, low_row_pct, per_bounce, threads: _ } => {
+                Effect::Explode {
+                    dmg,
+                    dtype,
+                    band,
+                    carve_pct,
+                    mat_bonus,
+                    low_row_pct,
+                    per_bounce,
+                    threads: _,
+                } => {
                     let mut d = dmg + per_bounce * a.bounces.max(0);
                     if half {
                         d /= 2;
@@ -447,9 +510,15 @@ impl Battle {
                         band = band.bigger();
                     }
                     let r = band.radius();
-                    let bonus: Vec<(usize, i32)> = mat_bonus.iter().filter_map(|(k, v)| content.block_mat(k).map(|m| (m, *v))).collect();
-                    let heavy = content.shots[a.shot].weight == Weight::H || self.cur.as_ref().is_some_and(|c| c.heavy);
-                    self.ev(json!({"t": "explode", "x": x, "y": y, "r": r, "dmg": d, "type": dtype}));
+                    let bonus: Vec<(usize, i32)> = mat_bonus
+                        .iter()
+                        .filter_map(|(k, v)| content.block_mat(k).map(|m| (m, *v)))
+                        .collect();
+                    let heavy = content.shots[a.shot].weight == Weight::H
+                        || self.cur.as_ref().is_some_and(|c| c.heavy);
+                    self.ev(
+                        json!({"t": "explode", "x": x, "y": y, "r": r, "dmg": d, "type": dtype}),
+                    );
                     self.blast(a, x, y, r, d, *dtype, &bonus, *low_row_pct, direct);
                     let cr = r * carve_pct / 100;
                     if cr > 0 {
@@ -461,15 +530,28 @@ impl Battle {
                     }
                     self.after_damage();
                 }
-                Effect::Split { child, count, spread, speed_step, centered, speed_abs, replace } => {
-                    let Some(ci) = self.shot_index(child) else { continue };
+                Effect::Split {
+                    child,
+                    count,
+                    spread,
+                    speed_step,
+                    centered,
+                    speed_abs,
+                    replace,
+                } => {
+                    let Some(ci) = self.shot_index(child) else {
+                        continue;
+                    };
                     let (bvx, bvy) = if *speed_abs > 0 {
                         let l = len_fx(a.vx, a.vy);
                         let v = (*speed_abs as i64 * FX_ONE as i64 / 120) as i32;
                         if l == 0 {
                             (0, -v)
                         } else {
-                            ((a.vx as i64 * v as i64 / l as i64) as i32, (a.vy as i64 * v as i64 / l as i64) as i32)
+                            (
+                                (a.vx as i64 * v as i64 / l as i64) as i32,
+                                (a.vy as i64 * v as i64 / l as i64) as i32,
+                            )
                         }
                     } else {
                         (a.vx, a.vy)
@@ -478,13 +560,24 @@ impl Battle {
                         if self.actors.len() >= MAX_ACTORS {
                             break;
                         }
-                        let off2 = if *centered { 2 * k - (count - 1) } else { 2 * k };
+                        let off2 = if *centered {
+                            2 * k - (count - 1)
+                        } else {
+                            2 * k
+                        };
                         let ang = spread * off2 / 2;
                         let sp = 1000 + speed_step * off2 / 2;
                         let (rx, ry) = rotate(bvx, bvy, -ang);
                         let vx = (rx as i64 * sp as i64 / 1000) as i32;
                         let vy = (ry as i64 * sp as i64 / 1000) as i32;
-                        let mut ch = self.make_actor(a.side, ci, fx(x) + FX_ONE / 2, fx(y) + FX_ONE / 2, vx, vy);
+                        let mut ch = self.make_actor(
+                            a.side,
+                            ci,
+                            fx(x) + FX_ONE / 2,
+                            fx(y) + FX_ONE / 2,
+                            vx,
+                            vy,
+                        );
                         ch.apex_done = a.apex_done || vy >= 0;
                         ch.root = a.root && k == 0 && *replace;
                         self.actors.push(ch);
@@ -497,12 +590,24 @@ impl Battle {
                         }
                     }
                 }
-                Effect::Column { dmg, dtype, above_dmg, above_n } => {
+                Effect::Column {
+                    dmg,
+                    dtype,
+                    above_dmg,
+                    above_n,
+                } => {
                     if let Some(Hit::Block { side, c, r }) = direct {
                         self.damage_block_direct(a.side, side, c, r, *dmg, *dtype);
                         for k in 1..=*above_n {
                             if self.castles[side as usize].has_block(c, r + k) {
-                                self.damage_block_direct(a.side, side, c, r + k, *above_dmg, *dtype);
+                                self.damage_block_direct(
+                                    a.side,
+                                    side,
+                                    c,
+                                    r + k,
+                                    *above_dmg,
+                                    *dtype,
+                                );
                             }
                         }
                         // a Hob in the column takes it as an outside blast
@@ -513,13 +618,19 @@ impl Battle {
                             .filter(|h| {
                                 h.nook.is_some_and(|n| {
                                     let room = &self.castles[side as usize].nooks[n as usize];
-                                    (room.c == c || room.c + 1 == c) && room.r > r && room.r <= r + above_n
+                                    (room.c == c || room.c + 1 == c)
+                                        && room.r > r
+                                        && room.r <= r + above_n
                                 })
                             })
                             .map(|h| h.id)
                             .collect();
                         for h in hit_hobs {
-                            let cover = if self.hobs[h as usize].state == HobState::Seated { 50 } else { 100 };
+                            let cover = if self.hobs[h as usize].state == HobState::Seated {
+                                50
+                            } else {
+                                100
+                            };
                             self.damage_hob(a.side, h, *above_dmg, *dtype, 1000, &[cover], false);
                         }
                         self.ev(json!({"t": "column", "side": side, "c": c, "r": r}));
@@ -538,7 +649,9 @@ impl Battle {
                     self.ev(json!({"t": "mound", "x": x, "y": y, "r": radius}));
                 }
                 Effect::BecomeProp { shot } => {
-                    let Some(si) = self.shot_index(shot) else { continue };
+                    let Some(si) = self.shot_index(shot) else {
+                        continue;
+                    };
                     let mut yy = y;
                     while yy < self.terrain.h - 1 && !self.solid_any(x, yy + 1) {
                         yy += 1;
@@ -559,7 +672,13 @@ impl Battle {
                         stops_rollers: pf.stops_rollers,
                     });
                     // a side keeps at most 3 props; a fourth pops the oldest
-                    let mine: Vec<usize> = self.props.iter().enumerate().filter(|(_, p)| p.side == a.side).map(|(i, _)| i).collect();
+                    let mine: Vec<usize> = self
+                        .props
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, p)| p.side == a.side)
+                        .map(|(i, _)| i)
+                        .collect();
                     if mine.len() > 3 {
                         self.props.remove(mine[0]);
                     }
@@ -567,7 +686,9 @@ impl Battle {
                 }
                 Effect::Mend { hp, restore_pct } => {
                     let s = a.side as usize;
-                    let Some((c, r)) = self.self_target else { continue };
+                    let Some((c, r)) = self.self_target else {
+                        continue;
+                    };
                     if !self.castles[s].in_grid(c, r) {
                         continue;
                     }
@@ -576,7 +697,9 @@ impl Battle {
                         b.hp = (b.hp + hp).min(b.max);
                         b.peephole = false;
                         self.ev(json!({"t": "mend", "side": s, "blocks": [[c, r]]}));
-                    } else if let (Slot::Empty, Slot::Block(ob)) = (&self.castles[s].slots[i], &self.castles[s].original[i]) {
+                    } else if let (Slot::Empty, Slot::Block(ob)) =
+                        (&self.castles[s].slots[i], &self.castles[s].original[i])
+                    {
                         let mut nb = ob.clone();
                         nb.hp = (nb.max * restore_pct / 100).max(1);
                         let mut test = self.castles[s].clone();
@@ -588,11 +711,19 @@ impl Battle {
                         }
                     }
                     // mending the Nook wall also digs out its Loophole
-                    let nook_hob = self.hobs.iter().find(|h| h.side == a.side && h.buried).map(|h| h.id);
+                    let nook_hob = self
+                        .hobs
+                        .iter()
+                        .find(|h| h.side == a.side && h.buried)
+                        .map(|h| h.id);
                     if let Some(h) = nook_hob {
                         let near = self.hobs[h as usize].nook.is_some_and(|n| {
                             let room = &self.castles[s].nooks[n as usize];
-                            self.castles[s].room_walls(room).iter().flatten().any(|p| *p == (c, r))
+                            self.castles[s]
+                                .room_walls(room)
+                                .iter()
+                                .flatten()
+                                .any(|p| *p == (c, r))
                         });
                         if near {
                             self.clear_loophole(h);
@@ -613,7 +744,8 @@ impl Battle {
                             }
                             let cs = &self.castles[s];
                             let i = cs.idx(c, r);
-                            if let (Slot::Empty, Slot::Block(ob)) = (&cs.slots[i], &cs.original[i]) {
+                            if let (Slot::Empty, Slot::Block(ob)) = (&cs.slots[i], &cs.original[i])
+                            {
                                 let mut nb = ob.clone();
                                 nb.hp = (nb.max * hp_pct / 100).max(1);
                                 nb.peephole = false;
@@ -634,8 +766,17 @@ impl Battle {
                     if !self.puff_up_allowed[s] || self.puff_up_used[s] {
                         continue;
                     }
-                    let Some(h) = self.hobs.iter().find(|h| h.side == a.side && !h.alive() && !h.dummy).map(|h| h.id) else { continue };
-                    let Some(n) = self.lowest_free_nook(a.side) else { continue };
+                    let Some(h) = self
+                        .hobs
+                        .iter()
+                        .find(|h| h.side == a.side && !h.alive() && !h.dummy)
+                        .map(|h| h.id)
+                    else {
+                        continue;
+                    };
+                    let Some(n) = self.lowest_free_nook(a.side) else {
+                        continue;
+                    };
                     let hm = &mut self.hobs[h as usize];
                     hm.hp = *hp;
                     hm.state = HobState::Open;
@@ -654,12 +795,18 @@ impl Battle {
         if self.terrain.blocks_shell(x, y) {
             return true;
         }
-        self.castles.iter().any(|cs| cs.slot_at(x, y).is_some_and(|(c, r)| cs.has_block(c, r)))
+        self.castles
+            .iter()
+            .any(|cs| cs.slot_at(x, y).is_some_and(|(c, r)| cs.has_block(c, r)))
     }
 
     fn settle_ground(&mut self, x0: i32, x1: i32) {
         let castles = self.castles.clone();
-        let blocked = |x: i32, y: i32| castles.iter().any(|cs| cs.slot_at(x, y).is_some_and(|(c, r)| cs.has_block(c, r)));
+        let blocked = |x: i32, y: i32| {
+            castles
+                .iter()
+                .any(|cs| cs.slot_at(x, y).is_some_and(|(c, r)| cs.has_block(c, r)))
+        };
         self.terrain.settle(x0, x1, blocked);
         self.settle_castles();
         self.update_buried();
@@ -675,7 +822,11 @@ impl Battle {
             if rests {
                 continue;
             }
-            let ny = (cs.x..cs.x + w).map(|x| self.terrain.surface_below(x, base)).min().unwrap_or(self.terrain.h).min(self.terrain.h);
+            let ny = (cs.x..cs.x + w)
+                .map(|x| self.terrain.surface_below(x, base))
+                .min()
+                .unwrap_or(self.terrain.h)
+                .min(self.terrain.h);
             let drop = ny - base;
             if drop <= 0 {
                 continue;
@@ -700,7 +851,12 @@ impl Battle {
                     let i = cs.idx(c, r);
                     cs.slots[i] = Slot::Empty;
                 }
-                let ids: Vec<u8> = self.hobs.iter().filter(|h| h.side as usize == s && h.alive()).map(|h| h.id).collect();
+                let ids: Vec<u8> = self
+                    .hobs
+                    .iter()
+                    .filter(|h| h.side as usize == s && h.alive())
+                    .map(|h| h.id)
+                    .collect();
                 for h in ids {
                     self.hurt_hob_raw(h, 10, "thump");
                 }
@@ -735,7 +891,9 @@ impl Battle {
         self.ev(json!({"t": "bonk", "hob": h, "side": victim_side}));
         self.stats[victim_side as usize].own_bonked += 1;
         for n in neighbours {
-            if self.hobs[n as usize].has_passive(|p| matches!(p, Passive::OldGrudge)) && !self.hobs[n as usize].grudge {
+            if self.hobs[n as usize].has_passive(|p| matches!(p, Passive::OldGrudge))
+                && !self.hobs[n as usize].grudge
+            {
                 self.hobs[n as usize].grudge = true;
                 self.ev(json!({"t": "grudge", "hob": n}));
             }
@@ -777,9 +935,21 @@ impl Battle {
         v
     }
 
-    pub fn damage_block_direct(&mut self, shooter: u8, side: u8, c: i32, r: i32, dmg: i32, dtype: DType) {
-        let Some(b) = self.castles[side as usize].block(c, r) else { return };
-        let m = self.content.materials.blocks[b.mat as usize].mult.get(dtype);
+    pub fn damage_block_direct(
+        &mut self,
+        shooter: u8,
+        side: u8,
+        c: i32,
+        r: i32,
+        dmg: i32,
+        dtype: DType,
+    ) {
+        let Some(b) = self.castles[side as usize].block(c, r) else {
+            return;
+        };
+        let m = self.content.materials.blocks[b.mat as usize]
+            .mult
+            .get(dtype);
         let mut p = self.pcts_common(shooter, side);
         p.push(m);
         let d = calc(dmg, 1000, &p);
@@ -825,7 +995,16 @@ impl Battle {
     }
 
     /// Shot damage to a Hob with both clamps.
-    fn damage_hob(&mut self, shooter: u8, h: u8, dmg: i32, dtype: DType, falloff: i64, extra: &[i32], direct: bool) {
+    fn damage_hob(
+        &mut self,
+        shooter: u8,
+        h: u8,
+        dmg: i32,
+        dtype: DType,
+        falloff: i64,
+        extra: &[i32],
+        direct: bool,
+    ) {
         if !self.hobs[h as usize].alive() {
             return;
         }
@@ -873,7 +1052,8 @@ impl Battle {
             self.stats[shooter as usize].score += d as i64 * if threaded { 3 } else { 2 } / 2;
             // Clatter Call: buff the shooter's next door Hobs once per shot
             if let Some(sh) = self.cur.as_ref().and_then(|c| c.hob) {
-                if self.hobs[sh as usize].has_passive(|p| matches!(p, Passive::ClatterCall { .. })) {
+                if self.hobs[sh as usize].has_passive(|p| matches!(p, Passive::ClatterCall { .. }))
+                {
                     for n in self.next_door(sh) {
                         if !self.hobs[n as usize].clatter {
                             self.hobs[n as usize].clatter = true;
@@ -888,7 +1068,15 @@ impl Battle {
         }
     }
 
-    fn damage_kettle(&mut self, shooter: u8, side: u8, dmg: i32, dtype: DType, falloff: i64, extra: &[i32]) {
+    fn damage_kettle(
+        &mut self,
+        shooter: u8,
+        side: u8,
+        dmg: i32,
+        dtype: DType,
+        falloff: i64,
+        extra: &[i32],
+    ) {
         if shooter == side || self.castles[side as usize].kettle_hp <= 0 {
             return;
         }
@@ -926,7 +1114,18 @@ impl Battle {
 
     /// An area or point payload at (x, y).
     #[allow(clippy::too_many_arguments)]
-    fn blast(&mut self, a: &Actor, x: i32, y: i32, r: i32, dmg: i32, dtype: DType, bonus: &[(usize, i32)], low_row_pct: i32, direct: Option<Hit>) {
+    fn blast(
+        &mut self,
+        a: &Actor,
+        x: i32,
+        y: i32,
+        r: i32,
+        dmg: i32,
+        dtype: DType,
+        bonus: &[(usize, i32)],
+        low_row_pct: i32,
+        direct: Option<Hit>,
+    ) {
         let shooter = a.side;
         let falloff = |d: i32| -> i64 {
             if r == 0 {
@@ -946,12 +1145,20 @@ impl Battle {
                     if r == 0 && !is_direct {
                         continue;
                     }
-                    let d = if is_direct { 0 } else { dist_to_box(x, y, cs.slot_box(c, rr)) };
+                    let d = if is_direct {
+                        0
+                    } else {
+                        dist_to_box(x, y, cs.slot_box(c, rr))
+                    };
                     if d > r {
                         continue;
                     }
                     let mut p = self.pcts_common(shooter, s);
-                    p.push(self.content.materials.blocks[b.mat as usize].mult.get(dtype));
+                    p.push(
+                        self.content.materials.blocks[b.mat as usize]
+                            .mult
+                            .get(dtype),
+                    );
                     if let Some((_, v)) = bonus.iter().find(|(m, _)| *m == b.mat as usize) {
                         p.push(*v);
                     }
@@ -966,14 +1173,23 @@ impl Battle {
             }
         }
         // Hobs
-        let ids: Vec<u8> = self.hobs.iter().filter(|h| h.alive()).map(|h| h.id).collect();
+        let ids: Vec<u8> = self
+            .hobs
+            .iter()
+            .filter(|h| h.alive())
+            .map(|h| h.id)
+            .collect();
         for h in ids {
             let (hx, hy) = self.hob_feet(h);
             let is_direct = direct == Some(Hit::Hob(h));
             if r == 0 && !is_direct {
                 continue;
             }
-            let d = if is_direct { 0 } else { dist_to_box(x, y, (hx - 6, hy - 19, hx + 6, hy)) };
+            let d = if is_direct {
+                0
+            } else {
+                dist_to_box(x, y, (hx - 6, hy - 19, hx + 6, hy))
+            };
             if d > r {
                 continue;
             }
@@ -1019,7 +1235,11 @@ impl Battle {
             if r == 0 && !is_direct {
                 continue;
             }
-            let d = if is_direct { 0 } else { dist_to_box(x, y, (p.x - 6, p.y - 10, p.x + 6, p.y)) };
+            let d = if is_direct {
+                0
+            } else {
+                dist_to_box(x, y, (p.x - 6, p.y - 10, p.x + 6, p.y))
+            };
             if d > r {
                 continue;
             }
@@ -1032,7 +1252,9 @@ impl Battle {
                 p.x = p.x.clamp(0, self.terrain.w - 1);
             }
             let (px, py, hp, kind) = (p.x, p.y, p.hp, p.kind.clone());
-            self.ev(json!({"t": "hit", "target": "prop", "kind": kind, "x": px, "y": py, "dmg": dd}));
+            self.ev(
+                json!({"t": "hit", "target": "prop", "kind": kind, "x": px, "y": py, "dmg": dd}),
+            );
             if hp <= 0 {
                 self.ev(json!({"t": "prop_break", "kind": kind, "x": px, "y": py}));
             }
@@ -1060,10 +1282,11 @@ impl Battle {
         }
         self.refresh_hob_states();
         self.update_buried();
-        if self.castles.iter().any(|c| c.kettle_hp <= 0) || self.hobs.iter().any(|h| !h.alive()) || self.rules.objective.is_some() {
-            if self.check_win() {
-                self.actors.clear();
-            }
+        let maybe_over = self.castles.iter().any(|c| c.kettle_hp <= 0)
+            || self.hobs.iter().any(|h| !h.alive())
+            || self.rules.objective.is_some();
+        if maybe_over && self.check_win() {
+            self.actors.clear();
         }
     }
 
@@ -1099,7 +1322,10 @@ impl Battle {
                 cols.sort();
                 let mut blocks_json = vec![];
                 for &(c, r) in &chunk {
-                    let m = cs.block(c, r).map(|b| content.materials.blocks[b.mat as usize].id.clone()).unwrap_or_default();
+                    let m = cs
+                        .block(c, r)
+                        .map(|b| content.materials.blocks[b.mat as usize].id.clone())
+                        .unwrap_or_default();
                     blocks_json.push(json!([c, r, m]));
                 }
                 let mut falls = vec![];
@@ -1117,7 +1343,9 @@ impl Battle {
                     let i = self.castles[s].idx(c, r);
                     self.castles[s].slots[i] = Slot::Empty;
                 }
-                self.ev(json!({"t": "collapse", "side": side, "blocks": blocks_json, "falls": falls}));
+                self.ev(
+                    json!({"t": "collapse", "side": side, "blocks": blocks_json, "falls": falls}),
+                );
                 total += chunk.len() as i32;
                 // crush what lies under each column
                 for (c, land, crush, rb) in landings {
@@ -1162,7 +1390,12 @@ impl Battle {
                     }
                 }
             }
-            self.stats[if let Some(c) = &self.cur { c.side as usize } else { s }].blocks_dropped += total;
+            self.stats[if let Some(c) = &self.cur {
+                c.side as usize
+            } else {
+                s
+            }]
+            .blocks_dropped += total;
             if let Some(c) = self.cur.as_mut() {
                 c.dropped_blocks += total;
                 if c.dropped_blocks >= 4 {
@@ -1178,16 +1411,27 @@ impl Battle {
     /// The fall ladder: Hobs whose floor is gone drop to the first surface.
     fn hob_falls(&mut self, side: u8) {
         let s = side as usize;
-        let ids: Vec<u8> = self.hobs.iter().filter(|h| h.side == side && h.alive()).map(|h| h.id).collect();
+        let ids: Vec<u8> = self
+            .hobs
+            .iter()
+            .filter(|h| h.side == side && h.alive())
+            .map(|h| h.id)
+            .collect();
         for h in ids {
             let (fx_, fy) = self.hob_feet(h);
             let cs = &self.castles[s];
             let falls = match self.hobs[h as usize].nook {
                 Some(n) => {
                     let room = &cs.nooks[n as usize];
-                    room.r >= 1 && !cs.has_block(room.c, room.r - 1) && !cs.has_block(room.c + 1, room.r - 1)
+                    room.r >= 1
+                        && !cs.has_block(room.c, room.r - 1)
+                        && !cs.has_block(room.c + 1, room.r - 1)
                 }
-                None => !self.solid_any(fx_, fy + 1) && !self.solid_any(fx_ - 4, fy + 1) && !self.solid_any(fx_ + 4, fy + 1),
+                None => {
+                    !self.solid_any(fx_, fy + 1)
+                        && !self.solid_any(fx_ - 4, fy + 1)
+                        && !self.solid_any(fx_ + 4, fy + 1)
+                }
             };
             if !falls {
                 continue;
@@ -1205,7 +1449,10 @@ impl Battle {
             let mut seat = None;
             for (i, n) in cs.nooks.iter().enumerate() {
                 let b = cs.room_box(n);
-                let taken = self.hobs.iter().any(|o| o.id != h && o.side == side && o.alive() && o.nook == Some(i as u8));
+                let taken = self
+                    .hobs
+                    .iter()
+                    .any(|o| o.id != h && o.side == side && o.alive() && o.nook == Some(i as u8));
                 if !taken && fx_ >= b.0 && fx_ <= b.2 && ly >= b.1 && ly <= b.3 + 1 {
                     seat = Some(i as u8);
                 }
@@ -1216,7 +1463,11 @@ impl Battle {
                 let hm = &mut self.hobs[h as usize];
                 hm.nook = seat;
                 hm.free = (fx_ - bx, ly - by);
-                hm.state = if tumbled { HobState::Tumbled } else { HobState::Dropped };
+                hm.state = if tumbled {
+                    HobState::Tumbled
+                } else {
+                    HobState::Dropped
+                };
             }
             let dmg = if tumbled {
                 20

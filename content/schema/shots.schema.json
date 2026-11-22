@@ -1,0 +1,391 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shots: Plain Shots, Knacks, Trick Shells and child shells",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "id",
+      "name",
+      "kind",
+      "weight",
+      "flight"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "kind": {
+        "enum": [
+          "plain",
+          "knack",
+          "trick",
+          "child"
+        ]
+      },
+      "weight": {
+        "enum": [
+          "L",
+          "M",
+          "H"
+        ]
+      },
+      "match_class": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "dud": {
+        "type": "boolean"
+      },
+      "value": {
+        "type": "integer"
+      },
+      "skill_pct": {
+        "type": "integer"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "enum": [
+            "threads",
+            "metal"
+          ]
+        }
+      },
+      "card": {
+        "type": "string"
+      },
+      "dials": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "flight": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "arc",
+              "bounce",
+              "roller",
+              "dig",
+              "split",
+              "rise",
+              "beam",
+              "self",
+              "prop"
+            ]
+          },
+          "speed_pct": {
+            "type": "integer"
+          },
+          "gravity_pct": {
+            "type": "integer"
+          },
+          "wind_pct": {
+            "type": "integer"
+          },
+          "bounces": {
+            "type": "integer"
+          },
+          "keep_pct": {
+            "type": "integer"
+          },
+          "roll_ticks": {
+            "type": "integer"
+          },
+          "max_cells": {
+            "type": "integer"
+          },
+          "max_blocks": {
+            "type": "integer"
+          },
+          "block_dmg": {
+            "type": "integer"
+          },
+          "tunnel": {
+            "type": "integer"
+          },
+          "pass_blocks": {
+            "type": "integer"
+          },
+          "pass_dmg": {
+            "type": "integer"
+          },
+          "guide_tenths": {
+            "type": "integer"
+          },
+          "life_ticks": {
+            "type": "integer"
+          },
+          "prop_hp": {
+            "type": "integer"
+          },
+          "apex_gravity_pct": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "motor": {
+            "type": "boolean"
+          },
+          "stop_on_air": {
+            "type": "boolean"
+          },
+          "stops_rollers": {
+            "type": "boolean"
+          }
+        }
+      },
+      "triggers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "on",
+            "do"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "on": {
+              "enum": [
+                "launch",
+                "apex",
+                "impact",
+                "bounce",
+                "stop",
+                "expire",
+                "owner_turn_start",
+                "fire"
+              ]
+            },
+            "dial": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "do": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "op"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "op": {
+                    "enum": [
+                      "explode",
+                      "split",
+                      "column",
+                      "mound",
+                      "become_prop",
+                      "mend",
+                      "rebuild",
+                      "puff_up"
+                    ]
+                  },
+                  "dmg": {
+                    "type": "integer"
+                  },
+                  "dtype": {
+                    "enum": [
+                      "blast",
+                      "pierce",
+                      "dig",
+                      "fire",
+                      "crush"
+                    ]
+                  },
+                  "band": {
+                    "enum": [
+                      "point",
+                      "tiny",
+                      "small",
+                      "medium",
+                      "large",
+                      "huge"
+                    ]
+                  },
+                  "carve_pct": {
+                    "type": "integer"
+                  },
+                  "mat_bonus": {
+                    "type": "object"
+                  },
+                  "low_row_pct": {
+                    "type": "integer"
+                  },
+                  "per_bounce": {
+                    "type": "integer"
+                  },
+                  "threads": {
+                    "type": "boolean"
+                  },
+                  "child": {
+                    "type": "string"
+                  },
+                  "count": {
+                    "type": "integer"
+                  },
+                  "spread": {
+                    "type": "integer"
+                  },
+                  "speed_step": {
+                    "type": "integer"
+                  },
+                  "centered": {
+                    "type": "boolean"
+                  },
+                  "speed_abs": {
+                    "type": "integer"
+                  },
+                  "replace": {
+                    "type": "boolean"
+                  },
+                  "above_dmg": {
+                    "type": "integer"
+                  },
+                  "above_n": {
+                    "type": "integer"
+                  },
+                  "radius": {
+                    "type": "integer"
+                  },
+                  "shot": {
+                    "type": "string"
+                  },
+                  "hp": {
+                    "type": "integer"
+                  },
+                  "restore_pct": {
+                    "type": "integer"
+                  },
+                  "hp_pct": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "self_effects": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "op"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "enum": [
+                "explode",
+                "split",
+                "column",
+                "mound",
+                "become_prop",
+                "mend",
+                "rebuild",
+                "puff_up"
+              ]
+            },
+            "dmg": {
+              "type": "integer"
+            },
+            "dtype": {
+              "enum": [
+                "blast",
+                "pierce",
+                "dig",
+                "fire",
+                "crush"
+              ]
+            },
+            "band": {
+              "enum": [
+                "point",
+                "tiny",
+                "small",
+                "medium",
+                "large",
+                "huge"
+              ]
+            },
+            "carve_pct": {
+              "type": "integer"
+            },
+            "mat_bonus": {
+              "type": "object"
+            },
+            "low_row_pct": {
+              "type": "integer"
+            },
+            "per_bounce": {
+              "type": "integer"
+            },
+            "threads": {
+              "type": "boolean"
+            },
+            "child": {
+              "type": "string"
+            },
+            "count": {
+              "type": "integer"
+            },
+            "spread": {
+              "type": "integer"
+            },
+            "speed_step": {
+              "type": "integer"
+            },
+            "centered": {
+              "type": "boolean"
+            },
+            "speed_abs": {
+              "type": "integer"
+            },
+            "replace": {
+              "type": "boolean"
+            },
+            "above_dmg": {
+              "type": "integer"
+            },
+            "above_n": {
+              "type": "integer"
+            },
+            "radius": {
+              "type": "integer"
+            },
+            "shot": {
+              "type": "string"
+            },
+            "hp": {
+              "type": "integer"
+            },
+            "restore_pct": {
+              "type": "integer"
+            },
+            "hp_pct": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  }
+}

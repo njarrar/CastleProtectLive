@@ -7,9 +7,18 @@ use serde_json::Value;
 use std::sync::Arc;
 
 pub const GOLDEN: &[(&str, &str)] = &[
-    ("first_lump", include_str!("../tests/golden/first_lump.json")),
-    ("twin_puddings_bots", include_str!("../tests/golden/twin_puddings_bots.json")),
-    ("couch_starter_box", include_str!("../tests/golden/couch_starter_box.json")),
+    (
+        "first_lump",
+        include_str!("../tests/golden/first_lump.json"),
+    ),
+    (
+        "twin_puddings_bots",
+        include_str!("../tests/golden/twin_puddings_bots.json"),
+    ),
+    (
+        "couch_starter_box",
+        include_str!("../tests/golden/couch_starter_box.json"),
+    ),
 ];
 
 /// Play a replay script. Items: a command object ({"cmd": ...}), {"step": n},

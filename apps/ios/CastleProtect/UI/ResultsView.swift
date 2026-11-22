@@ -138,7 +138,7 @@ struct SkirmishSetupView: View {
             Form {
                 Section("Field") {
                     Picker("Map", selection: $options.map) {
-                        ForEach(model.bridge.maps()) { m in Text(m.name).tag(m.id) }
+                        ForEach(model.catalog.maps) { m in Text(m.name).tag(m.id) }
                     }
                     Picker("Rival", selection: $options.preset) {
                         ForEach(Preset.allCases) { p in Text(p.label).tag(p) }

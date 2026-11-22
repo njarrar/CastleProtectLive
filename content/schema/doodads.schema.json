@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Doodads",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "id",
+      "name",
+      "card",
+      "effect"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "card": {
+        "type": "string"
+      },
+      "effect": {
+        "type": "object",
+        "required": [
+          "op"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "op": {
+            "enum": [
+              "mend_blocks",
+              "lid"
+            ]
+          },
+          "count": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

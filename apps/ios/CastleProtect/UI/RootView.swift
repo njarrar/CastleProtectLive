@@ -137,6 +137,10 @@ struct ResumeCard: View {
     @EnvironmentObject private var model: AppModel
     let battle: BattleSave
 
+    init(battle: BattleSave) {
+        self.battle = battle
+    }
+
     var body: some View {
         ZStack {
             Theme.ink.opacity(0.45).ignoresSafeArea()

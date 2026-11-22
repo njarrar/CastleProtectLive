@@ -516,7 +516,12 @@ fn d3() -> i32 {
 
 impl Default for WindDef {
     fn default() -> Self {
-        WindDef { min: 0, max: 0, fronts: vec![], front_rounds: 3 }
+        WindDef {
+            min: 0,
+            max: 0,
+            fronts: vec![],
+            front_rounds: 3,
+        }
     }
 }
 
@@ -534,7 +539,11 @@ pub struct RummageDef {
 
 impl Default for RummageDef {
     fn default() -> Self {
-        RummageDef { pool: 6, picks: 2, source: vec![] }
+        RummageDef {
+            pool: 6,
+            picks: 2,
+            source: vec![],
+        }
     }
 }
 
@@ -719,7 +728,12 @@ impl Content {
         self.materials.blocks.iter().position(|m| m.id == id)
     }
     pub fn terrain_code(&self, id: &str) -> u8 {
-        self.materials.terrain.iter().find(|m| m.id == id).map(|m| m.code).unwrap_or(0)
+        self.materials
+            .terrain
+            .iter()
+            .find(|m| m.id == id)
+            .map(|m| m.code)
+            .unwrap_or(0)
     }
     pub fn terrain(&self, code: u8) -> Option<&TerrainMat> {
         self.materials.terrain.iter().find(|m| m.code == code)

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Command reply (cp_command output)",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/reply"
+    },
+    {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reply"
+      }
+    }
+  ],
+  "$defs": {
+    "reply": {
+      "type": "object",
+      "required": [
+        "ok"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "can_fire": {
+          "type": "boolean"
+        },
+        "angle": {
+          "type": "integer"
+        },
+        "power": {
+          "type": "integer"
+        },
+        "moved": {
+          "type": "integer"
+        },
+        "steam": {
+          "type": "integer"
+        },
+        "commands": {
+          "type": "array"
+        },
+        "results": {
+          "type": "array"
+        },
+        "falls": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "side": {
+          "type": "integer"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "log": {
+          "type": "array"
+        }
+      }
+    }
+  }
+}

@@ -6,7 +6,10 @@ fn sources() -> Vec<(String, String)> {
     for e in std::fs::read_dir(dir).unwrap() {
         let p = e.unwrap().path();
         if p.extension().is_some_and(|x| x == "rs") {
-            out.push((p.display().to_string(), std::fs::read_to_string(&p).unwrap()));
+            out.push((
+                p.display().to_string(),
+                std::fs::read_to_string(&p).unwrap(),
+            ));
         }
     }
     out
@@ -35,7 +38,11 @@ fn has_word(src: &str, word: &str) -> Option<usize> {
 fn no_floats_in_rules() {
     for (path, src) in sources() {
         for w in ["f32", "f64"] {
-            assert!(has_word(&src, w).is_none(), "{w} in {path} line {:?}", has_word(&src, w));
+            assert!(
+                has_word(&src, w).is_none(),
+                "{w} in {path} line {:?}",
+                has_word(&src, w)
+            );
         }
     }
 }

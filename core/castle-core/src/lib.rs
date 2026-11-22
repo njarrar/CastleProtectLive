@@ -3,6 +3,9 @@
 //! Integer and Q16.16 maths only, a 120 Hz fixed tick, seeded named random
 //! streams. Apps send commands as JSON and read snapshots as JSON.
 
+// Rules code passes many plain values between sim parts on purpose.
+#![allow(clippy::too_many_arguments, clippy::type_complexity)]
+
 pub mod actor;
 pub mod ai;
 pub mod base64;
@@ -58,7 +61,10 @@ impl Game {
     pub fn command(&mut self, json: &str) -> String {
         let v: Value = match serde_json::from_str(json) {
             Ok(v) => v,
-            Err(e) => return json!({"ok": false, "reason": "bad_json", "detail": e.to_string()}).to_string(),
+            Err(e) => {
+                return json!({"ok": false, "reason": "bad_json", "detail": e.to_string()})
+                    .to_string()
+            }
         };
         if let Value::Array(items) = &v {
             let out: Vec<Value> = items.iter().map(|c| self.battle.command(c)).collect();
