@@ -250,6 +250,8 @@ struct ShellView: Equatable, Sendable {
     var x: Double
     var y: Double
     var kind: String = ""
+    /// Flight direction in tenths of a degree, 0 right, 900 up.
+    var rot: Int = 0
 }
 
 struct DraftChip: Equatable, Sendable, Identifiable {

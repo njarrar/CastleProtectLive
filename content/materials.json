@@ -119,18 +119,18 @@
     }
   ],
   "hob": {
-    "blast": 150,
+    "blast": 100,
     "pierce": 150,
     "dig": 50,
     "fire": 100,
     "crush": 100
   },
   "kettle": {
-    "blast": 50,
+    "blast": 100,
     "pierce": 100,
     "dig": 0,
     "fire": 0,
     "crush": 50
   },
-  "cover_pct": 75
+  "cover_pct": 50
 }

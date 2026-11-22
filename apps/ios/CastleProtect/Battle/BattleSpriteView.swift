@@ -349,6 +349,8 @@ final class LensLayer {
             place(node, frame: useArt ? (sheet.frame(name) ?? sheet.frame("shell_clodpot")) : nil, at: CGPoint(x: sh.x, y: sh.y),
                   scale: shellScale, flip: false, fallback: palette.ink,
                   fallbackSize: CGSize(width: 16 * shellScale, height: 16 * shellScale))
+            // Turned to its flight direction (L6).
+            node.zRotation = CGFloat(Double(sh.rot) / 10 * Double.pi / 180)
         }
 
         // Blast flashes, four frames over 0.4 s.
@@ -550,8 +552,9 @@ enum Camera {
             return fortRect(1 - snap.activeSide).insetBy(dx: -150, dy: -50).offsetBy(dx: 0, dy: 30)
         case .follow:
             let base = fortRect(0).union(fortRect(1)).insetBy(dx: -80, dy: -40)
-            guard let sh = snap.shells.first else { return base.offsetBy(dx: 0, dy: 60) }
-            return base.union(CGRect(x: sh.x - 120, y: sh.y - 120, width: 240, height: 240))
+            guard !snap.shells.isEmpty else { return base.offsetBy(dx: 0, dy: 60) }
+            // Frame every shell of a split, not only the first (L6).
+            return snap.shells.reduce(base) { r, sh in r.union(CGRect(x: sh.x - 120, y: sh.y - 120, width: 240, height: 240)) }
         }
     }
 }

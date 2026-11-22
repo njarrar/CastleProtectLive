@@ -39,16 +39,17 @@ final class SoundEngine {
 
     private func observe() {
         let nc = NotificationCenter.default
-        observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+        let me = WeakRef(self)
+        observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { note in
             let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
             let began = raw == AVAudioSession.InterruptionType.began.rawValue
-            MainActor.assumeIsolated { self?.interrupted(began: began) }
+            MainActor.assumeIsolated { me.value?.interrupted(began: began) }
         })
-        observers.append(nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.rebuild() }
+        observers.append(nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { me.value?.rebuild() }
         })
-        observers.append(nc.addObserver(forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.restartIfNeeded() }
+        observers.append(nc.addObserver(forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { me.value?.restartIfNeeded() }
         })
     }
 

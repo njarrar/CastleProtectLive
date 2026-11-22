@@ -1,6 +1,12 @@
 import CoreHaptics
 import UIKit
 
+/// A weak reference that can cross into system callbacks.
+final class WeakRef<T: AnyObject>: @unchecked Sendable {
+    weak var value: T?
+    init(_ value: T) { self.value = value }
+}
+
 /// Plays the haptic table from the UX doc (6.5) with Core Haptics, falling
 /// back to UIKit feedback generators on devices without a haptic engine.
 /// The core sends `haptic` events with a kind; the app plays them.
@@ -24,6 +30,11 @@ final class Haptics {
     var level: HapticsLevel = .full
     private var engine: CHHapticEngine?
     private let supportsHaptics: Bool
+    /// One player per kind, made once (M7).
+    private var players: [Kind: CHHapticPatternPlayer] = [:]
+    private var running = false
+    /// Times of recent patterns, to keep a cluster shot to a few a moment.
+    private var recent: [UInt64] = []
 
     init() {
         supportsHaptics = CHHapticEngine.capabilitiesForHardware().supportsHaptics
@@ -31,6 +42,30 @@ final class Haptics {
             engine = try? CHHapticEngine()
             engine?.isAutoShutdownEnabled = true
             engine?.playsHapticsOnly = true
+            // After a server reset or a stop, players are stale: make them again (M7).
+            let me = WeakRef(self)
+            engine?.resetHandler = {
+                Task { @MainActor in me.value?.engineLost() }
+            }
+            engine?.stoppedHandler = { _ in
+                Task { @MainActor in me.value?.engineLost() }
+            }
+        }
+    }
+
+    private func engineLost() {
+        players = [:]
+        running = false
+    }
+
+    /// Starts the engine when a battle opens, so the first blast does not pay for it.
+    func warmUp() {
+        guard level != .off, let engine, !running else { return }
+        do {
+            try engine.start()
+            running = true
+        } catch {
+            running = false
         }
     }
 
@@ -44,13 +79,27 @@ final class Haptics {
         case .light where !kind.inLightSet: return
         default: break
         }
+        let now = DispatchTime.now().uptimeNanoseconds
+        recent.removeAll { now &- $0 > 100_000_000 }
+        guard recent.count < 4 else { return }
+        recent.append(now)
         if let engine, let pattern = Self.pattern(kind) {
             do {
-                try engine.start()
-                let player = try engine.makePlayer(with: pattern)
+                if !running {
+                    try engine.start()
+                    running = true
+                }
+                let player: CHHapticPatternPlayer
+                if let cached = players[kind] {
+                    player = cached
+                } else {
+                    player = try engine.makePlayer(with: pattern)
+                    players[kind] = player
+                }
                 try player.start(atTime: CHHapticTimeImmediate)
                 return
             } catch {
+                engineLost()
                 // Fall through to the UIKit generators.
             }
         }

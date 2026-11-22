@@ -98,6 +98,10 @@ final class AppModel: ObservableObject {
             launchNotice = "Your saved fight could not be resumed last time, so it was cleared. Your progress is safe."
             try? store.writeNow(loaded)
         }
+        if !loaded.firstRunDone {
+            // First run: start from the system's Reduce Motion (UX 7.3, L6).
+            loaded.settings.reduceMotion = UIAccessibility.isReduceMotionEnabled
+        }
         save = loaded
         campaign = catalog.campaign(pennants: loaded.progress.pennants)
         screen = loaded.firstRunDone ? .map : .title
@@ -260,6 +264,7 @@ final class AppModel: ObservableObject {
     private func makeSession(setup: BattleSetup, title: String) -> BattleSession {
         let s = BattleSession(game: game, setup: setup, title: title)
         s.settings = save.settings
+        haptics.warmUp()
         s.isPad = UIDevice.current.userInterfaceIdiom == .pad
         s.onTurnStarted = { [weak self] _ in self?.autosave() }
         s.onEvents = { [weak self] events, snap in self?.handle(events, snap) }

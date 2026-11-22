@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: S17, Settings. Every change applies at once; there is no Apply button.
 
@@ -47,19 +48,20 @@ struct SettingsView: View {
     @ViewBuilder
     private var soundTab: some View {
         Section {
-            percentRow("Music", \.music)
+            // Music, Voices and Subtitles come back when the game has music and voices (M12).
             percentRow("Sound", \.sound)
-            percentRow("Voices", \.voices)
             Toggle("Mute all", isOn: model.setting(\.muteAll))
-            Toggle("Subtitles", isOn: model.setting(\.subtitles))
         }
     }
 
     @ViewBuilder
     private var controlsTab: some View {
         Section {
-            Picker("Rotation", selection: model.setting(\.rotation)) {
-                ForEach(RotationSetting.allCases) { r in Text(r.label).tag(r) }
+            // An iPad that allows Split View cannot lock its orientation, so the setting shows on iPhone only (M10).
+            if UIDevice.current.userInterfaceIdiom != .pad {
+                Picker("Rotation", selection: model.setting(\.rotation)) {
+                    ForEach(RotationSetting.allCases) { r in Text(r.label).tag(r) }
+                }
             }
             Picker("Drag mode", selection: model.setting(\.dragMode)) {
                 ForEach(DragMode.allCases) { d in Text(d.label).tag(d) }
@@ -73,7 +75,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var assistsTab: some View {
-        Section(footer: Text("Take Back is part of Cozy.")) {
+        Section {
             Picker("Difficulty", selection: model.setting(\.preset)) {
                 ForEach(Preset.allCases) { p in Text(p.label).tag(p) }
             }

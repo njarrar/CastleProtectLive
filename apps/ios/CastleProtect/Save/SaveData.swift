@@ -33,8 +33,8 @@ enum ColourSet: String, Codable, Sendable, CaseIterable, Identifiable {
 /// Every player setting. Each change applies at once and is saved at once.
 struct GameSettings: Codable, Equatable, Sendable {
     var music = 70
-    var sound = 70
-    var voices = 70
+    var sound = 85
+    var voices = 80
     var muteAll = false
     var subtitles = true
     var rotation = RotationSetting.followDevice

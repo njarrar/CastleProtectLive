@@ -61,7 +61,7 @@ final class FrameAssembler {
             }
             v.canFire = false
             v.preview = []
-            v.shells = raw.shells.map { ShellView(x: Double($0.x), y: H - Double($0.y), kind: $0.shot) }
+            v.shells = raw.shells.map { ShellView(x: Double($0.x), y: H - Double($0.y), kind: $0.shot, rot: $0.rot) }
             v.speed = speed
             if !raw.terrain.chunks.isEmpty { v.terrain = groundHeights(fallback: last) }
             v.ground = grid
@@ -241,7 +241,7 @@ final class FrameAssembler {
                            spent: g.recalled, hob: String(g.hob))
         }
         v.ghostCount = [s.ghosts.filter { $0.side == 0 }.count, s.ghosts.filter { $0.side == 1 }.count]
-        v.shells = s.shells.map { ShellView(x: Double($0.x), y: H - Double($0.y), kind: $0.shot) }
+        v.shells = s.shells.map { ShellView(x: Double($0.x), y: H - Double($0.y), kind: $0.shot, rot: $0.rot) }
 
         if let d = s.draft {
             var pool = d.pool.map { id in
