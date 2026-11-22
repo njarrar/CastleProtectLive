@@ -58,6 +58,13 @@ object Camera {
         out[0] = (x0 + x1) / 2f; out[1] = (y0 + y1) / 2f; out[2] = s
     }
 
+    /** True when two world boxes (x0, y0, x1, y1) fit a [w] x [h] px rect together at [floor] px per cell or more. */
+    fun bothFit(a: FloatArray, b: FloatArray, w: Float, h: Float, margin: Float, floor: Float): Boolean {
+        val bw = max(a[2], b[2]) - min(a[0], b[0]) + 2 * margin
+        val bh = max(a[3], b[3]) - min(a[1], b[1]) + 2 * margin
+        return min(w / max(1f, bw), h / max(1f, bh)) >= floor
+    }
+
     /**
      * Shell follow with a dead zone: the centre moves only when the point leaves the
      * middle [zone] share of the view ([halfW], [halfH] are half the view in cells).
@@ -80,6 +87,22 @@ object Camera {
     fun <T : games.castleprotect.core.Castle> fortOrNull(castles: List<T>, side: Int): T? {
         for (i in castles.indices) if (castles[i].side == side) return castles[i]
         return castles.getOrNull(side)
+    }
+
+    /**
+     * The "Rival fort" edge marker (QA playtest 1, M3): when the fort's screen span [sx0]..[sx1]
+     * lies wholly off a [w] x [h] screen (inside [inL] and [inR] px of HUD on the left and right),
+     * the marker's spot on that edge at the fort's height [sy] (kept between [top] and [bottom]),
+     * and -1 for the left edge or +1 for the right. Null when any part of the fort is in view.
+     */
+    fun offscreenMarker(sx0: Float, sx1: Float, sy: Float, w: Float, h: Float, inL: Float, inR: Float, top: Float, bottom: Float): FloatArray? {
+        val lo = min(sx0, sx1); val hi = max(sx0, sx1)
+        val y = sy.coerceIn(top, max(top, h - bottom))
+        return when {
+            hi < inL -> floatArrayOf(inL, y, -1f)
+            lo > w - inR -> floatArrayOf(w - inR, y, 1f)
+            else -> null
+        }
     }
 
     /** Index range [i0, i1] of samples inside a visible world range, clamped to 0..n-1. Empty when i0 > i1. */

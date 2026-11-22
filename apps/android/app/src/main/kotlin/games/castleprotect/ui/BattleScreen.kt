@@ -75,7 +75,10 @@ import games.castleprotect.battle.Sprites
 import games.castleprotect.core.Cmd
 import games.castleprotect.core.Phase
 import games.castleprotect.game.BattleUi
+import games.castleprotect.game.FireLight
 import games.castleprotect.game.GameSession
+import games.castleprotect.game.HudText
+import games.castleprotect.game.PhoneLayout
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.max
@@ -169,7 +172,14 @@ fun BattleScreen(session: GameSession) {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         field()
                         TurnBanner(session, u, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
+                        BattleBanner(session, Modifier.align(Alignment.TopCenter).padding(top = 64.dp))
                         if (manual) CastleButton("Re-frame", { ref.view?.reframe() }, Modifier.align(Alignment.TopEnd).padding(6.dp), color = C.Paper, size = 12)
+                        // Fine Tune docks at the foot of the bottom lens on the side away from your fort, above the readout (M7).
+                        if (fineOpen && u.humanTurn && !dragging && !flying) {
+                            val far = PhoneLayout.pad(tall = true, mySide = viewer) == PhoneLayout.Pad.BOTTOM_START
+                            Box(Modifier.align(if (far) Alignment.BottomStart else Alignment.BottomEnd).padding(start = 8.dp, end = 8.dp, bottom = 84.dp)) { FineTunePad(session, u, s.tapOnly, nudge, recall) }
+                        }
+                        FireNote(session, u, Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp))
                         // Floats along the foot of the Bottom lens: Pause and Walk on one side, readout or Fine Tune on the other.
                         HandRow(s.leftHand, Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp),
                             start = {
@@ -180,10 +190,7 @@ fun BattleScreen(session: GameSession) {
                             },
                             end = {
                                 if (flying) SpeedButton(session)
-                                else if (u.humanTurn) {
-                                    if (fineOpen && !dragging) FineTunePad(session, u, s.tapOnly, nudge, recall)
-                                    else if (!dragging) Readout(session, u, { fineOpen = true; fineTuneAt = SystemClock.uptimeMillis() }, nudge)
-                                }
+                                else if (u.humanTurn && !dragging) Readout(session, u, { fineOpen = true; fineTuneAt = SystemClock.uptimeMillis() }, nudge)
                             })
                     }
                     if (!flying) {
@@ -191,7 +198,7 @@ fun BattleScreen(session: GameSession) {
                             Box(Modifier.alpha(if (dim) 0.25f else 1f).blockInput(dim)) { ShotTray(session, u, canAct, 48.dp) }
                             HandRow(s.leftHand, Modifier.fillMaxWidth().height(80.dp).padding(horizontal = 8.dp),
                                 start = { Box(Modifier.weight(1f).alpha(if (dim) 0.25f else 1f).blockInput(dim)) { CrewRow(session, u, viewer, canAct, vertical = false) } },
-                                end = { FireButton(u, fire) })
+                                end = { FireButton(session, u, fire) })
                         }
                     }
                 }
@@ -207,9 +214,15 @@ fun BattleScreen(session: GameSession) {
                     TopStrip(u, tall = false, pause = { PauseButton(session) })
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         TurnBanner(session, u, Modifier.align(Alignment.TopCenter).padding(top = 6.dp))
+                        BattleBanner(session, Modifier.align(Alignment.TopCenter).padding(top = 58.dp))
                         if (manual) CastleButton("Re-frame", { ref.view?.reframe() }, Modifier.align(if (s.leftHand) Alignment.TopStart else Alignment.TopEnd).padding(6.dp), color = C.Paper, size = 12)
                         if (!flying) Box(Modifier.align(if (s.leftHand) Alignment.CenterEnd else Alignment.CenterStart).padding(horizontal = 4.dp).alpha(if (dim) 0.25f else 1f).blockInput(dim)) { CrewRow(session, u, viewer, canAct, vertical = true) }
-                        if (fineOpen && u.humanTurn && !dragging) Box(Modifier.align(if (s.leftHand) Alignment.BottomStart else Alignment.BottomEnd).padding(start = if (s.leftHand) 92.dp else 0.dp, end = if (s.leftHand) 0.dp else 92.dp, bottom = 4.dp)) { FineTunePad(session, u, s.tapOnly, nudge, recall) }
+                        // Fine Tune sits under the top strip on the side away from your fort, clear of the tray, Fire and the forts (M7).
+                        if (fineOpen && u.humanTurn && !dragging && !flying) {
+                            val start = PhoneLayout.pad(tall = false, mySide = viewer) == PhoneLayout.Pad.TOP_START
+                            Box(Modifier.align(if (start) Alignment.TopStart else Alignment.TopEnd).padding(start = if (start) 60.dp else 0.dp, end = if (start) 0.dp else 4.dp, top = if (manual) 56.dp else 4.dp)) { FineTunePad(session, u, s.tapOnly, nudge, recall) }
+                        }
+                        FireNote(session, u, Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp))
                     }
                     if (!flying) {
                         HandRow(s.leftHand, Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
@@ -225,7 +238,7 @@ fun BattleScreen(session: GameSession) {
                                 Spacer(Modifier.width(8.dp))
                                 if (u.humanTurn && !fineOpen && !dragging) Readout(session, u, { fineOpen = true; fineTuneAt = SystemClock.uptimeMillis() }, nudge)
                                 Spacer(Modifier.width(8.dp))
-                                FireButton(u, fire)
+                                FireButton(session, u, fire)
                             })
                     } else Row(Modifier.fillMaxWidth().padding(6.dp), horizontalArrangement = if (s.leftHand) Arrangement.Start else Arrangement.End) { SpeedButton(session) }
                 }
@@ -257,17 +270,12 @@ private fun HandRow(left: Boolean, modifier: Modifier, start: @Composable androi
 @Composable
 private fun TopStrip(u: BattleUi, tall: Boolean, pause: (@Composable () -> Unit)? = null) {
     val h = u.hud
-    val v = h.volley
-    val round = when {
-        v != null -> "Shots left ${v.left.getOrElse(u.side) { 0 }}/${v.actions}"
-        h.squallRound > 0 -> "Sudden Squall ${h.squallRound}"
-        h.squallWarning > 0 -> "Round ${h.round}/${h.roundCap}  Squall in ${h.squallWarning}"
-        else -> "Round ${h.round}/${h.roundCap}"
-    } + (h.boss?.let { b -> "  Phase ${b.phase}/3" } ?: "")
+    // Rules v3: the Test Yard has no rounds (M4); Fatigue is counted down a few rounds ahead (M2).
+    val round = HudText.round(h, u.mode) + (h.boss?.let { b -> "  Phase ${b.phase}/3" } ?: "")
     val windText = if (h.wind == 0) "Calm" else "Wind ${abs(h.wind)} to the ${if (h.wind > 0) "right" else "left"}"
     val desc = "${h.names.getOrElse(0) { "" }} kettle ${h.kettlePct.getOrElse(0) { 0 }} percent. ${h.names.getOrElse(1) { "" }} kettle ${h.kettlePct.getOrElse(1) { 0 }} percent. $round. $windText." +
         (h.boss?.let { " The Grand Fort is in phase ${it.phase} of 3." } ?: "")
-    val squall = h.squallRound > 0 || h.squallWarning > 0
+    val squall = HudText.warn(h)
     val mod = Modifier.fillMaxWidth().background(C.Paper).border(1.dp, C.Ink).clearAndSetSemantics { contentDescription = desc }
     if (tall) {
         Column(mod.height(56.dp).padding(horizontal = 8.dp), verticalArrangement = Arrangement.Center) {
@@ -461,14 +469,22 @@ private fun ShotTray(session: GameSession, u: BattleUi, enabled: Boolean, chip: 
             val out = shot.uses == 0 || !ready
             val uses = if (shot.uses < 0) "" else ", ${shot.uses} left"
             val w = if (shot.weight.isNotEmpty()) ", weight ${shot.weight}" else ""
-            Box(Modifier.size(width = chip + 12.dp, height = chip).alpha(if (out || !enabled) 0.5f else 1f).clip(RoundedCornerShape(10.dp)).background(if (sel) C.Gold else C.Paper).border(2.dp, C.Ink, RoundedCornerShape(10.dp))
-                .clickable(enabled = enabled && !out, onClickLabel = "pick") { session.send(Cmd.pickShot(shot.id)); session.audio.play(if (ready) "ui_tap" else "ui_denied") }
-                .semantics { contentDescription = "${shot.name}$uses$w${if (shot.best) ", best with this Hob" else ""}${if (!ready) ", ${whyText(sc?.why)}" else ""}"; this.selected = sel }, contentAlignment = Alignment.Center) {
+            // An unready chip says why in the core's words (hud.shots[].text). It can still be picked: the pick
+            // stands, Fire goes grey and says why (QA playtest 1, M1).
+            val words = sc?.text ?: whyText(sc?.why)
+            Box(Modifier.size(width = chip + 12.dp, height = chip).alpha(if (out || !enabled) 0.5f else 1f).clip(RoundedCornerShape(10.dp)).background(if (sel) C.Gold else C.Paper).border(2.dp, if (sel && !ready) C.Danger else C.Ink, RoundedCornerShape(10.dp))
+                .clickable(enabled = enabled, onClickLabel = "pick") {
+                    session.send(Cmd.pickShot(shot.id)); session.audio.play(if (ready) "ui_tap" else "ui_denied")
+                    if (!ready) session.showFireNote(words)
+                }
+                .semantics { contentDescription = "${shot.name}$uses$w${if (shot.best) ", best with this Hob" else ""}${if (!ready) ", $words" else ""}"; this.selected = sel }, contentAlignment = Alignment.Center) {
                 if (shot.icon.isEmpty() || !SpriteImage(session.sprites, shot.icon, Modifier.fillMaxSize().padding(bottom = 12.dp, top = 2.dp))) Label(shot.name, Modifier.padding(2.dp), size = 11, bold = true, align = TextAlign.Center, maxLines = 2)
                 else Label(shot.name, Modifier.align(Alignment.BottomCenter).padding(horizontal = 2.dp), size = 9, bold = true, align = TextAlign.Center, maxLines = 1)
                 if (shot.uses >= 0) Label("${shot.uses}", Modifier.align(Alignment.TopEnd).padding(end = 3.dp).clip(CircleShape).background(C.Ink).padding(horizontal = 4.dp), size = 9, bold = true, color = Color.White)
                 if (shot.weight.isNotEmpty()) Label(shot.weight, Modifier.align(Alignment.BottomStart).padding(start = 3.dp), size = 9)
                 if (shot.best) Box(Modifier.align(Alignment.TopStart).padding(3.dp).size(7.dp).clip(CircleShape).background(C.Good))
+                val badge = if (ready) "" else HudText.chipBadge(sc?.why)
+                if (badge.isNotEmpty()) Label(badge, Modifier.align(Alignment.Center).clip(RoundedCornerShape(4.dp)).background(C.Danger).padding(horizontal = 3.dp).clearAndSetSemantics { }, size = 9, bold = true, color = Color.White, maxLines = 1)
             }
         }
     }
@@ -554,12 +570,14 @@ private fun Key(text: String, desc: String, enabled: Boolean, tapOnly: Boolean, 
 }
 
 @Composable
-private fun FireButton(u: BattleUi, fire: () -> Unit) {
+private fun FireButton(session: GameSession, u: BattleUi, fire: () -> Unit) {
     val h = u.selected
     val buried = h?.buried == true
-    val chip = u.hud.chip(u.hud.selectedShot)
-    val ready = u.humanTurn && h != null && h.canFire && !buried && (chip?.ready ?: true)
-    val label = if (buried) "Fire, dug in, the Loophole is buried" else if (ready) "Fire" else "Fire, locked" + (chip?.why?.let { ", ${whyText(it)}" } ?: "")
+    // Lit only when the core's hud.fire says so (QA playtest 1, M1); grey Fire says why and fires nothing.
+    val ready = FireLight.ready(u.hud, u.humanTurn, h)
+    val why = FireLight.why(u.hud)
+    val label = if (buried) "Fire, dug in, the Loophole is buried" else if (ready) "Fire" else "Fire, locked" + (why?.let { ", $it" } ?: u.hud.chip(u.hud.selectedShot)?.why?.let { ", ${whyText(it)}" } ?: "")
+    val tappable = u.humanTurn && h != null
     // The press: ui_fire_press timing (40, 70, 90 ms), as a squash and settle.
     var pressAt by remember { mutableLongStateOf(0L) }
     var k by remember { mutableStateOf(1f) }
@@ -573,9 +591,32 @@ private fun FireButton(u: BattleUi, fire: () -> Unit) {
         }
     }
     Box(Modifier.size(76.dp).graphicsLayer { scaleX = k; scaleY = k }.clip(CircleShape).background(if (ready) C.Gold else C.Locked).border(3.dp, C.Ink, CircleShape)
-        .onReleaseInside(ready, label) { pressAt = SystemClock.uptimeMillis(); fire() }, contentAlignment = Alignment.Center) {
+        .onReleaseInside(tappable, label) { if (ready) { pressAt = SystemClock.uptimeMillis(); fire() } else session.fireRefusedHere() }, contentAlignment = Alignment.Center) {
         Label(if (buried) "DUG IN" else "FIRE", size = if (buried) 12 else 18, bold = true)
     }
+}
+
+/** The core's words by Fire: a refused Fire's detail, or why grey Fire can not go (hud.fire.text). */
+@Composable
+private fun FireNote(session: GameSession, u: BattleUi, modifier: Modifier) {
+    val note = session.fireNote
+    var now by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
+    LaunchedEffect(note) { while (note != null && SystemClock.uptimeMillis() < note.second) { now = SystemClock.uptimeMillis(); delay(250) }; now = SystemClock.uptimeMillis() }
+    val text = note?.takeIf { now < it.second }?.first ?: if (u.humanTurn && !FireLight.ready(u.hud, true, u.selected)) FireLight.why(u.hud) else null
+    if (text.isNullOrEmpty()) return
+    Label(text, modifier.widthIn(max = 360.dp).clip(RoundedCornerShape(10.dp)).background(C.Paper).border(2.dp, C.Danger, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 4.dp)
+        .semantics { liveRegion = LiveRegionMode.Polite }, size = 13, bold = true, align = TextAlign.Center, maxLines = 2)
+}
+
+/** A battle banner from the core's events: Fatigue next round, Fatigue, a shot moved to the Plain Shot. */
+@Composable
+private fun BattleBanner(session: GameSession, modifier: Modifier) {
+    val b = session.banner ?: return
+    var now by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
+    LaunchedEffect(b) { while (SystemClock.uptimeMillis() < b.second) { now = SystemClock.uptimeMillis(); delay(200) }; now = SystemClock.uptimeMillis() }
+    if (now >= b.second) return
+    Label(b.first, modifier.widthIn(max = 420.dp).clip(RoundedCornerShape(16.dp)).background(C.InkSoft).border(2.dp, C.Ink, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 6.dp).clearAndSetSemantics { },
+        size = 15, bold = true, color = Color.White, align = TextAlign.Center, maxLines = 2)
 }
 
 /** Shove Off: shown when the selected Hob's Loophole is buried. Costs hud.shove_off_cost Steam. */
@@ -624,21 +665,25 @@ private fun HandoffCard(session: GameSession, u: BattleUi) {
         }
         scale = 1f; armed = true
     }
-    Box(Modifier.fillMaxSize().background(C.Ink.copy(alpha = 0.6f)).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }
+    BoxWithConstraints(Modifier.fillMaxSize().background(C.Ink.copy(alpha = 0.6f)).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }
         .semantics { paneTitle = "Pass the device" }, contentAlignment = Alignment.Center) {
-        Column(Modifier.padding(20.dp).widthIn(max = 380.dp).graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape(20.dp)).background(C.Paper).border(8.dp, C.side(to), RoundedCornerShape(20.dp)).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            if (session.handoffLine.isNotEmpty()) Label(session.handoffLine, size = 14, color = C.InkSoft, align = TextAlign.Center)
-            Spacer(Modifier.height(10.dp))
-            Label(if (to == 0) "●  ●  ●" else "◆  ◆  ◆", Modifier.clearAndSetSemantics { }, size = 20, color = C.side(to))
-            Label("Pass the device to", size = 16)
-            Label(name.uppercase(), Modifier.semantics { heading() }, size = 32, bold = true, color = C.side(to), align = TextAlign.Center)
+        // A short screen (phone landscape, 390 dp high) gets a compact card, so READY is fully in view (m5).
+        val compact = PhoneLayout.handoffCompact(maxHeight.value)
+        val gap = if (compact) 4.dp else 10.dp
+        Column(Modifier.padding(if (compact) 8.dp else 20.dp).widthIn(max = if (compact) 460.dp else 380.dp).verticalScroll(rememberScrollState()).graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(20.dp)).background(C.Paper).border(if (compact) 6.dp else 8.dp, C.side(to), RoundedCornerShape(20.dp)).padding(if (compact) 14.dp else 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (session.handoffLine.isNotEmpty()) Label(session.handoffLine, size = if (compact) 12 else 14, color = C.InkSoft, align = TextAlign.Center, maxLines = 2)
+            Spacer(Modifier.height(gap))
+            if (!compact) Label(if (to == 0) "●  ●  ●" else "◆  ◆  ◆", Modifier.clearAndSetSemantics { }, size = 20, color = C.side(to))
+            Label("Pass the device to", size = if (compact) 14 else 16)
+            Label(name.uppercase(), Modifier.semantics { heading() }, size = if (compact) 26 else 32, bold = true, color = C.side(to), align = TextAlign.Center, maxLines = 1)
             val marks = u.hud.handicap.getOrNull(to)?.marks ?: 0
             if (marks > 0) Label("Help: " + (if (marks == 1) "Some +" else "Lots ++"), size = 14, color = C.GoldDark, bold = true)
             u.hud.volley?.let { v -> Label("Score ${u.hud.score.getOrElse(0) { 0 }} to ${u.hud.score.getOrElse(1) { 0 }}    Shots left ${v.left.getOrElse(to) { 0 }}", size = 13) }
-            Spacer(Modifier.height(6.dp))
-            Label("Kettle ${u.hud.kettlePct.getOrElse(to) { 0 }}%    Round ${u.hud.round}/${u.hud.roundCap}", size = 14)
-            Spacer(Modifier.height(16.dp))
-            CastleButton("READY", { if (armed) session.handoffReady() }, Modifier.size(width = 200.dp, height = 72.dp), size = 22, description = "Pass the device to $name. Ready")
+            Spacer(Modifier.height(if (compact) 2.dp else 6.dp))
+            Label("Kettle ${u.hud.kettlePct.getOrElse(to) { 0 }}%    ${HudText.round(u.hud, u.mode)}", size = 14)
+            Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
+            CastleButton("READY", { if (armed) session.handoffReady() }, Modifier.size(width = 200.dp, height = if (compact) 56.dp else 72.dp), size = 22, description = "Pass the device to $name. Ready")
         }
     }
 }

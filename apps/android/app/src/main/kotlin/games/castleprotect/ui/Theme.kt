@@ -124,11 +124,13 @@ fun CastleButton(
 }
 
 /** A row of choices where exactly one is picked. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun Choice(label: String, options: List<String>, picked: Int, modifier: Modifier = Modifier, onPick: (Int) -> Unit) {
     Column(modifier.padding(vertical = 4.dp)) {
         if (label.isNotEmpty()) Label(label, size = 13, color = C.InkSoft)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // Options wrap on a narrow card (QA playtest 1, M8), so nothing runs off the edge.
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             options.forEachIndexed { i, o ->
                 CastleButton(o, { onPick(i) }, color = if (i == picked) C.Gold else C.Cream, selected = i == picked, size = 14, description = "$label: $o", pad = PaddingValues(horizontal = 12.dp, vertical = 8.dp))
             }

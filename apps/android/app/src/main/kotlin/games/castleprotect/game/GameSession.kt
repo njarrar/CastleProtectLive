@@ -46,7 +46,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlin.math.pow
 
-enum class Screen { TITLE, MAP, PRE_BATTLE, BATTLE, RESULTS, SKIRMISH, DUEL_SETUP, SETTINGS }
+enum class Screen { TITLE, MAP, PRE_BATTLE, BATTLE, RESULTS, SKIRMISH, DUEL_SETUP, SETTINGS, WORKSHOP }
 
 /**
  * What the Compose HUD reads. The selected Hob's aim is left out (every Hob's angle and
@@ -128,6 +128,15 @@ class GameSession(app: Application) : AndroidViewModel(app) {
     val aimState: StateFlow<AimUi> = _aim
     /** Frames with events, waiting for the field's effects (FieldFx). Cleared when a battle starts. */
     val fxFrames = ConcurrentLinkedQueue<Frame>()
+    /** A battle banner (Fatigue, a shot switched to the Plain Shot) and when it hides (uptime ms). */
+    var banner by mutableStateOf<Pair<String, Long>?>(null)
+        private set
+    /** The core's words for a shot that can not fire (a refused Fire, a tap on grey Fire), and when they hide. */
+    var fireNote by mutableStateOf<Pair<String, Long>?>(null)
+        private set
+    /** The Workshop fort (rows top down, Footing last), or empty for the default. */
+    var fort by mutableStateOf<List<String>>(emptyList())
+        private set
     /** A Hob-speak subtitle line and when it hides (uptime ms). */
     var subtitle by mutableStateOf<Pair<String, Long>?>(null)
         private set
@@ -225,7 +234,7 @@ class GameSession(app: Application) : AndroidViewModel(app) {
             val s = save
             audio.menuMusic()
             ui {
-                content = c; progress = s.pennants; buttons = s.buttons; canResume = s.battle != null; notice = msg
+                content = c; progress = s.pennants; buttons = s.buttons; canResume = s.battle != null; notice = msg; fort = s.fort
                 lastSpec = s.last?.let { BattleSpec(it.setup, it.seed, it.kind, it.level, it.seats) }
             }
         }
@@ -247,7 +256,7 @@ class GameSession(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         val done = CountDownLatch(1)
-        post { try { saveNow(); closeGame() } finally { done.countDown() } }
+        post { try { saveNow(); closeGame(); scratch?.close(); scratch = null } finally { done.countDown() } }
         try { done.await(3, TimeUnit.SECONDS) } catch (e: InterruptedException) { }
         running = false
         sim.interrupt()
@@ -436,10 +445,21 @@ class GameSession(app: Application) : AndroidViewModel(app) {
                 "threaded" -> { juice.slowMo(0.4f, 400, now); pattern(8, 60, 8) }
                 "walk" -> buzz(10)
                 "squall_round" -> say("Sudden Squall! Round ${e.n}.")
+                // Rules v3 (QA playtest 1, M2): a warning a round ahead, then the collapse plays as normal collapse events.
+                "fatigue_warning" -> { val t = e.text.ifEmpty { "Fatigue next round" }; say(t); showBanner(t, 3500) }
+                "fatigue" -> { say(HudText.FATIGUE_ON); showBanner(HudText.FATIGUE_ON, 3000); fatigueUntil = now + 2500 }
+                "collapse" -> if (e.why == "fatigue") { fatigueUntil = now + 2500; say("Fatigue: ${plural(e.blockCount, "block")} fell.") }
+                // At turn start (or on a Hob pick) a shot that can not fire moves to the Plain Shot (M1).
+                "shot_switch" -> if (f.hud.human(e.side)) {
+                    val h = hobOf(f, e.hob)
+                    val t = HudText.shotSwitch(h?.name ?: "", e.why, content.shotName(h?.plain ?: ""))
+                    say(t); showBanner(t, 3000)
+                }
                 "boss_phase" -> say("The Grand Fort wakes up: phase ${e.phase}.")
                 "relight" -> say("A kettle relights.")
                 "miss" -> if (shotFired) say("Missed. The shell left the field.")
-                "turn_start" -> {
+                // Test Yard: the Dummy side passes itself; its turn is not news (M4).
+                "turn_start" -> if (f.hud.yard && e.side == 1) Unit else {
                     if (shotFired) {
                         val who = f.hud.names.getOrElse(if (e.side >= 0) 1 - e.side else 0) { "" }
                         lastSummary = if (shotHits == 0) "$who: no hits." else "$who hit: ${plural(shotBreaks, "block")}, $shotDmg damage."
@@ -450,6 +470,9 @@ class GameSession(app: Application) : AndroidViewModel(app) {
                     audio.play("turn_yours", semis = if (e.side == 1) -2f else 0f)
                     val name = f.hud.names.getOrElse(e.side) { "" }
                     say(if (f.hud.human(e.side) && !(f.hud.human(0) && f.hud.human(1))) "Your turn" else "$name's turn")
+                    // The Fatigue warning also comes from the HUD, so a resumed battle shows it too.
+                    if (f.hud.human(e.side) && f.events.none { it.t == "fatigue_warning" }) HudText.fatigueBanner(f.hud)?.let { if (fatigueWarnedRound != f.hud.round) showBanner(it, 3000) }
+                    if (HudText.fatigueBanner(f.hud) != null) fatigueWarnedRound = f.hud.round
                 }
                 "win" -> {
                     val human = f.hud.human(e.winner)
@@ -523,10 +546,11 @@ class GameSession(app: Application) : AndroidViewModel(app) {
     /** A view beat from the field: a collapse lands (07 sections 6.1, 6.2, 6.4). */
     fun viewBeat(kind: String, n: Int, x: Float, y: Float) {
         if (kind != "collapse_land") return
-        // A collapse that lands after the settle (the next turn has begun) adds no shake, stop or slow motion (review 2 N-M12).
+        // A collapse that lands after the settle (the next turn has begun) adds no shake, stop or slow motion (review 2 N-M12),
+        // except the Fatigue collapse at the round 10 start, which plays like any other (QA playtest 1, M2).
         val ph = frame.phase
-        if (ph != Phase.RESOLVE && ph != Phase.SETTLE) { buzz(12); return }
         val now = SystemClock.uptimeMillis()
+        if (ph != Phase.RESOLVE && ph != Phase.SETTLE && now > fatigueUntil) { buzz(12); return }
         juice.addTrauma(minOf(0.4f, 0.05f * n), 250)
         if (n >= 3) juice.hitStop(50, now, fast)
         if (n >= 6) juice.slowMo(0.5f, 600, now)
@@ -540,6 +564,15 @@ class GameSession(app: Application) : AndroidViewModel(app) {
     }
 
     private fun plural(n: Int, w: String) = if (n == 1) "1 $w" else "$n ${w}s"
+
+    /** Until when a Fatigue collapse may shake the view (uptime ms). */
+    @Volatile private var fatigueUntil = 0L
+    private var fatigueWarnedRound = -1
+
+    private fun showBanner(text: String, ms: Long) { val until = SystemClock.uptimeMillis() + ms; ui { banner = text to until } }
+
+    /** Shows the core's words for a shot that can not fire (main thread). */
+    fun showFireNote(text: String) { fireNote = text to SystemClock.uptimeMillis() + 3500 }
     private fun say(s: String) { sayParts.add(s) }
 
     private fun onBattleEnded(f: Frame) {
@@ -579,7 +612,8 @@ class GameSession(app: Application) : AndroidViewModel(app) {
         gameSpec = null
         parser = SnapshotParser()
         frame = Frame.EMPTY
-        lastTurn = -1; lastResult = null; aiAt = 0L; shotFired = false; quietNext = false
+        lastTurn = -1; lastResult = null; aiAt = 0L; shotFired = false; quietNext = false; fatigueWarnedRound = -1; fatigueUntil = 0L
+        main.post { banner = null; fireNote = null }
         hobsAtStart = listOf(0, 0); windOn = -1; squallOn = -1; whistleSemis = Float.NaN
         fxFrames.clear()
         audio.stopLoops()
@@ -616,11 +650,8 @@ class GameSession(app: Application) : AndroidViewModel(app) {
     private fun replay(b: SavedBattle): String? {
         val fac = factory ?: return "This build has no game engine."
         closeGame()
-        // A save from another rules version can not replay (core/API.md, v0.2 change 1).
-        val rules = Regex("\"rules\"\\s*:\\s*(\\d+)")
-        val then = rules.find(b.core)?.groupValues?.get(1)
-        val nowRules = if (fac.standIn) then else rules.find(coreVersion())?.groupValues?.get(1)
-        if (then != null && nowRules != null && then != nowRules) return "The saved battle is from an older version of the rules. It was set aside."
+        // A save from another rules version can not replay (core/API.md: rules v3, saves from v2 do not resume).
+        SaveCompat.refusal(b.core, coreVersion(), fac.standIn)?.let { return it }
         val g = try { LiveBattle.open(fac, b.setup, b.seed, b.log) } catch (e: Exception) {
             return "The saved battle does not fit this version of the game (${e.message}). It was set aside."
         }
@@ -675,7 +706,28 @@ class GameSession(app: Application) : AndroidViewModel(app) {
 
     /** Fire: the button press sound and tap, then the Action. */
     fun fire(onReply: ((Reply) -> Unit)? = null) {
-        if (send(Cmd.FIRE) { r -> if (!r.ok) audio.play("ui_denied"); onReply?.invoke(r) }) { audio.play("ui_fire_press"); buzz(15) }
+        if (send(Cmd.FIRE) { r -> onFireReply(r); onReply?.invoke(r) }) { audio.play("ui_fire_press"); buzz(15) }
+    }
+
+    /**
+     * A refused Fire is never ignored (QA playtest 1, M1): the core's `detail` shows by Fire, and
+     * when it names a `ready_shot` the pick moves there, so the next tap fires.
+     */
+    private fun onFireReply(r: Reply) {
+        val (words, ready) = FireLight.onRefusal(r) ?: return
+        audio.play("ui_denied")
+        if (LiveBattle.isDead(r.reason)) return
+        showFireNote(words)
+        _announce.tryEmit(words)
+        if (ready != null && ready != _ui.value.hud.selectedShot) send(Cmd.pickShot(ready))
+    }
+
+    /** A tap on grey Fire: say why, fire nothing. */
+    fun fireRefusedHere() {
+        val words = FireLight.why(_ui.value.hud) ?: return
+        audio.play("ui_denied")
+        showFireNote(words)
+        _announce.tryEmit(words)
     }
 
     /** Picks a Hob; your Hob may say something. */
@@ -817,13 +869,17 @@ class GameSession(app: Application) : AndroidViewModel(app) {
 
     fun rematch() {
         val spec = lastSpec ?: return
-        // A campaign rematch picks up the new progress and Help; others keep their setup.
-        val again = if (spec.kind == "campaign") campaignSpec(spec.level) else spec.withSeed(BattleSpec.newSeed())
+        // Retry: the same seed and the next try as the setup's `attempt`, so the core makes it a new fight
+        // under the same rules (QA playtest 1, M6). A campaign rematch also picks up the new progress and Help.
+        val again = if (spec.kind == "campaign") campaignSpec(spec.level, spec.seed).withAttempt(spec.attempt + 1) else spec.retry()
         preSpec = again
         begin(again, toBattle = true)
     }
 
     val canRematch: Boolean get() = lastSpec != null
+
+    /** Workshop and the Test Yard open with level 1-5 (once 1-4 is won). */
+    val sideModesOpen: Boolean get() = (progress["1-4"] ?: 0) and 1 != 0
 
     /** Carry on: the live battle, or the saved one rebuilt from its log. */
     fun resume() {
@@ -860,6 +916,36 @@ class GameSession(app: Application) : AndroidViewModel(app) {
         back.clear(); back.addLast(Screen.TITLE)
     }
 
+    // ---- Workshop and Test Yard -----------------------------------------------
+
+    /** Sim thread: a battle handle for `validate_blueprint` queries only (they change nothing). */
+    private var scratch: games.castleprotect.core.CoreGame? = null
+
+    /** Asks the core whether [rows] stand with [seats] Nooks. [done] runs on the main thread. */
+    fun checkFort(rows: List<String>, seats: Int, done: (FortCheck) -> Unit) {
+        post {
+            val fac = factory ?: return@post
+            val g = scratch ?: try { fac.newGame(SCRATCH_SETUP, 1).also { scratch = it } } catch (e: CoreException) { null } ?: return@post
+            val r = try { FortCheck.parse(g.command(Cmd.validateBlueprint(rows, seats))) } catch (e: RuntimeException) { FortCheck(false, "The fort could not be checked.") }
+            ui { done(r) }
+        }
+    }
+
+    fun saveFort(rows: List<String>) {
+        fort = rows
+        post { save = save.copy(fort = rows); store.write(save) }
+    }
+
+    /** The Test Yard with [rows] (or the level's fort): endless shots at a Dummy side that passes itself. */
+    fun startTestYard(rows: List<String>?) {
+        val seats = rows?.let { FortGrid.fromRows(it).seats() } ?: 0
+        val spec = BattleSpec.testYard("d1", rows, seats)
+        preSpec = spec
+        replacingBattle { begin(spec, toBattle = true) }
+    }
+
+    fun leaveWorkshop() { post { scratch?.close(); scratch = null } }
+
     /** Couch Duel: the next player took the device. */
     fun handoffReady() { handoffTo = -1 }
 
@@ -886,5 +972,6 @@ class GameSession(app: Application) : AndroidViewModel(app) {
         private const val TAG = "CastleSession"
         private const val FRAME_MS = 16L
         private const val AI_THINK_MS = 700L
+        private const val SCRATCH_SETUP = """{"level":"d1","mode":"test_yard"}"""
     }
 }

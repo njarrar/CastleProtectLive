@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
                     Screen.SKIRMISH -> SkirmishScreen(session)
                     Screen.DUEL_SETUP -> DuelSetupScreen(session)
                     Screen.SETTINGS -> SettingsScreen(session)
+                    Screen.WORKSHOP -> games.castleprotect.ui.WorkshopScreen(session)
                 }
                 // A note (a refused start, a dropped move, a refused Give up) shows on every screen, not only the Title (review 2 N-L9).
                 if (session.screen != Screen.TITLE) session.notice?.let { n -> games.castleprotect.ui.NoticeBar(n) { session.notice = null } }

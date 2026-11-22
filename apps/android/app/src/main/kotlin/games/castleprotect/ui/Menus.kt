@@ -61,6 +61,8 @@ import games.castleprotect.core.Phase
 import games.castleprotect.core.SideOpts
 import kotlinx.coroutines.delay
 import games.castleprotect.game.GameSession
+import games.castleprotect.game.HudText
+import games.castleprotect.game.PhoneLayout
 import games.castleprotect.game.Screen
 
 @Composable
@@ -161,10 +163,15 @@ fun MapScreen(session: GameSession) {
                 if (tall) Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) { nodes() }
                 else Row(Modifier.weight(1f).fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) { nodes() }
                 // Dock. It grows as things open; Workshop and Tinker Tree arrive after v0.1.
-                Row(Modifier.fillMaxWidth().background(C.Paper).border(1.dp, C.Ink).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().background(C.Paper).border(1.dp, C.Ink).horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (session.canResume) CastleButton("Carry on", { if (!session.loading) session.resume() })
                     CastleButton("Skirmish", { session.go(Screen.SKIRMISH) }, color = C.Cream)
-                    Spacer(Modifier.weight(1f))
+                    // Workshop and Test Yard open with level 1-5, as on the web map.
+                    if (session.sideModesOpen) {
+                        CastleButton("Workshop", { session.go(Screen.WORKSHOP) }, color = C.Cream)
+                        CastleButton("Test Yard", { session.startTestYard(session.fort.ifEmpty { null }) }, color = C.Cream, enabled = !session.loading && !session.coreMissing,
+                            description = "Test Yard. Try any shot, endless uses")
+                    }
                     CastleButton("●◆ 2 Players", { session.go(Screen.DUEL_SETUP) }, Modifier.widthIn(min = 120.dp), color = C.Cream, description = "2 Players. Couch Duel on one device")
                 }
             }
@@ -327,6 +334,18 @@ fun ResultsScreen(session: GameSession) {
                 r.stats.getOrNull(me)?.let { st ->
                     Label("Shots ${st.shots}   Hits ${st.hits}   Blocks dropped ${st.blocksDropped}   Bonks ${st.bonks}   Best streak ${st.bestStreak}", Modifier.fillMaxWidth().padding(top = 6.dp), size = 12, color = C.InkSoft, align = TextAlign.Center)
                 }
+                // "Best shot" is the winner's (result.best_shot), never a shot of the losing side (QA playtest 1, m1).
+                r.bestShot?.let { b ->
+                    Label("Best shot: ${HudText.bestShot(b)}", Modifier.fillMaxWidth().padding(top = 6.dp), size = 14, bold = true, align = TextAlign.Center, color = C.side(b.side.coerceIn(0, 1)))
+                }
+                // Each side's own best shot (result.stats[i].best_shot).
+                if (r.stats.size >= 2) Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                    for (i in 0..1) {
+                        val who = if (duel) u.hud.names.getOrElse(i) { "Player ${i + 1}" } else if (i == 0) "Yours" else u.hud.names.getOrElse(1) { "Rival" }
+                        val b = r.bestOf(i)
+                        Label("$who: " + (b?.let { HudText.bestShot(it) } ?: "no damage dealt"), Modifier.fillMaxWidth(), size = 12, color = C.side(i), align = TextAlign.Center)
+                    }
+                }
                 // "What broke you" after a loss (07 section 4.6): the last blow, the worst blows and what was lost.
                 val b = r.broke
                 if (b != null && !won && !duel) BrokePanel(b)
@@ -433,7 +452,8 @@ fun DuelSetupScreen(session: GameSession) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Label("2 players, 1 device. Free forever, no ads.", size = 13, color = C.InkSoft)
                 BoxWithConstraints {
-                    val wide = maxWidth > 560.dp
+                    // Side by side from 600 dp (844 x 390 landscape); each card shrinks to its half and its rows wrap (M8).
+                    val wide = PhoneLayout.duelSideBySide(maxWidth.value)
                     val a: @Composable (Modifier) -> Unit = { m -> PlayerPlate(m, 0, p1, { p1 = it }, help1, { help1 = it }) { p1 = duelNames.filter { it != p2 }.random() } }
                     val b: @Composable (Modifier) -> Unit = { m -> PlayerPlate(m, 1, p2, { p2 = it }, help2, { help2 = it }) { p2 = duelNames.filter { it != p1 }.random() } }
                     if (wide) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { a(Modifier.weight(1f)); b(Modifier.weight(1f)) }

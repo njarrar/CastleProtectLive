@@ -94,6 +94,8 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     @Volatile private var fingerX = 0f
     @Volatile private var fingerY = 0f
     private var prevAngle = 0; private var prevPower = 0
+    /** The angle the pull had before the finger met the screen edge (QA playtest 1, m3). */
+    private var heldAngle = -1
     @Volatile private var sentAngle = -1
     @Volatile private var sentPower = -1
     private var lastX = 0f; private var lastY = 0f
@@ -276,6 +278,12 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
             mv = ease(main, cx, cy, scale, f, dt)
             renderer.drawLens(c, main, f, me, dragNow, shown, shakeOut)
             top.live = false; bottom.live = false
+            // Your fort is framed and the Rival's does not fit: a marker on the screen edge at its height (M3).
+            if (!flying) Camera.fortOrNull(f.castles, 1 - me)?.let { k ->
+                val mk = Camera.offscreenMarker(main.sx(k.x.toFloat()), main.sx((k.x + k.cols * k.block).toFloat()), main.sy((k.topY + k.baseY) / 2f),
+                    w, h, p[0], p[2], p[1] + 8f * dp, p[3] + 8f * dp)
+                if (mk != null) drawRivalMarker(c, mk[0], mk[1], mk[2] > 0f)
+            }
         }
         // Shake at 0%: a 2 pt white rim flash on the blast in its place, unless Reduce flashes is on.
         val fl = session.juice.flash
@@ -290,6 +298,27 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     }
 
     private val rim = android.graphics.Paint().apply { style = android.graphics.Paint.Style.STROKE; color = android.graphics.Color.WHITE }
+    private val markFill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val markText = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = 12f * dp; isFakeBoldText = true }
+    private val markPath = android.graphics.Path()
+
+    /** "Rival fort" pill with an arrow toward the fort, on the screen edge at [x], [y]. */
+    private fun drawRivalMarker(c: Canvas, x: Float, y: Float, right: Boolean) {
+        val label = "Rival fort"
+        val tw = markText.measureText(label)
+        val ph = 22f * dp; val pw = tw + 30f * dp
+        val x0 = if (right) x - pw else x; val x1 = x0 + pw
+        markFill.color = 0xFFE07A2E.toInt() // the Rival's orange
+        markFill.alpha = 230
+        c.drawRoundRect(x0, y - ph / 2, x1, y + ph / 2, ph / 2, ph / 2, markFill)
+        markPath.reset()
+        val tip = if (right) x1 + 8f * dp else x0 - 8f * dp
+        val base = if (right) x1 - 2f * dp else x0 + 2f * dp
+        markPath.moveTo(tip, y); markPath.lineTo(base, y - 7f * dp); markPath.lineTo(base, y + 7f * dp); markPath.close()
+        c.drawPath(markPath, markFill)
+        val tx = if (right) x0 + 10f * dp else x0 + 20f * dp
+        c.drawText(label, tx, y + markText.textSize * 0.35f, markText)
+    }
 
     private fun fortBox(k: games.castleprotect.core.Castle, out: FloatArray) {
         out[0] = k.x.toFloat(); out[1] = k.topY - 40f; out[2] = (k.x + k.cols * k.block).toFloat(); out[3] = k.baseY + 12f
@@ -343,7 +372,10 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 while (i + 1 < pv.size) { x0 = min(x0, pv[i].toFloat()); x1 = max(x1, pv[i].toFloat()); y0 = min(y0, pv[i + 1].toFloat()); y1 = max(y1, pv[i + 1].toFloat()); i += 2 }
                 val ax0 = min(x0, boxB[0]); val ax1 = max(x1, boxB[2]); val ay0 = min(y0, boxB[1]); val ay1 = max(y1, boxB[3])
                 Camera.fit(ax0, ay0, ax1, ay1, w, h, margin, floor, ceil, fitOut)
-                if (fitOut[2] <= floor + 1e-4f) {
+                // Both forts hold whenever their blocks still draw at 8 dp or more, even if the arc then runs off (M3).
+                if (fitOut[2] <= floor + 1e-4f && Camera.bothFit(boxA, boxB, w, h, margin, floor)) {
+                    Camera.fit(min(boxA[0], boxB[0]), min(boxA[1], boxB[1]), max(boxA[2], boxB[2]), max(boxA[3], boxB[3]), w, h, margin, floor, ceil, fitOut)
+                } else if (fitOut[2] <= floor + 1e-4f) {
                     // Both do not fit: your fort and the arc, with a little lean toward the rival.
                     val lean = if (boxB[0] > boxA[0]) 80f else -80f
                     Camera.fit(min(x0, x0 + lean), y0, max(x1, x1 + lean), y1, w, h, margin, floor, ceil, fitOut)
@@ -424,7 +456,7 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                     // A drag needs 8 pt of travel, not time. The spot where the finger went down is the anchor.
                     val sel = u.selected
                     anchorX = downX; anchorY = downY
-                    prevAngle = sel?.angle ?: 0; prevPower = sel?.power ?: 0; sentAngle = -1; sentPower = -1
+                    prevAngle = sel?.angle ?: 0; prevPower = sel?.power ?: 0; sentAngle = -1; sentPower = -1; heldAngle = -1
                     draggingFlag = true; dragging.value = true
                     session.audio.play("aim_drag_start")
                     session.buzz(8)
@@ -474,8 +506,9 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
      * The values are sent as they are; the core checks and keeps them.
      */
     private fun updateAim() {
-        val m = resources.displayMetrics
-        val (angle, power) = Aim.fromDrag(anchorX - fingerX, anchorY - fingerY, session.settings.pointMode, 0.4f * min(m.widthPixels, m.heightPixels))
+        val r = Aim.pull(anchorX, anchorY, fingerX, fingerY, width.toFloat(), height.toFloat(), session.settings.pointMode, dp, heldAngle)
+        val angle = r[0]; val power = r[1]
+        if (r[2] == 0) heldAngle = angle
         if (angle != sentAngle || power != sentPower) {
             if (power == 100 && sentPower != 100 && sentPower >= 0) session.buzz(8)
             sentAngle = angle; sentPower = power
@@ -517,6 +550,38 @@ object Aim {
         if (deg < 0f) deg = if (dx >= 0f) 0f else 180f
         val angle = ((deg * 2f).roundToInt() * 5).coerceIn(0, 1800)
         return angle to power
+    }
+
+    /**
+     * The pull for power 100 (QA playtest 1, m3): 40% of the screen's short side, or the room from
+     * the anchor to the screen edge in the pull's direction when that is less, never under 64 dp.
+     * So full power comes before the finger meets the edge.
+     */
+    fun fullPull(ax: Float, ay: Float, dirX: Float, dirY: Float, w: Float, h: Float, dp: Float): Float {
+        val base = 0.4f * min(w, h)
+        val len = hypot(dirX, dirY)
+        var room = Float.POSITIVE_INFINITY
+        if (len >= 1f) {
+            val ux = dirX / len; val uy = dirY / len
+            if (ux > 1e-4f) room = min(room, (w - ax) / ux) else if (ux < -1e-4f) room = min(room, -ax / ux)
+            if (uy > 1e-4f) room = min(room, (h - ay) / uy) else if (uy < -1e-4f) room = min(room, -ay / uy)
+        }
+        return max(64f * dp, min(base, room))
+    }
+
+    /** The finger is on the screen edge (within 2 dp). */
+    fun onEdge(x: Float, y: Float, w: Float, h: Float, dp: Float): Boolean = x <= 2f * dp || y <= 2f * dp || x >= w - 2f * dp || y >= h - 2f * dp
+
+    /**
+     * Aim from a pull from anchor [ax], [ay] to finger [fx], [fy] on a [w] x [h] screen. While the finger
+     * is on the screen edge the angle keeps [heldAngle] (the last one off the edge, -1 for none) and
+     * only power follows (m3): the edge never bends the angle. Returns angle, power and 1 when on the edge.
+     */
+    fun pull(ax: Float, ay: Float, fx: Float, fy: Float, w: Float, h: Float, pointMode: Boolean, dp: Float, heldAngle: Int): IntArray {
+        val full = fullPull(ax, ay, fx - ax, fy - ay, w, h, dp)
+        val (angle, power) = fromDrag(ax - fx, ay - fy, pointMode, full)
+        val edge = onEdge(fx, fy, w, h, dp)
+        return intArrayOf(if (edge && heldAngle >= 0) heldAngle else angle, power, if (edge) 1 else 0)
     }
 
     /** Fort margin in cells for an aim start: about two blocks. */

@@ -126,6 +126,8 @@ data class SaveData(
     val last: SavedBattle? = null,
     /** Buttons earned, summed from the core's result.buttons. */
     val buttons: Int = 0,
+    /** The Workshop fort: rows top down, the Footing row last (core/API.md `sides[i].rows`). Empty: none saved. */
+    val fort: List<String> = emptyList(),
 ) {
     fun toJson(): String {
         val o = JSONObject().put("v", VERSION)
@@ -133,6 +135,7 @@ data class SaveData(
         battle?.let { o.put("battle", it.toJson()) }
         last?.let { o.put("last", it.toJson()) }
         o.put("buttons", buttons)
+        if (fort.isNotEmpty()) o.put("fort", JSONArray(fort))
         return o.toString()
     }
 
@@ -146,7 +149,8 @@ data class SaveData(
             if (v > VERSION) throw IOException("save version $v is newer than this app ($VERSION)")
             val pen = HashMap<String, Int>()
             o.optJSONObject("pennants")?.let { p -> for (k in p.keys()) pen[k] = p.getInt(k) }
-            return SaveData(pen, o.optJSONObject("battle")?.let { battle(it) }, o.optJSONObject("last")?.let { battle(it) }, o.optInt("buttons", 0))
+            val fort = o.optJSONArray("fort")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList()
+            return SaveData(pen, o.optJSONObject("battle")?.let { battle(it) }, o.optJSONObject("last")?.let { battle(it) }, o.optInt("buttons", 0), fort)
         }
 
         private fun battle(b: JSONObject) = SavedBattle(

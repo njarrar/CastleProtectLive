@@ -48,6 +48,11 @@ class SnapshotParserTest {
         assertEquals(375, f.preview[0]); assertEquals(309, f.preview[1])
         assertNull(f.draft); assertNull(f.result)
         assertEquals(16, f.hash.length)
+        // Rules v3 fields (core/API.md "Changes for QA playtest 1").
+        assertTrue(f.hud.fire!!.ready)
+        assertEquals(10, f.hud.fatigueRound); assertEquals(9, f.hud.fatigueIn); assertTrue(!f.hud.fatigue)
+        assertTrue(f.hud.shots.all { it.ready && it.text == null })
+        assertTrue(!f.hud.yard)
     }
 
     @Test fun leanSnapshotKeepsTheLastFullOne() {

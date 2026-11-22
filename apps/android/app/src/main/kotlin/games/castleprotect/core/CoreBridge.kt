@@ -78,6 +78,8 @@ object Cmd {
     const val LOG = """{"cmd":"log"}"""
     const val HASH = """{"cmd":"hash"}"""
     const val TERRAIN_ALL = """{"cmd":"terrain_all"}"""
+    /** Workshop: does this fort stand? [rows] top down, Footing row last. */
+    fun validateBlueprint(rows: List<String>, seats: Int) = """{"cmd":"validate_blueprint","rows":[${rows.joinToString(",") { q(it) }}],"seats":$seats}"""
 }
 
 /** Per side options for a setup (core/API.md "Starting a battle"). Defaults send nothing. */
@@ -118,8 +120,45 @@ data class BattleSpec(
 ) {
     fun withSeed(s: Long) = copy(seed = s)
 
+    /** The setup's `attempt` (0 for the first try). */
+    val attempt: Int get() = ATTEMPT.find(setup)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+    /** The setup's `mode`. */
+    val mode: String get() = MODE.find(setup)?.groupValues?.get(1) ?: kind
+
+    /**
+     * The same fight's next try: same seed, `attempt` one higher (core/API.md "Starting a battle",
+     * QA playtest 1 M6). The core mixes it into the seed, so a Retry is a new fight. The Daily
+     * Dust-up stays one fight per date, so it never carries an attempt.
+     */
+    fun retry(): BattleSpec = withAttempt(attempt + 1)
+
+    fun withAttempt(n: Int): BattleSpec {
+        val base = setup.replace(ATTEMPT_FIELD, "")
+        if (mode == "daily" || n <= 0) return copy(setup = base)
+        val end = base.lastIndexOf('}')
+        if (end < 0) return this
+        return copy(setup = base.substring(0, end) + ""","attempt":${n.coerceAtMost(1_000_000)}""" + base.substring(end))
+    }
+
     companion object {
+        private val ATTEMPT = Regex("\"attempt\"\\s*:\\s*(\\d+)")
+        private val ATTEMPT_FIELD = Regex(",\\s*\"attempt\"\\s*:\\s*\\d+")
+        private val MODE = Regex("\"mode\"\\s*:\\s*\"([a-z_]+)\"")
+
         fun newSeed(): Long = System.nanoTime() and 0x7FFF_FFFF_FFFFL
+
+        /**
+         * The Test Yard (core/API.md "Test Yard"): side 1 is the Dummy side and passes itself, so the
+         * player keeps firing. [rows] is a Workshop fort (top down, Footing row last), or null for the
+         * level's. [crew] seats only the first n Hobs (0: the level's crew).
+         */
+        fun testYard(level: String = "d1", rows: List<String>? = null, crew: Int = 0, seed: Long = 7) = BattleSpec(
+            """{"level":${JsonText.quote(level)},"mode":"test_yard","sides":[{"control":"human"""" +
+                (rows?.let { r -> ""","rows":[${r.joinToString(",") { JsonText.quote(it) }}]""" } ?: "") +
+                (if (crew in 1..5) ""","crew_size":$crew""" else "") + """},{"control":"ai"}],"rummage":{"pool":0,"picks":0}}""",
+            seed, "test_yard", level,
+        )
 
         fun campaign(level: String, preset: String, seed: Long = newSeed(), help: SideOpts = SideOpts(), progress: Progress? = null) = BattleSpec(
             """{"level":${JsonText.quote(level)},"mode":"campaign","sides":[{"control":"human"${help.json()}},{"control":"ai","preset":${JsonText.quote(preset)}}]""" +
