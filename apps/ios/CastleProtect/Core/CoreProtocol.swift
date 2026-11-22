@@ -437,6 +437,8 @@ struct CoreCastle: Decodable, Equatable, Sendable {
     var steam = 0, steamTurn = 0
     var shimmer: [[Int]] = []
     var held: [[Int]] = []
+    /// True from round 10: battered blocks reach one block less to the side.
+    var fatigue = false
 
     init(from decoder: Decoder) throws {
         let k = try decoder.container(keyedBy: CodingKeys.self)
@@ -445,10 +447,11 @@ struct CoreCastle: Decodable, Equatable, Sendable {
         blocks = k.value(.blocks, []); rooms = k.value(.rooms, []); kettle = k.value(.kettle, CoreKettle())
         steam = k.value(.steam, 0); steamTurn = k.value(.steamTurn, 0)
         shimmer = k.value(.shimmer, []); held = k.value(.held, [])
+        fatigue = k.value(.fatigue, false)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case side, x, cols, rows, block, blocks, rooms, kettle, steam, shimmer, held
+        case side, x, cols, rows, block, blocks, rooms, kettle, steam, shimmer, held, fatigue
         case baseY = "base_y", steamTurn = "steam_turn"
     }
 }
