@@ -692,7 +692,9 @@ function hob(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, h: HobView, picke
   if (x < r.x - s || x > r.x + r.w + s || y < r.y - s * 3 || y > r.y + r.h + s) return;
   const frame = feel.hobSprite(h);
   const lift = feel.outDy * cam.s;
-  if (frame && sprites.draw(ctx, frame, x, y - lift, cam.s * HOB_SCALE, h.side === 1)) {
+  // Squashed (crushed by a fall): drawn flattened, never as Bonked; it pops back up (N2).
+  const sq = h.state === 'squashed' ? 0.62 : 1;
+  if (frame && sprites.drawEx(ctx, frame, x, y - lift, cam.s * HOB_SCALE, h.side === 1, 1, 0, sq)) {
     hobMarks(ctx, cam, h, picked, s, x, y);
   } else hobBody(ctx, r, cam, h, picked, t, false, s, x, y);
   if (h.state === 'dug') {
@@ -715,6 +717,7 @@ function hobMarks(ctx: CanvasRenderingContext2D, cam: Cam, h: HobView, picked: b
     ctx.setLineDash(NO_DASH);
   }
   if (h.state === 'rest') sprites.draw(ctx, 'fx_rest_cog', x + 10 * cam.s, y - 30 * cam.s, Math.max(0.8, cam.s));
+  if (h.state === 'squashed') squashMark(ctx, x, y - 22 * cam.s, Math.max(0.8, cam.s));
   if (!bonked && h.hp < h.maxHp) {
     ctx.fillStyle = INK;
     ctx.fillRect(x - s * 0.3, y + 2, s * 0.6, 4);
@@ -723,6 +726,19 @@ function hobMarks(ctx: CanvasRenderingContext2D, cam: Cam, h: HobView, picked: b
   }
 }
 const DASH_PICK = [4, 3];
+
+/** Three little stars over a Squashed Hob: dazed, not out. */
+function squashMark(ctx: CanvasRenderingContext2D, x: number, y: number, k: number) {
+  ctx.fillStyle = '#FFC23D';
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1;
+  for (let i = -1; i <= 1; i++) {
+    const cx = x + i * 7 * k, cy = y - Math.abs(i) * 2 * k, r = 3 * k;
+    ctx.beginPath();
+    for (let j = 0; j < 8; j++) { const a = (j * Math.PI) / 4, q = j % 2 ? r * 0.45 : r; ctx.lineTo(cx + Math.cos(a) * q, cy + Math.sin(a) * q); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+}
 
 function hobBody(ctx: CanvasRenderingContext2D, _r: Rect, _cam: Cam, h: HobView, picked: boolean, t: number, _firing: boolean, s: number, x: number, y: number) {
   const bonked = h.state === 'bonked';

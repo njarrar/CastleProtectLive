@@ -216,7 +216,8 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .palette img { width: 24px; height: 24px; vertical-align: middle; margin-right: 4px; }
 
 /* ---------- battle ---------- */
-.battle { position: absolute; inset: 0; overflow: hidden; background: var(--sky); touch-action: none; }
+.battle { position: absolute; inset: 0; overflow: hidden; overflow: clip; background: var(--sky); touch-action: none; }
+.battle .hud { overflow: clip; }
 .battle canvas.field { position: absolute; inset: 0; touch-action: none; }
 .hud { position: absolute; inset: 0; pointer-events: none; }
 .hud > *, .hud .floats-l, .hud .floats-r, .hud .crewrow, .hud .dockplate, .hud .topstrip { pointer-events: none; }
@@ -230,6 +231,7 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .pip.p-round { border-radius: 50%; }
 .pip.p-diamond { transform: rotate(45deg) scale(0.85); background: var(--c); border-color: var(--orange); }
 .pip.bonked { opacity: 0.35; }
+.pip.squashed { border-style: dashed; }
 .round { border: 2px solid var(--ink); border-radius: 999px; padding: 2px 12px; background: #fff; font-size: 15px; }
 .round.squall { background: var(--slate); color: #fff; }
 .wind { font-size: 15px; }
@@ -243,6 +245,8 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .btn.hob.on { outline: 4px solid var(--gold); outline-offset: 1px; }
 .btn.hob.rest .face { filter: grayscale(0.6); }
 .btn.hob.bonked { opacity: 0.4; }
+.btn.hob.squashed .face img { transform: scaleY(0.8); transform-origin: 50% 100%; }
+.btn.hob.squashed::after { content: '\2605'; position: absolute; left: -4px; top: -6px; color: var(--gold); font-size: 14px; -webkit-text-stroke: 1px var(--ink); }
 .btn.hob .cog { position: absolute; right: -4px; bottom: -4px; background: var(--ink-soft); color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; font-style: normal; display: grid; place-items: center; }
 .tray { display: flex; gap: 4px; }
 .btn.shot { width: 56px; height: 56px; padding: 2px; border-radius: 12px; font-size: 10px; line-height: 1.05; box-shadow: none; border-width: 2px; flex-direction: column; display: flex; align-items: center; justify-content: flex-end; }
@@ -274,7 +278,8 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .btn.reframe[hidden] { display: none; }
 .banner { position: absolute; left: 50%; top: 18%; transform: translate(-50%, -20px); background: var(--blue); color: #fff; border: 3px solid var(--ink); border-radius: 999px; padding: 6px 28px; font: 700 22px var(--title); opacity: 0; transition: opacity 150ms, transform 150ms; white-space: nowrap; pointer-events: none !important; z-index: 5; }
 .banner.show { opacity: 1; transform: translate(-50%, 0); }
-.banner.orange { background: var(--orange); } .banner.slate { background: var(--slate); } .banner.paper { background: var(--paper); color: var(--ink); }
+.banner.orange { background: var(--orange); } .banner.danger { background: var(--danger); }
+.banner { width: max-content; max-width: calc(100vw - 32px); white-space: normal; text-align: center; } .banner.slate { background: var(--slate); } .banner.paper { background: var(--paper); color: var(--ink); }
 .prompt { position: absolute; transform: translateX(-50%); background: var(--ink); color: #fff; border-radius: 12px; padding: 6px 14px; font: 700 18px var(--title); z-index: 6; }
 .prompt::after { content: ''; position: absolute; left: 50%; bottom: -8px; border: 8px solid transparent; border-top-color: var(--ink); border-bottom: 0; transform: translateX(-50%); }
 .prompt[hidden], .ghosthand[hidden] { display: none; }
@@ -334,7 +339,7 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .hud.tall .crewrow { display: flex; justify-content: space-between; align-items: center; min-height: 80px; }
 .hud.tall .fire { width: 76px; height: 76px; }
 .hud.tall .reframe { right: 10px; top: calc(var(--sat) + 66px); }
-.hud.tall .yardbar { position: absolute; left: 8px; top: 8px; }
+.hud.tall .yardbar { position: absolute; right: 8px; top: 8px; padding: 2px 8px; } .hud.tall .yardbar input { width: 96px; }
 .hud.tall.flight .dockplate .tray, .hud.tall.flight .dockplate .hobs { opacity: 0.25; transform: none; }
 @media (min-width: 700px) { .hud.tall .btn.shot { width: 64px; height: 64px; font-size: 11px; } .hud.tall .fire { width: 96px; height: 96px; } }
 .draft[hidden], [hidden] { display: none !important; }
@@ -416,7 +421,9 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 @media (max-height: 500px) and (min-aspect-ratio: 1/1) {
   .workshop { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto 1fr auto; column-gap: 16px; align-items: start; }
   .workshop .topbar { grid-column: 1 / -1; }
-  .workshop .ws-body { grid-column: 1; grid-row: 2 / span 3; }
+  .workshop .ws-body { display: contents; }
+  .workshop .gridwrap { grid-column: 1; grid-row: 2 / span 3; }
+  .workshop .status { grid-column: 2; grid-row: 3; align-self: start; }
   .workshop .palette { grid-column: 2; grid-row: 2; justify-content: flex-start; }
   .workshop .pinned { grid-column: 2; grid-row: 4; justify-content: flex-start; }
   .workshop .gridwrap { padding: 6px; }
@@ -447,3 +454,10 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 }
 @media (max-height: 500px) { .handoff .clip.flip { height: 44px; width: auto; } }
 .crest.round { background: var(--blue); padding: 0; font-size: inherit; }
+/* QA playtest 2: the owner rule ring on the picked Hob, and the Rival fort marker as a peek button. */
+.ownring { position: absolute; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; border: 4px solid var(--gold); box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px var(--ink); z-index: 4; pointer-events: none !important; animation: ownring 1.4s ease-in-out infinite; }
+.ownring[hidden] { display: none; }
+@keyframes ownring { 0%, 100% { transform: scale(0.85); opacity: 0.95; } 50% { transform: scale(1.12); opacity: 0.6; } }
+@media (prefers-reduced-motion: reduce) { .ownring { animation: none; } }
+.hud .fortmark { pointer-events: auto; cursor: pointer; min-height: 36px; }
+.hud .fortmark:focus-visible { outline: 3px solid var(--gold); }

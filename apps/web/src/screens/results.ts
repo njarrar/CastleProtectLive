@@ -26,6 +26,7 @@ export function resultsScreen(app: App, route: Route): Screen {
     h('div', { class: 'sheet' },
       h('h1', {}, title),
       h('p', { class: 'small' }, `${lvl ? `${lvl.id} ${lvl.name}` : ''}${res.round ? `, Round ${res.round}` : ''}`),
+      doublePopNote(res),
       pens,
       h('p', { class: 'score' }, clipCanvas('ui_button_coin_spin', 1, { still: app.settings.reduceMotion, cls: 'clip coin' }) ?? '', `Buttons +${res.buttons}`),
       res.bestShot && win ? h('p', { class: 'small' }, `Best shot: ${res.bestShot.hob}, ${(res.bestShot.angle / 10).toFixed(1)} / ${res.bestShot.power}, ${res.bestShot.dmg} dmg`) : '',
@@ -86,6 +87,7 @@ function versusResults(app: App, setup: Extract<Route, { to: 'results' }>['setup
     h('div', { class: 'sheet' },
       h('h1', { class: w >= 0 ? `side${w}` : '' }, title),
       h('p', { class: 'small' }, `${resultTitle(res, true, w >= 0 ? names[w === 0 ? 1 : 0] : undefined).replace(/!$/, '')}${w >= 0 && duel ? helpMark(w as Side) && ` (Help${helpMark(w as Side)})` : ''}`),
+      doublePopNote(res),
       h('div', { class: 'stats' }, col(order[0]), col(order[1])),
       res.bestShot ? h('p', { class: 'small' }, `Best shot: ${names[res.bestShot.side]}, Round ${res.bestShot.round}, ${res.bestShot.dmg} dmg`) : '',
       duel ? h('p', { class: 'tonight' }, `Tonight: ${names[0]} ${app.duelScore[0]} : ${app.duelScore[1]} ${names[1]}`) : '',
@@ -98,6 +100,11 @@ function versusResults(app: App, setup: Extract<Route, { to: 'results' }>['setup
     ),
   );
   return { el };
+}
+
+/** A Double Pop names its winner by a rule nobody sees: say it (QA playtest 2, n5). */
+function doublePopNote(res: ResultView): HTMLElement | string {
+  return res.howKey === 'double_pop' ? h('p', { class: 'small', 'data-testid': 'double-pop-note' }, 'Both kettles popped in the same Squall round. The kettle that had more left before that round wins.') : '';
 }
 
 /** One title per `how` from core/API.md, for the winner's side or the loser's. */

@@ -329,3 +329,89 @@ Good on all three shapes. See M7. The pad never sat on a fort, the Hob, the tray
 | Aim feel | Pass with fixes | Pass | Fire, the edge pull and the pad are fixed. The owner rule holds on every profile. Teach it better (n3) |
 | Collapse feel | Not proven | Not proven | Fatigue now plays, but half of it is off camera and the Hob states read wrong. Still needs a hand on a real phone, with sound |
 | Portrait stacked lenses | Pass | Pass for the campaign in Chromium | Campaign in portrait is the best way to play this build. Couch Duel can stick at its last shot (B1). WebKit needs the iPhone check (B2) |
+
+## Core fixes
+
+Core and content only (`core/`, `content/`). Rules version 4: saves from rules version 3 do not resume. Details for app builders are in `core/API.md`, "Changes for QA playtest 2" and "Frame sizes". New regression tests: `core/castle-core/tests/qa_playtest_2.rs`.
+
+Balance was measured with `cargo run --release -p castle-core --example winrate`, the player bot from playtest 1 (it hurts the Rival fort with about 75% of its shots). `d1` and `d2` now play as the web app's Skirmish: both sides seat Marge, Quill, Jax and Grub, the Rival on the Stone Skirt kit fort, light wind, Quick Pick, coin toss, Rounds 10. A new seed each battle.
+
+**N4. Skirmish on Fair.** Two causes. The Skirmish maps kept a grade 3 Rival with full Knacks and full HP, while Region 1 Rivals are grade 1 or 2 with green crews. And the player's loaner fort was the all-Timber home fort while the web app gives the Rival the Stone Skirt fort, which has more HP and wins most Double Pops. Fixes: a new level content field `grades` sets the Rival per AI preset. On `d1` and `d2`: Cozy aim 1, no Knack, 50% HP; Fair aim 2, 1 Knack use, 90% HP; Stubborn unchanged. The player's loaner fort on both maps is now the same Stone Skirt fort.
+
+| Skirmish, Rival Fair | Before | After |
+|---|---|---|
+| d1, 40 battles | 10 of 40 (25%) | 27 of 40 (67%) |
+| d2, 40 battles | 6 of 40 (15%) | 16 of 40 (40%) |
+| Both maps, 40 each | 16 of 80 (20%) | 43 of 80 (54%) |
+| Both maps, 200 each | | 242 of 400 (60.5%): d1 62%, d2 58% |
+
+40 battles swing by about 8 points either way, so the 200 battle run is the one to trust. Cozy after: 128 of 200 (64%). Note: the Cozy AI Bonks Hobs about as often as Fair, so Cozy is only a little easier even at 50% HP; that is the preset, not the map. Stubborn: 12 of 80 (15%), unchanged. Not fixed in the core: the `#skirmish` deep link seating 1 Hob against 4 (the web app picks the crew).
+
+**m7. 1-7 is over too soon.** Cage bars 100 HP (was 80), Hetty 140 HP (was 110), so stray blasts Bonk her less while the cage takes longer. Rounds to free Hetty, 40 battles each:
+
+| 1-7 on Fair | Before | After |
+|---|---|---|
+| Player bot (aim error 1.5 deg, 2 power) | 32 wins, median 7 rounds, 5 wins by round 5 | 31 wins, median 9 rounds, 2 wins by round 5, 19 in rounds 6 to 9 |
+| Sharp bot (0.4 deg, 1 power), closer to the QA hand | 29 wins, median 6 rounds, 14 wins by round 5, 11 Captive Bonked | 35 wins, median 7 rounds, 7 wins by round 5, 0 Captive Bonked |
+
+"Free her by Round 6" is now a real goal for a sharp player and out of reach for most.
+
+**N2. Crushed Hobs drawn as Bonked.** The core already sent `squashed` (or `dropped` when the floor went too) with 1 HP and `can_fire: true` for a Hob crushed by the Fatigue collapse; the web adapter maps `squashed` to Bonked (`real.ts` line 764). One core fault did add to it: `hud.crew[].hp_pct` was a whole-number percent, so a Hob on 1 HP of 100 or more read 0%, which looks like an empty pip. It is now at least 1 while the Hob is alive. API.md now says plainly that only `bonked` is out of the fight and that `squashed` pops back up at the end of its side's turn. Test: a 1-6 roof dropped by Fatigue on Hobs at 5 HP leaves them at 1 HP, `squashed` or `dropped`, able to fire, pips at 1% or more, and the squashed ones back up next turn.
+
+**B1. Null names in "what broke you".** The last blow had `hob_name: null` when no Hob was behind it: a woken Tick-Tock Crock or turnip, the 1-10 shears, or a prop shell. Now every blow in `result.broke.last`, `broke.top[]` and every `best_shot` has string `hob_name` and `shot_name`, and a `by` field (`hob`, `squall`, `ground`, `fatigue`, `self`, `shears`, `prop`). Field blows are named: "The Squall" / "Squall", "A fall" / "Fall", "Fatigue" / "Fatigue collapse", "Your own shot", "The shears" / "Big Snip", "A Tick-Tock Crock". The last blow can now be the Squall, a fall or Fatigue (before it was null or an older shot), and Fatigue crush is recorded as `fatigue`, not `ground`. Tests: a Couch Duel ended by the Squall names "The Squall"; six Couch Duels played to the end by the AI on both seats name every blow; the schema now requires the names.
+
+**B2. Round 10 in WebKit.** No core-side burst found. Measured over 80 bot battles on 1-8 and 1-10, stepping 2 ticks per frame with a snapshot each frame as the app does (about 400,000 frames): the Fatigue frame is at most 33 KB with 45 events and 12 `collapse` events, and resends no terrain; the 2 s after it total at most 183 KB. The biggest later frame is 210 KB (terrain after a big carve, in ordinary rounds) and the busiest second 640 KB. Only the first frame, `resume` and `terrain_all` send the whole map (2.35 MB). So nothing was capped; the bound is documented in API.md "Frame sizes" and a test keeps the Fatigue frame under 96 KB, 200 events and 64 terrain chunks. The crash 13 to 30 s after round 10 points at the app or the WebKit build (for example the effects spawned per collapse), not at what the core sends. Rerun: `BOT_FRAMES=1 cargo run --release -p castle-core --example winrate -- 40 fair 1-8 1-10`.
+
+Checks: `cargo fmt`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace`, `scripts/build-wasm.sh` and `scripts/run-golden.sh` pass. Fixtures regenerated. Golden `twin_puddings_bots` (a `d1` bot battle) changed with the new loaner fort and Rival grades: now `64108fdad601e7ea`; native and wasm agree.
+
+## 8. Web fixes
+
+Owner: web (apps/web only). Checked locally with `scripts/build-wasm.sh`, `npm ci`, `npm run build` and `npx playwright test` on all four projects (chromium, iphone, pixel-landscape, and the new webkit-long): 126 passed, 6 skipped by design (desktop-only checks on the phone projects). After screenshots are in `docs/qa/playtest-2/fixes/`. B1 (the lead's null `hob_name` fix in `real.ts` and `protocol.ts`) is kept, and the "what broke you" line now also reads the core's new `by` field.
+
+### B2, WebKit crash: found and fixed
+
+- Reproduced in Playwright WebKit with the QA players' own scripts. The live build crashed 3 times of 3 (once in round 5, before Fatigue), each with the same kernel trap as in the playtest (`WPEWebProcess trap invalid opcode in libWPEWebKit`). A local build served with no delay never crashed (4 runs). Served behind a slow front (250 ms, 300 KB/s, like the live site over the proxy), the local build crashed as well.
+- Isolated by taking one thing away at a time on the live build: with the service worker blocked, no crash (to round 12, past Fatigue). With the sound files blocked, no crash (to round 14). With only the @2x art held back, it still crashed. So the trigger is sound files answered by the service worker (the `castle-audio` CacheFirst route) while a fight runs. Memory was not the cause: canvas memory peaked at 105 MB in portrait and 29 MB in landscape, the largest canvas was 4800 x 1440 (6.9 M pixels), and nothing grew over a fight.
+- Fix (`apps/web/vite.config.ts`): on WebKit engines (Safari and every iOS browser) the worker no longer answers sound files. They load from the network and the HTTP cache (the names carry a content hash). Chromium keeps them in the worker cache for offline play. Offline on an iPhone, sounds fall back to the built-in synth stand-ins.
+- After the fix, behind the same slow front: 4 fights of 4 past Fatigue with no crash (1-8 to rounds 10 and 14, 1-10 to round 19 twice).
+- New test `tests/webkit-long.spec.ts` (project `webkit-long`, iPhone 13 in WebKit): plays 1-8 past round 12 with the page controlled by the service worker, checks the page never crashes, that Fatigue started, that canvas memory stays under 300 MB and every canvas under 4096 x 4096, and that the worker cached no sound file. On the old worker config it fails (121 sound files cached). It runs in about a minute.
+- Still to do on a real iPhone: play 1-8 past round 10 in Safari.
+
+### Majors
+
+- **N1, Fatigue shown.** Fatigue is its own event now (the duplicate `fatigue` case in `real.ts` is gone). "Fatigue next round: hurt blocks hold less" shows as a banner in round 9, and "Fatigue! Battered blocks give way" in red when the collapse starts. The turn banner waits until a Fatigue banner has had its time, so "Your turn" no longer covers it. While the collapse plays, the wide camera holds your own fort (both forts when they fit), and any settle frame after it stays home too, so there is no 1.5 s away from your fort at round 10. Screens: `n1-portrait-1-10-r9-fatigue-next-round-banner.jpg`, `n1-n2-portrait-1-8-r10-fatigue-banner-own-fort-squashed-hob.jpg`, `n1-landscape-1-6-r9-fatigue-next-round-banner.jpg`, `n1-landscape-1-6-r10-fatigue-start-camera-home-1.jpg` to `-3.jpg`.
+- **N2, Squashed is not Bonked.** The core's `squashed` state now maps to a new view state `squashed` (only `bonked` or 0 HP is Bonked). The Hob is drawn flattened with three small stars, its pip stays filled with a dashed ring, its portrait stays live with a star badge, and its label says "Squashed, back up soon".
+- **N3, both forts in landscape.** On a phone the plan frame may go down to 6 px blocks to hold both forts (8 px elsewhere). At 844 x 390 every campaign level, 1-1 to 1-10, now frames both forts while you plan (blocks 7.2 to 11.4 px), and so do the Test Yard and Couch Duel. The Rival fort marker is now a button: one tap peeks at both forts at any zoom ("View Rival fort"), a second tap ("Back to my fort"), a shot or the next turn brings the camera home. Screens: `n3-landscape-1-5-plan-both-forts.jpg` to `n3-landscape-1-9-plan-both-forts.jpg`, `n3-landscape-test-yard-plan.jpg`, `n3-landscape-couch-duel-plan.jpg`, `n3-landscape-zoomed-in-view-rival-fort-marker.jpg`, `n3-landscape-after-tap-peek-both-forts.jpg`.
+- **N4, Skirmish Fair too hard:** core, see Core requests.
+
+### Teaching the owner rule and turn start
+
+- A gold ring sits on the picked Hob on every Plan step, in every level, until the player has started 3 aims from the fort (saved as hints `aim-start-1` to `-3`).
+- A drag that starts in the sky on your turn says "Drag from your fort to aim" once per battle, next to your fort.
+- Portrait: a sky drag in the bottom lens now pans it (it did nothing). The re-frame key brings it back, and so does the next turn.
+- The 1-1 hint now reads "Drag from your fort to aim".
+- n1: a turn opens on a Hob who can act. If the picked Hob has no shot it may fire this turn, the first crewmate who has one is picked. If nobody can, Fire offers Pass as before.
+- Screens: `owner-rule-portrait-ring-on-picked-hob.jpg`, `owner-rule-portrait-sky-drag-pans-and-nudges.jpg`.
+
+### Minors fixed
+
+- n2 Workshop: the dead top row is gone (the grid shows the 9 rows that can be built), the core's "grid 8x11 outside ..." reads "Too big: keep the fort within 8 wide and 9 tall", and in landscape the status line sits beside the grid, on screen. `n2-workshop-landscape-top-row-and-status.jpg`.
+- n5: a "Double Pop!" result says how the winner was picked: the kettle that had more left before that Squall round.
+- n6 Test Yard: no "Dummy passed" banner over Back after each shot; in portrait the bar moved to the top right of the target lens, with a shorter wind slider.
+- n7: the portrait round label is short ("R10/15 · Fatigue", "R9/18 · Fat. 1"); the full text stays in its title and for screen readers. `n7-portrait-1-10-r10-short-round-label.jpg`.
+- n8: the battle can no longer be scrolled sideways (`overflow: clip`, and any scroll inside the battle is put back), so a shake or a wide banner cannot slide the HUD.
+- n9: the arc's edge arrow steps off the Fine Tune pad.
+- n10: `#modes`, `#skirmish`, `#duel`, `#workshop` and `#yard` open the map until the modes are unlocked (`?debug` links still open them, for tests).
+- Banners wrap to the screen width instead of running off it.
+
+### Not done
+
+- m6 stacked damage numbers, m11 map colours, m15 Squall wording on the results line, and the polish list.
+- A real iPhone run of B2.
+
+### Core requests
+
+- N4: Skirmish on Fair should use the campaign's gentler Rival aim grades for Cozy and Fair, and never seat 1 Hob against 4.
+- n4: 1-7 is still over in 3 to 5 rounds (one Grand Dumpling does 188 to the cage).
+- Please keep sending `fatigue_warning` and `fatigue` as events (the web now gives them their own banners), and say in a snapshot field when a Squashed Hob will be back up, so the view can show it.
+- `result.broke.*.by` is read now; please keep `hob_name` never null as the schema says.

@@ -165,7 +165,8 @@ export interface HobView {
   y: number;
   hp: number;
   maxHp: number;
-  state: 'ready' | 'rest' | 'bonked' | 'tumbled' | 'dug';
+  /** squashed: crushed by a fall (a Fatigue collapse), still in the fight and back up later (not Bonked). */
+  state: 'ready' | 'rest' | 'bonked' | 'tumbled' | 'dug' | 'squashed';
   rest: number;
 }
 
@@ -227,6 +228,8 @@ export type BattleEvent =
   | { t: 'thump'; side: Side }
   /** A Hob animation cue from a core event: tumble, land, dig (Shove Off), nextdoor (a Passive acts). */
   | { t: 'hob'; hob: string; act: 'tumble' | 'land' | 'dig' | 'nextdoor' | 'cheer' }
+  /** Fatigue: 'warn' a round ahead, 'start' when its collapse runs (QA playtest 2, N1). */
+  | { t: 'fatigue'; phase: 'warn' | 'start'; text: string }
   | { t: 'end'; winner: Side | -1; how: string; key?: string };
 
 export interface DraftChip {

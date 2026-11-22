@@ -135,7 +135,11 @@ export interface PBoss { phase: number; roller: PProp | null; roller_done: boole
 export interface PDraft { pool: string[]; picks: [string[], string[]]; next: PSide; picks_each: number; wish: string | null }
 export interface PResultStats { shots: number; hits: number; blocks_dropped: number; bonks: number; blocks_lost: number; kettle_lost: number; hobs_lost: number; best_streak: number; best_shot?: PBestShot | null }
 export interface PBestShot { side: PSide; hob: number; hob_name: string | null; shot: string; shot_name: string | null; angle: number; power: number; round: number; dmg: number }
-export interface PBlow { shot: string; shot_name: string | null; hob: number; hob_name: string | null; round?: number; dmg?: number }
+export interface PBlow {
+  shot: string; shot_name: string | null; hob: number | null; hob_name: string | null; round?: number; dmg?: number;
+  /** Who or what dealt it (newer cores): a Hob, or the Squall, a fall, Fatigue, your own shot, the shears, a prop. */
+  by?: 'hob' | 'squall' | 'ground' | 'fatigue' | 'self' | 'shears' | 'prop';
+}
 export interface PResult {
   winner: PSide; how: string; round: number; pennants: boolean[];
   // v0.2

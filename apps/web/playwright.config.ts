@@ -8,10 +8,11 @@ import { defineConfig, devices } from '@playwright/test';
 //  - iphone: iPhone 15 portrait in WebKit (touch, 3x), the phone specs.
 //  - pixel-landscape: Pixel 7 landscape in Chromium (touch), the phone specs.
 // The phone projects run the specs that do not need a service worker or a keyboard: the
-// fixes, mobile and qa1 (QA playtest 1) specs. PW_PROJECTS narrows the run (CI runs all three).
+// fixes, mobile and qa1 (QA playtest 1) specs. webkit-long plays 1-8 past Fatigue in WebKit (B2).
+// PW_PROJECTS narrows the run.
 const base = process.env.VITE_BASE ?? '/';
 const port = 4173;
-const phoneSpecs = /(fixes|mobile|qa1)\.spec\.ts/;
+const phoneSpecs = /(fixes|mobile|qa1|qa2)\.spec\.ts/;
 
 export default defineConfig({
   testDir: './tests',
@@ -27,8 +28,10 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } } },
+    { name: 'chromium', testIgnore: /webkit-long/, use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } } },
     { name: 'iphone', testMatch: phoneSpecs, use: { ...devices['iPhone 15'] } },
+    // QA playtest 2, B2: a long WebKit fight past Fatigue (iPhone 13 portrait at 3x).
+    { name: 'webkit-long', testMatch: /webkit-long\.spec\.ts/, timeout: 20 * 60_000, use: { ...devices['iPhone 13'] } },
     { name: 'pixel-landscape', testMatch: phoneSpecs, use: { ...devices['Pixel 7 landscape'] } },
   ],
   webServer: {

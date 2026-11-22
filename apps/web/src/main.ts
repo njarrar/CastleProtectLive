@@ -37,6 +37,9 @@ async function boot(): Promise<void> {
   // Deep links for testing and sharing: #map, #duel, #skirmish, #yard, #workshop, #settings, #level=1-1
   const route = (): Route => {
     const hash = location.hash.slice(1);
+    // The modes open after the campaign unlocks them; a link does not skip that (n10). Tests and
+    // debugging (?debug) still open them straight.
+    if (!DEBUG && !app.modesOpen() && ['duel', 'skirmish', 'workshop', 'modes', 'yard'].includes(hash)) return { to: 'map', focus: app.nextLevel() };
     if (hash === 'map' || hash === 'duel' || hash === 'skirmish' || hash === 'workshop' || hash === 'modes') return { to: hash };
     if (hash === 'settings') return { to: 'settings', back: { to: 'map' } };
     if (hash === 'yard') return { to: 'battle', setup: yardSetup(app) };

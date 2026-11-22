@@ -11,7 +11,9 @@ import { RULES } from '../core/rules';
 
 type Tool = BlueprintCell['kind'] | 'erase';
 const COLS = RULES.workshop.cols;
-const ROWS = RULES.workshop.rows;
+// The core counts the Footing as a row of the fort, so the top row of RULES.workshop.rows can never
+// be built on: the grid shows only the rows that can (QA playtest 2, n2).
+const ROWS = RULES.workshop.rows - 1;
 const MAX_NOOKS = RULES.workshop.max_nooks;
 
 export function workshopScreen(app: App): Screen {
@@ -19,6 +21,7 @@ export function workshopScreen(app: App): Screen {
   let bp: Blueprint = fresh();
   bp.cols = COLS;
   bp.rows = ROWS;
+  bp.cells = bp.cells.filter((x) => x.row < ROWS);
   let tool: Tool = 'cobble';
   const undo: string[] = [];
   const redo: string[] = [];
@@ -104,7 +107,7 @@ export function workshopScreen(app: App): Screen {
     }
     if (hadFocus) gridEl.querySelector<HTMLElement>('[tabindex="0"]')?.focus();
     gridEl.append(...Array.from({ length: COLS }, () => h('div', { class: 'cell footing-row', 'aria-hidden': 'true' })));
-    const why = [...new Set(check.problems.map((p) => p.why))];
+    const why = [...new Set(check.problems.map((p) => plainWhy(p.why)))];
     status.textContent = `Blocks ${check.blocks}/${check.budget}   Cost ${check.cost}   ${check.ok ? 'Ready' : why.join('. ')}`;
     status.classList.toggle('bad', !check.ok);
     saveBtn.toggleAttribute('disabled', !check.ok);
@@ -175,6 +178,12 @@ export function workshopScreen(app: App): Screen {
   );
   paint();
   return { el, destroy: () => window.removeEventListener('blur', stop) };
+}
+
+/** The core's reasons in plain words (it can say "grid 8x11 outside 3x3 to 8x10"). */
+function plainWhy(w: string): string {
+  if (/outside|grid \d+x\d+/i.test(w)) return `Too big: keep the fort within ${COLS} wide and ${ROWS} tall`;
+  return w.replace(/_/g, ' ');
 }
 
 /** Cut the grid to the used box so the fort sits on its Footing. */

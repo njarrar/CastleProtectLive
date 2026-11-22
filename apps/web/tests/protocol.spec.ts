@@ -106,8 +106,8 @@ const KNOWN: Record<string, string[]> = {
   '.result.stats[]': ['best_shot', 'best_streak', 'blocks_dropped', 'blocks_lost', 'bonks', 'hits', 'hobs_lost', 'kettle_lost', 'shots'],
   // the "what broke you" line reads how, last and the losses; top (the three worst shots) is for the replay card
   '.result.broke': ['blocks_lost', 'hobs_bonked', 'how', 'kettle_lost', 'last', 'side', 'top'],
-  '.result.broke.last': ['dmg', 'hob', 'hob_name', 'round', 'shot', 'shot_name'],
-  '.result.broke.top[]': ['dmg', 'hob', 'hob_name', 'round', 'shot', 'shot_name'],
+  '.result.broke.last': ['by', 'dmg', 'hob', 'hob_name', 'round', 'shot', 'shot_name'],
+  '.result.broke.top[]': ['by', 'dmg', 'hob', 'hob_name', 'round', 'shot', 'shot_name'],
   '.draft': ['next', 'picks', 'picks_each', 'pool', 'wish'],
 };
 
@@ -168,5 +168,6 @@ test('rules v3: hud.fire greys Fire with its text, fatigue_warning is a banner, 
   const s = core.snapshot();
   expect(s.hud.fire).not.toBe('ready');
   expect(s.hud.fireWhy).toBe('Marge Dumpling needs a rest: Plain Shot only');
-  expect(s.events.some((e) => e.t === 'note' && e.text === 'Fatigue next round')).toBe(true);
+  // QA playtest 2 (N1): its own event, so the battle holds its banner before the turn banner.
+  expect(s.events.some((e) => e.t === 'fatigue' && e.phase === 'warn' && e.text === 'Fatigue next round')).toBe(true);
 });

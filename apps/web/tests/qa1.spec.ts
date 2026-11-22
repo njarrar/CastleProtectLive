@@ -122,7 +122,8 @@ test('M3: on a map too wide to frame, your fort is framed and the Rival fort has
   expect(mine[2]).toBeLessThanOrEqual(LANDSCAPE.width);
   const seen = Math.max(0, Math.min(rival[2], LANDSCAPE.width) - Math.max(rival[0], 0));
   if (seen < 0.75 * (rival[2] - rival[0])) await expect(page.getByTestId('fort-mark')).toBeVisible();
-  else expect(await castle<number>(page, 'return c.cam().s;') * 16).toBeGreaterThanOrEqual(8);
+  // QA playtest 2 (N3): on a phone the plan frame may go down to 6 px blocks to hold both forts.
+  else expect(await castle<number>(page, 'return c.cam().s;') * 16).toBeGreaterThanOrEqual(6);
 });
 
 test('M3: an aim arc that runs off screen gets an arrow where it leaves', async ({ page }) => {

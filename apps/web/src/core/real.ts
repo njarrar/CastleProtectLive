@@ -436,7 +436,6 @@ export class RealCore implements CoreApi {
       case 'mend': return note('Mended', fortMid(n('side')), 'pennant');
       case 'rebuild': return note('Rebuilt', fortMid(n('side')), 'pennant');
       case 'puff_up': return note('Puffed up!', hobAt(n('hob')), 'pop');
-      case 'fatigue': return note('Fatigue: hurt blocks hold less now', undefined, 'squall');
       case 'pass': return note(`${s.hud.names[n('side')] || 'Side'} passed`);
       case 'walk': return note('Walked', undefined, undefined, false);
       case 'split': return note('Split!', [n('x'), H - n('y')], undefined, false);
@@ -467,8 +466,8 @@ export class RealCore implements CoreApi {
       case 'relight': return note('Kettle relit', fortMid(n('side')), 'pennant');
       // Rules v3 (QA playtest 1): Fatigue is warned a round ahead and named when it starts; its
       // collapse comes as ordinary collapse events (why: fatigue) and plays like any other.
-      case 'fatigue_warning': return note(typeof e.text === 'string' && e.text ? e.text : 'Fatigue next round', undefined, 'sheet');
-      case 'fatigue': return note('Fatigue! Battered blocks give way', undefined, 'creak');
+      case 'fatigue_warning': return [{ t: 'fatigue', phase: 'warn', text: typeof e.text === 'string' && e.text ? e.text : 'Fatigue next round' }];
+      case 'fatigue': return [{ t: 'fatigue', phase: 'start', text: 'Fatigue! Battered blocks give way' }];
       default: return [];
     }
   }
@@ -741,7 +740,8 @@ const WHY: Record<string, string> = {
 function brokeLine(r: PSnapshot['result']): string {
   const b = r?.broke;
   if (!b) return lossCause(r?.how ?? '');
-  const by = b.last ? (b.last.shot === 'squall' ? 'the Squall' : b.last.shot === 'ground' ? 'a fall' : (b.last.hob_name ? `${b.last.hob_name.split(' ')[0]}'s ${b.last.shot_name ?? 'shot'}` : (b.last.shot_name ?? 'a shot'))) : '';
+  const BY: Record<string, string> = { squall: 'the Squall', ground: 'a fall', fatigue: 'Fatigue', self: 'your own shot', shears: 'the shears' };
+  const by = b.last ? (b.last.by && BY[b.last.by] ? BY[b.last.by] : b.last.shot === 'squall' ? 'the Squall' : b.last.shot === 'ground' ? 'a fall' : (b.last.hob_name ? `${b.last.hob_name.split(' ')[0]}'s ${b.last.shot_name ?? 'shot'}` : (b.last.shot_name ?? 'a shot'))) : '';
   const lost = [b.blocks_lost ? `${b.blocks_lost} blocks` : '', b.hobs_bonked ? `${b.hobs_bonked} ${b.hobs_bonked === 1 ? 'Hob' : 'Hobs'} Bonked` : ''].filter(Boolean).join(', ');
   return `${lossCause(b.how)}${by ? ` The last blow: ${by}${b.last?.round ? ` in round ${b.last.round}` : ''}.` : ''}${lost ? ` Lost ${lost}.` : ''}`;
 }
@@ -761,7 +761,9 @@ function lossCause(how: string): string {
 }
 
 function hobState(h: PHob): HobView['state'] {
-  if (h.state === 'bonked' || h.state === 'squashed') return 'bonked';
+  if (h.state === 'bonked' || h.hp <= 0) return 'bonked';
+  // Crushed by a fall: hurt and down for now, never Bonked (QA playtest 2, N2).
+  if (h.state === 'squashed') return 'squashed';
   if (h.buried) return 'dug';
   if (h.rest > 0) return 'rest';
   if (h.state === 'tumbled' || h.state === 'dropped') return 'tumbled';

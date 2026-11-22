@@ -141,7 +141,12 @@ export default defineConfig({
           handler: 'CacheFirst',
           options: { cacheName: 'castle-art-2x', expiration: { maxEntries: 16, purgeOnQuotaError: true } },
         }, {
-          urlPattern: ({ url }) => /\/art\/audio\/.+\.(ogg|opus|mp3|m4a|aac|webm|wav)$/.test(url.pathname),
+          // Not on WebKit (Safari, every iOS browser): sound files answered by the worker while a
+          // fight runs crashed WebKit's web process (QA playtest 2, B2: 3 of 3 with the worker, 0 of
+          // 4 without). There they load from the network and the HTTP cache (hashed names); offline
+          // they fall back to the synth stand-ins.
+          urlPattern: ({ url }) => /\/art\/audio\/.+\.(ogg|opus|mp3|m4a|aac|webm|wav)$/.test(url.pathname)
+            && !(/AppleWebKit/.test(self.navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(self.navigator.userAgent)),
           handler: 'CacheFirst',
           options: { cacheName: 'castle-audio', expiration: { maxEntries: 200, purgeOnQuotaError: true } },
         }],
