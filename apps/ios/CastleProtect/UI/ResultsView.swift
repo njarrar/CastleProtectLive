@@ -56,7 +56,9 @@ struct ResultsView: View {
             .padding(16)
             .panel()
         }
-        Text("Buttons +\(info.result.buttons)").font(Theme.title(20)).foregroundStyle(Theme.ink)
+        if info.result.buttons > 0 {
+            Text("Buttons +\(info.result.buttons)").font(Theme.title(20)).foregroundStyle(Theme.ink)
+        }
         if !info.won {
             Text("Wobbly, but standing. Try again?").font(Theme.label(16)).foregroundStyle(Theme.inkSoft)
         }

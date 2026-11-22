@@ -62,8 +62,10 @@ export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-Wl,-z,max-page-size=16384"
 
 mkdir -p "$OUT_DIR"
 # shellcheck disable=SC2086
-cargo ndk "${ndk_args[@]}" -P "$API" -o "$OUT_DIR" \
-  build --manifest-path "$CORE/Cargo.toml" -p "$CRATE" $PROFILE_FLAG
+# cargo-ndk reads cargo metadata from the current folder, so run inside core/.
+case "$OUT_DIR" in /*) ;; *) OUT_DIR="$(pwd)/$OUT_DIR" ;; esac
+(cd "$CORE" && cargo ndk "${ndk_args[@]}" -P "$API" -o "$OUT_DIR" \
+  build -p "$CRATE" $PROFILE_FLAG)
 
 echo "Built $PROFILE libraries:"
 find "$OUT_DIR" -name '*.so' -exec ls -l {} \;

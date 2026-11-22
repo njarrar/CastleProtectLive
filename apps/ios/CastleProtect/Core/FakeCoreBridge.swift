@@ -68,7 +68,7 @@ final class FakeCoreBridge: CoreBridge {
             if let shot = obj["shot"] as? String { sel["shot"] = shot }
             hud["selected"] = sel
             current["hud"] = hud
-            queue.append(current)
+            queue.append(quiet(current))
             accept(obj)
             return reply(cmd == "pick_hob" ? ["ok": true, "can_fire": true] : ["ok": true])
         case "fire", "pass":
@@ -110,7 +110,7 @@ final class FakeCoreBridge: CoreBridge {
 
     func snapshot() -> String {
         guard running else { return #"{"phase":"none"}"# }
-        let next = queue.isEmpty ? quiet(current) : queue.removeFirst()
+        let next = queue.isEmpty ? lean(of: current) : queue.removeFirst()
         return reply(next)
     }
 
@@ -121,12 +121,21 @@ final class FakeCoreBridge: CoreBridge {
 
     // MARK: Helpers
 
-    /// A repeat of the current frame with no events and no terrain, as the core sends between changes.
+    /// The current frame again with no events and no terrain (sent after a change).
     private func quiet(_ frame: [String: Any]) -> [String: Any] {
         var f = frame
         f["events"] = [[String: Any]]()
         f["terrain"] = ["chunks": [[String: Any]]()]
         return f
+    }
+
+    /// A lean snapshot, as the core sends while nothing but shells changes.
+    private func lean(of frame: [String: Any]) -> [String: Any] {
+        [
+            "tick": tick, "full": false,
+            "phase": frame["phase"] ?? "plan", "side": frame["side"] ?? 0, "awaiting": frame["awaiting"] ?? "none",
+            "terrain": ["chunks": [[String: Any]]()], "shells": [[Any]](), "events": [[String: Any]](),
+        ]
     }
 
     private func setAim(angle: Int?, power: Int?) -> (Int, Int) {
