@@ -368,3 +368,12 @@ test('m14: a waiting update shows "Update ready" within 2 s of load', async ({ p
     server.close();
   }
 });
+
+test('M6 (web side): Retry from Pause is the next try, sent to the core as attempt', async ({ page }) => {
+  await startLevel1(page);
+  await page.getByRole('button', { name: 'Pause' }).click({ force: true });
+  await page.getByRole('button', { name: 'Retry' }).click();
+  await expect.poll(async () => (await snap(page)).phase).toBe('plan');
+  const attempt = await page.evaluate(() => (window as unknown as { castleApp: { lastSetup: { attempt?: number } } }).castleApp.lastSetup.attempt);
+  expect(attempt).toBe(1);
+});

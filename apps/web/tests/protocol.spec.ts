@@ -152,3 +152,21 @@ test('rooms, props, root and battered reach the view', () => {
   expect(s.fatigue[0]).toBe(true);
   expect(s.rooms.find((r) => r.side === 0)?.flap).toBe(true);
 });
+
+// Rules v3 (QA playtest 1): the adapter reads hud.fire, the Fatigue warning and the Retry try count.
+test('rules v3: hud.fire greys Fire with its text, fatigue_warning is a banner, attempt goes in the setup', () => {
+  const plan = fx('snapshot_plan.json');
+  plan.hud.fire = { ready: false, why: 'resting_plain_only', text: 'Marge Dumpling needs a rest: Plain Shot only' };
+  plan.events = [{ t: 'fatigue_warning', round: 9, text: 'Fatigue next round' }];
+  let setupJson = '';
+  const { mod } = fake([plan]);
+  const G = (mod as unknown as { Game: new (...a: unknown[]) => object }).Game;
+  (mod as unknown as { Game: unknown }).Game = class extends (G as new (...a: unknown[]) => object) { constructor(...a: unknown[]) { super(...a); setupJson = String(a[1]); } };
+  const core = new RealCore(mod);
+  core.newBattle({ mode: 'campaign', level: '1-1', seed: 42, attempt: 2, difficulty: 'fair', windOff: false, sides: [{ name: 'You', human: true, crew: ['marge'] }, { name: 'Sir Pudge', human: false, crew: [] }] });
+  expect(JSON.parse(setupJson).attempt).toBe(2);
+  const s = core.snapshot();
+  expect(s.hud.fire).not.toBe('ready');
+  expect(s.hud.fireWhy).toBe('Marge Dumpling needs a rest: Plain Shot only');
+  expect(s.events.some((e) => e.t === 'note' && e.text === 'Fatigue next round')).toBe(true);
+});

@@ -29,6 +29,7 @@ export interface PSetup {
   mode?: 'campaign' | 'skirmish' | 'couch' | 'test_yard' | 'daily';
   sides?: PSideCfg[];
   first_turn?: 0 | 1 | 'coin';
+  attempt?: number;
   round_cap?: number;
   squall?: boolean;
   wind?: PWind;

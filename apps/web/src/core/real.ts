@@ -262,7 +262,8 @@ export class RealCore implements CoreApi {
       case 'give_up': pc = { cmd: 'give_up' }; break;
     }
     const r = this.send(pc!);
-    return r.ok ? { ok: true } : { ok: false, error: String(r.reason ?? 'refused') };
+    // A refused fire (rules v3) says why in plain words and which shot would go instead.
+    return r.ok ? { ok: true } : { ok: false, error: String(r.reason ?? 'refused'), detail: typeof r.detail === 'string' ? r.detail : undefined, readyShot: typeof r.ready_shot === 'string' ? r.ready_shot : undefined };
   }
 
   private walkStep(): CommandResult {
@@ -464,6 +465,10 @@ export class RealCore implements CoreApi {
       case 'shears_snip': return note('Snip!', undefined, 'snip');
       case 'shears_jam': return note(`The shears jam for ${n('turns')} turns`, undefined, 'thud');
       case 'relight': return note('Kettle relit', fortMid(n('side')), 'pennant');
+      // Rules v3 (QA playtest 1): Fatigue is warned a round ahead and named when it starts; its
+      // collapse comes as ordinary collapse events (why: fatigue) and plays like any other.
+      case 'fatigue_warning': return note(typeof e.text === 'string' && e.text ? e.text : 'Fatigue next round', undefined, 'sheet');
+      case 'fatigue': return note('Fatigue! Battered blocks give way', undefined, 'creak');
       default: return [];
     }
   }
@@ -810,6 +815,7 @@ export function toProtocolSetup(s: BattleSetup, glyphs: Record<string, Material>
   };
   if (s.mode === 'campaign') p.sides = [{ ...side(0), control: 'human' }, { control: 'ai', preset: s.difficulty }];
   if (s.first !== undefined) p.first_turn = s.first;
+  if (s.attempt) p.attempt = s.attempt; // the web has no Daily Dust-up, where the core ignores it
   if (s.roundCap && !s.volley) p.round_cap = s.roundCap;
   if (s.progress) p.progress = { cleared: s.progress.cleared, pennants: s.progress.pennants.slice(0, 3), daily_paid: false };
   const wind = s.windOff ? RULES.wind_presets.off : s.wind ? RULES.wind_presets[s.wind] : undefined;

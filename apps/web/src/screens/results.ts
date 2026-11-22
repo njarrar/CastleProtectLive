@@ -4,6 +4,7 @@ import { play } from '../audio/sfx';
 import type { ResultView, Side } from '../core/types';
 import { btn, h } from '../ui/dom';
 import { clipCanvas } from '../ui/motion';
+import { retrySetup } from '../battle/battle';
 
 export function resultsScreen(app: App, route: Route): Screen {
   const r = route as Extract<Route, { to: 'results' }>;
@@ -20,7 +21,7 @@ export function resultsScreen(app: App, route: Route): Screen {
     h('i', { 'aria-hidden': 'true' }, '⚑'), h('span', {}, g))));
   const next = app.levels()[app.levels().findIndex((l) => l.id === setup.level) + 1];
   const nextBtn = win && next ? btn('Next', () => app.go({ to: 'prebattle', level: next.id }), 'primary big', { 'data-autofocus': true }) : '';
-  const retry = btn('Retry', () => app.go({ to: 'battle', setup }), win ? 'secondary' : 'primary big', { 'data-autofocus': !win || !next });
+  const retry = btn('Retry', () => app.go({ to: 'battle', setup: retrySetup(setup) }), win ? 'secondary' : 'primary big', { 'data-autofocus': !win || !next });
   const el = h('main', { class: `screen results ${win ? 'win' : 'loss'}` },
     h('div', { class: 'sheet' },
       h('h1', {}, title),

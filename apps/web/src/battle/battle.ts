@@ -1232,7 +1232,13 @@ export function battleScreen(app: App, route: Route): Screen {
     }
     if (snap.hud.fire === 'pass') { if (send({ cmd: 'pass' })) afterAction(); return; }
     if (snap.hud.fire === 'locked' && snap.hud.fireWhy) { showBanner(snap.hud.fireWhy, 'paper'); say(snap.hud.fireWhy); play('tap'); return; }
-    if (send({ cmd: 'fire' })) { doneHint('fire'); afterAction(); firePress(fire); play('fire_press'); }
+    const res = core.command({ cmd: 'fire' });
+    lastRefusal = res.ok ? '' : res.error ?? '';
+    if (res.ok) { doneHint('fire'); afterAction(); firePress(fire); play('fire_press'); return; }
+    // Never a silent tap: say why, and move to the shot that can go when the core names one.
+    const why = res.detail ?? snap.hud.fireWhy ?? 'That shot cannot fire now';
+    showBanner(why, 'paper'); say(why); play('tap');
+    if (res.readyShot) send({ cmd: 'pick_shot', id: res.readyShot });
   }
   fire.addEventListener('click', (e) => { e.preventDefault(); doFire(); });
   // Resolve speed-up: a tap anywhere during Resolve also speeds up (07 §2.8). Not on the 2x key
@@ -1350,7 +1356,7 @@ export function battleScreen(app: App, route: Route): Screen {
       h('p', { class: 'small' }, lvl ? 'Win by Clean Sweep or Kettle Pop.' : ''),
       btn('Resume', () => closePause(), 'primary', { 'data-autofocus': true }),
       pass,
-      btn('Retry', () => { closePause(); void clearBattle(); app.go({ to: 'battle', setup }); }, 'secondary'),
+      btn('Retry', () => { closePause(); void clearBattle(); app.go({ to: 'battle', setup: retrySetup(setup) }); }, 'secondary'),
       btn('Settings', () => {
         // Back from Settings takes over this live battle (core.battleGen); the save is the fallback.
         const data = core.saveBattle();
@@ -1531,6 +1537,11 @@ function longPress(el: HTMLElement, fn: () => void): void {
   });
   el.addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - x, e.clientY - y) > 10) stop(); });
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, stop);
+}
+
+/** A Retry is the next try at the same fight: the core mixes the try count into the seed (rules v3). */
+export function retrySetup(s: BattleSetup): BattleSetup {
+  return { ...s, attempt: (s.attempt ?? 0) + 1 };
 }
 
 function clamp(v: number, a: number, b: number): number { return Math.max(a, Math.min(b, v)); }

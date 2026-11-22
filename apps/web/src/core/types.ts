@@ -42,6 +42,8 @@ export interface BattleSetup {
   level?: string; // '1-1' ... '1-10' in campaign
   map?: string;
   seed: number;
+  /** Which try at this fight (0 first, 1 the first Retry...): the core mixes it into the seed (rules v3). */
+  attempt?: number;
   difficulty: Difficulty;
   windOff: boolean;
   roundCap?: number;
@@ -75,6 +77,10 @@ export type Command =
 export interface CommandResult {
   ok: boolean;
   error?: string;
+  /** Plain words for a refusal (rules v3 fire). */
+  detail?: string;
+  /** A refused fire: the shot that would go instead ("plain"), when there is one. */
+  readyShot?: string;
 }
 
 export interface TerrainChunk {
