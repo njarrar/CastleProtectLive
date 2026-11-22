@@ -73,6 +73,7 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     @Volatile private var panX = 0f
     @Volatile private var panY = 0f
     @Volatile private var topPan = 0f
+    @Volatile private var bottomPan = 0f
     @Volatile private var bottomZoom = 1f
     @Volatile private var topZoom = 1f
     /** Copies of what input needs from the render thread (review L2). */
@@ -81,6 +82,7 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     @Volatile private var topBottomEdge = 0f
     @Volatile private var mainScale = 1f
     @Volatile private var topScale = 1f
+    @Volatile private var bottomScale = 1f
 
     // Aim Drag state (screen px). Aim itself is angle and power, never screen points.
     private var downX = 0f; private var downY = 0f
@@ -104,7 +106,7 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
 
     init { holder.addCallback(this); isFocusable = true }
 
-    fun reframe() { zoom = 1f; topZoom = 1f; bottomZoom = 1f; panX = 0f; panY = 0f; topPan = 0f; manual.value = false; manualFlag = false; redraw = true }
+    fun reframe() { zoom = 1f; topZoom = 1f; bottomZoom = 1f; panX = 0f; panY = 0f; topPan = 0f; bottomPan = 0f; manual.value = false; manualFlag = false; redraw = true }
 
     private fun setManual() { if (!manualFlag) { manualFlag = true; post { manual.value = true } } }
 
@@ -254,7 +256,7 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 val topH = ((h - stripH) * 0.39f)
                 top.rect.set(0f, 0f, w, topH); strip.set(0f, topH, w, topH + stripH); bottom.rect.set(0f, topH + stripH, w, h)
                 mv = frameFort(top, f, 1 - me, 0.75f * dp * topZoom, 36f * dp, topPan, dt)        // target fort, blocks about 12 pt
-                mv = frameFort(bottom, f, me, 1.0f * dp * bottomZoom, 96f * dp, 0f, dt) || mv     // your fort, blocks about 16 pt
+                mv = frameFort(bottom, f, me, 1.0f * dp * bottomZoom, 96f * dp, bottomPan, dt) || mv     // your fort, blocks about 16 pt
                 renderer.drawLens(c, top, f, me, null, null, shakeOut)
                 renderer.drawLens(c, bottom, f, me, dragNow, shown, null) // never shake under the aiming thumb
                 main.live = false
@@ -283,7 +285,7 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         }
         moving = mv || !session.juice.calm
         // Copies for input on the UI thread.
-        topLive = top.live; bottomLive = bottom.live; topBottomEdge = top.rect.bottom; mainScale = main.scale; topScale = top.scale
+        topLive = top.live; bottomLive = bottom.live; topBottomEdge = top.rect.bottom; mainScale = main.scale; topScale = top.scale; bottomScale = bottom.scale
         renderer.tick(viewDt)
     }
 
@@ -366,6 +368,17 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
 
     private fun inAimLens(x: Float, y: Float): Boolean = if (!tall) true else bottomLive && y > topBottomEdge + 32f * dp
 
+    /** True when a press at screen [x], [y] may start an Aim Drag: on the side on turn's fort (plus two blocks) or within 48 dp of the picked Hob. */
+    private fun onOwnFort(x: Float, y: Float): Boolean {
+        val f = session.frame
+        val l = if (tall) bottom else main
+        if (!l.live) return false
+        val k = Camera.fortOrNull(f.castles, f.side) ?: return true
+        val hob = f.selectedHob
+        val hobDist = if (hob != null) hypot(x - l.sx(hob.x.toFloat()), y - l.sy(hob.y.toFloat())) else Float.POSITIVE_INFINITY
+        return Aim.startsOnOwnFort(l.wx(x), l.wy(y), k.x.toFloat(), k.topY.toFloat(), (k.x + k.cols * k.block).toFloat(), k.baseY.toFloat(), hobDist, dp)
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
         val u = session.ui.value
@@ -375,7 +388,8 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 downX = e.x; downY = e.y; fingerX = e.x; fingerY = e.y; lastX = e.x; lastY = e.y
                 blocked = false; panning = false
                 // In the Tall layout an Aim Drag starts in the Bottom lens; a finger in the Top lens pans it.
-                candidate = u.humanTurn && u.selected != null && !session.paused && session.handoffTo < 0 && inAimLens(e.x, e.y)
+                // An Aim Drag starts only on your own fort or by the picked Hob (00 section 2.3); a press anywhere else pans.
+                candidate = u.humanTurn && u.selected != null && !session.paused && session.handoffTo < 0 && inAimLens(e.x, e.y) && onOwnFort(e.x, e.y)
                 panFromTop = tall && topLive && e.y <= topBottomEdge
                 return true
             }
@@ -416,9 +430,10 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                     session.buzz(8)
                     updateAim()
                 } else if (!candidate && travel >= 8f * dp) {
-                    // Nothing to aim (Top lens, Rival's turn, flight): one finger pans.
+                    // Nothing to aim (Top lens, open sky, Rival's turn, flight): one finger pans.
                     if (panFromTop) topPan = Camera.clampPan(topPan - (e.x - lastX) / Camera.clampScale(topScale, dp), fw)
-                    else if (!tall || session.ui.value.flying) {
+                    else if (tall && !session.ui.value.flying) bottomPan = Camera.clampPan(bottomPan - (e.x - lastX) / Camera.clampScale(bottomScale, dp), fw)
+                    else {
                         val sc = Camera.clampScale(mainScale, dp)
                         panX = Camera.clampPan(panX - (e.x - lastX) / sc, fw); panY = Camera.clampPan(panY - (e.y - lastY) / sc, fh)
                     }
@@ -502,5 +517,31 @@ object Aim {
         if (deg < 0f) deg = if (dx >= 0f) 0f else 180f
         val angle = ((deg * 2f).roundToInt() * 5).coerceIn(0, 1800)
         return angle to power
+    }
+
+    /** Fort margin in cells for an aim start: about two blocks. */
+    const val FORT_MARGIN = 32f
+    /** Press radius around the picked Hob for an aim start, in dp. */
+    const val HOB_RADIUS_DP = 48f
+
+    /**
+     * 00 section 2.3: an Aim Drag may only start on the side on turn's fort ([fx0], [fy0] to [fx1], [fy1]
+     * in world cells, grown by [FORT_MARGIN]) or within [HOB_RADIUS_DP] of the picked Hob ([hobDistPx]
+     * screen px away). [wx], [wy] is the press in world cells. Anywhere else the press pans.
+     */
+    fun startsOnOwnFort(wx: Float, wy: Float, fx0: Float, fy0: Float, fx1: Float, fy1: Float, hobDistPx: Float, dp: Float): Boolean {
+        val m = FORT_MARGIN
+        if (wx >= min(fx0, fx1) - m && wx <= max(fx0, fx1) + m && wy >= min(fy0, fy1) - m && wy <= max(fy0, fy1) + m) return true
+        return hobDistPx <= HOB_RADIUS_DP * dp
+    }
+
+    /**
+     * One finger gesture from [down] to [up] (screen px) against the current aim [prev]. The aim changes
+     * only when the press [startsOnFort] (see [startsOnOwnFort]) and lifts 12 dp or more from it; otherwise it pans and [prev] is kept.
+     */
+    fun afterDrag(startsOnFort: Boolean, downX: Float, downY: Float, upX: Float, upY: Float, prev: Pair<Int, Int>, pointMode: Boolean, fullPx: Float, dp: Float): Pair<Int, Int> {
+        // No fort start: the finger pans. A lift within 12 dp of the anchor cancels (8 dp starts the drag).
+        if (!startsOnFort || hypot(upX - downX, upY - downY) < 12f * dp) return prev
+        return fromDrag(downX - upX, downY - upY, pointMode, fullPx)
     }
 }
