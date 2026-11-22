@@ -87,7 +87,9 @@
     "objective": {
       "tag": "cage",
       "count": 2
-    }
+    },
+    "squall": false,
+    "cap_win": 1
   },
   "pennants": [
     {

@@ -245,7 +245,9 @@
           "type": [
             "integer",
             "null"
-          ]
+          ],
+          "minimum": 0,
+          "maximum": 1
         },
         "wind": {
           "type": "object",
@@ -319,6 +321,85 @@
         },
         "regrow": {
           "type": "boolean"
+        },
+        "boss": {
+          "type": "object",
+          "required": [
+            "phase2_pct",
+            "phase3_pct"
+          ],
+          "additionalProperties": false,
+          "description": "Grand Fort phases 2 and 3. Phase 2 starts when the boss kettle falls under phase2_pct or the root block breaks; phase 3 under phase3_pct.",
+          "properties": {
+            "phase2_pct": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "phase3_pct": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "roller": {
+              "type": "object",
+              "required": [
+                "x",
+                "hp",
+                "step",
+                "climb",
+                "flat_height"
+              ],
+              "additionalProperties": false,
+              "description": "Big Smoothie Jr.: rolls step cells toward the player each boss turn and shaves the ground down to flat_height. Its boiler prop has hp; dirt piled more than climb cells over the map's own ground stops it.",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "hp": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "step": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "climb": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "flat_height": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "shears": {
+              "type": "object",
+              "required": [
+                "hp",
+                "rows",
+                "jam_turns"
+              ],
+              "additionalProperties": false,
+              "description": "The Big Snip: open one boss turn (cut line shown), snip the top rows of the player's tallest column the next. Breaking the hinge prop jams them.",
+              "properties": {
+                "hp": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "rows": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "jam_turns": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
         }
       }
     },

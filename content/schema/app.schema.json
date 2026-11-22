@@ -8,8 +8,15 @@
   "properties": {
     "version": { "type": "integer", "minimum": 1 },
     "rewards": {
+      "description": "Buttons earn rates (design 00 section 5.2). The core reads the canon keys and sends the reward in the battle result (result.buttons); buttons_win and buttons_loss are the old flat numbers, kept for apps that have not moved to result.buttons yet.",
       "type": "object", "additionalProperties": false, "required": ["buttons_win", "buttons_loss"],
-      "properties": { "buttons_win": { "type": "integer", "minimum": 0 }, "buttons_loss": { "type": "integer", "minimum": 0 } }
+      "properties": {
+        "buttons_win": { "type": "integer", "minimum": 0 }, "buttons_loss": { "type": "integer", "minimum": 0 },
+        "first_clear": { "type": "integer", "minimum": 0 }, "first_clear_grand_fort": { "type": "integer", "minimum": 0 },
+        "per_pennant": { "type": "integer", "minimum": 0 }, "replay": { "type": "integer", "minimum": 0 },
+        "replay_grand_fort": { "type": "integer", "minimum": 0 }, "per_new_pennant": { "type": "integer", "minimum": 0 },
+        "loss": { "type": "integer", "minimum": 0 }, "daily": { "type": "integer", "minimum": 0 }
+      }
     },
     "joins": { "type": "object", "additionalProperties": { "type": "string" } },
     "campaign": {

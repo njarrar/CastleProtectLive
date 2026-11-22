@@ -298,17 +298,17 @@ struct CoreBlock: Decodable, Equatable, Sendable {
     var c = 0, r = 0, x = 0, y = 0
     var mat = "timber"
     var hp = 1, max = 1
-    var peephole = false, root = false
+    var peephole = false, root = false, battered = false
 
     init(from decoder: Decoder) throws {
         let k = try decoder.container(keyedBy: CodingKeys.self)
         c = k.value(.c, 0); r = k.value(.r, 0); x = k.value(.x, 0); y = k.value(.y, 0)
         mat = k.value(.mat, "timber")
         hp = k.value(.hp, 1); max = Swift.max(1, k.value(.max, 1))
-        peephole = k.value(.peephole, false); root = k.value(.root, false)
+        peephole = k.value(.peephole, false); root = k.value(.root, false); battered = k.value(.battered, false)
     }
 
-    private enum CodingKeys: String, CodingKey { case c, r, x, y, mat, hp, max, peephole, root }
+    private enum CodingKeys: String, CodingKey { case c, r, x, y, mat, hp, max, peephole, root, battered }
 }
 
 struct CoreRoom: Decodable, Equatable, Sendable {
@@ -424,6 +424,29 @@ struct CoreHob: Decodable, Equatable, Sendable {
         case id, side, def, name, hp, max, state, nook, x, y, rest, knack, plain, buried, cover, dummy, grudge, clatter, aim
         case cls = "class", knackUses = "knack_uses", canFire = "can_fire"
     }
+}
+
+/// A thing on the field: a Tick-Tock Crock or turnip (`kind` "shell"), a cage bar, the captive.
+struct CoreProp: Decodable, Equatable, Sendable {
+    var id = 0
+    /// 0 or 1, or 2 for a level object.
+    var side = 2
+    /// "shell", "cage_bar", "captive" (a newer core may send others).
+    var kind = ""
+    var tag = ""
+    var x = 0, y = 0
+    var hp = 1, max = 1
+    /// The shot id of a shell prop (Crock, turnip), else nil.
+    var shot: String?
+
+    init(from decoder: Decoder) throws {
+        let k = try decoder.container(keyedBy: CodingKeys.self)
+        id = k.value(.id, 0); side = k.value(.side, 2); kind = k.value(.kind, ""); tag = k.value(.tag, "")
+        x = k.value(.x, 0); y = k.value(.y, 0)
+        hp = k.value(.hp, 1); max = Swift.max(1, k.value(.max, 1)); shot = k.value(.shot, nil)
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, side, kind, tag, x, y, hp, max, shot }
 }
 
 /// A shell in flight, sent compact as `[id, x, y, rot, shot]`.
@@ -590,13 +613,16 @@ struct CoreResult: Decodable, Equatable, Sendable {
     var how = ""
     var round = 0
     var pennants: [Bool] = []
+    /// Buttons earned by this result, when the core sends them (else 0).
+    var buttons = 0
 
     init(from decoder: Decoder) throws {
         let k = try decoder.container(keyedBy: CodingKeys.self)
         winner = k.value(.winner, 0); how = k.value(.how, ""); round = k.value(.round, 0); pennants = k.value(.pennants, [])
+        buttons = k.value(.buttons, 0)
     }
 
-    private enum CodingKeys: String, CodingKey { case winner, how, round, pennants }
+    private enum CodingKeys: String, CodingKey { case winner, how, round, pennants, buttons }
 }
 
 /// One event. Every event has `t` and `tick`; the other fields depend on `t` (API.md, events).
@@ -655,6 +681,7 @@ struct CoreSnapshot: Decodable, Equatable, Sendable {
     var castles: [CoreCastle] = []
     var hobs: [CoreHob] = []
     var shells: [CoreShell] = []
+    var props: [CoreProp] = []
     var preview: [[Int]] = []
     var ghosts: [CoreGhost] = []
     var hud = CoreHud()
@@ -672,6 +699,7 @@ struct CoreSnapshot: Decodable, Equatable, Sendable {
         level = k.value(.level, ""); mode = k.value(.mode, "")
         map = k.value(.map, CoreMap()); terrain = k.value(.terrain, CoreTerrain())
         castles = k.value(.castles, []); hobs = k.value(.hobs, []); shells = k.value(.shells, [])
+        props = k.value(.props, [])
         preview = k.value(.preview, []); ghosts = k.value(.ghosts, []); hud = k.value(.hud, CoreHud())
         draft = k.value(.draft, nil); events = k.value(.events, []); result = k.value(.result, nil)
         hash = k.value(.hash, "")
@@ -682,7 +710,7 @@ struct CoreSnapshot: Decodable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case tick, phase, side, awaiting, full, level, mode, map, terrain, castles, hobs, shells
+        case tick, phase, side, awaiting, full, level, mode, map, terrain, castles, hobs, shells, props
         case preview, ghosts, hud, draft, events, result, hash
     }
 }

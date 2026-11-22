@@ -32,19 +32,16 @@ fn golden_replays_are_repeatable() {
 
 #[test]
 fn golden_command_log_replays_to_same_hash() {
-    // The AI's choices go into the command log; replaying the log alone (no
-    // AI) must land on the same state.
-    use castle_core::{battle::Battle, embedded};
+    // Each golden's command log (ai_turn included) replays to the same state.
+    use castle_core::embedded;
     use std::sync::Arc;
     let content = Arc::new(embedded::content());
-    let src = replay::GOLDEN[1].1;
-    let v: serde_json::Value = serde_json::from_str(src).unwrap();
-    let b = replay::run(content.clone(), &v).unwrap();
-    let setup = serde_json::to_string(&v["setup"]).unwrap();
-    let mut b2 = Battle::new(content, &setup, v["seed"].as_u64().unwrap()).unwrap();
-    for c in &b.log {
-        b2.command(c);
-        b2.run_until_plan(20_000);
+    for (name, src) in replay::GOLDEN {
+        let v: serde_json::Value = serde_json::from_str(src).unwrap();
+        let b = replay::run(content.clone(), &v).unwrap();
+        let setup = serde_json::to_string(&v["setup"]).unwrap();
+        let b2 = replay::from_log(content.clone(), &setup, v["seed"].as_u64().unwrap(), &b.log)
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(b.hash(), b2.hash(), "{name}: log replay differs");
     }
-    assert_eq!(b.hash(), b2.hash());
 }

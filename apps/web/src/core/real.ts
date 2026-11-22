@@ -283,6 +283,7 @@ export class RealCore implements CoreApi {
   /** Read a snapshot from the core, merge lean ones into the last full one, gather events and terrain. */
   private pull(): void {
     const raw = JSON.parse(this.game!.snapshot()) as PSnapshot;
+    if (!raw.full && !this.last) throw new Error('the core sent a lean snapshot with no full one before it');
     if (raw.full || !this.last) {
       if (this.last) this.lastCastles = this.last.castles;
       this.last = raw;
@@ -586,10 +587,18 @@ export class RealCore implements CoreApi {
     settle();
     const hash = this.query<string>({ cmd: 'hash' }, 'hash');
     if (d.hash && hash !== d.hash) throw new SaveError('This saved fight no longer replays the same.', 'mismatch');
-    g.snapshot(); // drop the replay's events
-    g.command(JSON.stringify({ cmd: 'terrain_all' }));
-    this.last = undefined;
+    // The first snapshot after the replay is full (commands ran) and becomes the base; its
+    // events are the replay's and are dropped. Then the whole map is sent again (that snapshot
+    // may be lean: only terrain changed).
+    const after = JSON.parse(g.snapshot()) as PSnapshot;
+    if (after.full) {
+      this.last = after;
+      this.lastCastles = undefined;
+      this.rev++;
+      for (const i of [0, 1] as const) this.steamMax[i] = Math.max(this.steamMax[i], after.hud.steam[i] ?? 0);
+    }
     this.cache = undefined;
+    g.command(JSON.stringify({ cmd: 'terrain_all' }));
     this.events = [];
     this.chunks = [];
     this.pull();

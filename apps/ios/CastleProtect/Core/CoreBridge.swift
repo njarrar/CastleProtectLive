@@ -8,8 +8,9 @@ import Foundation
 ///  - `FakeCoreBridge`: a thin player of the core's own fixture files
 ///    (core/fixtures), for tests, UI tests and builds without the XCFramework.
 ///
-/// One handle at a time, called from the main actor only (the core starts no
-/// threads and wants one thread per handle).
+/// One handle at a time. `CoreHost` owns the bridge and makes every call on
+/// its one serial queue (the core starts no threads and wants one thread per
+/// handle), so nothing else may call a bridge directly.
 protocol CoreBridge: AnyObject {
     /// Shown in Settings, About.
     var name: String { get }
@@ -28,15 +29,22 @@ protocol CoreBridge: AnyObject {
     func end()
 }
 
+#if !DEBUG && !canImport(CastleCoreFFI)
+#error("A Release build needs the real core: run scripts/build-xcframework.sh first (Frameworks/CastleCore.xcframework).")
+#endif
+
 enum CoreFactory {
-    /// The real core when it is linked, else the stand-in.
+    /// The real core when it is linked, else the stand-in. Only Debug builds
+    /// may choose the stand-in (UI tests, `-useStandIn`).
     static func make(preferStandIn: Bool) -> any CoreBridge {
         #if canImport(CastleCoreFFI)
-        if !preferStandIn {
-            return FFICoreBridge()
-        }
+        #if DEBUG
+        if preferStandIn { return FakeCoreBridge() }
         #endif
+        return FFICoreBridge()
+        #else
         return FakeCoreBridge()
+        #endif
     }
 
     static var realCoreLinked: Bool {

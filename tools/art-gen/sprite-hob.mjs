@@ -64,7 +64,7 @@ export const POSES = {
   // falling through a broken floor: hang, then flail. The hat stays up a beat
   tumble: [
     { face: 'wide', hf: [27, -46], hb: [-27, -46], hatDy: -5, toolRot: 16, sy: 1.04, sx: .97, dy: -4, shadow: false, boots: 'dangle' },
-    { face: 'shout', lean: -12, hf: [26, -58], hb: [-26, -55], hatDy: -9, hatRot: -8, toolRot: 28, sy: 1.06, sx: .96, dy: -4, shadow: false, boots: 'dangle', lines: true },
+    { face: 'shout', lean: -12, hf: [26, -58], hb: [-26, -55], hatDy: -7, hatRot: -8, toolRot: 28, sy: 1.04, sx: .97, dy: -4, shadow: false, boots: 'dangle', lines: true },
     { face: 'shout', lean: 11, hf: [28, -55], hb: [-25, -60], hatDy: -10, hatRot: 9, toolRot: -16, sy: 1.06, sx: .96, dy: -4, shadow: false, boots: 'dangle', lines: true },
     { face: 'wide', lean: -5, hf: [24, -61], hb: [-27, -51], hatDy: -8, hatRot: -4, toolRot: 20, sy: 1.05, sx: .96, dy: -4, shadow: false, boots: 'dangle', lines: true },
   ],
@@ -185,7 +185,7 @@ export function posedHob(key, teamKey, p = {}) {
   let fx = '';
   if (puff) fx += path('M50 -62 l9 -6 M54 -50 l11 -1 M50 -38 l9 5', 'none', { stroke: ink, sw: 2.5 }) + star4(46, -50, 5, C.gold, { stroke: ink, sw: 1.5 });
   if (flash) fx += star4(52, -44, 11, '#FFF3C4', { stroke: C.gold, sw: 2 }) + star4(52, -44, 4.5, '#FFFFFF');
-  if (lines) fx += path('M-40 -96 v-22 M-33 -70 v-16 M42 -100 v-22 M36 -74 v-14', 'none', { stroke: ink, sw: 2.5, op: .55 });
+  if (lines) fx += path('M-34 -96 v-20 M-29 -72 v-14 M40 -98 v-20 M35 -74 v-14', 'none', { stroke: ink, sw: 2.5, op: .55 });
   if (stars !== null) {
     // 0 and 1: hit stars. 2: stars drift off. 3: stars ring the head (eyes spin)
     const pts = stars === 3 ? [[-26, -98, 6.5], [0, -110, 5], [27, -100, 7], [36, -80, 4.5]] : stars === 2 ? [[-38, -100, 4.5], [42, -92, 5.5], [12, -116, 4]] : stars ? [[-30, -92, 6], [34, -86, 7.5], [8, -104, 5]] : [[-24, -84, 7.5], [30, -92, 6], [2, -98, 5]];

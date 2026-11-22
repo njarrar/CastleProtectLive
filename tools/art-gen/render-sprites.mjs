@@ -151,7 +151,10 @@ img{display:block}figcaption{margin:2px auto 0;opacity:.8;font-size:9px}`;
   const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const crc = Buffer.alloc(4); crc.writeUInt32BE(zlib.crc32(td) >>> 0); return Buffer.concat([len, td, crc]); };
   const parse = (buf) => { const out = []; let p = 8; while (p < buf.length) { const len = buf.readUInt32BE(p); out.push({ type: buf.toString('latin1', p + 4, p + 8), data: buf.subarray(p + 8, p + 8 + len) }); p += 12 + len; } return out; };
   // frames: [{ png: Buffer, ms }], all the same size
-  const apng = (frames) => {
+  const apng = (all) => {
+    // join frames that look the same
+    const frames = [];
+    for (const fr of all) { const last = frames[frames.length - 1]; if (last && last.png.equals(fr.png)) last.ms += fr.ms; else frames.push({ ...fr }); }
     const first = parse(frames[0].png), ihdr = first.find(c => c.type === 'IHDR').data;
     const parts = [Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr)];
     const actl = Buffer.alloc(8); actl.writeUInt32BE(frames.length, 0); actl.writeUInt32BE(0, 4);
@@ -220,20 +223,24 @@ img{display:block}figcaption{margin:2px auto 0;opacity:.8;font-size:9px}`;
 
   const H = (h, t, list) => [list.map(n => `hob_${h}_${t}_${n}`)].flat();
   await columns('hobs_fire.png', ['marge', 'thumper', 'quill', 'jax', 'nan', 'grub', 'bobbin', 'hetty'].map((h, i) => H(h, i % 2 ? 'orange' : 'blue', ['idle', 'fire', 'idle'])), 2, 1);
-  await columns('hob_idle_hit_bonked.png', [H('quill', 'orange', ['idle', 'hit', 'bonked'])], 3, 3);
-  await columns('hob_tumble_land.png', [H('grub', 'blue', ['tumble', 'land', 'idle'])], 3, 3);
-  await columns('hob_cheer.png', [H('bobbin', 'orange', ['cheer', 'idle']), H('marge', 'blue', ['cheer', 'idle'])], 3, 1);
-  await columns('hob_dig_nextdoor.png', [H('hetty', 'blue', ['dig', 'idle']), H('nan', 'orange', ['nextdoor']), H('thumper', 'blue', ['nextdoor'])], 3, 2);
-  await columns('kettle_pop.png', [['kettle_critical', 'kettle_pop']], 5, 1);
-  await columns('fort_parts.png', [['fx_kettle_steam'], ['loophole_open', 'loophole_flap_blue_close'], ['loophole_open', 'loophole_flap_orange_close'], ['pot_lid_raise']], 6, 3);
-  await columns('collapse_pieces.png', [['fx_crack_cobble'], ['fx_chunk_cobble'], ['fx_chunk_timber'], ['fx_chunk_wicker'], ['fx_rubble_cobble'], ['fx_rubble_wicker'], ['fx_dustcloud']], 6, 3);
+  await columns('hob_idle_hit_bonked.png', [H('quill', 'orange', ['idle', 'hit', 'bonked'])], 2, 3);
+  await columns('hob_tumble_land.png', [H('grub', 'blue', ['tumble', 'land', 'idle'])], 2, 3);
+  await columns('hob_cheer.png', [H('bobbin', 'orange', ['cheer', 'idle']), H('marge', 'blue', ['cheer', 'idle'])], 2, 1);
+  await columns('hob_dig.png', [H('hetty', 'blue', ['dig', 'idle']), H('grub', 'orange', ['dig', 'idle'])], 2, 1);
+  await columns('hob_nextdoor.png', ['grub', 'hetty', 'thumper', 'nan'].map((h, i) => H(h, i % 2 ? 'orange' : 'blue', ['nextdoor'])), 2, 1);
+  await columns('kettle_pop.png', [['kettle_critical', 'kettle_pop']], 4, 1);
+  await columns('fort_parts.png', [['fx_kettle_steam'], ['loophole_open', 'loophole_flap_blue_close'], ['loophole_open', 'loophole_flap_orange_close'], ['pot_lid_raise']], 4, 1);
+  await columns('collapse_pieces.png', [['fx_crack_cobble'], ['fx_chunk_cobble'], ['fx_chunk_timber'], ['fx_chunk_wicker'], ['fx_rubble_cobble'], ['fx_rubble_wicker'], ['fx_dustcloud']], 4, 2);
   await columns('trails.png', ['blast', 'pierce', 'dig', 'fire', 'mend'].map(n => ['fx_trail_' + n]), 8, 1);
-  await columns('effects.png', [['fx_impact_cobble'], ['fx_impact_wicker'], ['fx_impact_dirt'], ['fx_splash'], ['fx_fizz_bubble', 'fx_fizz_pop'], ['fx_squall'], ['fx_wind_leaf'], ['fx_pin_p1_drop'], ['fx_pin_p2_drop'], ['fx_ghost_dot_p1_pulse'], ['fx_ghost_dot_p2_pulse'], ['fx_shimmer']], 5, 3);
-  await columns('ui_motion.png', [['ui_fire', 'ui_fire_press'], ['ui_pennant_empty', 'ui_pennant_earn'], ['ui_button_coin_spin'], ['ui_handoff_flip']], 3, 3);
+  await columns('impacts.png', ['wicker', 'timber', 'cobble', 'footing', 'dirt'].map(n => ['fx_impact_' + n]), 4, 1);
+  await columns('splash_fizz.png', [['fx_splash'], ['fx_fizz_bubble', 'fx_fizz_pop']], 4, 2);
+  await columns('weather.png', [['fx_squall'], ['fx_wind_leaf']], 4, 1);
+  await columns('marks.png', [['fx_pin_p1_drop'], ['fx_pin_p2_drop'], ['fx_ghost_dot_p1_pulse'], ['fx_ghost_dot_p2_pulse'], ['fx_shimmer']], 4, 1);
+  await columns('ui_motion.png', [['ui_fire', 'ui_fire_press'], ['ui_pennant_empty', 'ui_pennant_earn'], ['ui_button_coin_spin'], ['ui_handoff_flip']], 2, 1);
 
   // fort walk: a small fort on four Stompers, moved by data.fort_bob. Shows how the data is used
   {
-    const z = 4, W = 420, Hh = 420, gx = 100, ground = 360, hipY = ground - (30 - 4.57) * z + 2;
+    const z = 3, W = 320, Hh = 320, gx = 80, ground = 270, hipY = ground - (30 - 4.57) * z + 2;
     const bob = ANIM.data.fort_bob, wa = ANIM.animations.stomper_blue_walk, frames = [];
     const rows = [['timber', 'timber', 'timber'], ['cobble', 'cobble', 'cobble'], ['footing', 'footing', 'footing']];
     for (let i = 0; i < 12; i++) {
@@ -243,7 +250,7 @@ img{display:block}figcaption{margin:2px auto 0;opacity:.8;font-size:9px}`;
       body += img('hob_marge_blue_idle_' + [0, 1, 0, 3][Math.floor(t / 400) % 4], 24 * z, 0, 24 / 50 * z) + img('flag_blue', 2 * z, 0, z);
       let html = `<div style="left:0;top:${ground}px;width:${W}px;height:${Hh - ground}px;background:#7CC46A"></div>`;
       // ground marks slide back so the fort reads as walking on the spot
-      for (let k = 0; k < 6; k++) html += `<div style="left:${((k * 80 - i * 13) % 480 + 480) % 480 - 30}px;top:${ground + 14}px;width:26px;height:5px;border-radius:3px;background:#5AA555"></div>`;
+      for (let k = 0; k < 6; k++) html += `<div style="left:${((k * 75.4 - i * 12.57) % 452.4 + 452.4) % 452.4 - 30}px;top:${ground + 14}px;width:26px;height:5px;border-radius:3px;background:#5AA555"></div>`;
       for (const [hx, ph, back] of [[10, 3, true], [38, 0, true], [10, 0, false], [38, 3, false]]) html += img(`stomper_blue_walk_${(fi + ph) % 6}`, gx + hx * z, hipY + bob.dy[fi] * z * .5, z, back ? 'filter:brightness(.7)' : '');
       html += `<div style="left:${gx}px;top:${hipY - 48 * z + 4 + bob.dy[fi] * z}px;width:${48 * z}px;height:${48 * z}px;transform-origin:50% 100%;transform:rotate(${bob.tilt[fi]}deg)">${body}</div>`;
       if (bob.stomp_frames.includes(fi)) html += img('fx_dust_0', gx + (fi ? 12 : 54) * z, ground - 4, z * .8);
@@ -254,23 +261,23 @@ img{display:block}figcaption{margin:2px auto 0;opacity:.8;font-size:9px}`;
   }
   // collapse: creak, lean, staggered drop, land, break. Driven by data.collapse
   {
-    const z = 5, W = 420, Hh = 460, x0 = 150, floor = 400, c = ANIM.data.collapse, m = 'cobble', frames = [];
-    const fall = 32 * z, T0 = 300, T1 = T0 + c.lean.ms, step = 40, end = 2300;
+    const z = 4, W = 340, Hh = 360, x0 = 120, floor = 310, c = ANIM.data.collapse, m = 'cobble', frames = [];
+    const fall = 16 * z, T0 = 300, T1 = T0 + c.lean.ms, step = 40, end = 2400;
     for (let t = 0; t < end; t += step) {
       let html = `<div style="left:0;top:${floor}px;width:${W}px;height:${Hh - floor}px;background:#9A6440"></div>`;
-      html += img('block_footing_fresh', x0 - 16 * z, floor - 16 * z, z) + img('block_footing_fresh', x0, floor - 16 * z, z) + img('block_cobble_fresh', x0 - 16 * z, floor - 32 * z, z) + img('block_cobble_fresh', x0 - 16 * z, floor - 48 * z, z);
-      // two blocks hang over a gap. Row 0 is the lower one and lets go first
+      html += img('block_footing_fresh', x0 - 16 * z, floor - 16 * z, z) + img('block_cobble_fresh', x0 - 16 * z, floor - 32 * z, z) + img('block_cobble_fresh', x0 - 16 * z, floor - 48 * z, z);
+      // two blocks hang off the side of the wall; the block under them has just gone. Row 0 is the lower one and lets go first
       for (let r = 0; r < 2; r++) {
-        const start = T1 + r * c.drop.row_gap_ms, restY = floor - 16 * z - 16 * z * (r + 1), dur = 260 + r * 20;
+        const start = T1 + r * c.drop.row_gap_ms, restY = floor - 16 * z - 16 * z * (r + 1), dur = 200;
         const u = Math.min(1, Math.max(0, (t - start) / dur)), y = restY - fall + fall * u * u, landed = t - (start + dur);
         const sh = t < T0 ? track(c.creak.shiver_x, t) * z : 0, wob = t < T0 ? track(c.wobble_deg[m], t) : 0;
         const lean = t >= T0 && landed < 0 ? c.lean.deg[m] * track(c.lean.track, t - T0) : 0;
         const breakAt = 60;
         if (landed < breakAt) {
           const sq = landed >= 0 ? track(c.land.squash_y, landed) : 1;
-          html += `<div style="left:${x0 + 16 * z + sh}px;top:${y}px;width:${16 * z}px;height:${16 * z}px;transform-origin:0% 100%;transform:rotate(${wob + lean}deg) scaleY(${sq})">${img(`block_${m}_${r ? 'scuffed' : 'battered'}`, 0, 0, z)}${t < T1 ? img(`fx_crack_${m}_${Math.min(2, Math.floor(t / 100))}`, 0, 0, z) : ''}</div>`;
+          html += `<div style="left:${x0 + sh}px;top:${y}px;width:${16 * z}px;height:${16 * z}px;transform-origin:0% 100%;transform:rotate(${wob + lean}deg) scaleY(${sq})">${img(`block_${m}_${r ? 'scuffed' : 'battered'}`, 0, 0, z)}${t < T1 ? img(`fx_crack_${m}_${Math.min(2, Math.floor(t / 100))}`, 0, 0, z) : ''}</div>`;
         } else {
-          const b = landed - breakAt, ra = ANIM.animations[`fx_rubble_${m}`], bx = x0 + 16 * z, by = floor - 16 * z * (r + 1);
+          const b = landed - breakAt, ra = ANIM.animations[`fx_rubble_${m}`], bx = x0, by = floor - 16 * z * (r + 1);
           if (r === 0 && b < 1500 + 270) html += img(b < 240 ? ra.frames[frameAt(ra, b, false)] : ra.hold, bx, by + 16 * z * 0, z, `opacity:${b > 1400 ? Math.max(0, 1 - (b - 1400) / 300) : 1}`);
           if (b < c.break.ms + 150) for (let k = 0; k < c.break.chunks_per_block[m]; k++) {
             const vx = (k - 1.5) * 34 + r * 12, v = b / 1000, ca = ANIM.animations[`fx_chunk_${m}`];

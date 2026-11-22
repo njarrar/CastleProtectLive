@@ -24,7 +24,7 @@ extern "C" {
  * `cp_last_error(NULL)` then gives the reason.
  *
  * # Safety
- * The string arguments must be NULL or valid NUL terminated UTF-8.
+ * The string arguments must be NULL or valid NUL terminated strings.
  */
 struct CpGame *cp_new(const char *content_json, const char *level_json, uint64_t seed);
 
@@ -32,7 +32,8 @@ struct CpGame *cp_new(const char *content_json, const char *level_json, uint64_t
  * Apply a command (JSON object or array of objects). Returns the JSON reply.
  *
  * # Safety
- * `handle` must come from `cp_new`; `json` must be valid UTF-8 or NULL.
+ * `handle` must be NULL or come from `cp_new`; `json` must be NULL or a NUL
+ * terminated string.
  */
 char *cp_command(struct CpGame *handle, const char *json);
 
@@ -40,7 +41,7 @@ char *cp_command(struct CpGame *handle, const char *json);
  * Advance the sim by whole 120 Hz ticks. Returns {"tick":..,"phase":..}.
  *
  * # Safety
- * `handle` must come from `cp_new`.
+ * `handle` must be NULL or come from `cp_new`.
  */
 char *cp_step(struct CpGame *handle, int32_t ticks);
 
@@ -48,13 +49,14 @@ char *cp_step(struct CpGame *handle, int32_t ticks);
  * The frame snapshot as JSON. Drains events and dirty terrain chunks.
  *
  * # Safety
- * `handle` must come from `cp_new`.
+ * `handle` must be NULL or come from `cp_new`.
  */
 char *cp_snapshot(struct CpGame *handle);
 
 /**
- * The last error text for `handle`, or for `cp_new` when `handle` is NULL.
- * Returns NULL when there is none. Free with `cp_free_string`.
+ * The last error text for `handle` (the last refusal reply, or the panic
+ * text), or for `cp_new` when `handle` is NULL. Returns NULL when there is
+ * none. Free with `cp_free_string`.
  *
  * # Safety
  * `handle` must be NULL or come from `cp_new`.
@@ -67,10 +69,11 @@ char *cp_last_error(struct CpGame *handle);
 char *cp_version(void);
 
 /**
- * Daily Dust-up seed for a local date text such as "2026-11-22".
+ * Daily Dust-up seed for a local date text such as "2026-11-22". Returns 0
+ * for NULL or bad UTF-8.
  *
  * # Safety
- * `date` must be NULL or valid NUL terminated UTF-8.
+ * `date` must be NULL or a NUL terminated string.
  */
 uint64_t cp_daily_seed(const char *date);
 
@@ -88,7 +91,7 @@ char *cp_golden_hashes(void);
 void cp_free_string(char *s);
 
 /**
- * Release a battle handle.
+ * Release a battle handle (also a dead one).
  *
  * # Safety
  * `handle` must be NULL or come from `cp_new`, freed only once.

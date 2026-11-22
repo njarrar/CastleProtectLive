@@ -618,8 +618,11 @@ fn every_shot_fires_without_panic() {
             cmd(&mut b, json!({"cmd": "pick_shot", "shot": "knack"}));
             cmd(&mut b, json!({"cmd": "aim", "angle": 1350, "power": 76}));
             let r = cmd(&mut b, json!({"cmd": "fire"}));
+            // a self shot with nothing to do is refused before it is paid
             assert!(
-                r["ok"] == true || r["reason"] == "no_heavy_first_turn",
+                r["ok"] == true
+                    || r["reason"] == "no_heavy_first_turn"
+                    || r["reason"] == "nothing_to_mend",
                 "{kit} {h}: {r}"
             );
             b.run_until_plan(10_000);

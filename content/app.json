@@ -2,7 +2,15 @@
   "version": 1,
   "rewards": {
     "buttons_win": 250,
-    "buttons_loss": 40
+    "buttons_loss": 40,
+    "first_clear": 200,
+    "first_clear_grand_fort": 500,
+    "per_pennant": 25,
+    "replay": 80,
+    "replay_grand_fort": 150,
+    "per_new_pennant": 10,
+    "loss": 40,
+    "daily": 60
   },
   "joins": {
     "quill": "1-2",

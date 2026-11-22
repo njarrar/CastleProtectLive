@@ -83,7 +83,23 @@
       "pool": 6,
       "picks": 2
     },
-    "regrow": true
+    "regrow": true,
+    "boss": {
+      "phase2_pct": 70,
+      "phase3_pct": 35,
+      "roller": {
+        "x": 1200,
+        "hp": 60,
+        "step": 120,
+        "climb": 32,
+        "flat_height": 330
+      },
+      "shears": {
+        "hp": 30,
+        "rows": 2,
+        "jam_turns": 2
+      }
+    }
   },
   "pennants": [
     {

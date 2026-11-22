@@ -36,6 +36,7 @@ export function battleScreen(app: App, route: Route): Screen {
     else if (!r.prepared) core.newBattle(setup);
     else core.resendTerrain?.(); // the pre-battle sheet already read the first snapshot
   } catch (e) {
+    console.error(e);
     if (r.resume) { void dropBattleSave(); throw new Error(e instanceof SaveError ? `${e.message} It was put aside.` : 'That saved fight could not be loaded. It was put aside.'); }
     throw new Error(`This fight cannot start: ${e instanceof Error ? e.message : String(e)}`);
   }

@@ -282,3 +282,69 @@ Fix: set `inert` on the HUD while a card is open, restore focus on close, write 
 - **Rotation.** Portrait to landscape keeps phase, aim, pins and round (seen). Open cards survive the relayout.
 - **Private mode.** If IndexedDB will not open, the app runs on a memory store.
 - **Pages base.** Asset, core, art and manifest paths all honour `VITE_BASE`; with the base set in both steps the smoke test passes under `/CastleProtect/`.
+
+---
+
+## Core requests
+
+The web does not edit `core/`. These are the changes the web needs from the core owner. Until they land, the numbers marked (app.json) live in `content/app.json` (schema `content/schema/app.schema.json`), read by `apps/web/src/core/rules.ts`; nothing else is hard coded in TypeScript.
+
+1. **Log only the last `aim` before an Action** (M1). The web now sends at most one `aim` per frame, but every one is logged, so a long drag still adds dozens of log lines. Either drop `aim` from `is_logged` and log the selected Hob's aim inside `fire`/`recall`, or collapse consecutive `aim` entries.
+2. **`hud.steam_max: [n, n]`** (M4 `steamMax`). The web uses the highest Steam it has seen per side as the bar's 100%. (The work in progress in `battle.rs` already has a `steam_max` field; please send it in the snapshot and add it to `API.md` and the fixtures.)
+3. **Per shot readiness** (M4 "Needs a rest", Fire ready). Send `ready` and `why` per chip (plain, knack, each hand shell) for the selected Hob, so the app stops rebuilding it from `rest`, `knack_uses` and `can_fire`.
+4. **Shove Off cost** (H2). Send `hud.shove_off_cost` (or the cost in the `pick_hob` reply) so the Fire key can read "Shove Off 15". The web shows "SHOVE OFF" and reports `not_enough_steam`.
+5. **Test Yard dummy** (M4). Let `test_yard` skip the dummy side's plan phase, so the app no longer sends `pass` for it.
+6. **Test Yard wind and Couch Duel Give up** (M13). Add `set_wind` (test_yard only) and `give_up` (couch only, ends with `how: "give_up"`) to the command set and `API.md`. Until then the web hides both on the real core (`CoreApi.features`).
+7. **Result stats** (M4 hit counting, loss cause). Send per side `shots`, `hits`, `blocks`, best shot and a "what broke you" line in `result`. The web counts them from events and maps `how` to a cause line. (The work in progress `SideStats.taken`/`last_blow` and `Outcome.broke` look like this; please add them to the snapshot schema.)
+8. **Rewards and unlocks** (app.json): Buttons per win and loss (`rewards`), which Hob joins after which level (`joins`), Walk from level 1-9 (`campaign.walk_from`), Doodads from 1-10 and which (`campaign.doodads_from`, `campaign.doodads`), Modes and Workshop after 1-5 (`campaign.modes_after`). Ideally the level files carry these.
+9. **Presets** (app.json): Help Steam 120/140 (`help_steam`; the work in progress `SideCfg.help` would let the app send `help` instead of `steam`), wind presets Off/Light/Full (`wind_presets`), Skirmish Rummage pool and picks (`rummage_presets`), Rival think time (`rival_think_seconds`), Walk step 4 cells per 4 ticks (`walk`).
+10. **Workshop** (app.json): budget 72, grid 8 x 10, 5 Nooks most (`workshop`). Please have `validate_blueprint` return `cost` and `budget` so the editor only shows what the core says.
+11. **`validate_blueprint` problem cells**. Return the failing `[c, r]` cells with `detail`, so the Workshop can mark the exact blocks (today it shows the text only).
+12. **Snapshot fixtures**. `tests/protocol.spec.ts` walks every key in `core/fixtures/snapshot_*.json` and fails on a key the adapter does not know. Please regenerate the fixtures with props (1-7) and a root block (1-10) present, so those paths are covered too.
+
+## Fixes
+
+Fix pass on branch `castle-protect-plan`, `apps/web/` and `.github/workflows/web.yml` only (plus the new `content/app.json` and its schema). Checked with `scripts/build-wasm.sh --target web`, then in `apps/web` `npm ci && npm run build && npx playwright test`: 17 of 17 pass with the default base, and 17 of 17 with `VITE_BASE=/CastleProtectLive/` (built and tested with the same base, `CI=1`).
+
+New tests: `tests/recovery.spec.ts` (offline reload plays the real wasm core from the precache; `?core=mock` still loads wasm in production; bad progress and settings records boot and are kept as `progress.broken`; cut-off, old-version and garbage battle saves are put aside with a note; a real save resumes; a save whose state hash does not match is refused; a 3 Nook Workshop fort on 1-7 falls back to the level fort and FIGHT works; Pass from Pause; bad and locked `#level` links; focus stays in the hand-off card). `tests/protocol.spec.ts` adds the fixture key walk, Shot Weight over `content/shots.json`, and props/root/battered/flap mapping.
+
+Screenshots at 390 x 844 and 844 x 390, before and after: `docs/review/code/web-shots/fixes-1/` (`before-*.png`, `after-*.png`).
+
+| Id | Status | What changed, or why not |
+|---|---|---|
+| C1 | Fixed | No HEAD probe: `loadCore` does a plain GET `import()` of `core/castle_wasm.js` and `init()`, which the precache answers offline. A production build never falls back: a load failure shows "Could not load the game" with Try again. `mock.ts` (and `content.ts`) load only by dynamic import under `import.meta.env.DEV` with `?core=mock`; the production bundle has no mock code (checked by grep), and `vite build` fails if no wasm pkg is found. Test: offline reload gives `data-core="wasm"`. |
+| C2 | Fixed | `VITE_BASE` is set at job level, so build, `vite preview` and the Playwright `baseURL` agree. Dropped the misleading `RUST_VERSION` and `WASM_BINDGEN_VERSION` pins (the toolchain file and `Cargo.lock` decide). |
+| H1 | Fixed | `CoreApi.checkFort(bp, seats)` runs `validate_blueprint` with the crew size. Campaign setup, the pre-battle sheet, Skirmish, Couch Duel and the Test Yard use the Workshop fort only when the core accepts it; otherwise the level's fort (or a content fort the core accepts, `fortFor`) with a clear note. FIGHT builds the battle on the sheet and shows the core's reason if it still refuses. `RealCore.start` builds the new `Game` before freeing the old one. |
+| H2 | Fixed (part) | Fire reads SHOVE OFF on a buried Loophole and sends `shove_off`; PASS when no Hob can fire or be shoved and no Doodad is left; Pass turn is always on the Pause card. Doodad chips (Mend Bucket, Pot Lid with a room choice) send `doodad`; 1-10 now brings them (from `content/app.json`). Not done: Puff Up, Rebuild and Mendglob `target` dials (v0.1 has no dial UI yet). |
+| H3 | Fixed | Saves are `v: 2` with `rules`, `sim` and the state `hash`. Load checks the version and rules first, every replayed command must be accepted, and the hash after replay must match; any failure throws `SaveError`, the save moves to `battle.broken`, and the player lands on the map with "This saved fight is from an older version" (or damaged, or no longer replays). A save from another core name is put aside, not hidden for good. |
+| H4 | Fixed | Settings and progress have a `version` and a per field check and migrate step; a bad field gets its default. A damaged record is kept as `<key>.broken`, the last good progress as `progress.bak`. `boot()` is wrapped: any failure shows "Could not start the game" with Try again and Reset save. |
+| H5 | Fixed | See C1: the mock is dev only and not in the production bundle. It was not cut to a fixture player; it stays as a dev tool. |
+| H6 | Fixed (part) | Drawn from snapshot data: props (1-7 cage bars and the captive, also marked on the Field Strip), the 1-10 root block, Loophole Flaps, Pot Lids on rooms and the kettle, broken Nooks, Battered blocks under Fatigue, Ridgepole holds, buried Hobs, Fatigue in the round chip. Protocol has `battered` and `fatigue`. Lean Lines: hold still on any block for 450 ms to highlight what would fall (the `lean_lines` query, never logged). Not drawn yet: `peephole`, `cover`, `grudge`, `clatter`, `hud.score`, `hud.puff_up`, `front_rounds_left` (listed as known in the fixture key test). |
+| H7 | Fixed | `registerType: 'prompt'`. A waiting update shows an "Update ready" chip on the title or map only; it never reloads during a fight. |
+| M1 | Fixed (part) | Drag keeps the newest aim and sends it once per frame and on release (120 pointer moves gave 71 aim commands at headless frame rate). Logging only the last aim needs the core (Core request 1). |
+| M2 | Fixed | The capture handler skips the Fire key, so 2x reads 1x after one click (checked in the browser). |
+| M3 | Fixed | Weight maps `L`, `M`, `H` (and the long names); test over `content/shots.json`. |
+| M4 | Fixed (part) | Moved to `content/app.json`: Buttons 250/40, Hob joins, Walk from 1-9, Help Steam, wind presets, Rummage presets, Workshop budget and grid, Walk speed, Doodads unlock, Modes unlock, Rival think time. The draft tag reads the level's own pool and picks. The Steam bar uses the side's starting Steam. Could not move: per shot readiness, Test Yard dummy pass, hit counting and loss cause (Core requests 2 to 7). |
+| M5 | Fixed | One title per `how` for winner and loser (Kettle Pop, Clean Sweep, Squall Pop, Double Pop, Rescued, dozed off, on points); the `how` key is kept on the result. |
+| M6 | Fixed | `onEnd` writes progress first, then clears the save, then shows results. |
+| M7 | Fixed | Transactions settle on abort, `transaction()` is in a try with one reopen on a closed connection, then the memory map; `onversionchange`/`onclose` reset the handle; `navigator.storage.persist()` is asked after the first win. |
+| M8 | Fixed | The frame loop catches, stops, and shows "The fight got stuck" with Retry and Map. `error` and `unhandledrejection` show the error screen. |
+| M9 | Fixed | Lens and HUD rects are read once after a layout change, not per frame. HUD text, styles, classes and data are written only when they change. The view model is rebuilt only on a full snapshot. |
+| M10 | Fixed (part) | Terrain draws only the lens's source rect; the sky keeps its aspect (no oval sun); preview dots are one path; sprite pages are `decode()`d before use. Not done: caching the fort to an offscreen canvas. |
+| M11 | Fixed | Relayout ends the drag and keeps the aim, with no Quick Fire. |
+| M12 | Fixed | `#level=` checks the id and `levelOpen`, else the map. A hash change during a fight is ignored. Screens push history; Back in a fight opens Pause (or closes a card), elsewhere goes up one screen. |
+| M13 | Fixed (hidden) | The Test Yard wind slider and duel Give up are hidden on the real core (`CoreApi.features`). The commands need the core (Core request 6). |
+| M14 | Fixed (part) | Cards make the rest of the battle inert, trap Tab, restore focus and have `aria-labelledby`; the round chip is no longer `aria-live`; a hidden status line posts one line per event; the Workshop grid has rows, a roving tab stop, arrow keys and Enter; `user-scalable=no` removed; Reduce motion stops particles, shake, sprite cycling and cloud drift. |
+| L1 | Fixed | Duel score is kept by side; Swap sides swaps it. |
+| L2 | Fixed | Break and hit anchors look up the castle from before the snapshot; prop hits land on the prop. |
+| L3 | Fixed | Threaded, front, drop, climb, castle drop, thump, mend, rebuild, puff up, fatigue, pass, split, lid, lid block, buried, shove off, prop break and regrow give a word, a banner or a sound, and a status line. |
+| L4 | Fixed | Stats and best shot are in the save; a resumed Couch Duel shows the hand-off card. |
+| L5 | Fixed (part) | The camera uses the map size; landscape keeps the forts' base near the bottom of the clear area and fills ground past the map ends. Some soil still shows under the shot tray. |
+| L6 | Fixed | Audio resumes from any state that is not running (iOS `interrupted`), unlocks on pointerup, touchend and keydown, and plays each sound at most once per 50 ms. |
+| L7 | Fixed | Fine Tune keys add the blur listener only while held. `__castle` and `castleApp` exist only in dev or with `?debug`. |
+| L8 | Fixed | Portrait top strip is two fixed rows (rival pips stay right); Pause and Hob keys are 44 pt in short landscape; the save quill fades out (and is hidden with Reduce motion). |
+| L9 | Fixed | Skirmish and duel maps come from the core's content (d1, d2), so no two names share a level. Rival turns at 2x covers the whole Rival turn. Lost pointer capture keeps the aim and never Quick Fires. |
+| L10 | Fixed | Shells are carried on by the part of a tick that has passed, so flight is even on 90 and 144 Hz. |
+| L11 | Fixed (part) | `pull_request` trigger; `binaryen` installed for `wasm-opt`; a failed Pages deploy is a warning, not hidden; build comment says wasm-bindgen; no source maps, no `.d.ts`, no 1024 px icon in `dist`. Note: the art pipeline now writes 4 atlas pages, so the precache is about 9 MB; that is art work, not the web build. |
+
+Notes. While this pass ran, other agents committed work in progress (some of these web files are already in commits `569b368` and `711e2f6`), the art pipeline rewrote `assets/`, and the core owner was editing `core/castle-core/src/battle.rs`. The final run used a wasm rebuilt from that in-progress core: it sends a lean snapshot after `terrain_all`, which broke resume until `loadBattle` kept the first full snapshot after the replay as its base (fixed, and the real save test covers it). Rerun the suite once the core change is final.
