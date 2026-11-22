@@ -41,10 +41,6 @@ targets:
       - path: ../../assets/manifest.json
         buildPhase: resources
         optional: true
-      - path: ../../assets/sounds
-        type: folder
-        buildPhase: resources
-        optional: true
       - path: ../../content
         type: folder
         buildPhase: resources
@@ -57,6 +53,16 @@ targets:
       - name: Core module map
         path: scripts/core-module.sh
         basedOnDependencyAnalysis: false
+    postCompileScripts:
+      # assets/sounds is optional; copy it into the bundle only when it exists.
+      - name: Copy sounds
+        basedOnDependencyAnalysis: false
+        script: |
+          SRC="${SRCROOT}/../../assets/sounds"
+          if [ -d "$SRC" ]; then
+            mkdir -p "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/sounds"
+            cp -R "$SRC/." "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/sounds/"
+          fi
     info:
       path: Config/Info.plist
       properties:
