@@ -27,9 +27,11 @@ import kotlin.math.sin
  * and never writes game state. Colours follow docs/design/06 (ink #2B1E2E, never
  * pure black; you blue and round, Rival orange and diamond).
  *
- * Per frame it allocates nothing on the common path (review H8): sprites are
- * resolved once per full snapshot and kept on the block and Hob objects, sprite
- * name tables are built at start, and text is formatted only when it changes.
+ * Per frame it allocates nothing on the common path (review H8, review 2 N-M8):
+ * sprites are resolved once per full snapshot and kept on the block and Hob objects,
+ * animated sprites are resolved when their clip changes frame (FieldFx.spriteOf),
+ * sprite name tables (flaps, lids, steam, props) are built at start, the hot loops use
+ * indices, and text is formatted only when it changes.
  */
 class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx: FieldFx) {
     private val ink = 0xFF2B1E2E.toInt()
@@ -72,7 +74,15 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         skySp = sprites.get("bg_downs_sky"); farSp = sprites.get("bg_downs_hills_far"); nearSp = sprites.get("bg_downs_hills_near")
         for (i in 0..2) { dotPulse[i] = sprites.get("fx_ghost_dot_p1_pulse_$i"); dotPulse[3 + i] = sprites.get("fx_ghost_dot_p2_pulse_$i") }
         stomperBlue = sprites.get("stomper_blue_0"); stomperOrange = sprites.get("stomper_orange_0")
+        flapSp[0] = sprites.get("loophole_flap_blue"); flapSp[1] = sprites.get("loophole_flap_orange")
+        lidUp = sprites.get("pot_lid_raise_2")
+        for (i in 0..3) steam[i] = sprites.get("fx_kettle_steam_$i")
+        rollerSp = sprites.get("shell_rolypoly"); shearsSp = sprites.get("icon_pan_parade"); cageSp = sprites.get("block_timber_fresh")
     }
+    private val flapSp = arrayOfNulls<Sprites.Sprite>(2)
+    private var lidUp: Sprites.Sprite? = null
+    private val steam = arrayOfNulls<Sprites.Sprite>(4)
+    private var rollerSp: Sprites.Sprite? = null; private var shearsSp: Sprites.Sprite? = null; private var cageSp: Sprites.Sprite? = null
     private var stomperBlue: Sprites.Sprite? = null; private var stomperOrange: Sprites.Sprite? = null
 
     val animating: Boolean get() = fx.busy
@@ -156,8 +166,12 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
 
     fun drawEmpty(c: Canvas) { c.drawColor(0xFFA5D8EC.toInt()) }
 
+    /** Draw time for [Sprites.Sprite.usedAt], so a low memory trim keeps what is on screen. */
+    private var stamp = 0L
+
     fun drawLens(c: Canvas, l: Lens, f: Frame, me: Int, drag: FloatArray?, readout: String?, shake: FloatArray? = null) {
         tables()
+        stamp = Sprites.now()
         val rc = l.rect
         c.save(); c.clipRect(rc)
         // Screen shake moves the field only (the HUD is Compose, above): offset and roll, capped.
@@ -176,7 +190,8 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         nearSp?.let { band(c, it, rc, horizon + 14 * dp, rc.height() * 0.30f, l.cx * l.scale * 0.5f) }
 
         drawTerrain(c, l, f)
-        for (k in f.castles) drawCastle(c, l, f, k)
+        val ks = f.castles
+        for (ki in ks.indices) drawCastle(c, l, f, ks[ki])
 
         // Ghost lines of earlier shots, then their Pins.
         line.strokeWidth = 1.5f * dp
@@ -192,8 +207,10 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         }
         line.pathEffect = null; line.alpha = 255
         val wl = l.wx(rc.left) - 20; val wr = l.wx(rc.right) + 20
-        for (g in f.ghosts) if (g.hasPin && g.pinX >= wl && g.pinX <= wr) {
-            val drop = fx.pinSprite("${g.side}:${g.pinX}:${g.pinY}:${g.round}")?.let { sprites.get(it) }
+        for (gi in f.ghosts.indices) {
+            val g = f.ghosts[gi]
+            if (!g.hasPin || g.pinX < wl || g.pinX > wr) continue
+            val drop = fx.pinClip(g)?.let { fx.spriteOf(it) }
             if (drop != null) { val hPx = 28f * dp; val u = hPx / 30f; r.set(l.sx(g.pinX.toFloat()) - 6f * u, l.sy(g.pinY.toFloat()) - 29.5f * u, l.sx(g.pinX.toFloat()) + 6f * u, l.sy(g.pinY.toFloat()) + 0.5f * u); c.drawBitmap(drop.bmp, null, r, bmp) }
             else drawPin(c, l.sx(g.pinX.toFloat()), l.sy(g.pinY.toFloat()), g.side, g.round, g.recalled)
         }
@@ -214,10 +231,11 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         }
 
         // Props: crocks, turnips, cage bars, the captive, the 1-10 roller and shears hinge.
-        for (p in f.props) drawProp(c, l, p)
+        val props = f.props
+        for (pi in props.indices) drawProp(c, l, props[pi])
         f.hud.boss?.let { b ->
-            if (b.roller != null && f.props.none { it.id == b.roller.id }) drawProp(c, l, b.roller)
-            if (b.shears != null && f.props.none { it.id == b.shears.id }) drawProp(c, l, b.shears)
+            if (b.roller != null && !hasProp(props, b.roller.id)) drawProp(c, l, b.roller)
+            if (b.shears != null && !hasProp(props, b.shears.id)) drawProp(c, l, b.shears)
             // The red cut line, shown one boss turn before the snip.
             val cut = b.cut
             if (cut != null && cut.size >= 4) {
@@ -228,7 +246,8 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         }
 
         // Shells in flight.
-        for (sh in f.shells) {
+        for (si in f.shells.indices) {
+            val sh = f.shells[si]
             val px = l.sx(sh.x.toFloat()); val py = l.sy(sh.y.toFloat()); val rad = max(4f * dp, 4f * l.scale)
             val sp = shellSprite(sh.shot)
             if (sp != null) {
@@ -277,15 +296,16 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
 
     @Volatile var reduceMotion = false
 
+    private fun hasProp(props: List<games.castleprotect.core.Prop>, id: Int): Boolean { for (i in props.indices) if (props[i].id == id) return true; return false }
+
     private fun drawProp(c: Canvas, l: Lens, p: games.castleprotect.core.Prop) {
-        val name = when (p.kind) {
-            "shell" -> "shell_${p.shot ?: "old_turnip"}"
-            "roller" -> "shell_rolypoly"
-            "shears" -> "icon_pan_parade"
-            "cage_bar" -> "block_timber_fresh"
-            else -> ""
+        val sp = when (p.kind) {
+            "shell" -> shellSprite(p.shot ?: "old_turnip")
+            "roller" -> rollerSp
+            "shears" -> shearsSp
+            "cage_bar" -> cageSp
+            else -> null
         }
-        val sp = if (name.isEmpty()) null else sprites.get(name)
         val px = l.sx(p.x.toFloat()); val py = l.sy(p.y.toFloat())
         val size = when (p.kind) { "roller" -> 40f; "shears" -> 20f; "cage_bar" -> 8f; "captive" -> 24f; else -> 14f } * l.scale
         if (sp != null) {
@@ -346,7 +366,7 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
      */
     private fun blockSprite(b: Block): Sprites.Sprite? {
         val cached = b.look as? Looks
-        if (cached != null && cached.gen == tableGen) return cached.sp
+        if (cached != null && cached.gen == tableGen) { cached.sp?.usedAt = stamp; return cached.sp }
         val wear = if (b.battered) "battered" else if (b.hp < b.max) "scuffed" else "fresh"
         val sp = sprites.get("block_${b.mat}_$wear", "block_${b.mat}_fresh")
         b.look = Looks(tableGen, sp)
@@ -383,8 +403,8 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
             c.translate(shift[0] * l.scale, shift[1] * l.scale)
             c.rotate(shift[2], l.sx(k.x + k.cols * bs / 2f), l.sy(k.baseY.toFloat()))
             for (leg in 0..1) {
-                val name = fx.legSprite(k.side, leg) ?: continue
-                val sp = sprites.get(name) ?: (if (k.side == 0) stomperBlue else stomperOrange) ?: continue
+                val clip = fx.legClip(k.side, leg) ?: continue
+                val sp = fx.spriteOf(clip) ?: (if (k.side == 0) stomperBlue else stomperOrange) ?: continue
                 val lx = k.x + k.cols * bs * (if (leg == 0) 0.25f else 0.75f)
                 val u = l.scale * 1.2f
                 r.set(l.sx(lx) - 14.5f * u, l.sy(k.baseY.toFloat()) - 4.6f * u, l.sx(lx) + 17.5f * u, l.sy(k.baseY.toFloat()) + 25.4f * u)
@@ -394,9 +414,12 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         // Rooms sit behind the blocks.
         val ks = k.kettle
         if (ks != null) kettleRoomSp?.let { spriteBox(c, it, l, ks.room) }
-        nookSp?.let { n -> for (room in k.rooms) if (room.kind == "nook") spriteBox(c, n, l, room.box) }
+        val rooms = k.rooms
+        nookSp?.let { n -> for (ri in rooms.indices) { val room = rooms[ri]; if (room.kind == "nook") spriteBox(c, n, l, room.box) } }
         val left = l.rect.left; val right = l.rect.right
-        for (b in k.blocks) {
+        val blocks = k.blocks
+        for (bi in blocks.indices) {
+            val b = blocks[bi]
             r.set(l.sx(b.x.toFloat()), l.sy(b.y.toFloat()), l.sx(b.x + bs), l.sy(b.y + bs))
             if (r.right < left || r.left > right) continue
             val sp = blockSprite(b)
@@ -410,23 +433,26 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         }
         fx.drawShimmer(c, l, k, ghostDash)
         // Loophole Flaps and Pot Lids over the rooms.
-        for (room in k.rooms) {
+        val sideIx = if (k.side == 1) 1 else 0
+        for (ri in rooms.indices) {
+            val room = rooms[ri]
             val lh = room.loophole
-            val flap = fx.flapSprite(k.side, room.id) ?: if (room.flap) "loophole_flap_$team" else null
-            if (flap != null && lh.size >= 4) sprites.get(flap)?.let { sp -> r.set(l.sx(lh[0].toFloat()), l.sy(lh[1] - 5f), l.sx(lh[2] + 1f), l.sy(lh[3] + 6f)); c.drawBitmap(sp.bmp, null, r, bmp) }
-            val lid = fx.lidSprite(k.side, room.id.toString()) ?: if (room.lid) "pot_lid_raise_2" else null
-            if (lid != null && room.box.size >= 4) sprites.get(lid)?.let { sp -> spriteBox(c, sp, l, room.box) }
+            val flap = fx.flapClip(k.side, room.id)?.let { fx.spriteOf(it) } ?: if (room.flap) flapSp[sideIx] else null
+            if (flap != null && lh.size >= 4) { r.set(l.sx(lh[0].toFloat()), l.sy(lh[1] - 5f), l.sx(lh[2] + 1f), l.sy(lh[3] + 6f)); c.drawBitmap(flap.bmp, null, r, bmp) }
+            val lid = fx.lidClip(k.side, room.id)?.let { fx.spriteOf(it) } ?: if (room.lid) lidUp else null
+            if (lid != null && room.box.size >= 4) spriteBox(c, lid, l, room.box)
         }
         if (ks != null && ks.room.size >= 4) {
-            val lid = fx.lidSprite(k.side, "k") ?: if (ks.lid) "pot_lid_raise_2" else null
-            if (lid != null) sprites.get(lid)?.let { sp -> spriteBox(c, sp, l, ks.room) }
+            val lid = fx.kettleLidClip(k.side)?.let { fx.spriteOf(it) } ?: if (ks.lid) lidUp else null
+            if (lid != null) spriteBox(c, lid, l, ks.room)
         }
         // Heartkettle. The look follows the core's kettle_pct for this side; a pop plays kettle_pop.
         if (ks != null && ks.box.size >= 4) {
             val kx = l.sx((ks.box[0] + ks.box[2]) / 2f); val ky = l.sy((ks.box[1] + ks.box[3]) / 2f)
             val pct = f.hud.kettlePct.getOrElse(k.side) { 100 }
-            val popName = fx.kettleSprite(k.side)
-            val sp = popName?.let { sprites.get(it) } ?: if (!ks.intact || pct <= 0) kettlePopped else if (pct <= 25) kettleCrit else if (pct <= 50) kettleHurt else kettleFull
+            val popClip = fx.kettleClip(k.side)
+            val popName = popClip?.let { fx.spriteOf(it) }
+            val sp = popName ?: if (!ks.intact || pct <= 0) kettlePopped else if (pct <= 25) kettleCrit else if (pct <= 50) kettleHurt else kettleFull
             if (sp != null) {
                 if (ks.intact && popName == null) kettleHalo?.let { spriteAt(c, it, kx, ky, 34f * l.scale * (1f + (if (reduceMotion) 0f else 0.06f * sin(time * 4f)))) }
                 spriteAt(c, sp, kx, ky, (if (popName != null) 40f else 24f) * l.scale)
@@ -436,23 +462,25 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
                 fill.color = 0xFF4FE3C1.toInt(); c.drawCircle(kx, ky, kr * (0.3f + 0.08f * sin(time * 4f)), fill)
             }
             // At 25% or less steam puffs from the kettle.
-            if (ks.intact && pct in 1..25 && !reduceMotion) sprites.get("fx_kettle_steam_${(time * 1000f / 180f).toInt() % 4}")?.let { st ->
+            if (ks.intact && pct in 1..25 && !reduceMotion) steam[(time * 1000f / 180f).toInt() % 4]?.let { st ->
                 r.set(kx - 8f * l.scale, ky - 36f * l.scale, kx + 8f * l.scale, ky - 12f * l.scale); c.drawBitmap(st.bmp, null, r, bmp)
             }
         }
         // Hobs; (x, y) is the feet. Art faces right, so the right-hand fort is flipped.
         val frame2 = (time * 2f).toInt()
-        for (h in f.hobs) {
+        val hobs = f.hobs
+        for (hi in hobs.indices) {
+            val h = hobs[hi]
             if (h.side != k.side) continue
             val dy = fx.hobDy(h)
             val hx = l.sx(h.x.toFloat()); val hy = l.sy(h.y.toFloat() - dy)
             val selected = h.id == f.hud.selectedHob && f.side == k.side
             val hr = 9f * l.scale
-            val anim = fx.hobFrame(h)
-            val asp = anim?.let { sprites.get(it.first) }
+            val anim = fx.hobClip(h)
+            val asp = anim?.let { fx.spriteOf(it) }
             if (anim != null && asp != null) {
                 // Every frame of one animation shares its size and anchor (animations.json); a Hob is 80 px tall at @1x, about 28 cells.
-                val d = anim.second; val u = HOB_K * l.scale
+                val d = anim.def; val u = HOB_K * l.scale
                 r.set(hx - d.ax * u, hy - d.ay * u, hx + (d.w - d.ax) * u, hy + (d.h - d.ay) * u)
                 if (k.side == 1) { c.save(); c.scale(-1f, 1f, hx, hy); c.drawBitmap(asp.bmp, null, r, bmp); c.restore() } else c.drawBitmap(asp.bmp, null, r, bmp)
             } else {

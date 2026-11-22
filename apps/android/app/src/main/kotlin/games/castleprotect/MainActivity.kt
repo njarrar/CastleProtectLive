@@ -2,6 +2,7 @@ package games.castleprotect
 
 import android.content.pm.ActivityInfo
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -63,6 +64,8 @@ class MainActivity : ComponentActivity() {
                     Screen.DUEL_SETUP -> DuelSetupScreen(session)
                     Screen.SETTINGS -> SettingsScreen(session)
                 }
+                // A note (a refused start, a dropped move, a refused Give up) shows on every screen, not only the Title (review 2 N-L9).
+                if (session.screen != Screen.TITLE) session.notice?.let { n -> games.castleprotect.ui.NoticeBar(n) { session.notice = null } }
                 session.confirm?.let { c ->
                     AlertDialog(
                         onDismissRequest = { session.confirm = null },
@@ -76,9 +79,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** The first tap anywhere opens the sound on a first launch (review 2 N-H2), whichever button it lands on. */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) session.firstTap()
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        session.firstTap()
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun onTrimMemory(level: Int) { super.onTrimMemory(level); session.onTrimMemory(level) }
 
-    override fun onStart() { super.onStart(); session.onStart() }
+    override fun onStart() {
+        super.onStart()
+        session.onStart()
+        // TalkBack activates buttons without a touch event: its users get sound from the start.
+        if (getSystemService(android.view.accessibility.AccessibilityManager::class.java)?.isTouchExplorationEnabled == true) session.firstTap()
+    }
 
     // Calls, alerts, app switches, lock screen: the sim stops and the battle is saved.
     override fun onStop() { session.onStop(); super.onStop() }

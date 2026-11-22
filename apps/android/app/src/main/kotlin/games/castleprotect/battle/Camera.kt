@@ -72,6 +72,16 @@ object Camera {
         }
     }
 
+    /**
+     * The fort of [side], found by its side field and then by place, or null. Camera,
+     * hint and overlay code must never index the list directly: a missing fort falls back
+     * (to the other fort, then to the whole map) and never crashes.
+     */
+    fun <T : games.castleprotect.core.Castle> fortOrNull(castles: List<T>, side: Int): T? {
+        for (i in castles.indices) if (castles[i].side == side) return castles[i]
+        return castles.getOrNull(side)
+    }
+
     /** Index range [i0, i1] of samples inside a visible world range, clamped to 0..n-1. Empty when i0 > i1. */
     fun visibleRange(worldLeft: Float, worldRight: Float, step: Float, n: Int): IntArray {
         if (n <= 0 || step <= 0f || worldLeft.isNaN() || worldRight.isNaN()) return intArrayOf(0, -1)

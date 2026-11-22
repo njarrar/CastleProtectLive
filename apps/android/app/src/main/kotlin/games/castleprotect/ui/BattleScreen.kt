@@ -120,10 +120,11 @@ fun BattleScreen(session: GameSession) {
     // TalkBack: speak turn starts, shot results and the winner (review M11).
     // A node that is always there and changes its text, which TalkBack speaks reliably.
     var spoken by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) { session.announcements.collect { msg -> spoken = msg } }
+    LaunchedEffect(Unit) { session.announcements.collect { msg -> spoken = games.castleprotect.game.Announce.distinct(spoken, msg) } }
     // Fine Tune opens after any Aim Drag and folds away 4 s after the last nudge,
     // except with TalkBack or Tap only on, where it stays open (moving focus takes longer).
-    LaunchedEffect(dragging) { if (!dragging && ref.view != null && ref.view!!.dragEndedAt > 0 && u.humanTurn) { fineOpen = true; fineTuneAt = SystemClock.uptimeMillis() } }
+    // Overlay code never force-unwraps the view: no view yet means no pad, not a crash.
+    LaunchedEffect(dragging) { val v = ref.view; if (!dragging && v != null && v.dragEndedAt > 0 && u.humanTurn) { fineOpen = true; fineTuneAt = SystemClock.uptimeMillis() } }
     val keepPad = touchExplore || s.tapOnly
     LaunchedEffect(fineOpen, fineTuneAt, keepPad) { if (fineOpen && !keepPad) { delay(4000); fineOpen = false } }
     LaunchedEffect(u.humanTurn, keepPad) { if (!u.humanTurn) fineOpen = false else if (keepPad) fineOpen = true }
@@ -144,7 +145,7 @@ fun BattleScreen(session: GameSession) {
         val v = ref.view
         if (v == null || SystemClock.uptimeMillis() - v.dragEndedAt > 150) session.fire { r -> if (r.ok) fineOpen = false }
     }
-    val recall: () -> Unit = { if (u.recallIndex >= 0) { session.send(Cmd.recall(u.recallIndex)); session.audio.play("aim_recall") }; fineTuneAt = SystemClock.uptimeMillis() }
+    val recall: () -> Unit = { if (u.recallIndex >= 0) session.recall(u.recallIndex); fineTuneAt = SystemClock.uptimeMillis() }
     val viewer = u.viewer
     val flying = u.flying
     val dim = dragging
@@ -181,7 +182,7 @@ fun BattleScreen(session: GameSession) {
                                 if (flying) SpeedButton(session)
                                 else if (u.humanTurn) {
                                     if (fineOpen && !dragging) FineTunePad(session, u, s.tapOnly, nudge, recall)
-                                    else if (!dragging) Readout(u, { fineOpen = true; fineTuneAt = SystemClock.uptimeMillis() }, nudge)
+                                    else if (!dragging) Readout(session, u, { fineOpen = true; fineTuneAt = SystemClock.uptimeMillis() }, nudge)
                                 }
                             })
                     }
@@ -199,7 +200,8 @@ fun BattleScreen(session: GameSession) {
                 with(density) {
                     ref.view?.hudPad = floatArrayOf((safe.calculateLeftPadding(dir) + 60.dp).toPx(), (safe.calculateTopPadding() + 40.dp).toPx(), (safe.calculateRightPadding(dir) + 8.dp).toPx(), (safe.calculateBottomPadding() + 68.dp).toPx())
                 }
-                field()
+                // The field node hides under a card too (review 2 N-L14).
+                Box(Modifier.fillMaxSize().then(hidden)) { field() }
                 // The top strip is padded for the status bar and any cutout (review M7).
                 Column(Modifier.fillMaxSize().padding(start = safe.calculateLeftPadding(dir), end = safe.calculateRightPadding(dir), top = safe.calculateTopPadding(), bottom = safe.calculateBottomPadding()).then(hidden)) {
                     TopStrip(u, tall = false, pause = { PauseButton(session) })
@@ -221,7 +223,7 @@ fun BattleScreen(session: GameSession) {
                             },
                             end = {
                                 Spacer(Modifier.width(8.dp))
-                                if (u.humanTurn && !fineOpen && !dragging) Readout(u, { fineOpen = true; fineTuneAt = SystemClock.uptimeMillis() }, nudge)
+                                if (u.humanTurn && !fineOpen && !dragging) Readout(session, u, { fineOpen = true; fineTuneAt = SystemClock.uptimeMillis() }, nudge)
                                 Spacer(Modifier.width(8.dp))
                                 FireButton(u, fire)
                             })
@@ -233,6 +235,11 @@ fun BattleScreen(session: GameSession) {
             Subtitle(session, Modifier.align(Alignment.BottomCenter).padding(bottom = if (tall) 150.dp else 84.dp))
             if (session.handoffTo >= 0) HandoffCard(session, u)
             if (session.paused) PauseCard(session)
+            // A rebuild after a core fault replays the battle: show that, not a frozen field (review 2 N-M16).
+            if (session.loading) Box(Modifier.fillMaxSize().background(C.Ink.copy(alpha = 0.4f)).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }
+                .semantics { liveRegion = LiveRegionMode.Polite; contentDescription = "Loading the battle" }, contentAlignment = Alignment.Center) {
+                Label("Loading...", Modifier.clip(RoundedCornerShape(12.dp)).background(C.Paper).padding(horizontal = 20.dp, vertical = 10.dp), size = 18, bold = true)
+            }
         }
     }
 }
@@ -498,9 +505,11 @@ private fun CrewRow(session: GameSession, u: BattleUi, side: Int, enabled: Boole
 }
 
 @Composable
-private fun Readout(u: BattleUi, onTap: () -> Unit, nudge: (Int, Int, Boolean) -> Boolean) {
+private fun Readout(session: GameSession, u: BattleUi, onTap: () -> Unit, nudge: (Int, Int, Boolean) -> Boolean) {
+    // The aim comes from its own flow: only this and the pad recompose during an Aim Drag (review 2 N-M9).
+    val aim by session.aimState.collectAsState()
     val h = u.selected
-    val text = if (h != null) "%.1f° | %d".format(h.angle / 10f, h.power) else "--° | --"
+    val text = if (h != null) String.format(java.util.Locale.ROOT, "%.1f° | %d", aim.angle / 10f, aim.power) else "--° | --"
     val d = LocalDensity.current
     val step by rememberUpdatedState(nudge)
     // Tap opens Fine Tune. A drag that starts here is the Slow Drag: 5 pt per power point (up and down),
@@ -516,18 +525,19 @@ private fun Readout(u: BattleUi, onTap: () -> Unit, nudge: (Int, Int, Boolean) -
                 if (da != 0 || dpw != 0) { ax -= da * stepPx; ay += dpw * stepPx; step(-da * 5, dpw, false) }
             }
         }
-        .semantics { contentDescription = if (h != null) "Aim ${h.angle / 10f} degrees, power ${h.power}" else "No Hob selected" }, contentAlignment = Alignment.Center) {
+        .semantics { contentDescription = if (h != null) "Aim ${aim.angle / 10f} degrees, power ${aim.power}" else "No Hob selected" }, contentAlignment = Alignment.Center) {
         Label(text, size = 18, bold = true)
     }
 }
 
 @Composable
 private fun FineTunePad(session: GameSession, u: BattleUi, tapOnly: Boolean, nudge: (Int, Int, Boolean) -> Boolean, recall: () -> Unit) {
+    session.aimState.collectAsState().value // recompose on a new aim
     val (a, p) = session.aimBase(u)
     Row(Modifier.clip(PlateShape).background(C.Paper).border(2.dp, C.Ink, PlateShape).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column { Key("ang −", "Angle down a tenth", a > 0, tapOnly) { nudge(-1, 0, true) }; Key("pow −", "Power down one", p > 0, tapOnly) { nudge(0, -1, true) } }
         Column(Modifier.width(64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Label("%.1f°".format(a / 10f), size = 16, bold = true)
+            Label(String.format(java.util.Locale.ROOT, "%.1f°", a / 10f), size = 16, bold = true)
             Label("$p", size = 16, bold = true)
             CastleButton("Recall", recall, Modifier.padding(top = 2.dp).size(64.dp, 48.dp), color = C.Cream, size = 11, enabled = u.recallIndex >= 0,
                 description = "Recall the last shot's aim", pad = PaddingValues(0.dp))

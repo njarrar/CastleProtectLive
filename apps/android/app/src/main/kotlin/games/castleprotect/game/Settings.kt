@@ -31,6 +31,8 @@ class Settings(ctx: Context) {
     var help by int("help", 0)                  // 0 none, 1 some, 2 lots (your side's Help handicap)
     var textSize by int("text_size", 1)         // 0 small, 1 normal, 2 large
     var seenIntro by bool("seen_intro", false)
+    /** Sound was opened by a first tap (review 2 N-H2); later launches are never silent. */
+    var soundUnlocked by bool("sound_unlocked", false)
 
     val presetKey: String get() = listOf("cozy", "fair", "stubborn")[preset.coerceIn(0, 2)]
     val helpKey: String get() = listOf("none", "some", "lots")[help.coerceIn(0, 2)]

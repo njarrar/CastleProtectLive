@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -38,6 +41,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
@@ -205,4 +209,15 @@ fun SpriteImage(sprites: games.castleprotect.battle.Sprites, name: String, modif
     val img = remember(name, sprites.generation) { sprites.get(name)?.bmp?.asImageBitmap() } ?: return false
     androidx.compose.foundation.Image(img, contentDescription = null, modifier = modifier)
     return true
+}
+
+/** A note at the top of any screen, with OK to close it. Read out by TalkBack. */
+@Composable
+fun NoticeBar(text: String, onOk: () -> Unit) {
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().safeDrawingPadding().padding(12.dp), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
+        Plate(Modifier.widthIn(max = 420.dp).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }, color = C.Cream) {
+            Label(text, size = 13)
+            CastleButton("OK", onOk, Modifier.padding(top = 6.dp), color = C.Paper, size = 13)
+        }
+    }
 }

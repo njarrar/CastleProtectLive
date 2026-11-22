@@ -32,9 +32,11 @@ class Lens(val rect: RectF = RectF(), @Volatile var cx: Float = 0f, @Volatile va
  * The battle field. A SurfaceView with its own render thread that draws the
  * latest frame. It also owns the Aim Drag.
  *
- * Drawing is on demand (review M6): a new frame, a moving camera, a drag or a blast
- * draws at the display rate; otherwise the idle animation draws at about 12 fps, and
- * nothing is drawn while paused.
+ * Drawing is on demand (review M6, review 2 N-M2, N-M3): a new frame, a moving camera,
+ * a drag or a blast draws at up to 60 fps; ambient motion (wind leaves, shimmer, the
+ * Squall) and idle poses draw at about 12 fps. While paused the field draws once when
+ * the surface is new or changes size (return from Home, a turn of the device), then
+ * waits, so it is never left black behind the Pause card.
  */
 @SuppressLint("ViewConstructor")
 class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(ctx), SurfaceHolder.Callback {
@@ -129,19 +131,26 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
             var last = System.nanoTime()
             var lastFrame: Frame? = null
             var lastIdle = 0L
+            var lastDraw = 0L
             while (alive) {
                 val f = session.frame
                 val now = SystemClock.uptimeMillis()
-                if (session.paused) { if (!sleepQuiet(100)) return; redraw = true; continue }
+                val paused = session.paused
+                if (paused && !redraw) { if (!sleepQuiet(100)) return; continue }
                 val idleDue = now - lastIdle >= IDLE_MS
-                if (f === lastFrame && !redraw && !draggingFlag && !renderer.animating && !moving && !idleDue && session.juice.calm && session.fxFrames.isEmpty()) { if (!sleepQuiet(8)) return; continue }
+                if (!paused && f === lastFrame && !redraw && !draggingFlag && !renderer.animating && !moving && !idleDue && session.juice.calm && session.fxFrames.isEmpty()) { if (!sleepQuiet(8)) return; continue }
+                // At most 60 fps, also on a 120 Hz screen.
+                val wait = FRAME_MIN_MS - (now - lastDraw)
+                if (wait > 0) { if (!sleepQuiet(wait)) return; continue }
+                lastDraw = now
                 if (idleDue) lastIdle = now
                 lastFrame = f; redraw = false
                 val c: Canvas? = try { holder.lockHardwareCanvas() } catch (e: Exception) { try { holder.lockCanvas() } catch (e2: Exception) { null } }
                 if (c == null) { if (!sleepQuiet(16)) return; continue }
                 try {
                     val t = System.nanoTime()
-                    val dt = ((t - last) / 1e9f).coerceIn(0f, 0.1f); last = t
+                    // Paused: one still frame (no time passes for the field).
+                    val dt = if (paused) 0f else ((t - last) / 1e9f).coerceIn(0f, 0.1f); last = t
                     // View time: frozen in a hit stop, slowed in slow motion (docs/design/07 section 6).
                     val scale = session.juice.scale(SystemClock.uptimeMillis())
                     drawFrame(c, f, dt, dt * scale)
@@ -213,8 +222,7 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         val hob = f.selectedHob
         if (dragNow != null && hob != null && (hob.angle != readoutA || hob.power != readoutP)) {
             readoutA = hob.angle; readoutP = hob.power
-            readout = "%.1f° | %d".format(hob.angle / 10f, hob.power)
-            session.audio.loop("aim_band_stretch", true, semis = hob.power * 12f / 100f)
+            readout = String.format(java.util.Locale.ROOT, "%.1f° | %d", hob.angle / 10f, hob.power)
         }
         val shown = if (dragNow != null) readout else null
         val me = if (f.hud.human(f.side)) f.side else if (f.hud.human(0)) 0 else 1
@@ -256,7 +264,8 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
             main.rect.set(0f, 0f, w, h)
             val p = hudPad
             val clearW = max(1f, w - p[0] - p[2]); val clearH = max(1f, h - p[1] - p[3])
-            wideTarget(f, me, clearW, clearH, now)
+            // No camera move while a finger aims (07: "Holds still"): the target is frozen for the drag (review 2 N-M6).
+            if (!draggingFlag || !main.live) wideTarget(f, me, clearW, clearH, now)
             var scale = fitOut[2] * zoom
             scale = max(Camera.minBlockScale(dp), Camera.clampScale(scale, dp))
             // The clear rect's centre sits off the screen centre by the HUD pads.
@@ -295,15 +304,17 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     private fun wideTarget(f: Frame, me: Int, w: Float, h: Float, now: Long) {
         val floor = Camera.minBlockScale(dp); val ceil = 1.4f * dp
         val sh = f.shells.firstOrNull()
-        val active = f.castles.getOrNull(f.side) ?: f.castles[0]
-        val other = f.castles.getOrNull(1 - f.side) ?: f.castles[1]
+        // Never index a missing fort: fall back to the other one, then to the whole map.
+        val active = Camera.fortOrNull(f.castles, f.side) ?: Camera.fortOrNull(f.castles, 1 - f.side)
+        val other = Camera.fortOrNull(f.castles, 1 - f.side) ?: active
+        if (active == null || other == null) { fitOut[0] = f.mapW / 2f; fitOut[1] = f.mapH / 2f; fitOut[2] = max(floor, min(w / max(1, f.mapW), h / max(1, f.mapH))); return }
         fortBox(active, boxA); fortBox(other, boxB)
         val margin = 24f
         when {
             sh != null && !manualFlag -> {
                 // Shell plus the fort it flies at.
                 val x0 = min(sh.x.toFloat(), boxB[0]); val x1 = max(sh.x.toFloat(), boxB[2])
-                val y0 = min(sh.y.toFloat(), boxB[1]); val y1 = boxB[3]
+                val y0 = min(sh.y.toFloat(), boxB[1]); val y1 = max(sh.y.toFloat(), boxB[3])
                 Camera.fit(x0, y0, x1, y1, w, h, margin, floor, ceil, fitOut)
                 if (fitOut[2] <= floor + 1e-4f || session.settings.reduceMotion) {
                     // Too wide to show both at 8 dp blocks: follow the shell with a 30% dead zone (a wide fixed frame with Reduce motion: it jumps only when the shell leaves).
@@ -454,6 +465,8 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
             if (power == 100 && sentPower != 100 && sentPower >= 0) session.buzz(8)
             sentAngle = angle; sentPower = power
             session.aim(angle, power)
+            // The band's pitch follows power. Started and stopped on the UI thread only (review 2 N-L6).
+            if (draggingFlag) session.audio.loop("aim_band_stretch", true, semis = power * 12f / 100f)
         }
     }
 
@@ -468,7 +481,10 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         else if (mayFire && session.settings.quickFire) session.fire()
     }
 
-    companion object { private const val IDLE_MS = 83L }
+    companion object {
+        private const val IDLE_MS = 83L
+        private const val FRAME_MIN_MS = 16L
+    }
 }
 
 /** Aim Drag maths, apart from the view so it can be tested. */

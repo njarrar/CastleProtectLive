@@ -74,7 +74,15 @@ class SaveStore(dir: File, name: String) {
 
     private fun moveAside(f: File): File? {
         val to = File(dir0, "${f.name}.bad-${System.currentTimeMillis()}")
-        return if (f.renameTo(to)) to else null
+        if (!f.renameTo(to)) return null
+        pruneSetAside()
+        return to
+    }
+
+    /** Set-aside saves are kept for support, but only the newest two (review 2 N-L15). */
+    fun pruneSetAside() {
+        val bad = dir0.listFiles { x -> x.name.contains(".bad-") } ?: return
+        bad.sortedByDescending { it.name.substringAfterLast(".bad-").toLongOrNull() ?: 0L }.drop(2).forEach { it.delete() }
     }
 
     /** Writes the save atomically, keeping the last good one as `.prev`. Returns false on failure. */

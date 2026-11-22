@@ -10,7 +10,10 @@ package games.castleprotect.core
  * into one entry, so only the last aim is kept apart). On a dead reply it frees the
  * handle, starts a new one with `cp_new` and the same setup and seed, sends
  * `{"cmd":"resume","log":[...]}`, and sends the last aim again. The command that
- * panicked is dropped. After [MAX_RECOVERIES] the battle is marked [broken].
+ * panicked is dropped and [takeDropped] reports it, so the player can be told. After
+ * [MAX_RECOVERIES] the battle is marked [broken]; so is a command that panics again
+ * straight after a rebuild (the same state, the same command: no use trying three times).
+ * [onRebuild] is told when a rebuild starts and ends, since a long replay takes time.
  *
  * Not thread safe: the sim thread owns it.
  */
@@ -34,6 +37,16 @@ class LiveBattle private constructor(
 
     fun takeRebuilt(): Boolean { val r = rebuilt; rebuilt = false; return r }
 
+    /** The name of the command a rebuild dropped, until the owner reads it. */
+    private var dropped: String? = null
+    fun takeDropped(): String? { val d = dropped; dropped = null; return d }
+
+    /** Called with true when a rebuild starts and false when it ends (the sim thread). */
+    var onRebuild: ((Boolean) -> Unit)? = null
+
+    /** The command that panicked last, while no command has gone through since the rebuild. */
+    private var panicked: String? = null
+
     /** The core's whole log now (the last aim included), for a save. Falls back to the kept copy. */
     fun freshLog(): String {
         if (broken == null) readLog(game)?.let { log = it; lastAim = null }
@@ -45,8 +58,15 @@ class LiveBattle private constructor(
         if (broken != null) return """{"ok":false,"reason":"dead_handle","detail":"battle could not be rebuilt"}"""
         val text = game.command(json)
         val r = Reply.parse(text)
-        if (!r.ok && isDead(r.reason)) { recover(r.reason); return text }
-        if (r.ok) after(json)
+        if (!r.ok && isDead(r.reason)) {
+            val name = cmdName(json)
+            if (r.reason == "panic" && panicked == json) { broken = "the core failed again on $name"; close(); return text }
+            if (r.reason == "panic") panicked = json
+            dropped = name
+            recover(r.reason)
+            return text
+        }
+        if (r.ok) { after(json); panicked = null }
         return text
     }
 
@@ -81,20 +101,36 @@ class LiveBattle private constructor(
         if (recoveries >= MAX_RECOVERIES) { broken = "the core failed again ($why)"; return false }
         recoveries++
         try { game.close() } catch (e: RuntimeException) { }
+        onRebuild?.invoke(true)
+        var g: CoreGame? = null
         return try {
-            val g = factory.newGame(setup, seed)
+            g = factory.newGame(setup, seed)
             replay(g, log)
             lastAim?.let { g.command(it) }
             game = g
             rebuilt = true
             true
         } catch (e: Exception) {
+            // The new handle is closed too, so a failed rebuild leaks nothing (review 2 N-M16).
+            try { g?.close() } catch (e2: RuntimeException) { }
             broken = e.message ?: why
             false
+        } finally {
+            onRebuild?.invoke(false)
         }
     }
 
     override fun close() { try { game.close() } catch (e: RuntimeException) { } }
+
+    /**
+     * A battle saved in the Rummage (phase draft) and carried on into the Battle screen,
+     * which has no Rummage: end the draft so the battle can go on (review 2 N-M13).
+     * Returns true when it did.
+     */
+    fun finishDraft(): Boolean {
+        if (broken != null || field(game.step(0), "phase") != "draft") return false
+        return Reply.parse(command(Cmd.END_DRAFT)).ok
+    }
 
     companion object {
         const val MAX_RECOVERIES = 3

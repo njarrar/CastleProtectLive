@@ -7,7 +7,12 @@ import org.json.JSONObject
 class SoundDef(
     val id: String, val kind: String, val file: String, val loop: Boolean, val repeatGapS: Float,
     val layer: String?, val bus: String, val volume: Float, val pitchVar: Float, val durationS: Float, val barS: Float,
-)
+    /** Exact length in frames (the loop length); 0 when the manifest has none. */
+    val samples: Int = 0,
+) {
+    /** Frames to keep from a decode at [rate]. */
+    fun frames(rate: Int): Int = if (samples > 0) samples else (durationS * rate).toInt()
+}
 
 /** Hob-speak subtitles from assets/audio/barks.json, by sound id. */
 class BarkLines(val lines: Map<String, List<String>>, val chance: Map<String, Float>) {
@@ -70,6 +75,7 @@ class AudioManifest(
                         if (s.isNull("layer")) null else s.optString("layer"), s.optString("bus", "ui"),
                         s.optDouble("volume", 1.0).toFloat(), s.optDouble("pitch_var_semitones", 0.0).toFloat(),
                         s.optDouble("duration", 1.0).toFloat(), sync?.optDouble("bar_s", 0.0)?.toFloat() ?: 0f,
+                        s.optInt("samples", 0),
                     )
                 }
                 fun strMap(src: JSONObject?): Map<String, String> {

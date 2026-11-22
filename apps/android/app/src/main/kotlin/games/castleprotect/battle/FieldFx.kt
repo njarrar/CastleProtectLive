@@ -6,12 +6,52 @@ import android.graphics.RectF
 import games.castleprotect.core.Castle
 import games.castleprotect.core.Frame
 import games.castleprotect.core.GameEvent
+import games.castleprotect.core.Ghost
 import games.castleprotect.core.Hob
 import games.castleprotect.core.Phase
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
+
+/** Where sprites come from. [Sprites] in the app; a stand-in in unit tests. */
+interface SpriteSource {
+    /** Bumped when decoded bitmaps are dropped, so holders of resolved sprites look them up again. */
+    val generation: Int
+    fun get(name: String): Sprites.Sprite?
+}
+
+/**
+ * Where each block of a core `collapse` event starts and lands (review 2 N-H3).
+ *
+ * The core lists the blocks at the cells they stood in before the fall (castle-core
+ * effects.rs builds `blocks` before it removes the chunk), and `falls` is how far each
+ * column drops, in cells. So a piece starts at its own cell and lands `fall` lower.
+ */
+object CollapsePlan {
+    class Piece(val c: Int, val row: Int, val mat: String, val x: Float, val startY: Float, val fall: Float) {
+        val landY: Float get() = startY + fall
+    }
+
+    fun of(e: GameEvent, castleX: Int, baseY: Int): List<Piece> {
+        val out = ArrayList<Piece>(e.blocks.size / 3)
+        var i = 0
+        while (i + 2 < e.blocks.size) {
+            val c = e.blocks[i]; val row = e.blocks[i + 1]
+            val mat = if (e.blocks[i + 2] >= 0) GameEvent.matName(e.blocks[i + 2]) else "timber"
+            out.add(Piece(c, row, mat, castleX + 16f * c, baseY - 16f * (row + 1), fallOf(e, c)))
+            i += 3
+        }
+        return out
+    }
+
+    /** Cells column [c] falls, from the event's `falls` pairs (0 when absent). */
+    fun fallOf(e: GameEvent, c: Int): Float {
+        var j = 0
+        while (j + 1 < e.falls.size) { if (e.falls[j] == c) return e.falls[j + 1].toFloat(); j += 2 }
+        return 0f
+    }
+}
 
 /**
  * Everything that moves on the field but is not a game rule: Hob poses, the Stomper
@@ -23,9 +63,14 @@ import kotlin.math.sqrt
  * Runs on the render thread. [cue] plays a sound that belongs to an animation frame
  * (assets/audio/README.md "Sounds that follow animations"); [beat] reports a view beat
  * (a collapse landing) so the session can add hit stop and shake.
+ *
+ * Frame cost (review 2 N-M8): [update] and [draw] allocate nothing on the common path.
+ * Clip events go through one shared sink, sprites are resolved when a clip changes
+ * frame and kept on the clip, flaps, lids and pins are kept in arrays by number, and
+ * pose names are looked up once per Hob.
  */
 class FieldFx(
-    private val sprites: Sprites,
+    private val sprites: SpriteSource,
     private val dp: Float,
     private val cue: (anim: String, event: String, x: Float, shot: String?) -> Unit,
     private val beat: (kind: String, n: Int, x: Float, y: Float) -> Unit,
@@ -33,40 +78,55 @@ class FieldFx(
     private val trailOf: (String) -> String,
 ) {
     var anims: Anims = Anims.EMPTY
+        set(v) { if (v !== field) { field = v; clear() } }
 
-    /** One looping or one shot effect at a world point. */
+    /** One looping or one shot effect at a world point. [ambient]: leaves, never a reason to draw at full rate. */
     private class Fx(val clip: AnimClip, var x: Float, var y: Float, var vx: Float = 0f, var vy: Float = 0f, val g: Float = 0f,
                      val k: Float = 1f, var life: Float = 10_000f, val fadeMs: Float = 0f, var rot: Float = 0f, val spin: Float = 0f,
-                     val sound: Boolean = true) {
+                     val sound: Boolean = true, val ambient: Boolean = false) {
         var age = 0f
     }
 
-    private class HobPose(var clip: AnimClip, var pose: String, var shot: String? = null) {
+    private class HobPose(val id: Int, val prefix: String) {
+        var clip: AnimClip? = null
+        var pose = "idle"
+        /** The def this pose started with; the clip has moved on (next) when it is no longer this. */
+        var poseDef: AnimDef? = null
+        var shot: String? = null
+        /** A cheer that repeats plays without its sounds (review 2 N-L1). */
+        var silent = false
+        var seen = 0
         var blinkIn = 3000f
         var fallFrom = 0f; var fallTo = 0f; var fallMs = 0f; var fallT = -1f
+        val defs = HashMap<String, Any>()
     }
 
-    /** A block falling in a collapse. */
+    /** A block falling in a collapse: from [y] (its own cell) down [fall] cells. */
     private class Piece(val side: Int, val mat: String, val x: Float, val y: Float, val fall: Float, val delay: Float, val leanDir: Float, val first: Boolean, val count: Int) {
         var t = 0f
         var crack: AnimClip? = null
         var landed = false
         var broken = false
+        var sp: Sprites.Sprite? = null
+        var spGen = -1
     }
 
     private class Walk(val side: Int, val dx: Float, val ms: Float) { var t = 0f }
-    private class Rubble(val sprite: String, val x: Float, val y: Float) { var age = 0f }
+    private class Rubble(val sprite: String, val x: Float, val y: Float) { var age = 0f; var sp: Sprites.Sprite? = null; var spGen = -1 }
+    private class PinDrop(val key: Long, val clip: AnimClip)
 
     private val fx = ArrayList<Fx>()
-    private val hobs = HashMap<Int, HobPose>()
+    private val hobs = ArrayList<HobPose>()
     private val pieces = ArrayList<Piece>()
     private val rubble = ArrayList<Rubble>()
     private val walks = arrayOfNulls<Walk>(2)
     private val legs = arrayOfNulls<AnimClip>(4)
     private val kettle = arrayOfNulls<AnimClip>(2)
-    private val flaps = HashMap<String, AnimClip>()
-    private val lids = HashMap<String, AnimClip>()
-    private val pins = HashMap<String, AnimClip>()
+    /** By side * [ROOMS] + room id. */
+    private val flaps = arrayOfNulls<AnimClip>(2 * ROOMS)
+    private val lids = arrayOfNulls<AnimClip>(2 * ROOMS)
+    private val kettleLids = arrayOfNulls<AnimClip>(2)
+    private val pins = ArrayList<PinDrop>()
     private var prev: Frame? = null
     private var shimmerT = 0f
     private var shimmerClip: AnimClip? = null
@@ -74,25 +134,64 @@ class FieldFx(
     private var trailT = 0f
     private var squall: AnimClip? = null
     private var time = 0f
-    private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
-    private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-    private val r = RectF()
+    private var frameNo = 0
+    private val trailNames = HashMap<String, String>()
+    private val paint by lazy(LazyThreadSafetyMode.NONE) { Paint(Paint.FILTER_BITMAP_FLAG) }
+    private val line by lazy(LazyThreadSafetyMode.NONE) { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE } }
+    private val r by lazy(LazyThreadSafetyMode.NONE) { RectF() }
 
-    val busy: Boolean get() = fx.isNotEmpty() || pieces.isNotEmpty() || rubble.isNotEmpty() || walks.any { it != null } || kettle.any { it != null && !it.done }
+    /** The shared clip event sink: reads the clip's current name when an event fires. */
+    private inner class Sink : ClipEvents {
+        var clip: AnimClip? = null
+        var name = ""
+        var x = 0f
+        var shot: String? = null
+        override fun on(event: String) { cue(clip?.def?.name ?: name, event, x, shot) }
+    }
+    private val sink = Sink()
+    private fun sink(clip: AnimClip?, name: String, x: Float, shot: String? = null): ClipEvents { sink.clip = clip; sink.name = name; sink.x = x; sink.shot = shot; return sink }
 
-    fun clear() { fx.clear(); hobs.clear(); pieces.clear(); rubble.clear(); walks.fill(null); kettle.fill(null); flaps.clear(); lids.clear(); pins.clear(); prev = null }
+    /**
+     * True while something that is not ambient moves: the field then draws at the display
+     * rate. Wind leaves, shimmer and the Squall do not count (review 2 N-M2, M6): they run
+     * at the idle rate.
+     */
+    val busy: Boolean get() {
+        for (i in fx.indices) if (!fx[i].ambient) return true
+        if (pieces.isNotEmpty() || rubble.isNotEmpty()) return true
+        for (s in 0..1) { if (walks[s] != null) return true; val k = kettle[s]; if (k != null && !k.done) return true }
+        for (a in flaps) if (a != null && !a.done) return true
+        for (a in lids) if (a != null && !a.done) return true
+        for (a in kettleLids) if (a != null && !a.done) return true
+        return pins.isNotEmpty()
+    }
+
+    /** A new battle or a new view: nothing of the old one is kept (review 2 N-L4). */
+    fun clear() {
+        fx.clear(); hobs.clear(); pieces.clear(); rubble.clear(); walks.fill(null); legs.fill(null); kettle.fill(null)
+        flaps.fill(null); lids.fill(null); kettleLids.fill(null); pins.clear(); prev = null
+        flapState.clear(); lidState.clear(); pinKnown.clear(); lastStateFrame = null
+        squall = null; shimmerClip = null; shimmerT = 0f; leafT = 0f; trailT = 0f
+    }
 
     private fun def(name: String): AnimDef? = anims[name]
     private fun team(side: Int) = if (side == 0) "blue" else "orange"
 
-    private fun spawn(name: String, x: Float, y: Float, k: Float = 1f, vx: Float = 0f, vy: Float = 0f, g: Float = 0f, life: Float = 10_000f, fadeMs: Float = 0f, spin: Float = 0f, sound: Boolean = true) {
+    private fun spawn(name: String, x: Float, y: Float, k: Float = 1f, vx: Float = 0f, vy: Float = 0f, g: Float = 0f, life: Float = 10_000f,
+                      fadeMs: Float = 0f, spin: Float = 0f, sound: Boolean = true, ambient: Boolean = false) {
         val d = def(name) ?: return
-        if (fx.size >= MAX_FX) fx.removeAt(0)
+        if (fx.size >= MAX_FX) dropOne()
         val clip = AnimClip(anims, d)
-        val f = Fx(clip, x, y, vx, vy, g, k, life, fadeMs, 0f, spin, sound)
-        clip.advance(0f) { e -> if (sound) cue(name, e, x, null) }
+        val f = Fx(clip, x, y, vx, vy, g, k, life, fadeMs, 0f, spin, sound, ambient)
+        clip.advance(0f, if (sound) sink(clip, name, x) else null)
         if (sound) cue(name, "start", x, null)
         fx.add(f)
+    }
+
+    /** At the cap, an ambient effect (a leaf, a trail) goes first, so blasts and rubble stay (review 2 N-L17). */
+    private fun dropOne() {
+        for (i in fx.indices) if (fx[i].ambient) { fx.removeAt(i); return }
+        fx.removeAt(0)
     }
 
     // ---- events -------------------------------------------------------------
@@ -120,20 +219,22 @@ class FieldFx(
             }
             "break" -> if (key(e.side, e.c, e.r) !in collapsed) blockAt(p ?: f, e.side, e.c, e.r)?.let { b -> breakBlock(b.third, b.first, b.second, 1) }
             "collapse" -> collapse(f, e)
-            "drop" -> hobs[e.hob]?.let { hp ->
-                val d = def("hob_${hobKey(f, e.hob)}_${team(e.side)}_tumble")
-                if (d != null) { hp.clip.play(d); hp.pose = "tumble" }
+            "drop" -> hobPose(e.hob)?.let { hp ->
+                val d = hp.def(f, "tumble")
+                if (d != null) { hp.clipFor(d).play(d); hp.pose = "tumble"; hp.poseDef = d }
                 hp.fallFrom = e.fromY.toFloat(); hp.fallTo = e.toY.toFloat(); hp.fallT = 0f
                 hp.fallMs = (sqrt(2f * max(1f, abs(e.toY - e.fromY).toFloat()) / FALL_G) + 150f)
             } ?: Unit
             "bonk" -> pose(f, e.hob, "bonked")
             "shove_off", "dug_out" -> pose(f, e.hob, "dig")
             "kettle_pop" -> if (e.side in 0..1) def("kettle_pop")?.let { d -> kettle[e.side] = AnimClip(anims, d) }
+            // A relit kettle is whole again: drop the popped look (review 2 N-M5).
+            "relight" -> if (e.side in 0..1) kettle[e.side] = null else kettle.fill(null)
             "walk" -> if (e.side in 0..1) {
                 val dx = (e.fromX - e.toX).toFloat()
                 if (dx != 0f) {
                     walks[e.side] = Walk(e.side, dx, max(330f, abs(dx) / 120f * 1000f))
-                    def("stomper_${team(e.side)}_walk")?.let { d -> legs[e.side * 2] = AnimClip(anims, d); legs[e.side * 2 + 1] = AnimClip(anims, d).also { it.advance(3f * (d.ms.firstOrNull() ?: 110)) } }
+                    def(WALK[e.side])?.let { d -> legs[e.side * 2] = AnimClip(anims, d); legs[e.side * 2 + 1] = AnimClip(anims, d).also { it.advance(3f * (d.ms.firstOrNull() ?: 110)) } }
                 }
             }
             "win" -> for (h in f.hobs) if (h.side == e.winner && !h.bonked) pose(f, h.id, "cheer")
@@ -159,26 +260,47 @@ class FieldFx(
         return Triple(k.x + 16f * c, k.baseY - 16f * (r + 1), "timber")
     }
 
-    private fun hobKey(f: Frame, id: Int): String = Sprites.hobKey(f.hobs.firstOrNull { it.id == id }?.def ?: "marge")
+    private fun hobPose(id: Int): HobPose? { for (i in hobs.indices) if (hobs[i].id == id) return hobs[i]; return null }
+
+    private fun newPose(h: Hob): HobPose = HobPose(h.id, "hob_${Sprites.hobKey(h.def)}_${team(h.side)}_").also { hobs.add(it) }
+
+    /** The def for [pose] of this Hob, looked up once (no name is built per frame). */
+    private fun HobPose.def(f: Frame?, pose: String): AnimDef? {
+        val v = defs[pose]
+        if (v != null) return v as? AnimDef
+        val d = anims[prefix + pose]
+        defs[pose] = d ?: NONE
+        return d
+    }
+
+    private fun HobPose.clipFor(d: AnimDef): AnimClip = clip ?: AnimClip(anims, d).also { clip = it }
 
     private fun pose(f: Frame, id: Int, pose: String, shot: String? = null) {
-        val h = f.hobs.firstOrNull { it.id == id } ?: return
-        val d = def("hob_${Sprites.hobKey(h.def)}_${team(h.side)}_$pose") ?: return
-        val hp = hobs.getOrPut(id) { HobPose(AnimClip(anims, d), pose) }
-        hp.clip.play(d); hp.pose = pose; hp.shot = shot
+        var h: Hob? = null
+        for (x in f.hobs) if (x.id == id) { h = x; break }
+        if (h == null) return
+        val hp = hobPose(id) ?: newPose(h)
+        val d = hp.def(f, pose) ?: return
+        hp.clipFor(d).play(d); hp.pose = pose; hp.poseDef = d; hp.shot = shot; hp.silent = false
         if (pose == "bonked") cue(d.name, "start", h.x.toFloat(), null)
     }
 
     private fun spawnBoom(size: String, x: Float, y: Float) {
-        val names = Array(4) { "fx_boom_${size}_$it" }
-        val k = when (size) { "large" -> 1.5f; "medium" -> 1.1f; else -> 0.8f }
         // The boom frames are plain sprites (no entry in animations.json): play them as a 4 frame clip.
-        val d = AnimDef("boom_$size", names, intArrayOf(50, 60, 70, 90), false, 0, 64f, 64f, 32f, 32f, Array(4) { emptyArray() }, null, null, null)
-        if (fx.size >= MAX_FX) fx.removeAt(0)
+        val d = booms.getOrPut(size) {
+            AnimDef("boom_$size", Array(4) { "fx_boom_${size}_$it" }, intArrayOf(50, 60, 70, 90), false, 0, 64f, 64f, 32f, 32f, Array(4) { emptyArray() }, null, null, null)
+        }
+        val k = when (size) { "large" -> 1.5f; "medium" -> 1.1f; else -> 0.8f }
+        if (fx.size >= MAX_FX) dropOne()
         fx.add(Fx(AnimClip(anims, d), x, y, k = k, sound = false))
     }
+    private val booms = HashMap<String, AnimDef>()
 
-    /** A block breaks where it stands: chunks fly, rubble plays, the broken block holds 1.5 s and fades. */
+    /**
+     * A block breaks where it stands: chunks fly, rubble plays once, then the broken block
+     * holds 1.5 s and fades. The rubble clip lives only as long as its frames (review 2
+     * N-M1); the [Rubble] object shows the hold.
+     */
     private fun breakBlock(mat: String, x: Float, y: Float, n: Int) {
         val c = anims.collapse
         val chunks = if (n > 6) 1 else c.chunks[mat] ?: 3
@@ -186,34 +308,27 @@ class FieldFx(
             val a = (i + 0.5f) / chunks
             spawn("fx_chunk_$mat", x + 16f * a, y + 6f, 1f, vx = (a - 0.5f) * 0.12f, vy = -0.10f - 0.04f * (i % 2), g = FALL_G, life = c.breakMs + 300f, fadeMs = 200f, spin = (a - 0.5f) * 0.8f, sound = i == 0)
         }
-        spawn("fx_rubble_$mat", x + 2f, y + 13f)
+        val rub = "fx_rubble_$mat"
+        spawn(rub, x + 2f, y + 13f, life = (def(rub)?.total ?: 0).toFloat())
         rubble.add(Rubble("block_${mat}_broken", x, y))
         if (rubble.size > 40) rubble.removeAt(0)
     }
 
     /** Collapse beats (06 section 6.3, animations.json data.collapse): creak, lean, drop row by row, land, break. */
     private fun collapse(f: Frame, e: GameEvent) {
-        val k = f.castles.getOrNull(e.side) ?: return
-        val n = e.blocks.size / 3
+        val k = f.castles.getOrNull(e.side) ?: f.castles.firstOrNull { it.side == e.side } ?: return
+        val plan = CollapsePlan.of(e, k.x, k.baseY)
+        val n = plan.size
         if (n == 0) return
         var minRow = Int.MAX_VALUE
-        var i = 0
-        while (i + 2 < e.blocks.size) { minRow = min(minRow, e.blocks[i + 1]); i += 3 }
+        for (p in plan) minRow = min(minRow, p.row)
         val mid = k.x + k.cols * 8f
-        i = 0
         var first = true
-        while (i + 2 < e.blocks.size) {
-            val c = e.blocks[i]; val row = e.blocks[i + 1]
-            val mat = if (e.blocks[i + 2] >= 0) GameEvent.matName(e.blocks[i + 2]) else "timber"
-            var fall = 0f
-            var j = 0
-            while (j + 1 < e.falls.size) { if (e.falls[j] == c) fall = e.falls[j + 1].toFloat(); j += 2 }
-            val x = k.x + 16f * c; val y = k.baseY - 16f * (row + 1) - fall
-            val p = Piece(e.side, mat, x, y, fall, ((row - minRow) * anims.collapse.rowGapMs).toFloat(), if (x + 8f < mid) -1f else 1f, first, n)
-            def("fx_crack_$mat")?.let { p.crack = AnimClip(anims, it) }
+        for (cp in plan) {
+            val p = Piece(e.side, cp.mat, cp.x, cp.startY, cp.fall, ((cp.row - minRow) * anims.collapse.rowGapMs).toFloat(), if (cp.x + 8f < mid) -1f else 1f, first, n)
+            def("fx_crack_${cp.mat}")?.let { p.crack = AnimClip(anims, it) }
             pieces.add(p)
             first = false
-            i += 3
         }
         cue("fx_crack_timber", "start", mid, null)
     }
@@ -222,83 +337,104 @@ class FieldFx(
 
     private fun states(f: Frame) {
         for (k in f.castles) {
+            if (k.side !in 0..1) continue
             for (room in k.rooms) {
-                val key = "${k.side}:${room.id}"
-                val was = flapState[key]
-                if (was != null && was != room.flap) def("loophole_flap_${team(k.side)}_close")?.let { d ->
-                    flaps[key] = AnimClip(anims, d, backwards = !room.flap)
+                val slot = slot(k.side, room.id)
+                if (slot < 0) continue
+                val was = flapState[slot]
+                if (was != null && was != room.flap) def(FLAP[k.side])?.let { d ->
+                    flaps[slot] = AnimClip(anims, d, backwards = !room.flap)
                     if (room.flap) cue(d.name, "start", k.x.toFloat(), null)
                 }
-                flapState[key] = room.flap
-                val lwas = lidState[key]
-                if (lwas != null && lwas != room.lid) def("pot_lid_raise")?.let { d -> lids[key] = AnimClip(anims, d, backwards = !room.lid) }
-                lidState[key] = room.lid
+                flapState[slot] = room.flap
+                val lwas = lidState[slot]
+                if (lwas != null && lwas != room.lid) def("pot_lid_raise")?.let { d -> lids[slot] = AnimClip(anims, d, backwards = !room.lid) }
+                lidState[slot] = room.lid
             }
             val kk = k.kettle
             if (kk != null) {
-                val key = "${k.side}:k"
-                val was = lidState[key]
-                if (was != null && was != kk.lid) def("pot_lid_raise")?.let { d -> lids[key] = AnimClip(anims, d, backwards = !kk.lid) }
-                lidState[key] = kk.lid
+                val slot = -1 - k.side
+                val was = lidState[slot]
+                if (was != null && was != kk.lid) def("pot_lid_raise")?.let { d -> kettleLids[k.side] = AnimClip(anims, d, backwards = !kk.lid) }
+                lidState[slot] = kk.lid
             }
         }
-        val seen = HashSet<String>()
+        val seen = HashSet<Long>()
         for (g in f.ghosts) if (g.hasPin) {
-            val key = "${g.side}:${g.pinX}:${g.pinY}:${g.round}"
+            val key = pinKey(g)
             seen.add(key)
             if (key !in pinKnown) {
                 pinKnown.add(key)
-                if (prev != null) def("fx_pin_${if (g.side == 0) "p1" else "p2"}_drop")?.let { d -> pins[key] = AnimClip(anims, d) }
+                if (prev != null) def(if (g.side == 0) "fx_pin_p1_drop" else "fx_pin_p2_drop")?.let { d -> pins.add(PinDrop(key, AnimClip(anims, d))) }
             }
         }
         pinKnown.retainAll(seen)
     }
-    private val flapState = HashMap<String, Boolean>()
-    private val lidState = HashMap<String, Boolean>()
-    private val pinKnown = HashSet<String>()
+    private val flapState = HashMap<Int, Boolean>()
+    private val lidState = HashMap<Int, Boolean>()
+    private val pinKnown = HashSet<Long>()
     private var lastStateFrame: Frame? = null
+
+    private fun slot(side: Int, room: Int): Int = if (side in 0..1 && room in 0 until ROOMS) side * ROOMS + room else -1
 
     // ---- time ---------------------------------------------------------------
 
     /** Advances everything by [dt] ms of view time (already scaled by hit stop and slow motion). */
     fun update(f: Frame, dt: Float) {
         if (f !== lastStateFrame) {
-            if (lastStateFrame?.fullSeq != f.fullSeq || lastStateFrame == null) states(f)
+            if (lastStateFrame == null || lastStateFrame?.fullSeq != f.fullSeq) states(f)
             lastStateFrame = f
         }
         time += dt
+        frameNo++
         val still = reduceMotion()
         // Hobs
-        val gone = HashSet(hobs.keys)
-        for (h in f.hobs) {
-            gone.remove(h.id)
-            val hp = hobs[h.id]
+        val hs = f.hobs
+        for (i in hs.indices) {
+            val h = hs[i]
             val want = basePose(f, h)
-            if (hp == null) { def(animName(h, want))?.let { hobs[h.id] = HobPose(AnimClip(anims, it), want) }; continue }
-            val oneShot = hp.pose in ONE_SHOT && !hp.clip.done && hp.clip.def.name.endsWith("_${hp.pose}")
-            if (!oneShot && hp.pose != want && !(hp.pose == "tumble" && hp.fallT >= 0f)) { def(animName(h, want))?.let { hp.clip.play(it); hp.pose = want } }
-            if (hp.pose == "aim") hp.clip.pick(if (h.power < 34) 0 else if (h.power < 67) 1 else 2)
-            else if (!(still && hp.pose == "idle")) hp.clip.advance(dt) { e -> cue(hp.clip.def.name, e, h.x.toFloat(), hp.shot) }
-            // A play-once pose that ended goes back to the pose the core's state asks for.
-            if (hp.clip.def.name.endsWith("_idle") && hp.pose != "idle" && hp.pose in ONE_SHOT) hp.pose = "idle"
+            var hp = hobPose(h.id)
+            if (hp == null || hp.clip == null) {
+                val p = hp ?: newPose(h)
+                p.seen = frameNo
+                val d = p.def(f, want) ?: continue
+                p.clip = AnimClip(anims, d); p.pose = want; p.poseDef = d
+                // A pose that began before this view (an old Bonk) starts in its loop, with no sounds.
+                if (want == "bonked") p.clip?.skipToLoop()
+                continue
+            }
+            hp.seen = frameNo
+            val clip = hp.clip ?: continue
+            val oneShot = hp.pose in ONE_SHOT && !clip.done && clip.def === hp.poseDef
+            if (!oneShot && hp.pose != want && !(hp.pose == "tumble" && hp.fallT >= 0f)) {
+                hp.def(f, want)?.let { clip.play(it); hp.pose = want; hp.poseDef = it; hp.silent = false }
+            }
+            if (hp.pose == "aim") clip.pick(if (h.power < 34) 0 else if (h.power < 67) 1 else 2)
+            else if (!(still && hp.pose == "idle")) clip.advance(dt, if (hp.silent) null else sink(clip, "", h.x.toFloat(), hp.shot))
+            // A play-once pose that ended goes back to the pose the core's state asks for. A winner keeps cheering, quietly.
+            if (hp.pose in ONE_SHOT && clip.def !== hp.poseDef) {
+                val pd = hp.poseDef
+                if (hp.pose == "cheer" && want == "cheer" && pd != null) { clip.play(pd); hp.silent = true } else hp.pose = "idle"
+            }
             if (hp.pose == "idle") {
                 hp.blinkIn -= dt
-                if (hp.blinkIn <= 0f) { hp.blinkIn = 3000f + (h.id * 677 % 2000); def(animName(h, "blink"))?.let { hp.clip.play(it) } }
+                if (hp.blinkIn <= 0f) { hp.blinkIn = 3000f + (h.id * 677 % 2000); hp.def(f, "blink")?.let { clip.play(it) } }
             }
             if (hp.fallT >= 0f) {
                 hp.fallT += dt
-                if (hp.fallT >= hp.fallMs) { hp.fallT = -1f; def(animName(h, "land"))?.let { hp.clip.play(it); hp.pose = "land" } }
+                if (hp.fallT >= hp.fallMs) { hp.fallT = -1f; hp.def(f, "land")?.let { clip.play(it); hp.pose = "land"; hp.poseDef = it } }
             }
         }
-        for (id in gone) hobs.remove(id)
+        var i = hobs.size - 1
+        while (i >= 0) { if (hobs[i].seen != frameNo) hobs.removeAt(i); i-- }
         // Effects
-        var i = fx.size - 1
+        i = fx.size - 1
         while (i >= 0) {
             val e = fx[i]
             e.age += dt
             e.vy += e.g * dt
             e.x += e.vx * dt; e.y += e.vy * dt; e.rot += e.spin * dt
-            e.clip.advance(dt) { ev -> if (e.sound) cue(e.clip.def.name, ev, e.x, null) }
+            e.clip.advance(dt, if (e.sound) sink(e.clip, "", e.x) else null)
             if ((e.clip.done && e.clip.def.hold == null) || e.age > e.life) fx.removeAt(i)
             i--
         }
@@ -329,17 +465,25 @@ class FieldFx(
         for (s in 0..1) {
             val w = walks[s] ?: continue
             w.t += dt
-            val wx = f.castles.getOrNull(s)?.let { it.x + it.cols * 8f } ?: 0f
-            legs[s * 2]?.advance(dt) { e -> cue("stomper_${team(s)}_walk", e, wx, null) }
+            val k = f.castles.getOrNull(s)
+            val wx = if (k != null) k.x + k.cols * 8f else 0f
+            legs[s * 2]?.let { it.advance(dt, sink(it, WALK[s], wx)) }
             legs[s * 2 + 1]?.advance(dt)
             if (w.t >= w.ms + 120f) { walks[s] = null; legs[s * 2] = null; legs[s * 2 + 1] = null }
         }
-        for (s in 0..1) kettle[s]?.advance(dt) { e -> cue("kettle_pop", e, f.castles.getOrNull(s)?.x?.toFloat() ?: 0f, null) }
-        for (a in flaps.values) a.advance(dt)
+        for (s in 0..1) {
+            val kc = kettle[s] ?: continue
+            val k = f.castles.getOrNull(s)
+            kc.advance(dt, sink(kc, "kettle_pop", k?.x?.toFloat() ?: 0f))
+            // Relit (or rebuilt from a save) while the pop had ended: the kettle is whole again.
+            if (kc.done && k?.kettle?.intact == true) kettle[s] = null
+        }
         val mid = f.mapW / 2f
-        for (a in lids.values) a.advance(dt) { e -> cue("pot_lid_raise", e, mid, null) }
-        for (a in pins.values) a.advance(dt) { e -> cue("fx_pin_p1_drop", e, mid, null) }
-        pins.values.removeAll { it.done }
+        for (a in flaps) a?.advance(dt)
+        for (a in lids) a?.let { it.advance(dt, sink(it, "pot_lid_raise", mid)) }
+        for (a in kettleLids) a?.let { it.advance(dt, sink(it, "pot_lid_raise", mid)) }
+        i = pins.size - 1
+        while (i >= 0) { val pd = pins[i]; pd.clip.advance(dt, sink(pd.clip, "fx_pin_p1_drop", mid)); if (pd.clip.done) pins.removeAt(i); i-- }
         // Shimmer once every 3 s.
         shimmerT += dt
         if (shimmerT >= 3000f) { shimmerT = 0f; def("fx_shimmer")?.let { shimmerClip = AnimClip(anims, it) } }
@@ -348,9 +492,14 @@ class FieldFx(
         trailT += dt
         if (trailT >= 40f) {
             trailT = 0f
-            for (sh in f.shells) spawn("fx_trail_${trailOf(sh.shot)}", sh.x.toFloat(), sh.y.toFloat(), sound = false)
+            val sh = f.shells
+            for (j in sh.indices) {
+                val s = sh[j]
+                val name = trailNames.getOrPut(s.shot) { "fx_trail_${trailOf(s.shot)}" }
+                spawn(name, s.x.toFloat(), s.y.toFloat(), sound = false, ambient = true)
+            }
         }
-        // Wind leaves drift with the wind; the Squall overlay loops in a Squall round.
+        // Wind leaves drift with the wind; the Squall overlay loops in a Squall round. Both are ambient.
         val wind = f.hud.wind
         if (!still && wind != 0 && f.phase != Phase.NONE) {
             leafT += dt
@@ -359,34 +508,41 @@ class FieldFx(
                 leafT = 0f
                 val lx = if (wind > 0) 0f else f.mapW.toFloat()
                 val ly = f.mapH * (0.2f + 0.4f * ((time.toInt() / 37) % 10) / 10f)
-                spawn("fx_wind_leaf", lx, ly, 1f, vx = wind * 0.03f, vy = 0.005f, life = f.mapW / (abs(wind) * 0.03f), sound = false)
+                if (leafCount() < MAX_FX / 4) spawn("fx_wind_leaf", lx, ly, 1f, vx = wind * 0.03f, vy = 0.005f, life = f.mapW / (abs(wind) * 0.03f), sound = false, ambient = true)
             }
         }
         squall = if (f.hud.squallRound > 0) (squall ?: def("fx_squall")?.let { AnimClip(anims, it) }) else null
         if (!still) squall?.advance(dt)
     }
 
+    private fun leafCount(): Int { var n = 0; for (j in fx.indices) if (fx[j].ambient) n++; return n }
+
     private fun basePose(f: Frame, h: Hob): String = when {
         h.bonked -> "bonked"
         f.phase == Phase.ENDED && f.result?.winner == h.side -> "cheer"
         f.phase == Phase.PLAN && h.side == f.side && h.id == f.hud.selectedHob && f.hud.human(f.side) -> "aim"
-        h.grudge || h.clatter -> if (def(animName(h, "nextdoor")) != null) "nextdoor" else "idle"
+        h.grudge || h.clatter -> if (hobPose(h.id)?.def(f, "nextdoor") != null) "nextdoor" else "idle"
         else -> "idle"
     }
 
-    private fun animName(h: Hob, pose: String) = "hob_${Sprites.hobKey(h.def)}_${team(h.side)}_$pose"
-
     // ---- what the renderer asks -------------------------------------------
 
-    /** The Hob's current sprite and the animation it belongs to (for size and anchor), or null. */
-    fun hobFrame(h: Hob): Pair<String, AnimDef>? {
-        val hp = hobs[h.id] ?: return null
-        return hp.clip.sprite to hp.clip.def
+    /** The Hob's clip (its def gives size and anchor), or null. Resolve its sprite with [spriteOf]. */
+    fun hobClip(h: Hob): AnimClip? = hobPose(h.id)?.clip
+
+    /** The sprite a clip shows now, resolved only when its frame changes (kept on the clip). */
+    fun spriteOf(c: AnimClip): Sprites.Sprite? {
+        val name = c.sprite
+        val gen = sprites.generation
+        if (c.memoName !== name || c.memoGen != gen) { c.memoName = name; c.memoGen = gen; c.memo = sprites.get(name) }
+        val sp = c.memo as Sprites.Sprite?
+        if (sp != null) sp.usedAt = stamp
+        return sp
     }
 
     /** Extra y offset in cells for a Hob mid fall (the snapshot already has it at the landing spot). */
     fun hobDy(h: Hob): Float {
-        val hp = hobs[h.id] ?: return 0f
+        val hp = hobPose(h.id) ?: return 0f
         if (hp.fallT < 0f) return 0f
         val u = (hp.fallT / max(1f, hp.fallMs - 150f)).coerceIn(0f, 1f)
         return (hp.fallFrom - hp.fallTo) * (1f - u * u)
@@ -406,39 +562,60 @@ class FieldFx(
         out[2] = anims.bobTilt.getOrElse(fi) { 0f }
     }
 
-    fun kettleSprite(side: Int): String? = kettle.getOrNull(side)?.sprite
+    /** The kettle pop clip, while it is the look to show (cleared on relight). */
+    fun kettleClip(side: Int): AnimClip? = kettle.getOrNull(side)
 
-    fun flapSprite(side: Int, room: Int): String? = flaps["$side:$room"]?.let { if (it.done && it.def.hold == null) null else it.sprite }
-    fun lidSprite(side: Int, room: String): String? = lids["$side:$room"]?.sprite
-    fun pinSprite(key: String): String? = pins[key]?.sprite
+    fun flapClip(side: Int, room: Int): AnimClip? {
+        val s = slot(side, room); if (s < 0) return null
+        val a = flaps[s] ?: return null
+        return if (a.done && a.def.hold == null) null else a
+    }
+    fun lidClip(side: Int, room: Int): AnimClip? { val s = slot(side, room); return if (s < 0) null else lids[s] }
+    fun kettleLidClip(side: Int): AnimClip? = kettleLids.getOrNull(side)
+    fun pinClip(g: Ghost): AnimClip? { val k = pinKey(g); for (i in pins.indices) if (pins[i].key == k) return pins[i].clip; return null }
 
-    /** Legs under a walking fort, as sprites to draw at the fort base. */
-    fun legSprite(side: Int, leg: Int): String? = if (walks.getOrNull(side) == null) null else legs[side * 2 + leg]?.sprite
+    /** Legs under a walking fort. */
+    fun legClip(side: Int, leg: Int): AnimClip? = if (walks.getOrNull(side) == null) null else legs[side * 2 + leg]
 
-    fun shimmerSprite(): String? = if (reduceMotion()) null else shimmerClip?.let { if (it.done) null else it.sprite }
-    fun squallSprite(): String? = squall?.sprite
+    fun shimmerClip(): AnimClip? = if (reduceMotion()) null else shimmerClip?.let { if (it.done) null else it }
+    fun squallClip(): AnimClip? = squall
+
+    /** For tests: start and land y of each falling piece, in world cells. */
+    internal fun pieceYs(): List<Pair<Float, Float>> = pieces.map { it.y to it.y + it.fall }
+    internal val effectCount: Int get() = fx.size
 
     // ---- drawing ------------------------------------------------------------
 
+    /** Draw time stamp for [Sprites.Sprite.usedAt], so a low memory trim keeps what is on screen. */
+    private var stamp = 0L
+
+    private fun memo(name: String, gen: Int, holder: Rubble): Sprites.Sprite? {
+        if (holder.spGen != gen) { holder.spGen = gen; holder.sp = sprites.get(name) }
+        return holder.sp?.also { it.usedAt = stamp }
+    }
+
     /** Draws collapse pieces, rubble and every effect through lens [l]. */
     fun draw(c: Canvas, l: Lens, f: Frame) {
+        stamp = Sprites.now()
         val col = anims.collapse
-        for (rb in rubble) {
-            val sp = sprites.get(rb.sprite) ?: continue
+        val gen = sprites.generation
+        for (i in rubble.indices) {
+            val rb = rubble[i]
+            val sp = memo(rb.sprite, gen, rb) ?: continue
             val a = if (rb.age < col.rubbleHoldMs) 1f else (1f - (rb.age - col.rubbleHoldMs) / 400f).coerceIn(0f, 1f)
             paint.alpha = (a * 255).toInt()
             r.set(l.sx(rb.x), l.sy(rb.y), l.sx(rb.x + 16f), l.sy(rb.y + 16f))
             c.drawBitmap(sp.bmp, null, r, paint)
         }
         paint.alpha = 255
-        for (p in pieces) drawPiece(c, l, p, col)
-        for (e in fx) {
-            val name = e.clip.sprite
-            val sp = sprites.get(name) ?: continue
-            val d = e.clip.def
-            val u = e.k * l.scale
+        for (i in pieces.indices) drawPiece(c, l, pieces[i], col, gen)
+        for (i in fx.indices) {
+            val e = fx[i]
             val x = l.sx(e.x); val y = l.sy(e.y)
             if (x < l.rect.left - 200 || x > l.rect.right + 200) continue
+            val sp = spriteOf(e.clip) ?: continue
+            val d = e.clip.def
+            val u = e.k * l.scale
             val fade = if (e.fadeMs > 0f && e.life - e.age < e.fadeMs) ((e.life - e.age) / e.fadeMs).coerceIn(0f, 1f) else 1f
             paint.alpha = (fade * 255).toInt()
             r.set(x - d.ax * u, y - d.ay * u, x + (d.w - d.ax) * u, y + (d.h - d.ay) * u)
@@ -447,8 +624,9 @@ class FieldFx(
         paint.alpha = 255
     }
 
-    private fun drawPiece(c: Canvas, l: Lens, p: Piece, col: CollapseData) {
-        val sp = sprites.get("block_${p.mat}_scuffed") ?: sprites.get("block_${p.mat}_fresh")
+    private fun drawPiece(c: Canvas, l: Lens, p: Piece, col: CollapseData, gen: Int) {
+        if (p.spGen != gen) { p.spGen = gen; p.sp = sprites.get("block_${p.mat}_scuffed") ?: sprites.get("block_${p.mat}_fresh") }
+        val sp = p.sp
         var dx = 0f; var dy = 0f; var deg = 0f; var sy = 1f
         val still = reduceMotion()
         val dropAt = col.creakMs + col.leanMs + p.delay
@@ -471,15 +649,14 @@ class FieldFx(
         c.save()
         if (deg != 0f) c.rotate(deg, x0 + w / 2f, y1)
         if (sp != null) c.drawBitmap(sp.bmp, null, r, paint) else { line.color = 0xFF2B1E2E.toInt(); line.strokeWidth = dp; c.drawRect(r, line) }
-        p.crack?.let { cr -> sprites.get(cr.sprite)?.let { c.drawBitmap(it.bmp, null, r, paint) } }
+        p.crack?.let { cr -> spriteOf(cr)?.let { c.drawBitmap(it.bmp, null, r, paint) } }
         c.restore()
     }
 
     /** Shimmer over the blocks at the end of their reach; with Reduce motion a still dotted outline. */
     fun drawShimmer(c: Canvas, l: Lens, k: Castle, dash: android.graphics.PathEffect) {
         if (k.shimmer.isEmpty()) return
-        val name = shimmerSprite()
-        val sp = name?.let { sprites.get(it) }
+        val sp = shimmerClip()?.let { spriteOf(it) }
         var i = 0
         while (i + 1 < k.shimmer.size) {
             val bx = k.x + 16f * k.shimmer[i]; val by = k.baseY - 16f * (k.shimmer[i + 1] + 1)
@@ -490,10 +667,10 @@ class FieldFx(
         }
     }
 
-    /** The Squall: rain and wind tiles over the lens. */
+    /** The Squall: rain and wind tiles over the lens, a few large tiles to keep overdraw down (review 2 N-L17). */
     fun drawSquall(c: Canvas, l: Lens) {
-        val sp = squallSprite()?.let { sprites.get(it) } ?: return
-        val s = 96f * dp
+        val sp = squall?.let { spriteOf(it) } ?: return
+        val s = max(160f * dp, l.rect.width() / 3f)
         paint.alpha = 150
         var y = l.rect.top
         while (y < l.rect.bottom) { var x = l.rect.left; while (x < l.rect.right) { r.set(x, y, x + s, y + s); c.drawBitmap(sp.bmp, null, r, paint); x += s }; y += s }
@@ -504,6 +681,13 @@ class FieldFx(
         /** Gravity for view falls, in cells per ms squared (16 cells in about 150 ms). */
         const val FALL_G = 0.0014f
         const val MAX_FX = 160
+        /** Room ids per side kept for flaps and lids. */
+        private const val ROOMS = 64
         private val ONE_SHOT = setOf("fire", "hit", "dig", "land", "cheer", "blink")
+        private val NONE = Any()
+        private val WALK = arrayOf("stomper_blue_walk", "stomper_orange_walk")
+        private val FLAP = arrayOf("loophole_flap_blue_close", "loophole_flap_orange_close")
+
+        fun pinKey(g: Ghost): Long = (g.side.toLong() shl 60) or ((g.pinX.toLong() and 0xFFFFF) shl 40) or ((g.pinY.toLong() and 0xFFFFF) shl 20) or (g.round.toLong() and 0xFFFFF)
     }
 }

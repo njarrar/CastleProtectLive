@@ -131,6 +131,9 @@ class Anims(val defs: Map<String, AnimDef>, val bobDy: FloatArray, val bobTilt: 
     }
 }
 
+/** Receives a clip's frame events. One shared object per owner, so advancing a clip allocates nothing (review 2 N-M8). */
+fun interface ClipEvents { fun on(event: String) }
+
 /**
  * Plays one animation (assets/README.md "How to play one"): keeps view time, walks
  * the ms list, fires events when a frame first shows, loops from loop_from, then
@@ -149,8 +152,13 @@ class AnimClip(private val anims: Anims, start: AnimDef, private val backwards: 
     /** Sprite to show after a play-once animation with no next has ended. */
     val holdName: String? get() = if (done) def.hold else null
 
-    /** The sprite name to draw now. */
+    /** The sprite name to draw now. Always a string held by the def, so it can be compared by reference. */
     val sprite: String get() = holdName ?: def.frames[if (frame < 0) idx(0) else frame]
+
+    /** The renderer's resolved sprite for [memoName] at sprite generation [memoGen] (no lookup per frame). */
+    @JvmField var memoName: String? = null
+    @JvmField var memoGen = -1
+    @JvmField var memo: Any? = null
 
     private fun idx(i: Int) = if (backwards) def.frames.size - 1 - i else i
 
@@ -160,8 +168,17 @@ class AnimClip(private val anims: Anims, start: AnimDef, private val backwards: 
     /** Position in play order (0 is the first frame shown), or -1 before the first frame. */
     private var pos = -1
 
+    /**
+     * Jumps to the looping part with no events (a pose that began long ago, for example
+     * a Hob Bonked before this view was made: no inflate or lift sound again, review 2 N-L2).
+     */
+    fun skipToLoop() {
+        if (!def.loop || def.pick != null) return
+        pos = def.loopFrom; frame = idx(pos); t = def.starts[def.loopFrom].toFloat(); done = false
+    }
+
     /** Advances by [dtMs] of view time. [onEvent] gets each event as its frame first shows, in order. */
-    fun advance(dtMs: Float, onEvent: ((String) -> Unit)? = null) {
+    fun advance(dtMs: Float, onEvent: ClipEvents? = null) {
         if (done || def.pick != null) { if (frame < 0) frame = 0; return }
         if (pos < 0) enter(0, onEvent)
         var left = dtMs.coerceAtLeast(0f)
@@ -186,14 +203,15 @@ class AnimClip(private val anims: Anims, start: AnimDef, private val backwards: 
     }
 
     /** Shows every frame after the current one up to [i], firing their events. */
-    private fun reach(i: Int, onEvent: ((String) -> Unit)?) {
+    private fun reach(i: Int, onEvent: ClipEvents?) {
         while (pos < i) enter(pos + 1, onEvent)
     }
 
-    private fun enter(i: Int, onEvent: ((String) -> Unit)?) {
+    private fun enter(i: Int, onEvent: ClipEvents?) {
         pos = i
         frame = idx(i)
-        if (onEvent != null) for (e in def.events[i]) onEvent(e)
+        // Events belong to the real frame, so a clip played backwards fires them at the right end (review 2 N-L3).
+        if (onEvent != null) { val ev = def.events[frame]; for (k in ev.indices) onEvent.on(ev[k]) }
     }
 
     /** Starts [d] from its first frame. */

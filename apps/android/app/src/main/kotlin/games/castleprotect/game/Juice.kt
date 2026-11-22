@@ -10,8 +10,9 @@ import kotlin.math.sqrt
  * game rule. The sim stays fixed step; hit stop and slow motion only change how fast
  * the app feeds it ticks and how fast animations run, so replays and saves do not care.
  *
- * Written from the sim thread (events) and read by the sim and render threads. The
- * clock is passed in ([now], uptime ms) so the rules can be unit tested.
+ * Written from the sim thread (events), the render thread (collapse beats, shake) and
+ * the main thread (2x). Every write takes one lock (review 2 N-L19). The clock is
+ * passed in ([now], uptime ms) so the rules can be unit tested.
  */
 class Juice(private val reduceMotion: () -> Boolean = { false }, private val shakeScale: () -> Float = { 1f }) {
     @Volatile private var stopUntil = 0L
@@ -44,17 +45,21 @@ class Juice(private val reduceMotion: () -> Boolean = { false }, private val sha
 
     val calm: Boolean get() = trauma <= 0f && flash <= 0f
 
-    /** A new turn: the slow motion budget and the 2x cancel reset; shake stops (no shake in Plan). */
-    fun newTurn() { addedMs = 0f; noSlow = false; slowThisShot = false; trauma = 0f; flash = 0f }
+    /**
+     * A new turn: the slow motion budget and the 2x cancel reset; shake stops (no shake in
+     * Plan); a slow motion or hit stop from the last shot ends here and never runs into
+     * the new turn (review 2 N-M12).
+     */
+    @Synchronized fun newTurn() { addedMs = 0f; noSlow = false; slowThisShot = false; trauma = 0f; flash = 0f; slowUntil = 0L; stopUntil = 0L }
 
     /** A new shot leaves: one slow motion per shot. */
-    fun newShot() { slowThisShot = false }
+    @Synchronized fun newShot() { slowThisShot = false }
 
     /**
      * Freezes the view for [ms]. At most one per 250 ms; halved at 2x Resolve speed;
      * capped at 50 ms with Reduce motion (hit stops are stillness, so they stay).
      */
-    fun hitStop(ms: Int, now: Long, fast: Boolean) {
+    @Synchronized fun hitStop(ms: Int, now: Long, fast: Boolean) {
         if (now - lastStopAt < 250) return
         var d = ms
         if (fast) d /= 2
@@ -69,7 +74,7 @@ class Juice(private val reduceMotion: () -> Boolean = { false }, private val sha
      * time per turn, except one that ends the battle, which always plays. With Reduce
      * motion a 150 ms hold plays instead. Returns true when it plays.
      */
-    fun slowMo(speed: Float, ms: Int, now: Long, endsBattle: Boolean = false): Boolean {
+    @Synchronized fun slowMo(speed: Float, ms: Int, now: Long, endsBattle: Boolean = false): Boolean {
         if (reduceMotion()) { stopUntil = max(stopUntil, now + 150); return false }
         if (!endsBattle && (noSlow || slowThisShot)) return false
         val added = ms * (1f - speed)
@@ -82,14 +87,14 @@ class Juice(private val reduceMotion: () -> Boolean = { false }, private val sha
     }
 
     /** 2x tapped during Resolve: slow motion ends now and does not come back this turn. */
-    fun cancelSlow() { noSlow = true; slowUntil = 0L }
+    @Synchronized fun cancelSlow() { noSlow = true; slowUntil = 0L }
 
     /**
      * Adds trauma (0 to 1) that decays to 0 over [decayMs]. [dx], [dy]: direction from the
      * blast to the screen centre, for the first kick. [scale]: distance falloff (1 within a
      * screen width, 0 beyond two).
      */
-    fun addTrauma(amount: Float, decayMs: Int, dx: Float = 0f, dy: Float = 1f, upDown: Boolean = false, scale: Float = 1f) {
+    @Synchronized fun addTrauma(amount: Float, decayMs: Int, dx: Float = 0f, dy: Float = 1f, upDown: Boolean = false, scale: Float = 1f) {
         val k = shakeScale()
         val a = amount * scale.coerceIn(0f, 1f)
         if (a <= 0f) return
@@ -107,7 +112,7 @@ class Juice(private val reduceMotion: () -> Boolean = { false }, private val sha
      * x and y as a share of the cap (-1 to 1, times trauma squared) and roll in degrees.
      * [aiming]: the Plan step, where there is never any shake.
      */
-    fun shake(dtMs: Float, aiming: Boolean, out: FloatArray) {
+    @Synchronized fun shake(dtMs: Float, aiming: Boolean, out: FloatArray) {
         if (aiming) { trauma = 0f; flash = 0f; out[0] = 0f; out[1] = 0f; out[2] = 0f; return }
         flash = max(0f, flash - dtMs / 200f)
         if (trauma <= 0f) { out[0] = 0f; out[1] = 0f; out[2] = 0f; return }
