@@ -257,17 +257,20 @@ final class CoreThreadTests: XCTestCase {
         XCTAssertNil(game.start(.campaign("1-1", preset: .fair, seed: 4)))
         _ = try XCTUnwrap(game.frame())
         XCTAssertTrue(game.send(.aim(angle: 460, power: 61)).ok)
+        _ = game.frame()
+        // Save and replay first (the stand-in does not log the Rival's turn), then a shot and a Rival turn.
+        let bytes = game.save()
+        XCTAssertFalse(bytes.isEmpty)
+        let result = await game.load(bytes)
+        XCTAssertEqual(result, .ok)
+        _ = game.frame()
         XCTAssertTrue(game.send(.fire()).ok)
         for _ in 0..<40 {
             game.advance(milliseconds: 100)
             game.waitUntilIdle()
             _ = game.frame()
         }
-        let bytes = game.save()
-        XCTAssertFalse(bytes.isEmpty)
-        let result = await game.load(bytes)
-        XCTAssertEqual(result, .ok)
-        _ = game.frame()
+        XCTAssertTrue(bridge.inner.command(#"{"cmd":"log"}"#).contains("fire"))
         XCTAssertEqual(bridge.threads.count, 1, "one thread for every call (core/API.md)")
         XCTAssertEqual(bridge.mainThreadCalls, 0)
     }

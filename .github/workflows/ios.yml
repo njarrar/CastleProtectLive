@@ -234,7 +234,9 @@ jobs:
           check NSPrivacyAccessedAPICategoryUserDefaults 'OBJC_CLASS_$_NSUserDefaults'
           # Where fstat comes from (Rust std's panic and backtrace code), for the build log.
           echo "Objects that pull in fstat:"
-          nm -A ../../core/target/aarch64-apple-ios/release/libcastle_ffi.a 2>/dev/null | grep -E " U _fstat(64)?$" | head -n 8 || true
+          for lib in $(find ../../core/target -path '*aarch64-apple-ios/release/libcastle_ffi.a' 2>/dev/null); do
+            nm -A "$lib" 2>/dev/null | grep -E "U _fstat(64)?$" | head -n 8 || true
+          done
           echo "Undefined symbols checked: $(wc -l < build/undefined-symbols.txt)"
           exit $fail
 
