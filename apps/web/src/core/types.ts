@@ -32,6 +32,7 @@ export interface SideSetup {
   crew: string[]; // Hob ids
   blueprint?: Blueprint; // omitted: level or starter fort
   help?: Help;
+  doodads?: string[]; // up to 2 Doodad ids
 }
 
 export interface BattleSetup {
@@ -256,7 +257,7 @@ export interface HudView {
   shots: ShotChip[];
   preview: [number, number][]; // arc points, already cut to the preview share
   previewEndsFlap?: boolean;
-  fire: 'locked' | 'ready' | 'dug' | 'flight' | 'use' | 'fast';
+  fire: 'locked' | 'ready' | 'dug' | 'pass' | 'flight' | 'use' | 'fast';
   canWalk: boolean;
   thinking?: boolean; // Rival think pose
   doodads: { id: string; name: string; card: string }[]; // the active side's Doodads left

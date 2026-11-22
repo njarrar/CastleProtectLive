@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "App rules",
+  "description": "Numbers the apps need that the core does not send yet (menus, rewards, unlocks, presets). Read by apps/web at build time.",
+  "type": "object",
+  "required": ["version", "rewards", "joins", "campaign", "help_steam", "wind_presets", "rummage_presets", "workshop", "walk", "rival_think_seconds"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "rewards": {
+      "type": "object", "additionalProperties": false, "required": ["buttons_win", "buttons_loss"],
+      "properties": { "buttons_win": { "type": "integer", "minimum": 0 }, "buttons_loss": { "type": "integer", "minimum": 0 } }
+    },
+    "joins": { "type": "object", "additionalProperties": { "type": "string" } },
+    "campaign": {
+      "type": "object", "additionalProperties": false, "required": ["walk_from", "doodads_from", "doodads", "modes_after"],
+      "properties": {
+        "walk_from": { "type": "string" },
+        "doodads_from": { "type": "string" },
+        "doodads": { "type": "array", "items": { "type": "string" }, "maxItems": 2 },
+        "modes_after": { "type": "string" }
+      }
+    },
+    "help_steam": {
+      "type": "object", "additionalProperties": false, "required": ["none", "some", "lots"],
+      "properties": { "none": { "type": "integer" }, "some": { "type": "integer" }, "lots": { "type": "integer" } }
+    },
+    "wind_presets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object", "required": ["min", "max"],
+        "properties": { "min": { "type": "integer" }, "max": { "type": "integer" } }
+      }
+    },
+    "rummage_presets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object", "required": ["pool", "picks"],
+        "properties": { "pool": { "type": "integer", "minimum": 0 }, "picks": { "type": "integer", "minimum": 0 } }
+      }
+    },
+    "workshop": {
+      "type": "object", "additionalProperties": false, "required": ["budget", "cols", "rows", "max_nooks"],
+      "properties": {
+        "budget": { "type": "integer" }, "cols": { "type": "integer" }, "rows": { "type": "integer" }, "max_nooks": { "type": "integer" }
+      }
+    },
+    "walk": {
+      "type": "object", "additionalProperties": false, "required": ["cells", "ticks"],
+      "properties": { "cells": { "type": "integer", "minimum": 1 }, "ticks": { "type": "integer", "minimum": 1 } }
+    },
+    "rival_think_seconds": { "type": "number", "minimum": 0 }
+  }
+}

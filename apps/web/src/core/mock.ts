@@ -1,3 +1,6 @@
+// Dev only: a stand-in rules engine for working on the UI without the wasm core. It is
+// loaded by dynamic import under import.meta.env.DEV with ?core=mock and is not in the
+// production bundle (see core/index.ts).
 // MockCore: a stand-in that returns plausible snapshots until castle-wasm lands.
 // It is NOT the rules. Numbers are rough, physics is simple, and the real core
 // (core/castle-wasm) replaces it as soon as its pkg is present. Do not tune gameplay here.
@@ -40,6 +43,8 @@ type Logged = { tick: number; c: Command };
 export class MockCore implements CoreApi {
   readonly name = 'mock';
   readonly version = 'mock-0.1';
+  readonly rules = 0;
+  readonly features = { setWind: true, giveUp: true };
   private setup!: BattleSetup;
   private rand = rng(1);
   private tick = 0;
@@ -78,7 +83,13 @@ export class MockCore implements CoreApi {
   private replaying = false;
   private squallOn = 0;
 
-  levels() { return LEVELS; }
+  levels() { return LEVELS.map((l) => ({ ...l, draftPool: l.draft ? 6 : 0, draftPicks: l.draft ? 2 : 0, doodads: [] as string[] })); }
+  checkFort(bp: Blueprint, seats: number) {
+    const n = new Set(bp.cells.filter((c) => c.kind === 'nook').map((c) => c.room ?? 0)).size;
+    return n >= seats ? { ok: true } : { ok: false, why: `${n} Nooks for ${seats} Hobs` };
+  }
+  fortFor(): Blueprint | undefined { return undefined; }
+  leanLines(): [number, number][] { return []; }
   hobs() { return HOBS; }
   starterForts() { return STARTER_FORTS; }
   defaultBlueprint() { return structuredClone(DEFAULT_BLUEPRINT); }
@@ -217,7 +228,7 @@ export class MockCore implements CoreApi {
   }
 
   private addBlock(side: Side, x: number, y: number, mat: Material): void {
-    this.blocks.push({ id: this.nextId++, side, x, y, size: B, mat, hp: HP[mat], maxHp: HP[mat], vy: 0 });
+    this.blocks.push({ id: this.nextId++, side, c: 0, r: 0, x, y, size: B, mat, hp: HP[mat], maxHp: HP[mat], vy: 0 });
   }
 
   // ---------- commands ----------
@@ -243,6 +254,7 @@ export class MockCore implements CoreApi {
         this.wind = Math.max(-10, Math.min(10, Math.round(c.wind)));
         return { ok: true };
       case 'fast': return { ok: true };
+      case 'shove_off': case 'pass': case 'doodad': return { ok: false, error: 'not_in_mock' };
     }
     if (this.phase !== 'plan' || !this.human(side)) return { ok: false, error: 'not your turn' };
     switch (c.cmd) {
@@ -815,11 +827,13 @@ export class MockCore implements CoreApi {
       shells: this.shells.map(({ def: _d, hob: _h, path: _p, split: _s, apex: _a, aim: _m, ...v }) => v),
       pins: this.pins.map((p) => ({ ...p })),
       forts: [{ ...this.forts[0] }, { ...this.forts[1] }],
+      rooms: [], props: [], fatigue: [false, false],
       events: ev,
       hud: {
         active: this.active, you, steam: this.steam[you], steamMax: 100, steamTurn: this.steamTurn,
         hob: this.picked[you], shot: this.shot[you], aim: h?.lastAim ? { ...h.lastAim } : undefined,
         shots, preview, fire: fireState, canWalk: this.canWalk() && this.phase === 'plan', thinking: this.phase === 'rival',
+        doodads: [], canPass: false,
       },
       draft: this.draft ? JSON.parse(JSON.stringify(this.draft)) : undefined,
       result: this.result,

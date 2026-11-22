@@ -30,3 +30,6 @@ export function rowsToBlueprint(rows: string[], name: string, glyphs: Record<str
   });
   return { name, cols: Math.max(1, ...body.map((r) => r.length)), rows: body.length, cells, rowsText: rows };
 }
+
+/** Marker Blueprint: "use the level's own fort" (the core picks it from the level). */
+export const LEVEL_FORT: Blueprint = { id: 'default', name: 'Level fort', cols: 0, rows: 0, cells: [] };

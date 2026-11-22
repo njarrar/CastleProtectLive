@@ -19,7 +19,8 @@ export function unlockAudio(): void {
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
-  if (ctx.state === 'suspended') void ctx.resume();
+  // iOS reports 'interrupted' after a call or Siri; any state but running needs a resume.
+  if (ctx.state !== 'running') void ctx.resume().catch(() => undefined);
 }
 
 export function setVolume(v: number, mute: boolean): void {
@@ -63,8 +64,14 @@ function noise(dur: number, gain: number, freq: number, q = 1, delay = 0) {
   s.stop(t + dur + 0.02);
 }
 
+// A big collapse sends one hit per block at once: play each sound at most once per 50 ms.
+const lastAt = new Map<Sfx, number>();
+
 export function play(s: Sfx): void {
   if (!ctx || muted) return;
+  const now = performance.now();
+  if (now - (lastAt.get(s) ?? -1e9) < 50) return;
+  lastAt.set(s, now);
   switch (s) {
     case 'tap': tone(660, 0.06, 'triangle', 0.25); break;
     case 'sheet': tone(420, 0.12, 'sine', 0.2, 1.5); break;

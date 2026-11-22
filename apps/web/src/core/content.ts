@@ -1,4 +1,5 @@
-// Display data for the mock core only. The real core ships these from content/ JSON.
+// Dev only: data for the mock core (mock.ts). Nothing in the production build imports this;
+// the real core ships all of it from content/ JSON.
 import type { Blueprint, BlueprintCell, HobInfo, LevelInfo } from './types';
 
 export const HOBS: HobInfo[] = [

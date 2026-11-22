@@ -1,6 +1,7 @@
 import type { App, Route, Screen } from '../app';
 import { play, unlockAudio } from '../audio/sfx';
-import { clearBattle, loadBattleSave } from '../save/db';
+import { clearBattle, dropBattleSave, loadBattleSave } from '../save/db';
+import type { BattleSetup, Blueprint } from '../core/types';
 import { btn, h } from '../ui/dom';
 
 export function gear(app: App, back: Route): HTMLElement {
@@ -29,16 +30,22 @@ export function titleScreen(app: App): Screen {
     h('p', { class: 'small free' }, 'Free forever. No ads.'),
   );
   void loadBattleSave().then((save) => {
-    if (!save || save.coreName !== app.core.name) return;
-    const sheet = h('div', { class: 'scrim' }, h('div', { class: 'card resume', role: 'dialog' },
-      h('h2', {}, 'Carry on?'),
+    if (!save) return;
+    // A save from another rules engine is never replayed; it is put aside, not kept forever.
+    if (save.coreName !== app.core.name) { void dropBattleSave(); return; }
+    const sheet = h('div', { class: 'scrim' }, h('div', { class: 'card resume', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'resume-h' },
+      h('h2', { id: 'resume-h' }, 'Carry on?'),
       h('p', {}, save.label),
-      btn('Resume', () => { unlockAudio(); app.go({ to: 'battle', setup: save.setup, resume: save.core }); }, 'primary', { 'data-autofocus': true }),
+      btn('Resume', () => {
+        unlockAudio();
+        // The battle screen checks the version and the replay; a bad save routes to the map with a note.
+        app.go({ to: 'battle', setup: save.setup, resume: save.core, handoff: save.handoff });
+      }, 'primary', { 'data-autofocus': true, 'data-testid': 'resume' }),
       btn('Leave it', () => { void clearBattle(); sheet.remove(); }, 'secondary'),
     ));
     el.append(sheet);
     sheet.querySelector<HTMLElement>('[data-autofocus]')?.focus();
-  });
+  }).catch(() => undefined);
   return { el };
 }
 
@@ -73,8 +80,8 @@ export function mapScreen(app: App, r: Route): Screen {
   const scroller = h('div', { class: 'mapscroll' }, strip);
   const dock = h('nav', { class: 'dock' },
     btn('Play', () => app.go({ to: 'prebattle', level: next }), 'primary', { 'data-testid': 'dock-play' }),
-    app.levelDone('1-5') ? btn('Modes', () => app.go({ to: 'modes' }), 'secondary') : '',
-    app.levelDone('1-5') ? btn('Workshop', () => app.go({ to: 'workshop' }), 'secondary') : '',
+    app.modesOpen() ? btn('Modes', () => app.go({ to: 'modes' }), 'secondary') : '',
+    app.modesOpen() ? btn('Workshop', () => app.go({ to: 'workshop' }), 'secondary') : '',
   );
   const el = h('main', { class: 'screen map' },
     h('header', { class: 'topbar' },
@@ -113,12 +120,18 @@ export function modesScreen(app: App): Screen {
   return { el };
 }
 
-export function yardSetup(app: App) {
+/** The Test Yard: your fort (when the core accepts it) and as many of your crew as it seats. */
+export function yardSetup(app: App, fort: Blueprint | undefined = app.progress.blueprint): BattleSetup {
+  const roster = app.roster();
+  const nooks = fort ? new Set(fort.cells.filter((c) => c.kind === 'nook').map((c) => c.room ?? 0)).size : 0;
+  const crew = roster.slice(0, Math.max(1, Math.min(5, nooks || 5)));
+  let blueprint = fort;
+  if (blueprint && !app.core.checkFort(blueprint, crew.length).ok) blueprint = app.core.fortFor(crew.length);
   return {
-    mode: 'yard' as const, seed: 7, difficulty: app.settings.difficulty, windOff: true,
+    mode: 'yard', seed: 7, difficulty: app.settings.difficulty, windOff: true,
     sides: [
-      { name: 'You', human: true, crew: app.roster().slice(0, 5), blueprint: app.progress.blueprint },
+      { name: 'You', human: true, crew, blueprint },
       { name: 'Dummy', human: false, crew: [] },
-    ] as [import('../core/types').SideSetup, import('../core/types').SideSetup],
+    ],
   };
 }

@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "rewards": {
+    "buttons_win": 250,
+    "buttons_loss": 40
+  },
+  "joins": {
+    "quill": "1-2",
+    "jax": "1-4",
+    "grub": "1-5",
+    "hetty": "1-7",
+    "bobbin": "1-8",
+    "old_thumper": "1-9",
+    "nan": "1-10"
+  },
+  "campaign": {
+    "walk_from": "1-9",
+    "doodads_from": "1-10",
+    "doodads": [
+      "mend_bucket",
+      "pot_lid"
+    ],
+    "modes_after": "1-5"
+  },
+  "help_steam": {
+    "none": 0,
+    "some": 120,
+    "lots": 140
+  },
+  "wind_presets": {
+    "off": {
+      "min": 0,
+      "max": 0
+    },
+    "light": {
+      "min": 0,
+      "max": 3
+    },
+    "full": {
+      "min": 0,
+      "max": 6
+    }
+  },
+  "rummage_presets": {
+    "draft": {
+      "pool": 6,
+      "picks": 2
+    },
+    "quick": {
+      "pool": 6,
+      "picks": 2
+    },
+    "plain": {
+      "pool": 0,
+      "picks": 0
+    }
+  },
+  "workshop": {
+    "budget": 72,
+    "cols": 8,
+    "rows": 10,
+    "max_nooks": 5
+  },
+  "walk": {
+    "cells": 4,
+    "ticks": 4
+  },
+  "rival_think_seconds": 1.0
+}
