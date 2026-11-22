@@ -1,0 +1,6581 @@
+{
+ "name": "Castle Protect v0.1 sprites",
+ "generator": "tools/art-gen/gen-sprites.mjs + render-sprites.mjs",
+ "scales": [
+  "1x",
+  "2x"
+ ],
+ "note": "w and h are px at @1x. anchor is px at @1x from the top left. Hobs face right; flip them for the right-hand fort.",
+ "sprites": [
+  {
+   "name": "block_wicker_fresh",
+   "group": "blocks",
+   "purpose": "Wicker block, fresh. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_wicker_fresh.svg",
+   "files": {
+    "1x": "sprites/block_wicker_fresh.png",
+    "2x": "sprites/block_wicker_fresh@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_wicker_scuffed",
+   "group": "blocks",
+   "purpose": "Wicker block, scuffed. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_wicker_scuffed.svg",
+   "files": {
+    "1x": "sprites/block_wicker_scuffed.png",
+    "2x": "sprites/block_wicker_scuffed@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_wicker_battered",
+   "group": "blocks",
+   "purpose": "Wicker block, battered. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_wicker_battered.svg",
+   "files": {
+    "1x": "sprites/block_wicker_battered.png",
+    "2x": "sprites/block_wicker_battered@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_wicker_broken",
+   "group": "blocks",
+   "purpose": "Wicker block, broken (rubble shown for 1.5 s). One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_wicker_broken.svg",
+   "files": {
+    "1x": "sprites/block_wicker_broken.png",
+    "2x": "sprites/block_wicker_broken@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "palette_block_wicker",
+   "group": "ui",
+   "purpose": "Wicker block for the Workshop palette",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/palette_block_wicker.svg",
+   "files": {
+    "1x": "sprites/palette_block_wicker.png",
+    "2x": "sprites/palette_block_wicker@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_timber_fresh",
+   "group": "blocks",
+   "purpose": "Timber block, fresh. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_timber_fresh.svg",
+   "files": {
+    "1x": "sprites/block_timber_fresh.png",
+    "2x": "sprites/block_timber_fresh@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_timber_scuffed",
+   "group": "blocks",
+   "purpose": "Timber block, scuffed. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_timber_scuffed.svg",
+   "files": {
+    "1x": "sprites/block_timber_scuffed.png",
+    "2x": "sprites/block_timber_scuffed@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_timber_battered",
+   "group": "blocks",
+   "purpose": "Timber block, battered. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_timber_battered.svg",
+   "files": {
+    "1x": "sprites/block_timber_battered.png",
+    "2x": "sprites/block_timber_battered@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_timber_broken",
+   "group": "blocks",
+   "purpose": "Timber block, broken (rubble shown for 1.5 s). One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_timber_broken.svg",
+   "files": {
+    "1x": "sprites/block_timber_broken.png",
+    "2x": "sprites/block_timber_broken@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "palette_block_timber",
+   "group": "ui",
+   "purpose": "Timber block for the Workshop palette",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/palette_block_timber.svg",
+   "files": {
+    "1x": "sprites/palette_block_timber.png",
+    "2x": "sprites/palette_block_timber@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_cobble_fresh",
+   "group": "blocks",
+   "purpose": "Cobble block, fresh. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_cobble_fresh.svg",
+   "files": {
+    "1x": "sprites/block_cobble_fresh.png",
+    "2x": "sprites/block_cobble_fresh@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_cobble_scuffed",
+   "group": "blocks",
+   "purpose": "Cobble block, scuffed. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_cobble_scuffed.svg",
+   "files": {
+    "1x": "sprites/block_cobble_scuffed.png",
+    "2x": "sprites/block_cobble_scuffed@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_cobble_battered",
+   "group": "blocks",
+   "purpose": "Cobble block, battered. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_cobble_battered.svg",
+   "files": {
+    "1x": "sprites/block_cobble_battered.png",
+    "2x": "sprites/block_cobble_battered@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_cobble_broken",
+   "group": "blocks",
+   "purpose": "Cobble block, broken (rubble shown for 1.5 s). One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_cobble_broken.svg",
+   "files": {
+    "1x": "sprites/block_cobble_broken.png",
+    "2x": "sprites/block_cobble_broken@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "palette_block_cobble",
+   "group": "ui",
+   "purpose": "Cobble block for the Workshop palette",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/palette_block_cobble.svg",
+   "files": {
+    "1x": "sprites/palette_block_cobble.png",
+    "2x": "sprites/palette_block_cobble@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_footing_fresh",
+   "group": "blocks",
+   "purpose": "Footing block, fresh. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_footing_fresh.svg",
+   "files": {
+    "1x": "sprites/block_footing_fresh.png",
+    "2x": "sprites/block_footing_fresh@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_footing_scuffed",
+   "group": "blocks",
+   "purpose": "Footing block, scuffed. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_footing_scuffed.svg",
+   "files": {
+    "1x": "sprites/block_footing_scuffed.png",
+    "2x": "sprites/block_footing_scuffed@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_footing_battered",
+   "group": "blocks",
+   "purpose": "Footing block, battered. One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_footing_battered.svg",
+   "files": {
+    "1x": "sprites/block_footing_battered.png",
+    "2x": "sprites/block_footing_battered@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "block_footing_broken",
+   "group": "blocks",
+   "purpose": "Footing block, broken (rubble shown for 1.5 s). One block is 16 x 16 cells",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/block_footing_broken.svg",
+   "files": {
+    "1x": "sprites/block_footing_broken.png",
+    "2x": "sprites/block_footing_broken@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "palette_block_footing",
+   "group": "ui",
+   "purpose": "Footing block for the Workshop palette",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/palette_block_footing.svg",
+   "files": {
+    "1x": "sprites/palette_block_footing.png",
+    "2x": "sprites/palette_block_footing@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "nook",
+   "group": "fort",
+   "purpose": "Nook backdrop, 2 x 2 blocks. Draw behind the Hob",
+   "w": 32,
+   "h": 32,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/nook.svg",
+   "files": {
+    "1x": "sprites/nook.png",
+    "2x": "sprites/nook@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "kettle_room",
+   "group": "fort",
+   "purpose": "Kettle Room backdrop, 2 x 2 blocks. Draw behind the Heartkettle",
+   "w": 32,
+   "h": 32,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/kettle_room.svg",
+   "files": {
+    "1x": "sprites/kettle_room.png",
+    "2x": "sprites/kettle_room@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "loophole_open",
+   "group": "fort",
+   "purpose": "Loophole, open. Overlay on a wall block",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/loophole_open.svg",
+   "files": {
+    "1x": "sprites/loophole_open.png",
+    "2x": "sprites/loophole_open@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "loophole_flap_blue",
+   "group": "fort",
+   "purpose": "Loophole with its Flap down, blue team hem",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/loophole_flap_blue.svg",
+   "files": {
+    "1x": "sprites/loophole_flap_blue.png",
+    "2x": "sprites/loophole_flap_blue@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "loophole_flap_orange",
+   "group": "fort",
+   "purpose": "Loophole with its Flap down, orange team hem (hatched)",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/loophole_flap_orange.svg",
+   "files": {
+    "1x": "sprites/loophole_flap_orange.png",
+    "2x": "sprites/loophole_flap_orange@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "flag_blue",
+   "group": "fort",
+   "purpose": "Fort flag, player 1: pennant, solid blue",
+   "w": 16,
+   "h": 24,
+   "anchor": [
+    4,
+    23
+   ],
+   "svg": "svg/flag_blue.svg",
+   "files": {
+    "1x": "sprites/flag_blue.png",
+    "2x": "sprites/flag_blue@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "flag_orange",
+   "group": "fort",
+   "purpose": "Fort flag, player 2: square, hatched orange",
+   "w": 16,
+   "h": 24,
+   "anchor": [
+    4,
+    23
+   ],
+   "svg": "svg/flag_orange.svg",
+   "files": {
+    "1x": "sprites/flag_orange.png",
+    "2x": "sprites/flag_orange@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "kettle_full",
+   "group": "kettle",
+   "purpose": "Heartkettle, full: clean copper, small wisp",
+   "w": 48,
+   "h": 40,
+   "anchor": [
+    18.21,
+    35.31
+   ],
+   "svg": "svg/kettle_full.svg",
+   "files": {
+    "1x": "sprites/kettle_full.png",
+    "2x": "sprites/kettle_full@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "kettle_hurt",
+   "group": "kettle",
+   "purpose": "Heartkettle, hurt: one crack, thin steam",
+   "w": 48,
+   "h": 40,
+   "anchor": [
+    18.21,
+    35.31
+   ],
+   "svg": "svg/kettle_hurt.svg",
+   "files": {
+    "1x": "sprites/kettle_hurt.png",
+    "2x": "sprites/kettle_hurt@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "kettle_critical",
+   "group": "kettle",
+   "purpose": "Heartkettle, critical: crack web, lid rattles, steam puffs",
+   "w": 48,
+   "h": 40,
+   "anchor": [
+    18.21,
+    35.31
+   ],
+   "svg": "svg/kettle_critical.svg",
+   "files": {
+    "1x": "sprites/kettle_critical.png",
+    "2x": "sprites/kettle_critical@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "kettle_popped",
+   "group": "kettle",
+   "purpose": "Heartkettle, popped: lid off, glow out",
+   "w": 48,
+   "h": 40,
+   "anchor": [
+    18.21,
+    35.31
+   ],
+   "svg": "svg/kettle_popped.svg",
+   "files": {
+    "1x": "sprites/kettle_popped.png",
+    "2x": "sprites/kettle_popped@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "kettle_halo",
+   "group": "kettle",
+   "purpose": "Kettle glow halo. Draw behind the kettle, centre on its belly, pulse in code",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/kettle_halo.svg",
+   "files": {
+    "1x": "sprites/kettle_halo.png",
+    "2x": "sprites/kettle_halo@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "stomper_blue_0",
+   "group": "stompers",
+   "purpose": "Stomper leg, blue boot, walk frame 0. Hip pivot is the anchor",
+   "w": 32,
+   "h": 30,
+   "anchor": [
+    14.48,
+    4.57
+   ],
+   "svg": "svg/stomper_blue_0.svg",
+   "files": {
+    "1x": "sprites/stomper_blue_0.png",
+    "2x": "sprites/stomper_blue_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "stomper_blue_1",
+   "group": "stompers",
+   "purpose": "Stomper leg, blue boot, walk frame 1. Hip pivot is the anchor",
+   "w": 32,
+   "h": 30,
+   "anchor": [
+    14.48,
+    4.57
+   ],
+   "svg": "svg/stomper_blue_1.svg",
+   "files": {
+    "1x": "sprites/stomper_blue_1.png",
+    "2x": "sprites/stomper_blue_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "stomper_orange_0",
+   "group": "stompers",
+   "purpose": "Stomper leg, orange boot with hatched toe, walk frame 0. Hip pivot is the anchor",
+   "w": 32,
+   "h": 30,
+   "anchor": [
+    14.48,
+    4.57
+   ],
+   "svg": "svg/stomper_orange_0.svg",
+   "files": {
+    "1x": "sprites/stomper_orange_0.png",
+    "2x": "sprites/stomper_orange_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "stomper_orange_1",
+   "group": "stompers",
+   "purpose": "Stomper leg, orange boot with hatched toe, walk frame 1. Hip pivot is the anchor",
+   "w": 32,
+   "h": 30,
+   "anchor": [
+    14.48,
+    4.57
+   ],
+   "svg": "svg/stomper_orange_1.svg",
+   "files": {
+    "1x": "sprites/stomper_orange_1.png",
+    "2x": "sprites/stomper_orange_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_idle_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_blue_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_idle_0.png",
+    "2x": "sprites/hob_marge_blue_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_idle_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_blue_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_idle_1.png",
+    "2x": "sprites/hob_marge_blue_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_idle_2",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_blue_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_idle_2.png",
+    "2x": "sprites/hob_marge_blue_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_aim_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_blue_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_aim_0.png",
+    "2x": "sprites/hob_marge_blue_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_aim_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_blue_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_aim_1.png",
+    "2x": "sprites/hob_marge_blue_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_fire_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_blue_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_fire_0.png",
+    "2x": "sprites/hob_marge_blue_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_fire_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_blue_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_fire_1.png",
+    "2x": "sprites/hob_marge_blue_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_hit_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_blue_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_hit_0.png",
+    "2x": "sprites/hob_marge_blue_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_hit_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_blue_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_hit_1.png",
+    "2x": "sprites/hob_marge_blue_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_bonked_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_marge_blue_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_bonked_0.png",
+    "2x": "sprites/hob_marge_blue_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_bonked_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_marge_blue_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_bonked_1.png",
+    "2x": "sprites/hob_marge_blue_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_cheer_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_blue_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_cheer_0.png",
+    "2x": "sprites/hob_marge_blue_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_blue_cheer_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, blue team, cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_blue_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_blue_cheer_1.png",
+    "2x": "sprites/hob_marge_blue_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_idle_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_orange_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_idle_0.png",
+    "2x": "sprites/hob_marge_orange_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_idle_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_orange_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_idle_1.png",
+    "2x": "sprites/hob_marge_orange_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_idle_2",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_orange_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_idle_2.png",
+    "2x": "sprites/hob_marge_orange_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_aim_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_orange_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_aim_0.png",
+    "2x": "sprites/hob_marge_orange_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_aim_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_orange_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_aim_1.png",
+    "2x": "sprites/hob_marge_orange_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_fire_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_orange_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_fire_0.png",
+    "2x": "sprites/hob_marge_orange_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_fire_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_orange_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_fire_1.png",
+    "2x": "sprites/hob_marge_orange_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_hit_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_orange_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_hit_0.png",
+    "2x": "sprites/hob_marge_orange_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_hit_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_orange_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_hit_1.png",
+    "2x": "sprites/hob_marge_orange_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_bonked_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_marge_orange_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_bonked_0.png",
+    "2x": "sprites/hob_marge_orange_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_bonked_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_marge_orange_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_bonked_1.png",
+    "2x": "sprites/hob_marge_orange_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_cheer_0",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_orange_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_cheer_0.png",
+    "2x": "sprites/hob_marge_orange_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_marge_orange_cheer_1",
+   "group": "hobs",
+   "purpose": "Marge Dumpling, orange team (hatched scarf, diamond patch), cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_marge_orange_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_marge_orange_cheer_1.png",
+    "2x": "sprites/hob_marge_orange_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_marge_blue",
+   "group": "portraits",
+   "purpose": "Marge Dumpling portrait disc, blue team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_marge_blue.svg",
+   "files": {
+    "1x": "sprites/portrait_marge_blue.png",
+    "2x": "sprites/portrait_marge_blue@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_marge_orange",
+   "group": "portraits",
+   "purpose": "Marge Dumpling portrait disc, orange team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_marge_orange.svg",
+   "files": {
+    "1x": "sprites/portrait_marge_orange.png",
+    "2x": "sprites/portrait_marge_orange@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_idle_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_blue_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_idle_0.png",
+    "2x": "sprites/hob_quill_blue_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_idle_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_blue_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_idle_1.png",
+    "2x": "sprites/hob_quill_blue_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_idle_2",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_blue_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_idle_2.png",
+    "2x": "sprites/hob_quill_blue_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_aim_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_blue_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_aim_0.png",
+    "2x": "sprites/hob_quill_blue_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_aim_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_blue_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_aim_1.png",
+    "2x": "sprites/hob_quill_blue_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_fire_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_blue_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_fire_0.png",
+    "2x": "sprites/hob_quill_blue_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_fire_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_blue_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_fire_1.png",
+    "2x": "sprites/hob_quill_blue_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_hit_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_blue_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_hit_0.png",
+    "2x": "sprites/hob_quill_blue_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_hit_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_blue_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_hit_1.png",
+    "2x": "sprites/hob_quill_blue_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_bonked_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_quill_blue_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_bonked_0.png",
+    "2x": "sprites/hob_quill_blue_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_bonked_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_quill_blue_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_bonked_1.png",
+    "2x": "sprites/hob_quill_blue_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_cheer_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_blue_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_cheer_0.png",
+    "2x": "sprites/hob_quill_blue_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_blue_cheer_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, blue team, cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_blue_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_blue_cheer_1.png",
+    "2x": "sprites/hob_quill_blue_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_idle_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_orange_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_idle_0.png",
+    "2x": "sprites/hob_quill_orange_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_idle_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_orange_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_idle_1.png",
+    "2x": "sprites/hob_quill_orange_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_idle_2",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_orange_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_idle_2.png",
+    "2x": "sprites/hob_quill_orange_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_aim_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_orange_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_aim_0.png",
+    "2x": "sprites/hob_quill_orange_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_aim_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_orange_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_aim_1.png",
+    "2x": "sprites/hob_quill_orange_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_fire_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_orange_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_fire_0.png",
+    "2x": "sprites/hob_quill_orange_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_fire_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_orange_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_fire_1.png",
+    "2x": "sprites/hob_quill_orange_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_hit_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_orange_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_hit_0.png",
+    "2x": "sprites/hob_quill_orange_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_hit_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_orange_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_hit_1.png",
+    "2x": "sprites/hob_quill_orange_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_bonked_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_quill_orange_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_bonked_0.png",
+    "2x": "sprites/hob_quill_orange_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_bonked_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_quill_orange_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_bonked_1.png",
+    "2x": "sprites/hob_quill_orange_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_cheer_0",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_orange_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_cheer_0.png",
+    "2x": "sprites/hob_quill_orange_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_quill_orange_cheer_1",
+   "group": "hobs",
+   "purpose": "Quill Needlesworth, orange team (hatched scarf, diamond patch), cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_quill_orange_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_quill_orange_cheer_1.png",
+    "2x": "sprites/hob_quill_orange_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_quill_blue",
+   "group": "portraits",
+   "purpose": "Quill Needlesworth portrait disc, blue team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_quill_blue.svg",
+   "files": {
+    "1x": "sprites/portrait_quill_blue.png",
+    "2x": "sprites/portrait_quill_blue@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_quill_orange",
+   "group": "portraits",
+   "purpose": "Quill Needlesworth portrait disc, orange team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_quill_orange.svg",
+   "files": {
+    "1x": "sprites/portrait_quill_orange.png",
+    "2x": "sprites/portrait_quill_orange@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_idle_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_blue_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_idle_0.png",
+    "2x": "sprites/hob_jax_blue_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_idle_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_blue_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_idle_1.png",
+    "2x": "sprites/hob_jax_blue_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_idle_2",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_blue_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_idle_2.png",
+    "2x": "sprites/hob_jax_blue_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_aim_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_blue_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_aim_0.png",
+    "2x": "sprites/hob_jax_blue_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_aim_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_blue_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_aim_1.png",
+    "2x": "sprites/hob_jax_blue_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_fire_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_blue_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_fire_0.png",
+    "2x": "sprites/hob_jax_blue_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_fire_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_blue_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_fire_1.png",
+    "2x": "sprites/hob_jax_blue_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_hit_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_blue_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_hit_0.png",
+    "2x": "sprites/hob_jax_blue_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_hit_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_blue_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_hit_1.png",
+    "2x": "sprites/hob_jax_blue_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_bonked_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_jax_blue_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_bonked_0.png",
+    "2x": "sprites/hob_jax_blue_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_bonked_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_jax_blue_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_bonked_1.png",
+    "2x": "sprites/hob_jax_blue_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_cheer_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_blue_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_cheer_0.png",
+    "2x": "sprites/hob_jax_blue_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_blue_cheer_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, blue team, cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_blue_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_blue_cheer_1.png",
+    "2x": "sprites/hob_jax_blue_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_idle_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_orange_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_idle_0.png",
+    "2x": "sprites/hob_jax_orange_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_idle_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_orange_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_idle_1.png",
+    "2x": "sprites/hob_jax_orange_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_idle_2",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_orange_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_idle_2.png",
+    "2x": "sprites/hob_jax_orange_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_aim_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_orange_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_aim_0.png",
+    "2x": "sprites/hob_jax_orange_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_aim_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_orange_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_aim_1.png",
+    "2x": "sprites/hob_jax_orange_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_fire_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_orange_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_fire_0.png",
+    "2x": "sprites/hob_jax_orange_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_fire_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_orange_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_fire_1.png",
+    "2x": "sprites/hob_jax_orange_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_hit_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_orange_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_hit_0.png",
+    "2x": "sprites/hob_jax_orange_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_hit_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_orange_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_hit_1.png",
+    "2x": "sprites/hob_jax_orange_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_bonked_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_jax_orange_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_bonked_0.png",
+    "2x": "sprites/hob_jax_orange_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_bonked_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_jax_orange_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_bonked_1.png",
+    "2x": "sprites/hob_jax_orange_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_cheer_0",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_orange_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_cheer_0.png",
+    "2x": "sprites/hob_jax_orange_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_jax_orange_cheer_1",
+   "group": "hobs",
+   "purpose": "Jax Peppercorn, orange team (hatched scarf, diamond patch), cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_jax_orange_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_jax_orange_cheer_1.png",
+    "2x": "sprites/hob_jax_orange_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_jax_blue",
+   "group": "portraits",
+   "purpose": "Jax Peppercorn portrait disc, blue team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_jax_blue.svg",
+   "files": {
+    "1x": "sprites/portrait_jax_blue.png",
+    "2x": "sprites/portrait_jax_blue@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_jax_orange",
+   "group": "portraits",
+   "purpose": "Jax Peppercorn portrait disc, orange team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_jax_orange.svg",
+   "files": {
+    "1x": "sprites/portrait_jax_orange.png",
+    "2x": "sprites/portrait_jax_orange@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_idle_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_blue_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_idle_0.png",
+    "2x": "sprites/hob_grub_blue_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_idle_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_blue_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_idle_1.png",
+    "2x": "sprites/hob_grub_blue_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_idle_2",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_blue_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_idle_2.png",
+    "2x": "sprites/hob_grub_blue_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_aim_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_blue_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_aim_0.png",
+    "2x": "sprites/hob_grub_blue_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_aim_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_blue_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_aim_1.png",
+    "2x": "sprites/hob_grub_blue_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_fire_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_blue_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_fire_0.png",
+    "2x": "sprites/hob_grub_blue_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_fire_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_blue_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_fire_1.png",
+    "2x": "sprites/hob_grub_blue_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_hit_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_blue_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_hit_0.png",
+    "2x": "sprites/hob_grub_blue_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_hit_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_blue_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_hit_1.png",
+    "2x": "sprites/hob_grub_blue_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_bonked_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_grub_blue_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_bonked_0.png",
+    "2x": "sprites/hob_grub_blue_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_bonked_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_grub_blue_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_bonked_1.png",
+    "2x": "sprites/hob_grub_blue_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_cheer_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_blue_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_cheer_0.png",
+    "2x": "sprites/hob_grub_blue_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_blue_cheer_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, blue team, cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_blue_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_blue_cheer_1.png",
+    "2x": "sprites/hob_grub_blue_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_idle_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_orange_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_idle_0.png",
+    "2x": "sprites/hob_grub_orange_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_idle_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_orange_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_idle_1.png",
+    "2x": "sprites/hob_grub_orange_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_idle_2",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_orange_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_idle_2.png",
+    "2x": "sprites/hob_grub_orange_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_aim_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_orange_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_aim_0.png",
+    "2x": "sprites/hob_grub_orange_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_aim_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_orange_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_aim_1.png",
+    "2x": "sprites/hob_grub_orange_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_fire_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_orange_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_fire_0.png",
+    "2x": "sprites/hob_grub_orange_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_fire_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_orange_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_fire_1.png",
+    "2x": "sprites/hob_grub_orange_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_hit_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_orange_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_hit_0.png",
+    "2x": "sprites/hob_grub_orange_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_hit_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_orange_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_hit_1.png",
+    "2x": "sprites/hob_grub_orange_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_bonked_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_grub_orange_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_bonked_0.png",
+    "2x": "sprites/hob_grub_orange_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_bonked_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_grub_orange_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_bonked_1.png",
+    "2x": "sprites/hob_grub_orange_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_cheer_0",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_orange_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_cheer_0.png",
+    "2x": "sprites/hob_grub_orange_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_grub_orange_cheer_1",
+   "group": "hobs",
+   "purpose": "Grub Mudgett, orange team (hatched scarf, diamond patch), cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_grub_orange_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_grub_orange_cheer_1.png",
+    "2x": "sprites/hob_grub_orange_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_grub_blue",
+   "group": "portraits",
+   "purpose": "Grub Mudgett portrait disc, blue team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_grub_blue.svg",
+   "files": {
+    "1x": "sprites/portrait_grub_blue.png",
+    "2x": "sprites/portrait_grub_blue@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_grub_orange",
+   "group": "portraits",
+   "purpose": "Grub Mudgett portrait disc, orange team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_grub_orange.svg",
+   "files": {
+    "1x": "sprites/portrait_grub_orange.png",
+    "2x": "sprites/portrait_grub_orange@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_idle_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_blue_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_idle_0.png",
+    "2x": "sprites/hob_bobbin_blue_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_idle_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_blue_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_idle_1.png",
+    "2x": "sprites/hob_bobbin_blue_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_idle_2",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_blue_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_idle_2.png",
+    "2x": "sprites/hob_bobbin_blue_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_aim_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_blue_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_aim_0.png",
+    "2x": "sprites/hob_bobbin_blue_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_aim_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_blue_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_aim_1.png",
+    "2x": "sprites/hob_bobbin_blue_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_fire_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_blue_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_fire_0.png",
+    "2x": "sprites/hob_bobbin_blue_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_fire_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_blue_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_fire_1.png",
+    "2x": "sprites/hob_bobbin_blue_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_hit_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_blue_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_hit_0.png",
+    "2x": "sprites/hob_bobbin_blue_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_hit_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_blue_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_hit_1.png",
+    "2x": "sprites/hob_bobbin_blue_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_bonked_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_bobbin_blue_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_bonked_0.png",
+    "2x": "sprites/hob_bobbin_blue_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_bonked_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_bobbin_blue_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_bonked_1.png",
+    "2x": "sprites/hob_bobbin_blue_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_cheer_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_blue_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_cheer_0.png",
+    "2x": "sprites/hob_bobbin_blue_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_blue_cheer_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, blue team, cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_blue_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_blue_cheer_1.png",
+    "2x": "sprites/hob_bobbin_blue_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_idle_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_orange_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_idle_0.png",
+    "2x": "sprites/hob_bobbin_orange_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_idle_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_orange_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_idle_1.png",
+    "2x": "sprites/hob_bobbin_orange_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_idle_2",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_orange_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_idle_2.png",
+    "2x": "sprites/hob_bobbin_orange_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_aim_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_orange_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_aim_0.png",
+    "2x": "sprites/hob_bobbin_orange_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_aim_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_orange_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_aim_1.png",
+    "2x": "sprites/hob_bobbin_orange_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_fire_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_orange_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_fire_0.png",
+    "2x": "sprites/hob_bobbin_orange_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_fire_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_orange_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_fire_1.png",
+    "2x": "sprites/hob_bobbin_orange_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_hit_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_orange_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_hit_0.png",
+    "2x": "sprites/hob_bobbin_orange_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_hit_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_orange_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_hit_1.png",
+    "2x": "sprites/hob_bobbin_orange_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_bonked_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_bobbin_orange_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_bonked_0.png",
+    "2x": "sprites/hob_bobbin_orange_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_bonked_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_bobbin_orange_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_bonked_1.png",
+    "2x": "sprites/hob_bobbin_orange_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_cheer_0",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_orange_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_cheer_0.png",
+    "2x": "sprites/hob_bobbin_orange_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_bobbin_orange_cheer_1",
+   "group": "hobs",
+   "purpose": "Bobbin Springheel, orange team (hatched scarf, diamond patch), cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_bobbin_orange_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_bobbin_orange_cheer_1.png",
+    "2x": "sprites/hob_bobbin_orange_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_bobbin_blue",
+   "group": "portraits",
+   "purpose": "Bobbin Springheel portrait disc, blue team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_bobbin_blue.svg",
+   "files": {
+    "1x": "sprites/portrait_bobbin_blue.png",
+    "2x": "sprites/portrait_bobbin_blue@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_bobbin_orange",
+   "group": "portraits",
+   "purpose": "Bobbin Springheel portrait disc, orange team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_bobbin_orange.svg",
+   "files": {
+    "1x": "sprites/portrait_bobbin_orange.png",
+    "2x": "sprites/portrait_bobbin_orange@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_idle_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_blue_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_idle_0.png",
+    "2x": "sprites/hob_hetty_blue_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_idle_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_blue_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_idle_1.png",
+    "2x": "sprites/hob_hetty_blue_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_idle_2",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_blue_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_idle_2.png",
+    "2x": "sprites/hob_hetty_blue_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_aim_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_blue_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_aim_0.png",
+    "2x": "sprites/hob_hetty_blue_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_aim_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_blue_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_aim_1.png",
+    "2x": "sprites/hob_hetty_blue_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_fire_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_blue_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_fire_0.png",
+    "2x": "sprites/hob_hetty_blue_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_fire_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_blue_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_fire_1.png",
+    "2x": "sprites/hob_hetty_blue_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_hit_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_blue_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_hit_0.png",
+    "2x": "sprites/hob_hetty_blue_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_hit_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_blue_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_hit_1.png",
+    "2x": "sprites/hob_hetty_blue_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_bonked_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_hetty_blue_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_bonked_0.png",
+    "2x": "sprites/hob_hetty_blue_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_bonked_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_hetty_blue_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_bonked_1.png",
+    "2x": "sprites/hob_hetty_blue_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_cheer_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_blue_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_cheer_0.png",
+    "2x": "sprites/hob_hetty_blue_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_blue_cheer_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, blue team, cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_blue_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_blue_cheer_1.png",
+    "2x": "sprites/hob_hetty_blue_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_idle_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_orange_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_idle_0.png",
+    "2x": "sprites/hob_hetty_orange_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_idle_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_orange_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_idle_1.png",
+    "2x": "sprites/hob_hetty_orange_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_idle_2",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_orange_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_idle_2.png",
+    "2x": "sprites/hob_hetty_orange_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_aim_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_orange_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_aim_0.png",
+    "2x": "sprites/hob_hetty_orange_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_aim_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_orange_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_aim_1.png",
+    "2x": "sprites/hob_hetty_orange_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_fire_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_orange_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_fire_0.png",
+    "2x": "sprites/hob_hetty_orange_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_fire_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_orange_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_fire_1.png",
+    "2x": "sprites/hob_hetty_orange_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_hit_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_orange_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_hit_0.png",
+    "2x": "sprites/hob_hetty_orange_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_hit_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_orange_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_hit_1.png",
+    "2x": "sprites/hob_hetty_orange_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_bonked_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_hetty_orange_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_bonked_0.png",
+    "2x": "sprites/hob_hetty_orange_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_bonked_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_hetty_orange_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_bonked_1.png",
+    "2x": "sprites/hob_hetty_orange_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_cheer_0",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_orange_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_cheer_0.png",
+    "2x": "sprites/hob_hetty_orange_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_hetty_orange_cheer_1",
+   "group": "hobs",
+   "purpose": "Hetty Mortarboard, orange team (hatched scarf, diamond patch), cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_hetty_orange_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_hetty_orange_cheer_1.png",
+    "2x": "sprites/hob_hetty_orange_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_hetty_blue",
+   "group": "portraits",
+   "purpose": "Hetty Mortarboard portrait disc, blue team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_hetty_blue.svg",
+   "files": {
+    "1x": "sprites/portrait_hetty_blue.png",
+    "2x": "sprites/portrait_hetty_blue@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_hetty_orange",
+   "group": "portraits",
+   "purpose": "Hetty Mortarboard portrait disc, orange team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_hetty_orange.svg",
+   "files": {
+    "1x": "sprites/portrait_hetty_orange.png",
+    "2x": "sprites/portrait_hetty_orange@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_idle_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_blue_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_idle_0.png",
+    "2x": "sprites/hob_thumper_blue_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_idle_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_blue_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_idle_1.png",
+    "2x": "sprites/hob_thumper_blue_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_idle_2",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_blue_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_idle_2.png",
+    "2x": "sprites/hob_thumper_blue_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_aim_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_blue_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_aim_0.png",
+    "2x": "sprites/hob_thumper_blue_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_aim_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_blue_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_aim_1.png",
+    "2x": "sprites/hob_thumper_blue_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_fire_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_blue_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_fire_0.png",
+    "2x": "sprites/hob_thumper_blue_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_fire_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_blue_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_fire_1.png",
+    "2x": "sprites/hob_thumper_blue_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_hit_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_blue_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_hit_0.png",
+    "2x": "sprites/hob_thumper_blue_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_hit_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_blue_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_hit_1.png",
+    "2x": "sprites/hob_thumper_blue_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_bonked_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_thumper_blue_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_bonked_0.png",
+    "2x": "sprites/hob_thumper_blue_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_bonked_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_thumper_blue_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_bonked_1.png",
+    "2x": "sprites/hob_thumper_blue_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_cheer_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_blue_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_cheer_0.png",
+    "2x": "sprites/hob_thumper_blue_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_blue_cheer_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, blue team, cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_blue_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_blue_cheer_1.png",
+    "2x": "sprites/hob_thumper_blue_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_idle_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_orange_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_idle_0.png",
+    "2x": "sprites/hob_thumper_orange_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_idle_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_orange_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_idle_1.png",
+    "2x": "sprites/hob_thumper_orange_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_idle_2",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_orange_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_idle_2.png",
+    "2x": "sprites/hob_thumper_orange_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_aim_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_orange_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_aim_0.png",
+    "2x": "sprites/hob_thumper_orange_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_aim_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_orange_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_aim_1.png",
+    "2x": "sprites/hob_thumper_orange_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_fire_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_orange_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_fire_0.png",
+    "2x": "sprites/hob_thumper_orange_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_fire_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_orange_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_fire_1.png",
+    "2x": "sprites/hob_thumper_orange_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_hit_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_orange_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_hit_0.png",
+    "2x": "sprites/hob_thumper_orange_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_hit_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_orange_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_hit_1.png",
+    "2x": "sprites/hob_thumper_orange_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_bonked_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_thumper_orange_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_bonked_0.png",
+    "2x": "sprites/hob_thumper_orange_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_bonked_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_thumper_orange_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_bonked_1.png",
+    "2x": "sprites/hob_thumper_orange_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_cheer_0",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_orange_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_cheer_0.png",
+    "2x": "sprites/hob_thumper_orange_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_thumper_orange_cheer_1",
+   "group": "hobs",
+   "purpose": "Old Thumper Grumbleby, orange team (hatched scarf, diamond patch), cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_thumper_orange_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_thumper_orange_cheer_1.png",
+    "2x": "sprites/hob_thumper_orange_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_thumper_blue",
+   "group": "portraits",
+   "purpose": "Old Thumper Grumbleby portrait disc, blue team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_thumper_blue.svg",
+   "files": {
+    "1x": "sprites/portrait_thumper_blue.png",
+    "2x": "sprites/portrait_thumper_blue@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_thumper_orange",
+   "group": "portraits",
+   "purpose": "Old Thumper Grumbleby portrait disc, orange team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_thumper_orange.svg",
+   "files": {
+    "1x": "sprites/portrait_thumper_orange.png",
+    "2x": "sprites/portrait_thumper_orange@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_idle_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_blue_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_idle_0.png",
+    "2x": "sprites/hob_nan_blue_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_idle_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_blue_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_idle_1.png",
+    "2x": "sprites/hob_nan_blue_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_idle_2",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_blue_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_idle_2.png",
+    "2x": "sprites/hob_nan_blue_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_aim_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_blue_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_aim_0.png",
+    "2x": "sprites/hob_nan_blue_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_aim_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_blue_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_aim_1.png",
+    "2x": "sprites/hob_nan_blue_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_fire_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_blue_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_fire_0.png",
+    "2x": "sprites/hob_nan_blue_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_fire_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_blue_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_fire_1.png",
+    "2x": "sprites/hob_nan_blue_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_hit_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_blue_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_hit_0.png",
+    "2x": "sprites/hob_nan_blue_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_hit_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_blue_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_hit_1.png",
+    "2x": "sprites/hob_nan_blue_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_bonked_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_nan_blue_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_bonked_0.png",
+    "2x": "sprites/hob_nan_blue_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_bonked_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_nan_blue_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_bonked_1.png",
+    "2x": "sprites/hob_nan_blue_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_cheer_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_blue_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_cheer_0.png",
+    "2x": "sprites/hob_nan_blue_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_blue_cheer_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, blue team, cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_blue_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_blue_cheer_1.png",
+    "2x": "sprites/hob_nan_blue_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_idle_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), idle frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_orange_idle_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_idle_0.png",
+    "2x": "sprites/hob_nan_orange_idle_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_idle_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), idle frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_orange_idle_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_idle_1.png",
+    "2x": "sprites/hob_nan_orange_idle_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_idle_2",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), idle frame 2. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_orange_idle_2.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_idle_2.png",
+    "2x": "sprites/hob_nan_orange_idle_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_aim_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), aim frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_orange_aim_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_aim_0.png",
+    "2x": "sprites/hob_nan_orange_aim_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_aim_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), aim frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_orange_aim_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_aim_1.png",
+    "2x": "sprites/hob_nan_orange_aim_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_fire_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), fire frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_orange_fire_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_fire_0.png",
+    "2x": "sprites/hob_nan_orange_fire_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_fire_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), fire frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_orange_fire_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_fire_1.png",
+    "2x": "sprites/hob_nan_orange_fire_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_hit_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), hit frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_orange_hit_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_hit_0.png",
+    "2x": "sprites/hob_nan_orange_hit_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_hit_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), hit frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_orange_hit_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_hit_1.png",
+    "2x": "sprites/hob_nan_orange_hit_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_bonked_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), bonked frame 0, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_nan_orange_bonked_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_bonked_0.png",
+    "2x": "sprites/hob_nan_orange_bonked_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_bonked_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), bonked frame 1, with Snooze Balloon. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 116,
+   "anchor": [
+    30,
+    112
+   ],
+   "svg": "svg/hob_nan_orange_bonked_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_bonked_1.png",
+    "2x": "sprites/hob_nan_orange_bonked_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_cheer_0",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), cheer frame 0. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_orange_cheer_0.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_cheer_0.png",
+    "2x": "sprites/hob_nan_orange_cheer_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "hob_nan_orange_cheer_1",
+   "group": "hobs",
+   "purpose": "Nan Clatterpot, orange team (hatched scarf, diamond patch), cheer frame 1. Faces right. Anchor is the feet",
+   "w": 72,
+   "h": 80,
+   "anchor": [
+    30,
+    76
+   ],
+   "svg": "svg/hob_nan_orange_cheer_1.svg",
+   "files": {
+    "1x": "sprites/hob_nan_orange_cheer_1.png",
+    "2x": "sprites/hob_nan_orange_cheer_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_nan_blue",
+   "group": "portraits",
+   "purpose": "Nan Clatterpot portrait disc, blue team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_nan_blue.svg",
+   "files": {
+    "1x": "sprites/portrait_nan_blue.png",
+    "2x": "sprites/portrait_nan_blue@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "portrait_nan_orange",
+   "group": "portraits",
+   "purpose": "Nan Clatterpot portrait disc, orange team. Sits inside a crew ring",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/portrait_nan_orange.svg",
+   "files": {
+    "1x": "sprites/portrait_nan_orange.png",
+    "2x": "sprites/portrait_nan_orange@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_clodpot",
+   "group": "shells",
+   "purpose": "Clodpot, Lobber Plain Shot (Blast). In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_clodpot.svg",
+   "files": {
+    "1x": "sprites/shell_clodpot.png",
+    "2x": "sprites/shell_clodpot@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_clodpot",
+   "group": "icons",
+   "purpose": "Clodpot, Lobber Plain Shot (Blast). Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_clodpot.svg",
+   "files": {
+    "1x": "sprites/icon_clodpot.png",
+    "2x": "sprites/icon_clodpot@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_gravel",
+   "group": "shells",
+   "purpose": "Gravel Sneeze stone, Scatterjack Plain Shot (Blast). Fire three in a fan. In flight",
+   "w": 10,
+   "h": 10,
+   "anchor": [
+    5,
+    5
+   ],
+   "svg": "svg/shell_gravel.svg",
+   "files": {
+    "1x": "sprites/shell_gravel.png",
+    "2x": "sprites/shell_gravel@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_nibbler",
+   "group": "shells",
+   "purpose": "Nibbler, Delver Plain Shot (Dig). Toothy grub, mouth to the right. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_nibbler.svg",
+   "files": {
+    "1x": "sprites/shell_nibbler.png",
+    "2x": "sprites/shell_nibbler@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_nibbler",
+   "group": "icons",
+   "purpose": "Nibbler, Delver Plain Shot (Dig). Toothy grub, mouth to the right. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_nibbler.svg",
+   "files": {
+    "1x": "sprites/icon_nibbler.png",
+    "2x": "sprites/icon_nibbler@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_bouncebean",
+   "group": "shells",
+   "purpose": "Bouncebean, Boinker Plain Shot (Blast). Bean with a grin. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_bouncebean.svg",
+   "files": {
+    "1x": "sprites/shell_bouncebean.png",
+    "2x": "sprites/shell_bouncebean@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_bouncebean",
+   "group": "icons",
+   "purpose": "Bouncebean, Boinker Plain Shot (Blast). Bean with a grin. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_bouncebean.svg",
+   "files": {
+    "1x": "sprites/icon_bouncebean.png",
+    "2x": "sprites/icon_bouncebean@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_bouncebean_squash",
+   "group": "shells",
+   "purpose": "Bouncebean, squashed frame for each hop. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_bouncebean_squash.svg",
+   "files": {
+    "1x": "sprites/shell_bouncebean_squash.png",
+    "2x": "sprites/shell_bouncebean_squash@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_mendglob",
+   "group": "shells",
+   "purpose": "Mendglob, Patcher Plain Shot (mend). Mortar glob with a plus. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_mendglob.svg",
+   "files": {
+    "1x": "sprites/shell_mendglob.png",
+    "2x": "sprites/shell_mendglob@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_mendglob",
+   "group": "icons",
+   "purpose": "Mendglob, Patcher Plain Shot (mend). Mortar glob with a plus. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_mendglob.svg",
+   "files": {
+    "1x": "sprites/icon_mendglob.png",
+    "2x": "sprites/icon_mendglob@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_pudding_bomb",
+   "group": "shells",
+   "purpose": "Pudding Bomb Trick Shell (Blast, huge soft blast). Wobbly pudding with a cherry. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_pudding_bomb.svg",
+   "files": {
+    "1x": "sprites/shell_pudding_bomb.png",
+    "2x": "sprites/shell_pudding_bomb@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_pudding_bomb",
+   "group": "icons",
+   "purpose": "Pudding Bomb Trick Shell (Blast, huge soft blast). Wobbly pudding with a cherry. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_pudding_bomb.svg",
+   "files": {
+    "1x": "sprites/icon_pudding_bomb.png",
+    "2x": "sprites/icon_pudding_bomb@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_lid_lifter",
+   "group": "shells",
+   "purpose": "Lid Lifter Trick Shell (Blast, goes up the column). Pot lid on a spring. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_lid_lifter.svg",
+   "files": {
+    "1x": "sprites/shell_lid_lifter.png",
+    "2x": "sprites/shell_lid_lifter@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_lid_lifter",
+   "group": "icons",
+   "purpose": "Lid Lifter Trick Shell (Blast, goes up the column). Pot lid on a spring. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_lid_lifter.svg",
+   "files": {
+    "1x": "sprites/icon_lid_lifter.png",
+    "2x": "sprites/icon_lid_lifter@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_marble_sack",
+   "group": "shells",
+   "purpose": "Marble Sack Trick Shell (Blast, splits into 8 marbles). Drawstring bag. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_marble_sack.svg",
+   "files": {
+    "1x": "sprites/shell_marble_sack.png",
+    "2x": "sprites/shell_marble_sack@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_marble_sack",
+   "group": "icons",
+   "purpose": "Marble Sack Trick Shell (Blast, splits into 8 marbles). Drawstring bag. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_marble_sack.svg",
+   "files": {
+    "1x": "sprites/icon_marble_sack.png",
+    "2x": "sprites/icon_marble_sack@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_marble",
+   "group": "shells",
+   "purpose": "Marble from the Marble Sack. Rolls downhill and pops. In flight",
+   "w": 10,
+   "h": 10,
+   "anchor": [
+    5,
+    5
+   ],
+   "svg": "svg/shell_marble.svg",
+   "files": {
+    "1x": "sprites/shell_marble.png",
+    "2x": "sprites/shell_marble@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_nosy_goose",
+   "group": "shells",
+   "purpose": "Nosy Goose Trick Shell (Pierce, bends toward a Hob it sees). Goose head, neck out. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_nosy_goose.svg",
+   "files": {
+    "1x": "sprites/shell_nosy_goose.png",
+    "2x": "sprites/shell_nosy_goose@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_nosy_goose",
+   "group": "icons",
+   "purpose": "Nosy Goose Trick Shell (Pierce, bends toward a Hob it sees). Goose head, neck out. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_nosy_goose.svg",
+   "files": {
+    "1x": "sprites/icon_nosy_goose.png",
+    "2x": "sprites/icon_nosy_goose@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_mole_mail",
+   "group": "shells",
+   "purpose": "Mole Mail Trick Shell (Dig, tunnels through the hill). Mole with a letter. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_mole_mail.svg",
+   "files": {
+    "1x": "sprites/shell_mole_mail.png",
+    "2x": "sprites/shell_mole_mail@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_mole_mail",
+   "group": "icons",
+   "purpose": "Mole Mail Trick Shell (Dig, tunnels through the hill). Mole with a letter. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_mole_mail.svg",
+   "files": {
+    "1x": "sprites/icon_mole_mail.png",
+    "2x": "sprites/icon_mole_mail@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_old_turnip",
+   "group": "shells",
+   "purpose": "Old Turnip Trick Shell (dud). It is a turnip. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_old_turnip.svg",
+   "files": {
+    "1x": "sprites/shell_old_turnip.png",
+    "2x": "sprites/shell_old_turnip@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_old_turnip",
+   "group": "icons",
+   "purpose": "Old Turnip Trick Shell (dud). It is a turnip. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_old_turnip.svg",
+   "files": {
+    "1x": "sprites/icon_old_turnip.png",
+    "2x": "sprites/icon_old_turnip@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_rubber_radish",
+   "group": "shells",
+   "purpose": "Rubber Radish Trick Shell (Blast, five bouncing pops). Radish with a grin. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_rubber_radish.svg",
+   "files": {
+    "1x": "sprites/shell_rubber_radish.png",
+    "2x": "sprites/shell_rubber_radish@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_rubber_radish",
+   "group": "icons",
+   "purpose": "Rubber Radish Trick Shell (Blast, five bouncing pops). Radish with a grin. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_rubber_radish.svg",
+   "files": {
+    "1x": "sprites/icon_rubber_radish.png",
+    "2x": "sprites/icon_rubber_radish@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_sod_sack",
+   "group": "shells",
+   "purpose": "Sod Sack Trick Shell (builds a heap of dirt). Sack spilling soil. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_sod_sack.svg",
+   "files": {
+    "1x": "sprites/shell_sod_sack.png",
+    "2x": "sprites/shell_sod_sack@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_sod_sack",
+   "group": "icons",
+   "purpose": "Sod Sack Trick Shell (builds a heap of dirt). Sack spilling soil. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_sod_sack.svg",
+   "files": {
+    "1x": "sprites/icon_sod_sack.png",
+    "2x": "sprites/icon_sod_sack@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_mend_bucket",
+   "group": "shells",
+   "purpose": "Mend Bucket Doodad (mends 3 blocks). Bucket of mortar with a trowel. In flight",
+   "w": 20,
+   "h": 20,
+   "anchor": [
+    10,
+    10
+   ],
+   "svg": "svg/shell_mend_bucket.svg",
+   "files": {
+    "1x": "sprites/shell_mend_bucket.png",
+    "2x": "sprites/shell_mend_bucket@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_mend_bucket",
+   "group": "icons",
+   "purpose": "Mend Bucket Doodad (mends 3 blocks). Bucket of mortar with a trowel. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_mend_bucket.svg",
+   "files": {
+    "1x": "sprites/icon_mend_bucket.png",
+    "2x": "sprites/icon_mend_bucket@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_pot_lid",
+   "group": "shells",
+   "purpose": "Pot Lid Doodad (a Hob holds it over a room; first shell bounces off). In flight",
+   "w": 32,
+   "h": 32,
+   "anchor": [
+    16,
+    16
+   ],
+   "svg": "svg/shell_pot_lid.svg",
+   "files": {
+    "1x": "sprites/shell_pot_lid.png",
+    "2x": "sprites/shell_pot_lid@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_pot_lid",
+   "group": "icons",
+   "purpose": "Pot Lid Doodad (a Hob holds it over a room; first shell bounces off). Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_pot_lid.svg",
+   "files": {
+    "1x": "sprites/icon_pot_lid.png",
+    "2x": "sprites/icon_pot_lid@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "shell_hatpin",
+   "group": "shells",
+   "purpose": "Hatpin, Zinger Plain Shot (Pierce). Long pin with a pearl head, point to the right. In flight",
+   "w": 40,
+   "h": 10,
+   "anchor": [
+    20,
+    5
+   ],
+   "svg": "svg/shell_hatpin.svg",
+   "files": {
+    "1x": "sprites/shell_hatpin.png",
+    "2x": "sprites/shell_hatpin@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_hatpin",
+   "group": "icons",
+   "purpose": "Hatpin, Zinger Plain Shot (Pierce). Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_hatpin.svg",
+   "files": {
+    "1x": "sprites/icon_hatpin.png",
+    "2x": "sprites/icon_hatpin@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "icon_gravel",
+   "group": "icons",
+   "purpose": "Gravel Sneeze, Scatterjack Plain Shot. Three stones in a fan. Tray and card icon",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/icon_gravel.svg",
+   "files": {
+    "1x": "sprites/icon_gravel.png",
+    "2x": "sprites/icon_gravel@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_small_0",
+   "group": "effects",
+   "purpose": "Explosion puff, small, frame 0 of 4. For Tiny and Small blasts. Scale so the burst matches the blast radius",
+   "w": 32,
+   "h": 32,
+   "anchor": [
+    16,
+    16
+   ],
+   "svg": "svg/fx_boom_small_0.svg",
+   "files": {
+    "1x": "sprites/fx_boom_small_0.png",
+    "2x": "sprites/fx_boom_small_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_small_1",
+   "group": "effects",
+   "purpose": "Explosion puff, small, frame 1 of 4. For Tiny and Small blasts. Scale so the burst matches the blast radius",
+   "w": 32,
+   "h": 32,
+   "anchor": [
+    16,
+    16
+   ],
+   "svg": "svg/fx_boom_small_1.svg",
+   "files": {
+    "1x": "sprites/fx_boom_small_1.png",
+    "2x": "sprites/fx_boom_small_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_small_2",
+   "group": "effects",
+   "purpose": "Explosion puff, small, frame 2 of 4. For Tiny and Small blasts. Scale so the burst matches the blast radius",
+   "w": 32,
+   "h": 32,
+   "anchor": [
+    16,
+    16
+   ],
+   "svg": "svg/fx_boom_small_2.svg",
+   "files": {
+    "1x": "sprites/fx_boom_small_2.png",
+    "2x": "sprites/fx_boom_small_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_small_3",
+   "group": "effects",
+   "purpose": "Explosion puff, small, frame 3 of 4. For Tiny and Small blasts. Scale so the burst matches the blast radius",
+   "w": 32,
+   "h": 32,
+   "anchor": [
+    16,
+    16
+   ],
+   "svg": "svg/fx_boom_small_3.svg",
+   "files": {
+    "1x": "sprites/fx_boom_small_3.png",
+    "2x": "sprites/fx_boom_small_3@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_medium_0",
+   "group": "effects",
+   "purpose": "Explosion puff, medium, frame 0 of 4. For Medium blasts. Scale so the burst matches the blast radius",
+   "w": 64,
+   "h": 64,
+   "anchor": [
+    32,
+    32
+   ],
+   "svg": "svg/fx_boom_medium_0.svg",
+   "files": {
+    "1x": "sprites/fx_boom_medium_0.png",
+    "2x": "sprites/fx_boom_medium_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_medium_1",
+   "group": "effects",
+   "purpose": "Explosion puff, medium, frame 1 of 4. For Medium blasts. Scale so the burst matches the blast radius",
+   "w": 64,
+   "h": 64,
+   "anchor": [
+    32,
+    32
+   ],
+   "svg": "svg/fx_boom_medium_1.svg",
+   "files": {
+    "1x": "sprites/fx_boom_medium_1.png",
+    "2x": "sprites/fx_boom_medium_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_medium_2",
+   "group": "effects",
+   "purpose": "Explosion puff, medium, frame 2 of 4. For Medium blasts. Scale so the burst matches the blast radius",
+   "w": 64,
+   "h": 64,
+   "anchor": [
+    32,
+    32
+   ],
+   "svg": "svg/fx_boom_medium_2.svg",
+   "files": {
+    "1x": "sprites/fx_boom_medium_2.png",
+    "2x": "sprites/fx_boom_medium_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_medium_3",
+   "group": "effects",
+   "purpose": "Explosion puff, medium, frame 3 of 4. For Medium blasts. Scale so the burst matches the blast radius",
+   "w": 64,
+   "h": 64,
+   "anchor": [
+    32,
+    32
+   ],
+   "svg": "svg/fx_boom_medium_3.svg",
+   "files": {
+    "1x": "sprites/fx_boom_medium_3.png",
+    "2x": "sprites/fx_boom_medium_3@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_large_0",
+   "group": "effects",
+   "purpose": "Explosion puff, large, frame 0 of 4. For Huge blasts. Scale so the burst matches the blast radius",
+   "w": 128,
+   "h": 128,
+   "anchor": [
+    64,
+    64
+   ],
+   "svg": "svg/fx_boom_large_0.svg",
+   "files": {
+    "1x": "sprites/fx_boom_large_0.png",
+    "2x": "sprites/fx_boom_large_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_large_1",
+   "group": "effects",
+   "purpose": "Explosion puff, large, frame 1 of 4. For Huge blasts. Scale so the burst matches the blast radius",
+   "w": 128,
+   "h": 128,
+   "anchor": [
+    64,
+    64
+   ],
+   "svg": "svg/fx_boom_large_1.svg",
+   "files": {
+    "1x": "sprites/fx_boom_large_1.png",
+    "2x": "sprites/fx_boom_large_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_large_2",
+   "group": "effects",
+   "purpose": "Explosion puff, large, frame 2 of 4. For Huge blasts. Scale so the burst matches the blast radius",
+   "w": 128,
+   "h": 128,
+   "anchor": [
+    64,
+    64
+   ],
+   "svg": "svg/fx_boom_large_2.svg",
+   "files": {
+    "1x": "sprites/fx_boom_large_2.png",
+    "2x": "sprites/fx_boom_large_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_boom_large_3",
+   "group": "effects",
+   "purpose": "Explosion puff, large, frame 3 of 4. For Huge blasts. Scale so the burst matches the blast radius",
+   "w": 128,
+   "h": 128,
+   "anchor": [
+    64,
+    64
+   ],
+   "svg": "svg/fx_boom_large_3.svg",
+   "files": {
+    "1x": "sprites/fx_boom_large_3.png",
+    "2x": "sprites/fx_boom_large_3@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_dust_0",
+   "group": "effects",
+   "purpose": "Dust puff, frame 0 of 3. Landing blocks, walking forts",
+   "w": 24,
+   "h": 16,
+   "anchor": [
+    12,
+    8
+   ],
+   "svg": "svg/fx_dust_0.svg",
+   "files": {
+    "1x": "sprites/fx_dust_0.png",
+    "2x": "sprites/fx_dust_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_dust_1",
+   "group": "effects",
+   "purpose": "Dust puff, frame 1 of 3. Landing blocks, walking forts",
+   "w": 24,
+   "h": 16,
+   "anchor": [
+    12,
+    8
+   ],
+   "svg": "svg/fx_dust_1.svg",
+   "files": {
+    "1x": "sprites/fx_dust_1.png",
+    "2x": "sprites/fx_dust_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_dust_2",
+   "group": "effects",
+   "purpose": "Dust puff, frame 2 of 3. Landing blocks, walking forts",
+   "w": 24,
+   "h": 16,
+   "anchor": [
+    12,
+    8
+   ],
+   "svg": "svg/fx_dust_2.svg",
+   "files": {
+    "1x": "sprites/fx_dust_2.png",
+    "2x": "sprites/fx_dust_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_wicker_0",
+   "group": "effects",
+   "purpose": "Debris chip 0, wicker. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_wicker_0.svg",
+   "files": {
+    "1x": "sprites/fx_chip_wicker_0.png",
+    "2x": "sprites/fx_chip_wicker_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_wicker_1",
+   "group": "effects",
+   "purpose": "Debris chip 1, wicker. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_wicker_1.svg",
+   "files": {
+    "1x": "sprites/fx_chip_wicker_1.png",
+    "2x": "sprites/fx_chip_wicker_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_wicker_2",
+   "group": "effects",
+   "purpose": "Debris chip 2, wicker. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_wicker_2.svg",
+   "files": {
+    "1x": "sprites/fx_chip_wicker_2.png",
+    "2x": "sprites/fx_chip_wicker_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_timber_0",
+   "group": "effects",
+   "purpose": "Debris chip 0, timber. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_timber_0.svg",
+   "files": {
+    "1x": "sprites/fx_chip_timber_0.png",
+    "2x": "sprites/fx_chip_timber_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_timber_1",
+   "group": "effects",
+   "purpose": "Debris chip 1, timber. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_timber_1.svg",
+   "files": {
+    "1x": "sprites/fx_chip_timber_1.png",
+    "2x": "sprites/fx_chip_timber_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_timber_2",
+   "group": "effects",
+   "purpose": "Debris chip 2, timber. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_timber_2.svg",
+   "files": {
+    "1x": "sprites/fx_chip_timber_2.png",
+    "2x": "sprites/fx_chip_timber_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_cobble_0",
+   "group": "effects",
+   "purpose": "Debris chip 0, cobble. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_cobble_0.svg",
+   "files": {
+    "1x": "sprites/fx_chip_cobble_0.png",
+    "2x": "sprites/fx_chip_cobble_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_cobble_1",
+   "group": "effects",
+   "purpose": "Debris chip 1, cobble. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_cobble_1.svg",
+   "files": {
+    "1x": "sprites/fx_chip_cobble_1.png",
+    "2x": "sprites/fx_chip_cobble_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_cobble_2",
+   "group": "effects",
+   "purpose": "Debris chip 2, cobble. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_cobble_2.svg",
+   "files": {
+    "1x": "sprites/fx_chip_cobble_2.png",
+    "2x": "sprites/fx_chip_cobble_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_footing_0",
+   "group": "effects",
+   "purpose": "Debris chip 0, footing. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_footing_0.svg",
+   "files": {
+    "1x": "sprites/fx_chip_footing_0.png",
+    "2x": "sprites/fx_chip_footing_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_footing_1",
+   "group": "effects",
+   "purpose": "Debris chip 1, footing. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_footing_1.svg",
+   "files": {
+    "1x": "sprites/fx_chip_footing_1.png",
+    "2x": "sprites/fx_chip_footing_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_footing_2",
+   "group": "effects",
+   "purpose": "Debris chip 2, footing. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_footing_2.svg",
+   "files": {
+    "1x": "sprites/fx_chip_footing_2.png",
+    "2x": "sprites/fx_chip_footing_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_dirt_0",
+   "group": "effects",
+   "purpose": "Debris chip 0, dirt. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_dirt_0.svg",
+   "files": {
+    "1x": "sprites/fx_chip_dirt_0.png",
+    "2x": "sprites/fx_chip_dirt_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_dirt_1",
+   "group": "effects",
+   "purpose": "Debris chip 1, dirt. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_dirt_1.svg",
+   "files": {
+    "1x": "sprites/fx_chip_dirt_1.png",
+    "2x": "sprites/fx_chip_dirt_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chip_dirt_2",
+   "group": "effects",
+   "purpose": "Debris chip 2, dirt. View only, spin and fade in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chip_dirt_2.svg",
+   "files": {
+    "1x": "sprites/fx_chip_dirt_2.png",
+    "2x": "sprites/fx_chip_dirt_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_shimmer",
+   "group": "effects",
+   "purpose": "Shimmer glint for a block on weak support. Slide across the block at 30% opacity",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/fx_shimmer.svg",
+   "files": {
+    "1x": "sprites/fx_shimmer.png",
+    "2x": "sprites/fx_shimmer@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_ghost_dot_p1",
+   "group": "effects",
+   "purpose": "Ghost arc dot, player 1 (round). Also the aim preview dot",
+   "w": 6,
+   "h": 6,
+   "anchor": [
+    3,
+    3
+   ],
+   "svg": "svg/fx_ghost_dot_p1.svg",
+   "files": {
+    "1x": "sprites/fx_ghost_dot_p1.png",
+    "2x": "sprites/fx_ghost_dot_p1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_ghost_dot_p2",
+   "group": "effects",
+   "purpose": "Ghost arc dot, player 2 (diamond)",
+   "w": 6,
+   "h": 6,
+   "anchor": [
+    3,
+    3
+   ],
+   "svg": "svg/fx_ghost_dot_p2.svg",
+   "files": {
+    "1x": "sprites/fx_ghost_dot_p2.png",
+    "2x": "sprites/fx_ghost_dot_p2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_ghost_dash_p1",
+   "group": "effects",
+   "purpose": "Ghost arc dash, player 1 (long dash). Rotate along the arc",
+   "w": 10,
+   "h": 4,
+   "anchor": [
+    5,
+    2
+   ],
+   "svg": "svg/fx_ghost_dash_p1.svg",
+   "files": {
+    "1x": "sprites/fx_ghost_dash_p1.png",
+    "2x": "sprites/fx_ghost_dash_p1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_pin_p1",
+   "group": "effects",
+   "purpose": "Pin, player 1: round blue head. Marks where a shot landed. Anchor is the tip",
+   "w": 12,
+   "h": 20,
+   "anchor": [
+    6,
+    19.5
+   ],
+   "svg": "svg/fx_pin_p1.svg",
+   "files": {
+    "1x": "sprites/fx_pin_p1.png",
+    "2x": "sprites/fx_pin_p1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_pin_p2",
+   "group": "effects",
+   "purpose": "Pin, player 2: diamond orange head, hatched. Anchor is the tip",
+   "w": 12,
+   "h": 20,
+   "anchor": [
+    6,
+    19.5
+   ],
+   "svg": "svg/fx_pin_p2.svg",
+   "files": {
+    "1x": "sprites/fx_pin_p2.png",
+    "2x": "sprites/fx_pin_p2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_star",
+   "group": "effects",
+   "purpose": "Gold star. Hit and Tumble stars, sparks",
+   "w": 10,
+   "h": 10,
+   "anchor": [
+    5,
+    5
+   ],
+   "svg": "svg/fx_star.svg",
+   "files": {
+    "1x": "sprites/fx_star.png",
+    "2x": "sprites/fx_star@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_heal_plus",
+   "group": "effects",
+   "purpose": "Mend sparkle with a plus. Mendglob and Mend Bucket",
+   "w": 12,
+   "h": 12,
+   "anchor": [
+    6,
+    6
+   ],
+   "svg": "svg/fx_heal_plus.svg",
+   "files": {
+    "1x": "sprites/fx_heal_plus.png",
+    "2x": "sprites/fx_heal_plus@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_trail_puff",
+   "group": "effects",
+   "purpose": "Trail puff behind a shell. Tint the rim by owner in code",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_trail_puff.svg",
+   "files": {
+    "1x": "sprites/fx_trail_puff.png",
+    "2x": "sprites/fx_trail_puff@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_chevron",
+   "group": "effects",
+   "purpose": "Down chevron for Lean Lines: this block or Hob will fall",
+   "w": 8,
+   "h": 8,
+   "anchor": [
+    4,
+    4
+   ],
+   "svg": "svg/fx_chevron.svg",
+   "files": {
+    "1x": "sprites/fx_chevron.png",
+    "2x": "sprites/fx_chevron@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_rest_cog",
+   "group": "effects",
+   "purpose": "Rest cog over a Hob that needs a rest. Turn it in code",
+   "w": 12,
+   "h": 12,
+   "anchor": [
+    6,
+    6
+   ],
+   "svg": "svg/fx_rest_cog.svg",
+   "files": {
+    "1x": "sprites/fx_rest_cog.png",
+    "2x": "sprites/fx_rest_cog@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_burn_0",
+   "group": "effects",
+   "purpose": "Burn flame, frame 0 of 3. Loop over a burning block or Hob",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    8,
+    15
+   ],
+   "svg": "svg/fx_burn_0.svg",
+   "files": {
+    "1x": "sprites/fx_burn_0.png",
+    "2x": "sprites/fx_burn_0@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_burn_1",
+   "group": "effects",
+   "purpose": "Burn flame, frame 1 of 3. Loop over a burning block or Hob",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    8,
+    15
+   ],
+   "svg": "svg/fx_burn_1.svg",
+   "files": {
+    "1x": "sprites/fx_burn_1.png",
+    "2x": "sprites/fx_burn_1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_burn_2",
+   "group": "effects",
+   "purpose": "Burn flame, frame 2 of 3. Loop over a burning block or Hob",
+   "w": 16,
+   "h": 16,
+   "anchor": [
+    8,
+    15
+   ],
+   "svg": "svg/fx_burn_2.svg",
+   "files": {
+    "1x": "sprites/fx_burn_2.png",
+    "2x": "sprites/fx_burn_2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_snooze_balloon",
+   "group": "effects",
+   "purpose": "Snooze Balloon alone (round). Use when a Bonked Hob floats off. Anchor is the string end",
+   "w": 40,
+   "h": 52,
+   "anchor": [
+    17,
+    49
+   ],
+   "svg": "svg/fx_snooze_balloon.svg",
+   "files": {
+    "1x": "sprites/fx_snooze_balloon.png",
+    "2x": "sprites/fx_snooze_balloon@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "fx_snooze_balloon_p2",
+   "group": "effects",
+   "purpose": "Snooze Balloon with the player 2 diamond tag on the string",
+   "w": 40,
+   "h": 52,
+   "anchor": [
+    17,
+    49
+   ],
+   "svg": "svg/fx_snooze_balloon_p2.svg",
+   "files": {
+    "1x": "sprites/fx_snooze_balloon_p2.png",
+    "2x": "sprites/fx_snooze_balloon_p2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "terrain_soil",
+   "group": "terrain",
+   "purpose": "Soil, the ground body under the grass. Tiles both ways",
+   "w": 64,
+   "h": 64,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/terrain_soil.svg",
+   "files": {
+    "1x": "sprites/terrain_soil.png",
+    "2x": "sprites/terrain_soil@2x.png"
+   },
+   "atlas": false,
+   "tile": "xy"
+  },
+  {
+   "name": "terrain_deep_soil",
+   "group": "terrain",
+   "purpose": "Deep soil, the lower ground band. Tiles both ways",
+   "w": 64,
+   "h": 64,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/terrain_deep_soil.svg",
+   "files": {
+    "1x": "sprites/terrain_deep_soil.png",
+    "2x": "sprites/terrain_deep_soil@2x.png"
+   },
+   "atlas": false,
+   "tile": "xy"
+  },
+  {
+   "name": "terrain_stone",
+   "group": "terrain",
+   "purpose": "Stone (Rock, puddingstone). Stops digging. Tiles both ways",
+   "w": 64,
+   "h": 64,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/terrain_stone.svg",
+   "files": {
+    "1x": "sprites/terrain_stone.png",
+    "2x": "sprites/terrain_stone@2x.png"
+   },
+   "atlas": false,
+   "tile": "xy"
+  },
+  {
+   "name": "terrain_loam",
+   "group": "terrain",
+   "purpose": "Loam, soft ground that digs easily. Tiles both ways",
+   "w": 64,
+   "h": 64,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/terrain_loam.svg",
+   "files": {
+    "1x": "sprites/terrain_loam.png",
+    "2x": "sprites/terrain_loam@2x.png"
+   },
+   "atlas": false,
+   "tile": "xy"
+  },
+  {
+   "name": "terrain_grass_top",
+   "group": "terrain",
+   "purpose": "Grass cap for the top of the ground, with soil under it. Repeats sideways only",
+   "w": 64,
+   "h": 64,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/terrain_grass_top.svg",
+   "files": {
+    "1x": "sprites/terrain_grass_top.png",
+    "2x": "sprites/terrain_grass_top@2x.png"
+   },
+   "atlas": false,
+   "tile": "x"
+  },
+  {
+   "name": "bg_downs_sky",
+   "group": "backgrounds",
+   "purpose": "Sky for Puddingstone Downs, far parallax layer. Repeats sideways",
+   "w": 1024,
+   "h": 512,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/bg_downs_sky.svg",
+   "files": {
+    "1x": "sprites/bg_downs_sky.png",
+    "2x": "sprites/bg_downs_sky@2x.png"
+   },
+   "atlas": false,
+   "tile": "x"
+  },
+  {
+   "name": "bg_downs_hills_far",
+   "group": "backgrounds",
+   "purpose": "Far hills for Puddingstone Downs, middle parallax layer. Clear above the hill line. Repeats sideways",
+   "w": 1024,
+   "h": 256,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/bg_downs_hills_far.svg",
+   "files": {
+    "1x": "sprites/bg_downs_hills_far.png",
+    "2x": "sprites/bg_downs_hills_far@2x.png"
+   },
+   "atlas": false,
+   "tile": "x"
+  },
+  {
+   "name": "bg_downs_hills_near",
+   "group": "backgrounds",
+   "purpose": "Near hills for Puddingstone Downs, front parallax layer. Clear above the hill line. Repeats sideways",
+   "w": 1024,
+   "h": 256,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/bg_downs_hills_near.svg",
+   "files": {
+    "1x": "sprites/bg_downs_hills_near.png",
+    "2x": "sprites/bg_downs_hills_near@2x.png"
+   },
+   "atlas": false,
+   "tile": "x"
+  },
+  {
+   "name": "ui_fire",
+   "group": "ui",
+   "purpose": "Fire button, up. Gold pill, no text",
+   "w": 80,
+   "h": 86,
+   "anchor": [
+    40,
+    40
+   ],
+   "svg": "svg/ui_fire.svg",
+   "files": {
+    "1x": "sprites/ui_fire.png",
+    "2x": "sprites/ui_fire@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_fire_pressed",
+   "group": "ui",
+   "purpose": "Fire button, pressed",
+   "w": 80,
+   "h": 86,
+   "anchor": [
+    40,
+    40
+   ],
+   "svg": "svg/ui_fire_pressed.svg",
+   "files": {
+    "1x": "sprites/ui_fire_pressed.png",
+    "2x": "sprites/ui_fire_pressed@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_fire_off",
+   "group": "ui",
+   "purpose": "Fire button, not usable (rival turn, Hob resting)",
+   "w": 80,
+   "h": 86,
+   "anchor": [
+    40,
+    40
+   ],
+   "svg": "svg/ui_fire_off.svg",
+   "files": {
+    "1x": "sprites/ui_fire_off.png",
+    "2x": "sprites/ui_fire_off@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_walk_right",
+   "group": "ui",
+   "purpose": "Walk right arrow. Costs Steam",
+   "w": 52,
+   "h": 58,
+   "anchor": [
+    26,
+    26
+   ],
+   "svg": "svg/ui_walk_right.svg",
+   "files": {
+    "1x": "sprites/ui_walk_right.png",
+    "2x": "sprites/ui_walk_right@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_walk_left",
+   "group": "ui",
+   "purpose": "Walk left arrow. Costs Steam",
+   "w": 52,
+   "h": 58,
+   "anchor": [
+    26,
+    26
+   ],
+   "svg": "svg/ui_walk_left.svg",
+   "files": {
+    "1x": "sprites/ui_walk_left.png",
+    "2x": "sprites/ui_walk_left@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_pause",
+   "group": "ui",
+   "purpose": "Pause button",
+   "w": 44,
+   "h": 50,
+   "anchor": [
+    22,
+    22
+   ],
+   "svg": "svg/ui_pause.svg",
+   "files": {
+    "1x": "sprites/ui_pause.png",
+    "2x": "sprites/ui_pause@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_chip",
+   "group": "ui",
+   "purpose": "Shot tray chip frame, normal. Put a 48 px shot icon on it",
+   "w": 60,
+   "h": 62,
+   "anchor": [
+    30,
+    31
+   ],
+   "svg": "svg/ui_chip.svg",
+   "files": {
+    "1x": "sprites/ui_chip.png",
+    "2x": "sprites/ui_chip@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_chip_selected",
+   "group": "ui",
+   "purpose": "Shot tray chip frame, selected (gold)",
+   "w": 60,
+   "h": 62,
+   "anchor": [
+    30,
+    31
+   ],
+   "svg": "svg/ui_chip_selected.svg",
+   "files": {
+    "1x": "sprites/ui_chip_selected.png",
+    "2x": "sprites/ui_chip_selected@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_chip_locked",
+   "group": "ui",
+   "purpose": "Shot tray chip frame, not usable (grey with a lock)",
+   "w": 60,
+   "h": 62,
+   "anchor": [
+    30,
+    31
+   ],
+   "svg": "svg/ui_chip_locked.svg",
+   "files": {
+    "1x": "sprites/ui_chip_locked.png",
+    "2x": "sprites/ui_chip_locked@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_chip_doodad",
+   "group": "ui",
+   "purpose": "Doodad chip frame: green, square corners, wrench dot",
+   "w": 60,
+   "h": 62,
+   "anchor": [
+    30,
+    31
+   ],
+   "svg": "svg/ui_chip_doodad.svg",
+   "files": {
+    "1x": "sprites/ui_chip_doodad.png",
+    "2x": "sprites/ui_chip_doodad@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_ring_p1",
+   "group": "ui",
+   "purpose": "Crew portrait ring, player 1: round, solid blue. Hollow middle for a 48 px portrait",
+   "w": 68,
+   "h": 68,
+   "anchor": [
+    34,
+    34
+   ],
+   "svg": "svg/ui_ring_p1.svg",
+   "files": {
+    "1x": "sprites/ui_ring_p1.png",
+    "2x": "sprites/ui_ring_p1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_ring_p1_active",
+   "group": "ui",
+   "purpose": "Crew portrait ring, player 1, the Hob whose turn it is (gold edge)",
+   "w": 68,
+   "h": 68,
+   "anchor": [
+    34,
+    34
+   ],
+   "svg": "svg/ui_ring_p1_active.svg",
+   "files": {
+    "1x": "sprites/ui_ring_p1_active.png",
+    "2x": "sprites/ui_ring_p1_active@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_ring_p2",
+   "group": "ui",
+   "purpose": "Crew portrait ring, player 2: diamond, hatched orange. Round hole for a 48 px portrait",
+   "w": 68,
+   "h": 68,
+   "anchor": [
+    34,
+    34
+   ],
+   "svg": "svg/ui_ring_p2.svg",
+   "files": {
+    "1x": "sprites/ui_ring_p2.png",
+    "2x": "sprites/ui_ring_p2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_ring_p2_active",
+   "group": "ui",
+   "purpose": "Crew portrait ring, player 2, the Hob whose turn it is (gold edge)",
+   "w": 68,
+   "h": 68,
+   "anchor": [
+    34,
+    34
+   ],
+   "svg": "svg/ui_ring_p2_active.svg",
+   "files": {
+    "1x": "sprites/ui_ring_p2_active.png",
+    "2x": "sprites/ui_ring_p2_active@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_ring_bonked",
+   "group": "ui",
+   "purpose": "Overlay for a Bonked Hob portrait: dim disc and a small balloon",
+   "w": 68,
+   "h": 68,
+   "anchor": [
+    34,
+    34
+   ],
+   "svg": "svg/ui_ring_bonked.svg",
+   "files": {
+    "1x": "sprites/ui_ring_bonked.png",
+    "2x": "sprites/ui_ring_bonked@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_wind_arrow",
+   "group": "ui",
+   "purpose": "Wind arrow, points right. Flip for left wind, scale length by strength",
+   "w": 48,
+   "h": 24,
+   "anchor": [
+    24,
+    12
+   ],
+   "svg": "svg/ui_wind_arrow.svg",
+   "files": {
+    "1x": "sprites/ui_wind_arrow.png",
+    "2x": "sprites/ui_wind_arrow@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_wind_leaf",
+   "group": "ui",
+   "purpose": "Wind leaf pip. One leaf per step of wind pull on a shell",
+   "w": 12,
+   "h": 12,
+   "anchor": [
+    6,
+    6
+   ],
+   "svg": "svg/ui_wind_leaf.svg",
+   "files": {
+    "1x": "sprites/ui_wind_leaf.png",
+    "2x": "sprites/ui_wind_leaf@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_squall",
+   "group": "ui",
+   "purpose": "Sudden Squall icon: storm cloud with wind streaks",
+   "w": 32,
+   "h": 32,
+   "anchor": [
+    16,
+    16
+   ],
+   "svg": "svg/ui_squall.svg",
+   "files": {
+    "1x": "sprites/ui_squall.png",
+    "2x": "sprites/ui_squall@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_pennant",
+   "group": "ui",
+   "purpose": "Pennant, won (gold swallow-tail flag). 3 per level",
+   "w": 20,
+   "h": 27,
+   "anchor": [
+    10,
+    13.5
+   ],
+   "svg": "svg/ui_pennant.svg",
+   "files": {
+    "1x": "sprites/ui_pennant.png",
+    "2x": "sprites/ui_pennant@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_pennant_empty",
+   "group": "ui",
+   "purpose": "Pennant, not won yet",
+   "w": 20,
+   "h": 27,
+   "anchor": [
+    10,
+    13.5
+   ],
+   "svg": "svg/ui_pennant_empty.svg",
+   "files": {
+    "1x": "sprites/ui_pennant_empty.png",
+    "2x": "sprites/ui_pennant_empty@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_button_coin",
+   "group": "ui",
+   "purpose": "Button coin: four-hole sewing button, the game currency",
+   "w": 24,
+   "h": 24,
+   "anchor": [
+    12,
+    12
+   ],
+   "svg": "svg/ui_button_coin.svg",
+   "files": {
+    "1x": "sprites/ui_button_coin.png",
+    "2x": "sprites/ui_button_coin@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_kettle_gauge_full",
+   "group": "ui",
+   "purpose": "Kettle gauge dial, full. Changes at 50% and 25% like the kettle sprite",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/ui_kettle_gauge_full.svg",
+   "files": {
+    "1x": "sprites/ui_kettle_gauge_full.png",
+    "2x": "sprites/ui_kettle_gauge_full@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_kettle_gauge_hurt",
+   "group": "ui",
+   "purpose": "Kettle gauge dial, hurt. Changes at 50% and 25% like the kettle sprite",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/ui_kettle_gauge_hurt.svg",
+   "files": {
+    "1x": "sprites/ui_kettle_gauge_hurt.png",
+    "2x": "sprites/ui_kettle_gauge_hurt@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_kettle_gauge_critical",
+   "group": "ui",
+   "purpose": "Kettle gauge dial, critical. Changes at 50% and 25% like the kettle sprite",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/ui_kettle_gauge_critical.svg",
+   "files": {
+    "1x": "sprites/ui_kettle_gauge_critical.png",
+    "2x": "sprites/ui_kettle_gauge_critical@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_kettle_gauge_popped",
+   "group": "ui",
+   "purpose": "Kettle gauge dial, popped. Changes at 50% and 25% like the kettle sprite",
+   "w": 48,
+   "h": 48,
+   "anchor": [
+    24,
+    24
+   ],
+   "svg": "svg/ui_kettle_gauge_popped.svg",
+   "files": {
+    "1x": "sprites/ui_kettle_gauge_popped.png",
+    "2x": "sprites/ui_kettle_gauge_popped@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_kettle_bar_frame",
+   "group": "ui",
+   "purpose": "Kettle HP bar frame with marks at 25% and 50%. Draw the fill on top, then crop it",
+   "w": 104,
+   "h": 18,
+   "anchor": [
+    52,
+    9
+   ],
+   "svg": "svg/ui_kettle_bar_frame.svg",
+   "files": {
+    "1x": "sprites/ui_kettle_bar_frame.png",
+    "2x": "sprites/ui_kettle_bar_frame@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_kettle_bar_fill",
+   "group": "ui",
+   "purpose": "Kettle HP bar fill (copper). Crop its width to the HP share",
+   "w": 104,
+   "h": 18,
+   "anchor": [
+    52,
+    9
+   ],
+   "svg": "svg/ui_kettle_bar_fill.svg",
+   "files": {
+    "1x": "sprites/ui_kettle_bar_fill.png",
+    "2x": "sprites/ui_kettle_bar_fill@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_steam_bar_fill",
+   "group": "ui",
+   "purpose": "Steam bar fill (white) for Walk. Use with the kettle bar frame",
+   "w": 104,
+   "h": 18,
+   "anchor": [
+    52,
+    9
+   ],
+   "svg": "svg/ui_steam_bar_fill.svg",
+   "files": {
+    "1x": "sprites/ui_steam_bar_fill.png",
+    "2x": "sprites/ui_steam_bar_fill@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_class_lobber",
+   "group": "ui",
+   "purpose": "Class icon, Lobber",
+   "w": 24,
+   "h": 24,
+   "anchor": [
+    12,
+    12
+   ],
+   "svg": "svg/ui_class_lobber.svg",
+   "files": {
+    "1x": "sprites/ui_class_lobber.png",
+    "2x": "sprites/ui_class_lobber@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_class_zinger",
+   "group": "ui",
+   "purpose": "Class icon, Zinger",
+   "w": 24,
+   "h": 24,
+   "anchor": [
+    12,
+    12
+   ],
+   "svg": "svg/ui_class_zinger.svg",
+   "files": {
+    "1x": "sprites/ui_class_zinger.png",
+    "2x": "sprites/ui_class_zinger@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_class_scatter",
+   "group": "ui",
+   "purpose": "Class icon, Scatterjack",
+   "w": 24,
+   "h": 24,
+   "anchor": [
+    12,
+    12
+   ],
+   "svg": "svg/ui_class_scatter.svg",
+   "files": {
+    "1x": "sprites/ui_class_scatter.png",
+    "2x": "sprites/ui_class_scatter@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_class_delver",
+   "group": "ui",
+   "purpose": "Class icon, Delver",
+   "w": 24,
+   "h": 24,
+   "anchor": [
+    12,
+    12
+   ],
+   "svg": "svg/ui_class_delver.svg",
+   "files": {
+    "1x": "sprites/ui_class_delver.png",
+    "2x": "sprites/ui_class_delver@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_class_boinker",
+   "group": "ui",
+   "purpose": "Class icon, Boinker",
+   "w": 24,
+   "h": 24,
+   "anchor": [
+    12,
+    12
+   ],
+   "svg": "svg/ui_class_boinker.svg",
+   "files": {
+    "1x": "sprites/ui_class_boinker.png",
+    "2x": "sprites/ui_class_boinker@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_class_patcher",
+   "group": "ui",
+   "purpose": "Class icon, Patcher",
+   "w": 24,
+   "h": 24,
+   "anchor": [
+    12,
+    12
+   ],
+   "svg": "svg/ui_class_patcher.svg",
+   "files": {
+    "1x": "sprites/ui_class_patcher.png",
+    "2x": "sprites/ui_class_patcher@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_crest_p1",
+   "group": "ui",
+   "purpose": "Player 1 crest: round badge with a pennant",
+   "w": 64,
+   "h": 64,
+   "anchor": [
+    32,
+    32
+   ],
+   "svg": "svg/ui_crest_p1.svg",
+   "files": {
+    "1x": "sprites/ui_crest_p1.png",
+    "2x": "sprites/ui_crest_p1@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "ui_crest_p2",
+   "group": "ui",
+   "purpose": "Player 2 crest: diamond badge with a square flag",
+   "w": 64,
+   "h": 64,
+   "anchor": [
+    32,
+    32
+   ],
+   "svg": "svg/ui_crest_p2.svg",
+   "files": {
+    "1x": "sprites/ui_crest_p2.png",
+    "2x": "sprites/ui_crest_p2@2x.png"
+   },
+   "atlas": true
+  },
+  {
+   "name": "app_icon",
+   "group": "app",
+   "purpose": "App icon: the Heartkettle on a fort wall with Marge. Full square, no clear pixels",
+   "w": 1024,
+   "h": 1024,
+   "anchor": [
+    0,
+    0
+   ],
+   "svg": "svg/app_icon.svg",
+   "files": {
+    "192": "sprites/app_icon-192.png",
+    "512": "sprites/app_icon-512.png",
+    "1024": "sprites/app_icon-1024.png"
+   },
+   "atlas": false
+  }
+ ],
+ "groups": {
+  "blocks": 16,
+  "ui": 40,
+  "fort": 7,
+  "kettle": 5,
+  "stompers": 4,
+  "hobs": 208,
+  "portraits": 16,
+  "shells": 18,
+  "icons": 16,
+  "effects": 46,
+  "terrain": 5,
+  "backgrounds": 3,
+  "app": 1
+ },
+ "count": 385
+}

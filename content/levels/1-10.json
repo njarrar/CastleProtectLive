@@ -1,0 +1,113 @@
+{
+  "id": "1-10",
+  "name": "The Topiary Keep",
+  "type": "grand_fort",
+  "size": "M",
+  "width": 2400,
+  "height": 720,
+  "ground": {
+    "points": [
+      [
+        0,
+        300
+      ],
+      [
+        250,
+        320
+      ],
+      [
+        500,
+        340
+      ],
+      [
+        900,
+        330
+      ],
+      [
+        1200,
+        420
+      ],
+      [
+        1500,
+        330
+      ],
+      [
+        1900,
+        330
+      ],
+      [
+        2400,
+        320
+      ]
+    ]
+  },
+  "pads": [
+    {
+      "x": 520
+    },
+    {
+      "x": 1850
+    }
+  ],
+  "player": {
+    "crew": [
+      "marge",
+      "quill",
+      "jax",
+      "hetty",
+      "grub",
+      "bobbin"
+    ],
+    "crew_size": 4,
+    "blueprint": "bp_home_4"
+  },
+  "rival": {
+    "name": "Marshal Mowbray Trimm",
+    "habit": "Hedges regrow while the Sprinkler Root stands.",
+    "blueprint": "bp_gf1_topiary",
+    "crew": [
+      "hedge_snipper",
+      "hedge_snipper",
+      "rake_hand",
+      "mower_minder"
+    ],
+    "aim": 2
+  },
+  "rules": {
+    "round_cap": 18,
+    "wind": {
+      "min": 0,
+      "max": 2
+    },
+    "rummage": {
+      "pool": 6,
+      "picks": 2
+    },
+    "regrow": true
+  },
+  "pennants": [
+    {
+      "type": "win",
+      "text": "Win"
+    },
+    {
+      "type": "root_by_round",
+      "text": "Break the Sprinkler Root by Round 4",
+      "value": 4
+    },
+    {
+      "type": "hill_half",
+      "text": "The hill keeps over half its height",
+      "value": 50
+    }
+  ],
+  "map_note": "You and the boss across one gentle hill with a lawn roller on top. A stream behind you.",
+  "new_thing": "Grand Fort.",
+  "water": [
+    {
+      "x0": 40,
+      "x1": 220,
+      "level": 315
+    }
+  ]
+}

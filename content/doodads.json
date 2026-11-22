@@ -1,0 +1,20 @@
+[
+  {
+    "id": "mend_bucket",
+    "name": "Mend Bucket",
+    "card": "Mends 3 of your blocks, 45 HP each.",
+    "effect": {
+      "op": "mend_blocks",
+      "count": 3,
+      "hp": 45
+    }
+  },
+  {
+    "id": "pot_lid",
+    "name": "Pot Lid",
+    "card": "The first shell to hit that room bounces off.",
+    "effect": {
+      "op": "lid"
+    }
+  }
+]

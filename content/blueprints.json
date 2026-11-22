@@ -1,0 +1,242 @@
+[
+  {
+    "id": "bp_home_3",
+    "name": "Home fort, three seats",
+    "rows": [
+      "ttttttt",
+      "t11t22t",
+      "t11t22t",
+      "ttttttt",
+      "tKKt33t",
+      "tKKt33t",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_home_3_cobble",
+    "name": "Home fort with a Cobble cap",
+    "rows": [
+      "ccccccc",
+      "t11t22t",
+      "t11t22t",
+      "ttttttt",
+      "tKKt33t",
+      "tKKt33t",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_home_4",
+    "name": "Home fort, five seats",
+    "rows": [
+      "ttttttt",
+      "t11t22t",
+      "t11t22t",
+      "ttttttt",
+      "tKKt33t",
+      "tKKt33t",
+      "ttttttt",
+      "t44t55t",
+      "t44t55t",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_home_5",
+    "name": "Home fort, five seats, Cobble low row",
+    "rows": [
+      "ttttttt",
+      "t11t22t",
+      "t11t22t",
+      "ttttttt",
+      "tKKt33t",
+      "tKKt33t",
+      "ttttttt",
+      "c44c55c",
+      "c44c55c",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_r1_box_wicker",
+    "name": "Hedge Box (Wicker)",
+    "rows": [
+      "wwwwwww",
+      "w11w22w",
+      "w11w22w",
+      "wwwwwww",
+      "wKKw33w",
+      "wKKw33w",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_r1_two_hats",
+    "name": "Hedge Box with a tower",
+    "rows": [
+      "...wwww",
+      "...w11w",
+      "...w11w",
+      "...wwww",
+      "wwwwwww",
+      "wKKw22w",
+      "wKKw22w",
+      "wwwwwww",
+      "wwwwwww",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_r1_kettle_knoll",
+    "name": "Hedge Box, kettle near the wall",
+    "rows": [
+      "ttttttt",
+      "w11w22t",
+      "w11w22t",
+      "wwwwwwt",
+      "w33wKKw",
+      "w33wKKw",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_r1_timber_3",
+    "name": "Hedge Box (Timber)",
+    "rows": [
+      "ttttttt",
+      "t11t22t",
+      "t11t22t",
+      "ttttttt",
+      "tKKt33t",
+      "tKKt33t",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_r1_roofed",
+    "name": "Hedge Box under a double roof",
+    "rows": [
+      "ttttttt",
+      "ttttttt",
+      "ttttttt",
+      "t11t22t",
+      "t11t22t",
+      "ttttttt",
+      "tKKt33t",
+      "tKKt33t",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_r1_beanpole",
+    "name": "Beanpole (the Stamp Tower)",
+    "rows": [
+      "tttt...",
+      "t11t...",
+      "t11t...",
+      "ttttttt",
+      "t22t33t",
+      "t22t33t",
+      "ttttttt",
+      "tKKtttt",
+      "tKKtttt",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_r1_orchard",
+    "name": "Hedge Box, five seats",
+    "rows": [
+      "ttttttt",
+      "t11t22t",
+      "t11t22t",
+      "ttttttt",
+      "tKKt33t",
+      "tKKt33t",
+      "ttttttt",
+      "t44t55t",
+      "t44t55t",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_r1_pancake",
+    "name": "Pancake with a Cobble roof",
+    "rows": [
+      "ccccccc",
+      "t11t22t",
+      "t11t22t",
+      "ttttttt",
+      "tKKt33t",
+      "tKKt33t",
+      "ttttttt",
+      "t44t55t",
+      "t44t55t",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_gf1_topiary",
+    "name": "The Topiary Keep",
+    "rows": [
+      "tttttttw",
+      "t11t22tw",
+      "t11t22tw",
+      "tttttttw",
+      "tKKt33tw",
+      "tKKt33tw",
+      "tttttttw",
+      "r44t55tw",
+      "t44t55tw",
+      "FFFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_kit_oak",
+    "name": "Starter Box: Oak",
+    "rows": [
+      "ttttttt",
+      "t11t22t",
+      "t11t22t",
+      "ttttttt",
+      "tKKt33t",
+      "tKKt33t",
+      "ttttttt",
+      "t44t55t",
+      "t44t55t",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_kit_stone",
+    "name": "Starter Box: Stone Skirt",
+    "rows": [
+      "ttttttt",
+      "t11t22t",
+      "t11t22t",
+      "ttttttt",
+      "tKKt33t",
+      "tKKt33t",
+      "ttttttt",
+      "c44c55c",
+      "c44c55c",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_kit_reed",
+    "name": "Starter Box: Reed Roof",
+    "rows": [
+      "wwwwwww",
+      "t11t22t",
+      "t11t22t",
+      "ttttttt",
+      "tKKt33t",
+      "tKKt33t",
+      "ttttttt",
+      "t44t55t",
+      "t44t55t",
+      "FFFFFFF"
+    ]
+  }
+]

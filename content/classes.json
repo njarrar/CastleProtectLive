@@ -1,0 +1,44 @@
+[
+  {
+    "id": "lobber",
+    "name": "Lobber",
+    "hp": 120,
+    "plain": "clodpot",
+    "role": "Demolisher"
+  },
+  {
+    "id": "zinger",
+    "name": "Zinger",
+    "hp": 80,
+    "plain": "hatpin",
+    "role": "Crew sniper"
+  },
+  {
+    "id": "scatterjack",
+    "name": "Scatterjack",
+    "hp": 100,
+    "plain": "gravel_sneeze",
+    "role": "Area"
+  },
+  {
+    "id": "delver",
+    "name": "Delver",
+    "hp": 140,
+    "plain": "nibbler",
+    "role": "Underminer"
+  },
+  {
+    "id": "boinker",
+    "name": "Boinker",
+    "hp": 90,
+    "plain": "bouncebean",
+    "role": "Trick shots"
+  },
+  {
+    "id": "patcher",
+    "name": "Patcher",
+    "hp": 110,
+    "plain": "mendglob",
+    "role": "Support"
+  }
+]

@@ -1,0 +1,780 @@
+[
+  {
+    "id": "clodpot",
+    "name": "Clodpot",
+    "kind": "plain",
+    "weight": "L",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 35,
+            "dtype": "blast",
+            "band": "medium"
+          }
+        ]
+      }
+    ],
+    "card": "Lob a pot. It goes boom."
+  },
+  {
+    "id": "hatpin",
+    "name": "Hatpin",
+    "kind": "plain",
+    "weight": "L",
+    "flight": {
+      "kind": "arc",
+      "speed_pct": 150,
+      "gravity_pct": 35,
+      "wind_pct": 40
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 32,
+            "dtype": "pierce",
+            "band": "point"
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "threads",
+      "metal"
+    ],
+    "skill_pct": 150,
+    "card": "Fast pin. Threads Loopholes."
+  },
+  {
+    "id": "gravel_sneeze",
+    "name": "Gravel Sneeze",
+    "kind": "plain",
+    "weight": "L",
+    "flight": {
+      "kind": "split"
+    },
+    "triggers": [
+      {
+        "on": "launch",
+        "do": [
+          {
+            "op": "split",
+            "child": "sneeze_stone",
+            "count": 3,
+            "spread": 60
+          }
+        ]
+      }
+    ],
+    "card": "Sneeze three stones in a fan."
+  },
+  {
+    "id": "extra_shake",
+    "name": "Gravel Sneeze (Extra Shake)",
+    "kind": "plain",
+    "weight": "L",
+    "flight": {
+      "kind": "split"
+    },
+    "triggers": [
+      {
+        "on": "launch",
+        "do": [
+          {
+            "op": "split",
+            "child": "shake_stone",
+            "count": 4,
+            "spread": 50
+          }
+        ]
+      }
+    ],
+    "card": "Four stones in a fan."
+  },
+  {
+    "id": "nibbler",
+    "name": "Nibbler",
+    "kind": "plain",
+    "weight": "L",
+    "flight": {
+      "kind": "dig",
+      "max_cells": 48,
+      "max_blocks": 1,
+      "block_dmg": 34,
+      "tunnel": 16
+    },
+    "triggers": [],
+    "card": "Bores a short hole in anything soft."
+  },
+  {
+    "id": "bouncebean",
+    "name": "Bouncebean",
+    "kind": "plain",
+    "weight": "L",
+    "flight": {
+      "kind": "bounce",
+      "bounces": 2,
+      "keep_pct": 70
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 30,
+            "dtype": "blast",
+            "band": "small",
+            "per_bounce": 5
+          }
+        ]
+      }
+    ],
+    "card": "Two hops, then pop."
+  },
+  {
+    "id": "mendglob",
+    "name": "Mendglob",
+    "kind": "plain",
+    "weight": "L",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 8,
+            "dtype": "blast",
+            "band": "tiny"
+          }
+        ]
+      }
+    ],
+    "self_effects": [
+      {
+        "op": "mend",
+        "hp": 50,
+        "restore_pct": 50
+      }
+    ],
+    "card": "Fix your block. Or annoy theirs."
+  },
+  {
+    "id": "grand_dumpling",
+    "name": "Grand Dumpling",
+    "kind": "knack",
+    "weight": "M",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 60,
+            "dtype": "blast",
+            "band": "large",
+            "low_row_pct": 130
+          }
+        ]
+      }
+    ],
+    "value": 60,
+    "card": "Huge dumpling. Hits the low row harder."
+  },
+  {
+    "id": "sunspear",
+    "name": "Sunspear",
+    "kind": "knack",
+    "weight": "M",
+    "flight": {
+      "kind": "beam",
+      "speed_pct": 300,
+      "gravity_pct": 0,
+      "wind_pct": 0,
+      "pass_blocks": 1,
+      "pass_dmg": 40
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 40,
+            "dtype": "pierce",
+            "band": "point"
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "threads"
+    ],
+    "value": 55,
+    "skill_pct": 150,
+    "card": "A ray through one wall."
+  },
+  {
+    "id": "pepper_rain",
+    "name": "Pepper Rain",
+    "kind": "knack",
+    "weight": "M",
+    "flight": {
+      "kind": "split"
+    },
+    "triggers": [
+      {
+        "on": "apex",
+        "do": [
+          {
+            "op": "split",
+            "child": "pepper_stone",
+            "count": 7,
+            "speed_step": 120
+          }
+        ]
+      }
+    ],
+    "value": 50,
+    "card": "Splits up high. Rains seven stones."
+  },
+  {
+    "id": "burrowbomb",
+    "name": "Burrowbomb",
+    "kind": "knack",
+    "weight": "M",
+    "flight": {
+      "kind": "dig",
+      "max_cells": 96,
+      "max_blocks": 2,
+      "block_dmg": 30,
+      "tunnel": 12
+    },
+    "triggers": [
+      {
+        "on": "stop",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 50,
+            "dtype": "blast",
+            "band": "medium"
+          }
+        ]
+      }
+    ],
+    "value": 55,
+    "card": "Bores in, then bursts inside."
+  },
+  {
+    "id": "rolypoly",
+    "name": "Rolypoly",
+    "kind": "knack",
+    "weight": "M",
+    "flight": {
+      "kind": "roller",
+      "roll_ticks": 360,
+      "motor": true
+    },
+    "triggers": [
+      {
+        "on": "stop",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 70,
+            "dtype": "blast",
+            "band": "medium"
+          }
+        ]
+      }
+    ],
+    "value": 60,
+    "card": "Rolls along the ground, then bursts."
+  },
+  {
+    "id": "barn_raising",
+    "name": "Barn Raising",
+    "kind": "knack",
+    "weight": "M",
+    "flight": {
+      "kind": "self"
+    },
+    "triggers": [
+      {
+        "on": "fire",
+        "do": [
+          {
+            "op": "rebuild",
+            "count": 4,
+            "hp_pct": 75
+          }
+        ]
+      },
+      {
+        "on": "fire",
+        "do": [
+          {
+            "op": "puff_up",
+            "hp": 40
+          }
+        ],
+        "dial": "puff_up"
+      }
+    ],
+    "dials": [
+      "rebuild",
+      "puff_up"
+    ],
+    "value": 50,
+    "card": "Rebuild four blocks. Or bring back a Hob."
+  },
+  {
+    "id": "tick_tock_crock",
+    "name": "Tick-Tock Crock",
+    "kind": "knack",
+    "weight": "H",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "become_prop",
+            "shot": "crock_prop"
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "metal"
+    ],
+    "value": 70,
+    "card": "Sits and ticks. Blows next turn."
+  },
+  {
+    "id": "pan_parade",
+    "name": "Pan Parade",
+    "kind": "knack",
+    "weight": "M",
+    "flight": {
+      "kind": "split"
+    },
+    "triggers": [
+      {
+        "on": "launch",
+        "do": [
+          {
+            "op": "split",
+            "child": "pan",
+            "count": 5,
+            "speed_step": 12,
+            "centered": false
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "metal"
+    ],
+    "value": 55,
+    "card": "Five pans walk across the wall."
+  },
+  {
+    "id": "pudding_bomb",
+    "name": "Pudding Bomb",
+    "kind": "trick",
+    "weight": "M",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 30,
+            "dtype": "blast",
+            "band": "huge",
+            "carve_pct": 50,
+            "mat_bonus": {
+              "wicker": 200
+            }
+          }
+        ]
+      }
+    ],
+    "match_class": "scatterjack",
+    "value": 30,
+    "card": "Huge soft blast. Blows the roofs off."
+  },
+  {
+    "id": "lid_lifter",
+    "name": "Lid Lifter",
+    "kind": "trick",
+    "weight": "M",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "column",
+            "dmg": 40,
+            "dtype": "blast",
+            "above_dmg": 25,
+            "above_n": 2
+          }
+        ]
+      }
+    ],
+    "match_class": "lobber",
+    "value": 35,
+    "card": "The blast goes straight up the column."
+  },
+  {
+    "id": "marble_sack",
+    "name": "Marble Sack",
+    "kind": "trick",
+    "weight": "M",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "split",
+            "child": "marble",
+            "count": 8,
+            "spread": 200,
+            "speed_abs": 120
+          }
+        ]
+      }
+    ],
+    "match_class": "scatterjack",
+    "value": 30,
+    "card": "Bursts into eight rolling marbles."
+  },
+  {
+    "id": "nosy_goose",
+    "name": "Nosy Goose",
+    "kind": "trick",
+    "weight": "M",
+    "flight": {
+      "kind": "arc",
+      "guide_tenths": 250
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 48,
+            "dtype": "blast",
+            "band": "small"
+          }
+        ]
+      }
+    ],
+    "match_class": "zinger",
+    "value": 40,
+    "card": "Bends toward a Hob it can see."
+  },
+  {
+    "id": "mole_mail",
+    "name": "Mole Mail",
+    "kind": "trick",
+    "weight": "M",
+    "flight": {
+      "kind": "dig",
+      "max_cells": 400,
+      "max_blocks": 1,
+      "tunnel": 10,
+      "stop_on_air": true
+    },
+    "triggers": [
+      {
+        "on": "stop",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 50,
+            "dtype": "blast",
+            "band": "medium"
+          }
+        ]
+      }
+    ],
+    "match_class": "delver",
+    "value": 40,
+    "card": "Tunnels through the hill and pops out the far side."
+  },
+  {
+    "id": "old_turnip",
+    "name": "Old Turnip",
+    "kind": "trick",
+    "weight": "L",
+    "flight": {
+      "kind": "bounce",
+      "bounces": 3,
+      "keep_pct": 50
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 1,
+            "dtype": "blast",
+            "band": "tiny"
+          },
+          {
+            "op": "become_prop",
+            "shot": "turnip_prop"
+          }
+        ]
+      }
+    ],
+    "match_class": "all",
+    "dud": true,
+    "value": 0,
+    "card": "Dud. It is a turnip."
+  },
+  {
+    "id": "rubber_radish",
+    "name": "Rubber Radish",
+    "kind": "trick",
+    "weight": "M",
+    "flight": {
+      "kind": "bounce",
+      "bounces": 5,
+      "keep_pct": 80
+    },
+    "triggers": [
+      {
+        "on": "bounce",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 14,
+            "dtype": "blast",
+            "band": "tiny"
+          }
+        ]
+      },
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 30,
+            "dtype": "blast",
+            "band": "small"
+          }
+        ]
+      }
+    ],
+    "match_class": "boinker",
+    "value": 35,
+    "card": "Five bouncing pops."
+  },
+  {
+    "id": "sod_sack",
+    "name": "Sod Sack",
+    "kind": "trick",
+    "weight": "L",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "mound",
+            "radius": 36
+          }
+        ]
+      }
+    ],
+    "match_class": "delver",
+    "value": 25,
+    "card": "Drops a heap of dirt."
+  },
+  {
+    "id": "sneeze_stone",
+    "name": "Sneeze stone",
+    "kind": "child",
+    "weight": "L",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 14,
+            "dtype": "blast",
+            "band": "tiny"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "shake_stone",
+    "name": "Shake stone",
+    "kind": "child",
+    "weight": "L",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 11,
+            "dtype": "blast",
+            "band": "tiny"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "pepper_stone",
+    "name": "Pepper stone",
+    "kind": "child",
+    "weight": "L",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 13,
+            "dtype": "blast",
+            "band": "small"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "pan",
+    "name": "Pan",
+    "kind": "child",
+    "weight": "L",
+    "flight": {
+      "kind": "arc"
+    },
+    "triggers": [
+      {
+        "on": "impact",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 18,
+            "dtype": "blast",
+            "band": "small"
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "metal"
+    ]
+  },
+  {
+    "id": "marble",
+    "name": "Marble",
+    "kind": "child",
+    "weight": "L",
+    "flight": {
+      "kind": "roller",
+      "roll_ticks": 240
+    },
+    "triggers": [
+      {
+        "on": "stop",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 10,
+            "dtype": "blast",
+            "band": "tiny"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "crock_prop",
+    "name": "Tick-Tock Crock",
+    "kind": "child",
+    "weight": "H",
+    "flight": {
+      "kind": "prop",
+      "prop_hp": 30
+    },
+    "triggers": [
+      {
+        "on": "owner_turn_start",
+        "do": [
+          {
+            "op": "explode",
+            "dmg": 85,
+            "dtype": "blast",
+            "band": "large"
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "metal"
+    ]
+  },
+  {
+    "id": "turnip_prop",
+    "name": "Turnip",
+    "kind": "child",
+    "weight": "L",
+    "flight": {
+      "kind": "prop",
+      "prop_hp": 10,
+      "stops_rollers": true
+    },
+    "triggers": []
+  }
+]

@@ -1,0 +1,74 @@
+{
+  "map": "d1",
+  "kits": [
+    {
+      "id": "kit_oak",
+      "name": "Oak",
+      "blueprint": "bp_kit_oak",
+      "crew": [
+        "marge",
+        "quill",
+        "jax",
+        "grub"
+      ],
+      "doodads": [
+        "mend_bucket",
+        "pot_lid"
+      ],
+      "shells": [
+        "pudding_bomb",
+        "lid_lifter",
+        "marble_sack",
+        "nosy_goose",
+        "mole_mail",
+        "old_turnip"
+      ]
+    },
+    {
+      "id": "kit_stone",
+      "name": "Stone Skirt",
+      "blueprint": "bp_kit_stone",
+      "crew": [
+        "old_thumper",
+        "nan",
+        "bobbin",
+        "hetty"
+      ],
+      "doodads": [
+        "mend_bucket",
+        "pot_lid"
+      ],
+      "shells": [
+        "pudding_bomb",
+        "lid_lifter",
+        "marble_sack",
+        "nosy_goose",
+        "mole_mail",
+        "old_turnip"
+      ]
+    },
+    {
+      "id": "kit_reed",
+      "name": "Reed Roof",
+      "blueprint": "bp_kit_reed",
+      "crew": [
+        "marge",
+        "nan",
+        "grub",
+        "bobbin"
+      ],
+      "doodads": [
+        "mend_bucket",
+        "pot_lid"
+      ],
+      "shells": [
+        "pudding_bomb",
+        "lid_lifter",
+        "marble_sack",
+        "nosy_goose",
+        "mole_mail",
+        "old_turnip"
+      ]
+    }
+  ]
+}

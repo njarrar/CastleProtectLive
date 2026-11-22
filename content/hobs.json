@@ -1,0 +1,144 @@
+[
+  {
+    "id": "marge",
+    "name": "Marge Dumpling",
+    "class": "lobber",
+    "hp": 120,
+    "knack": "grand_dumpling",
+    "player": true,
+    "passive": {
+      "kind": "preview_bonus",
+      "pct": 10
+    },
+    "passive_name": "Steady Hands"
+  },
+  {
+    "id": "quill",
+    "name": "Quill Needlesworth",
+    "class": "zinger",
+    "hp": 80,
+    "knack": "sunspear",
+    "player": true,
+    "passive": {
+      "kind": "thread_bonus",
+      "pct": 25
+    },
+    "passive_name": "Thread the Needle"
+  },
+  {
+    "id": "jax",
+    "name": "Jax Peppercorn",
+    "class": "scatterjack",
+    "hp": 100,
+    "knack": "pepper_rain",
+    "player": true,
+    "passive": {
+      "kind": "plain_override",
+      "shot": "extra_shake"
+    },
+    "passive_name": "Extra Shake"
+  },
+  {
+    "id": "grub",
+    "name": "Grub Mudgett",
+    "class": "delver",
+    "hp": 140,
+    "knack": "burrowbomb",
+    "player": true,
+    "passive": {
+      "kind": "broad_back"
+    },
+    "passive_name": "Broad Back"
+  },
+  {
+    "id": "bobbin",
+    "name": "Bobbin Springheel",
+    "class": "boinker",
+    "hp": 90,
+    "knack": "rolypoly",
+    "player": true,
+    "passive": {
+      "kind": "hop_dial",
+      "max": 3
+    },
+    "passive_name": "Extra Hop"
+  },
+  {
+    "id": "hetty",
+    "name": "Hetty Mortarboard",
+    "class": "patcher",
+    "hp": 110,
+    "knack": "barn_raising",
+    "player": true,
+    "passive": {
+      "kind": "ridgepole"
+    },
+    "passive_name": "Ridgepole"
+  },
+  {
+    "id": "old_thumper",
+    "name": "Old Thumper Grumbleby",
+    "class": "lobber",
+    "hp": 130,
+    "knack": "tick_tock_crock",
+    "player": true,
+    "passive": {
+      "kind": "old_grudge"
+    },
+    "passive_name": "Old Grudge"
+  },
+  {
+    "id": "nan",
+    "name": "Nan Clatterpot",
+    "class": "scatterjack",
+    "hp": 100,
+    "knack": "pan_parade",
+    "player": true,
+    "passive": {
+      "kind": "clatter_call",
+      "pct": 15
+    },
+    "passive_name": "Clatter Call"
+  },
+  {
+    "id": "hedge_snipper",
+    "name": "Hedge Snipper",
+    "class": "lobber",
+    "hp": 120,
+    "knack": "grand_dumpling",
+    "player": false
+  },
+  {
+    "id": "rake_hand",
+    "name": "Rake Hand",
+    "class": "scatterjack",
+    "hp": 100,
+    "knack": "pepper_rain",
+    "player": false
+  },
+  {
+    "id": "mower_minder",
+    "name": "Mower Minder",
+    "class": "boinker",
+    "hp": 90,
+    "knack": "rolypoly",
+    "player": false
+  },
+  {
+    "id": "pebble_pitcher",
+    "name": "Pebble Pitcher",
+    "class": "zinger",
+    "hp": 80,
+    "knack": "sunspear",
+    "player": false
+  },
+  {
+    "id": "straw_stuffer",
+    "name": "Straw Stuffer",
+    "class": "dummy",
+    "hp": 60,
+    "knack": null,
+    "player": false,
+    "dummy": true
+  }
+]

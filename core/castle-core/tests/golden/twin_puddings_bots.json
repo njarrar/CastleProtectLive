@@ -1,0 +1,7 @@
+{
+  "name": "twin_puddings_bots",
+  "about": "Skirmish on Twin Puddings, Fair AI on both sides, Rummage pool 6 with 2 picks each.",
+  "setup": {"level": "d1", "mode": "skirmish", "sides": [{"control": "ai", "preset": "fair"}, {"control": "ai", "preset": "stubborn"}]},
+  "seed": 2024,
+  "script": [{"auto": 80}]
+}

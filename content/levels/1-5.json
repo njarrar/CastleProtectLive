@@ -1,0 +1,108 @@
+{
+  "id": "1-5",
+  "name": "The Big One",
+  "type": "siege",
+  "size": "M",
+  "width": 2400,
+  "height": 720,
+  "ground": {
+    "points": [
+      [
+        0,
+        330
+      ],
+      [
+        400,
+        340
+      ],
+      [
+        700,
+        330
+      ],
+      [
+        900,
+        380
+      ],
+      [
+        1100,
+        330
+      ],
+      [
+        1500,
+        300
+      ],
+      [
+        1700,
+        260
+      ],
+      [
+        1950,
+        270
+      ],
+      [
+        2150,
+        340
+      ],
+      [
+        2400,
+        350
+      ]
+    ]
+  },
+  "pads": [
+    {
+      "x": 420
+    },
+    {
+      "x": 1820
+    }
+  ],
+  "player": {
+    "crew": [
+      "marge",
+      "quill",
+      "jax"
+    ],
+    "crew_size": 3,
+    "blueprint": "bp_home_3"
+  },
+  "rival": {
+    "name": "Sergeant Posy Rakewell",
+    "habit": "Goes for your hurt Hob.",
+    "blueprint": "bp_r1_roofed",
+    "crew": [
+      "hedge_snipper",
+      "pebble_pitcher",
+      "rake_hand"
+    ],
+    "aim": 2
+  },
+  "rules": {
+    "round_cap": 15,
+    "wind": {
+      "min": 0,
+      "max": 2
+    },
+    "rummage": {
+      "pool": 0,
+      "picks": 0
+    }
+  },
+  "pennants": [
+    {
+      "type": "win",
+      "text": "Win"
+    },
+    {
+      "type": "bonk_with_knack",
+      "text": "Bonk a Hob with a Knack"
+    },
+    {
+      "type": "kettle_above_pct",
+      "text": "Your kettle above 60%",
+      "value": 60
+    }
+  ],
+  "map_note": "A dell with a Molehill spot on its near rim. The Rival sits in the dell under a two-block Timber roof.",
+  "new_thing": "One Knack and needs a rest."
+}

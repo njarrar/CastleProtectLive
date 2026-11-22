@@ -1,0 +1,16 @@
+# build outputs
+target/
+node_modules/
+dist/
+pkg/
+.gradle/
+build/
+apps/android/app/src/main/jniLibs/
+apps/ios/Frameworks/
+apps/ios/*.xcodeproj/
+DerivedData/
+*.xcframework/
+local.properties
+.DS_Store
+test-results/
+playwright-report/

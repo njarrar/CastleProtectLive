@@ -1,0 +1,101 @@
+{
+  "id": "1-1",
+  "name": "First Lump",
+  "type": "siege",
+  "size": "S",
+  "width": 1600,
+  "height": 720,
+  "ground": {
+    "points": [
+      [
+        0,
+        300
+      ],
+      [
+        250,
+        325
+      ],
+      [
+        420,
+        330
+      ],
+      [
+        600,
+        300
+      ],
+      [
+        800,
+        420
+      ],
+      [
+        1000,
+        300
+      ],
+      [
+        1200,
+        292
+      ],
+      [
+        1600,
+        280
+      ]
+    ]
+  },
+  "pads": [
+    {
+      "x": 400
+    },
+    {
+      "x": 1300
+    }
+  ],
+  "player": {
+    "crew": [
+      "marge"
+    ],
+    "crew_size": 1,
+    "blueprint": "bp_home_3"
+  },
+  "rival": {
+    "name": "Sir Pudge",
+    "habit": "Shoots wide first. Then a bit closer.",
+    "blueprint": "bp_r1_box_wicker",
+    "crew": [
+      "hedge_snipper",
+      "straw_stuffer"
+    ],
+    "aim": 1
+  },
+  "rules": {
+    "round_cap": 8,
+    "squall": false,
+    "cap_win": 0,
+    "wind": {
+      "min": 0,
+      "max": 0
+    },
+    "full_preview_first_shot": true,
+    "rummage": {
+      "pool": 0,
+      "picks": 0
+    }
+  },
+  "pennants": [
+    {
+      "type": "win",
+      "text": "Win"
+    },
+    {
+      "type": "hits_in_a_row",
+      "text": "Land 2 hits in a row",
+      "value": 2
+    },
+    {
+      "type": "win_by_round",
+      "text": "Win by Round 5",
+      "value": 5
+    }
+  ],
+  "map_note": "You on a low knoll, one round hill mid-field, Rival 40 cells lower in the open.",
+  "new_thing": "Marge alone. Aim Drag, Fire, Ghost, Pin, Bonk."
+}

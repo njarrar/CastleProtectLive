@@ -1,0 +1,173 @@
+# Web app: build the core to Wasm, build apps/web with Vite, run the
+# Playwright smoke test, upload dist, and deploy to GitHub Pages.
+# Skips with a notice while apps/web does not exist yet.
+#
+# GitHub Pages on a private repo needs a paid plan (Pro, Team or Enterprise).
+# If the deploy job fails for that reason, the "web-dist" artifact is the
+# fallback: download it from the run page and serve it from any static host.
+# See docs/RELEASE.md.
+name: web
+
+on:
+  push:
+    branches: [castle-protect-plan, main]
+    paths:
+      - "core/**"
+      - "content/**"
+      - "assets/**"
+      - "apps/web/**"
+      - "scripts/build-wasm.sh"
+      - "scripts/setup-rust.sh"
+      - ".github/workflows/web.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_VERSION: "1.99.1"
+  NODE_VERSION: "22"
+  # Used only if core/Cargo.lock has no wasm-bindgen entry; the lock wins.
+  WASM_BINDGEN_VERSION: "0.2.130"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      built: ${{ steps.check.outputs.web }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check for apps/web and core/castle-wasm
+        id: check
+        run: |
+          if [ -f apps/web/package.json ]; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::apps/web/package.json not found, skipping web build."
+          fi
+          if [ -f apps/web/package.json ] && [ -f core/castle-wasm/Cargo.toml ]; then
+            echo "wasm=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "wasm=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::core/castle-wasm not found, building web without a fresh Wasm core."
+          fi
+
+      - name: Install Rust
+        if: steps.check.outputs.wasm == 'true'
+        run: scripts/setup-rust.sh wasm32-unknown-unknown
+
+      - name: Cache cargo
+        if: steps.check.outputs.wasm == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core -> target
+
+      - name: Build castle-wasm
+        if: steps.check.outputs.wasm == 'true'
+        run: scripts/build-wasm.sh --target web
+
+      - uses: actions/setup-node@v7
+        if: steps.check.outputs.web == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache npm
+        if: steps.check.outputs.web == 'true'
+        uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('apps/web/package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.check.outputs.web == 'true'
+        working-directory: apps/web
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "::warning::apps/web has no package-lock.json, using npm install."
+            npm install
+          fi
+
+      - name: Build
+        if: steps.check.outputs.web == 'true'
+        working-directory: apps/web
+        env:
+          # Pages serves the site under /<repo name>/.
+          VITE_BASE: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - name: Playwright smoke test
+        if: steps.check.outputs.web == 'true'
+        working-directory: apps/web
+        run: |
+          if [ -z "$(ls playwright.config.* 2>/dev/null)" ]; then
+            echo "::notice::No playwright.config in apps/web, skipping smoke test."
+            exit 0
+          fi
+          npx playwright install --with-deps chromium
+          if npm pkg get scripts.test:e2e | grep -q '"'; then
+            npm run test:e2e
+          elif grep -Eq "name:[[:space:]]*['\"]chromium['\"]" playwright.config.*; then
+            npx playwright test --project=chromium
+          else
+            npx playwright test
+          fi
+
+      - name: Upload Playwright report
+        if: failure() && steps.check.outputs.web == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          if-no-files-found: ignore
+
+      - name: Upload web build
+        if: steps.check.outputs.web == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: apps/web/dist
+          if-no-files-found: error
+
+      - name: Upload Pages artifact
+        if: >-
+          steps.check.outputs.web == 'true' && github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/castle-protect-plan' || github.ref == 'refs/heads/main')
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/web/dist
+
+  deploy:
+    needs: build
+    if: >-
+      needs.build.outputs.built == 'true' && github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/castle-protect-plan' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Pages may be off or unavailable (private repo on a free plan). Do not turn
+    # the whole run red for that; the web-dist artifact is the fallback.
+    continue-on-error: true
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

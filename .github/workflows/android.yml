@@ -1,0 +1,101 @@
+# Android app: build the core .so files with cargo-ndk, then a debug APK.
+# Skips with a notice while apps/android does not exist yet.
+name: android
+
+on:
+  push:
+    branches: [castle-protect-plan, main]
+    paths:
+      - "core/**"
+      - "content/**"
+      - "assets/**"
+      - "apps/android/**"
+      - "scripts/build-android-libs.sh"
+      - "scripts/setup-rust.sh"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_VERSION: "1.99.1"
+  # NDK r28c. r27 or newer is required for 16 KB page support.
+  NDK_VERSION: "28.2.13676358"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check for apps/android and core/castle-ffi
+        id: check
+        run: |
+          if [ -f apps/android/gradlew ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::apps/android/gradlew not found, skipping Android build."
+          fi
+          if [ -f apps/android/gradlew ] && [ -f core/castle-ffi/Cargo.toml ]; then
+            echo "core=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "core=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::core/castle-ffi not found, building the APK without native libs."
+          fi
+
+      - uses: actions/setup-java@v6
+        if: steps.check.outputs.app == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            apps/android/**/*.gradle*
+            apps/android/**/gradle-wrapper.properties
+            apps/android/gradle/libs.versions.toml
+
+      - uses: android-actions/setup-android@v4
+        if: steps.check.outputs.app == 'true'
+
+      - name: Install NDK
+        if: steps.check.outputs.core == 'true'
+        run: |
+          sdkmanager --install "ndk;${NDK_VERSION}" > /dev/null
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT:-$ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Install Rust
+        if: steps.check.outputs.core == 'true'
+        run: scripts/setup-rust.sh aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+
+      - name: Cache cargo
+        if: steps.check.outputs.core == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core -> target
+
+      - name: Build core for Android (arm64-v8a, armeabi-v7a, x86_64)
+        if: steps.check.outputs.core == 'true'
+        run: scripts/build-android-libs.sh
+
+      - name: Gradle assembleDebug
+        if: steps.check.outputs.app == 'true'
+        working-directory: apps/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        if: steps.check.outputs.app == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: castle-protect-debug-apk
+          path: apps/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

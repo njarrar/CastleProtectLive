@@ -1,0 +1,96 @@
+{
+  "id": "d2",
+  "name": "Orchard Dip",
+  "type": "skirmish",
+  "size": "M",
+  "width": 2400,
+  "height": 720,
+  "ground": {
+    "points": [
+      [
+        0,
+        420
+      ],
+      [
+        300,
+        430
+      ],
+      [
+        600,
+        420
+      ],
+      [
+        900,
+        360
+      ],
+      [
+        1200,
+        300
+      ],
+      [
+        1500,
+        280
+      ],
+      [
+        1650,
+        320
+      ],
+      [
+        1800,
+        250
+      ],
+      [
+        2050,
+        240
+      ],
+      [
+        2400,
+        300
+      ]
+    ]
+  },
+  "pads": [
+    {
+      "x": 420
+    },
+    {
+      "x": 1900
+    }
+  ],
+  "player": {
+    "crew": [
+      "marge",
+      "quill",
+      "jax",
+      "grub"
+    ],
+    "blueprint": "bp_home_4"
+  },
+  "rival": {
+    "name": "Skirmish Rival",
+    "habit": "Plays it straight.",
+    "blueprint": "bp_r1_orchard",
+    "crew": [
+      "hedge_snipper",
+      "rake_hand",
+      "pebble_pitcher",
+      "mower_minder"
+    ],
+    "aim": 3
+  },
+  "rules": {
+    "round_cap": 15,
+    "wind": {
+      "min": 0,
+      "max": 4
+    },
+    "rummage": {
+      "pool": 6,
+      "picks": 2
+    },
+    "first_turn": 2
+  },
+  "pennants": [],
+  "map_note": "You high, the Rival in a dell behind a hedge row.",
+  "new_thing": ""
+}

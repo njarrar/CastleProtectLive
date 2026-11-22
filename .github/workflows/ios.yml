@@ -1,0 +1,258 @@
+# iOS app: build the core XCFramework, generate the Xcode project with
+# XcodeGen, then build and test for the iPhone simulator without signing.
+# Skips with a notice while apps/ios does not exist yet.
+# macOS minutes cost 10x Linux minutes on private repos, so this workflow only
+# runs when iOS-related paths change.
+name: ios
+
+on:
+  push:
+    branches: [castle-protect-plan, main]
+    paths:
+      - "core/**"
+      - "content/**"
+      - "assets/**"
+      - "apps/ios/**"
+      - "scripts/build-xcframework.sh"
+      - "scripts/setup-rust.sh"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_VERSION: "1.99.1"
+  IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+  # Scheme to build. If it does not exist, the first scheme in the project is used.
+  IOS_SCHEME: CastleProtect
+  CARGO_TERM_COLOR: always
+
+jobs:
+  simulator:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check for apps/ios and core/castle-ffi
+        id: check
+        run: |
+          if [ -f apps/ios/project.yml ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::apps/ios/project.yml not found, skipping iOS build."
+          fi
+          if [ -f apps/ios/project.yml ] && [ -f core/castle-ffi/Cargo.toml ]; then
+            echo "core=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "core=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::core/castle-ffi not found, building the app without a fresh XCFramework."
+          fi
+
+      - name: Install Rust
+        if: steps.check.outputs.core == 'true'
+        run: scripts/setup-rust.sh aarch64-apple-ios aarch64-apple-ios-sim
+
+      - name: Cache cargo
+        if: steps.check.outputs.core == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core -> target
+
+      - name: Build XCFramework
+        if: steps.check.outputs.core == 'true'
+        run: scripts/build-xcframework.sh
+
+      - name: Install XcodeGen
+        if: steps.check.outputs.app == 'true'
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        if: steps.check.outputs.app == 'true'
+        working-directory: apps/ios
+        run: xcodegen generate
+
+      - name: Pick project, scheme and simulator
+        if: steps.check.outputs.app == 'true'
+        id: pick
+        working-directory: apps/ios
+        run: |
+          xcodebuild -version
+          project="$(find . -maxdepth 1 -name '*.xcodeproj' | head -n1)"
+          project="${project#./}"
+          schemes="$(xcodebuild -list -json -project "$project" | python3 -c 'import json,sys; print("\n".join(json.load(sys.stdin)["project"].get("schemes", [])))')"
+          if printf '%s\n' "$schemes" | grep -qx "$IOS_SCHEME"; then
+            scheme="$IOS_SCHEME"
+          else
+            scheme="$(printf '%s\n' "$schemes" | head -n1)"
+            echo "::notice::Scheme $IOS_SCHEME not found, using $scheme."
+          fi
+          sim_id="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          best = None
+          for runtime, devices in data.items():
+              if "iOS" not in runtime:
+                  continue
+              for d in devices:
+                  if d.get("isAvailable") and d["name"].startswith("iPhone"):
+                      key = (runtime, d["name"])
+                      if best is None or key > best[0]:
+                          best = (key, d["udid"])
+          print(best[1] if best else "")
+          ')"
+          if [ -z "$sim_id" ]; then
+            echo "::error::No iPhone simulator found on this runner."
+            exit 1
+          fi
+          {
+            echo "project=$project"
+            echo "scheme=$scheme"
+            echo "destination=platform=iOS Simulator,id=$sim_id"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build for simulator
+        if: steps.check.outputs.app == 'true'
+        working-directory: apps/ios
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild build \
+            -project "${{ steps.pick.outputs.project }}" \
+            -scheme "${{ steps.pick.outputs.scheme }}" \
+            -configuration Debug \
+            -destination "${{ steps.pick.outputs.destination }}" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build/xcodebuild-build.log
+
+      - name: Test on simulator
+        if: steps.check.outputs.app == 'true'
+        working-directory: apps/ios
+        run: |
+          set +e
+          xcodebuild test \
+            -project "${{ steps.pick.outputs.project }}" \
+            -scheme "${{ steps.pick.outputs.scheme }}" \
+            -configuration Debug \
+            -destination "${{ steps.pick.outputs.destination }}" \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO > build/xcodebuild-test.log 2>&1
+          status=$?
+          set -e
+          tail -n 80 build/xcodebuild-test.log
+          if [ "$status" -ne 0 ] && grep -q "is not currently configured for the test action" build/xcodebuild-test.log; then
+            echo "::notice::Scheme has no tests yet, skipping tests."
+            exit 0
+          fi
+          exit "$status"
+
+      - name: Zip simulator app
+        if: steps.check.outputs.app == 'true'
+        working-directory: apps/ios
+        run: |
+          app="$(find build/DerivedData/Build/Products/Debug-iphonesimulator -maxdepth 1 -name '*.app' | head -n1)"
+          if [ -z "$app" ]; then
+            echo "::error::No .app found in build products."
+            exit 1
+          fi
+          ditto -c -k --keepParent "$app" build/CastleProtect-simulator.app.zip
+
+      - name: Upload simulator app
+        if: steps.check.outputs.app == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: castle-protect-ios-simulator-app
+          path: apps/ios/build/CastleProtect-simulator.app.zip
+          if-no-files-found: error
+
+      - name: Upload test results
+        if: failure() && steps.check.outputs.app == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-results
+          path: |
+            apps/ios/build/TestResults.xcresult
+            apps/ios/build/*.log
+          if-no-files-found: ignore
+
+  # Signed archive for TestFlight. Turn on once the Apple secrets exist
+  # (names and steps in docs/RELEASE.md). Uncomment the job below.
+  #
+  # archive:
+  #   needs: simulator
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   runs-on: macos-latest
+  #   timeout-minutes: 60
+  #   environment: release
+  #   steps:
+  #     - uses: actions/checkout@v7
+  #     - name: Install Rust
+  #       run: scripts/setup-rust.sh aarch64-apple-ios aarch64-apple-ios-sim
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         workspaces: core -> target
+  #     - name: Build XCFramework
+  #       run: scripts/build-xcframework.sh
+  #     - name: Install XcodeGen and generate project
+  #       run: |
+  #         brew install xcodegen
+  #         cd apps/ios && xcodegen generate
+  #     - name: Import signing certificate and profile
+  #       env:
+  #         APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+  #         APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+  #         APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+  #         KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+  #       run: |
+  #         keychain="$RUNNER_TEMP/signing.keychain-db"
+  #         echo "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+  #         echo "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+  #         security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+  #         security set-keychain-settings -lut 21600 "$keychain"
+  #         security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+  #         security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+  #         security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$keychain"
+  #         security list-keychain -d user -s "$keychain"
+  #         mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+  #         cp "$RUNNER_TEMP/profile.mobileprovision" ~/Library/MobileDevice/Provisioning\ Profiles/
+  #     - name: Archive and export IPA
+  #       working-directory: apps/ios
+  #       env:
+  #         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+  #       run: |
+  #         project="$(ls -d *.xcodeproj | head -n1)"
+  #         xcodebuild archive -project "$project" -scheme "$IOS_SCHEME" \
+  #           -configuration Release -destination 'generic/platform=iOS' \
+  #           -archivePath build/CastleProtect.xcarchive \
+  #           DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Manual
+  #         /usr/libexec/PlistBuddy -c "Add :method string app-store-connect" \
+  #           -c "Add :teamID string $APPLE_TEAM_ID" build/ExportOptions.plist
+  #         xcodebuild -exportArchive -archivePath build/CastleProtect.xcarchive \
+  #           -exportOptionsPlist build/ExportOptions.plist -exportPath build/ipa
+  #     - name: Upload to TestFlight
+  #       working-directory: apps/ios
+  #       env:
+  #         APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+  #         APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+  #         APP_STORE_CONNECT_API_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8_BASE64 }}
+  #       run: |
+  #         mkdir -p ~/.appstoreconnect/private_keys
+  #         echo "$APP_STORE_CONNECT_API_KEY_P8_BASE64" | base64 --decode \
+  #           > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8
+  #         xcrun altool --upload-app -t ios -f build/ipa/*.ipa \
+  #           --apiKey "$APP_STORE_CONNECT_API_KEY_ID" --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+  #     - name: Remove keychain
+  #       if: always()
+  #       run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+  #     - uses: actions/upload-artifact@v7
+  #       with:
+  #         name: castle-protect-ipa
+  #         path: apps/ios/build/ipa/*.ipa

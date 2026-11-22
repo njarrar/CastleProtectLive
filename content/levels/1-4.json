@@ -1,0 +1,111 @@
+{
+  "id": "1-4",
+  "name": "Breezy Tops",
+  "type": "siege",
+  "size": "M",
+  "width": 2400,
+  "height": 720,
+  "ground": {
+    "points": [
+      [
+        0,
+        300
+      ],
+      [
+        400,
+        320
+      ],
+      [
+        700,
+        360
+      ],
+      [
+        950,
+        300
+      ],
+      [
+        1200,
+        380
+      ],
+      [
+        1450,
+        310
+      ],
+      [
+        1750,
+        400
+      ],
+      [
+        2100,
+        380
+      ],
+      [
+        2400,
+        360
+      ]
+    ]
+  },
+  "pads": [
+    {
+      "x": 420
+    },
+    {
+      "x": 1750
+    }
+  ],
+  "player": {
+    "crew": [
+      "marge",
+      "quill",
+      "jax"
+    ],
+    "crew_size": 3,
+    "blueprint": "bp_home_3",
+    "loose_shells": [
+      "marble_sack"
+    ]
+  },
+  "rival": {
+    "name": "Lance Corporal Sod Turfwick",
+    "habit": "Forgets the wind on his first shot of each front.",
+    "blueprint": "bp_r1_timber_3",
+    "crew": [
+      "hedge_snipper",
+      "rake_hand",
+      "pebble_pitcher"
+    ],
+    "aim": 1
+  },
+  "rules": {
+    "round_cap": 15,
+    "wind": {
+      "min": 0,
+      "max": 2,
+      "fronts": [
+        2,
+        -1
+      ]
+    },
+    "rummage": {
+      "pool": 0,
+      "picks": 0
+    }
+  },
+  "pennants": [
+    {
+      "type": "win",
+      "text": "Win"
+    },
+    {
+      "type": "hits_in_a_row",
+      "text": "Land 3 hits in a row",
+      "value": 3
+    },
+    {
+      "type": "no_hob_bonked",
+      "text": "No Hob of yours Bonked"
+    }
+  ],
+  "map_note": "Three rolling hills. Rival on the far crest, 80 cells above you.",
+  "new_thing": "+Jax. Wind, Weather Front, forecast."
+}

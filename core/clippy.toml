@@ -1,0 +1,5 @@
+# Rules crates keep a fixed iteration order and no floats.
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "iteration order is not fixed; use BTreeMap or a sorted Vec" },
+    { path = "std::collections::HashSet", reason = "iteration order is not fixed; use BTreeSet or a sorted Vec" },
+]

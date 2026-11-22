@@ -1,0 +1,93 @@
+{
+  "id": "1-2",
+  "name": "Two Hats",
+  "type": "siege",
+  "size": "S",
+  "width": 1600,
+  "height": 720,
+  "ground": {
+    "points": [
+      [
+        0,
+        300
+      ],
+      [
+        300,
+        320
+      ],
+      [
+        600,
+        380
+      ],
+      [
+        800,
+        300
+      ],
+      [
+        1000,
+        390
+      ],
+      [
+        1250,
+        330
+      ],
+      [
+        1600,
+        320
+      ]
+    ]
+  },
+  "pads": [
+    {
+      "x": 380
+    },
+    {
+      "x": 1320
+    }
+  ],
+  "player": {
+    "crew": [
+      "marge",
+      "quill"
+    ],
+    "crew_size": 2,
+    "blueprint": "bp_home_3"
+  },
+  "rival": {
+    "name": "Private Tuft Edgerly",
+    "habit": "Shoots your top Hob first.",
+    "blueprint": "bp_r1_two_hats",
+    "crew": [
+      "pebble_pitcher",
+      "hedge_snipper"
+    ],
+    "aim": 1
+  },
+  "rules": {
+    "round_cap": 10,
+    "wind": {
+      "min": 0,
+      "max": 0
+    },
+    "rummage": {
+      "pool": 0,
+      "picks": 0
+    }
+  },
+  "pennants": [
+    {
+      "type": "win",
+      "text": "Win"
+    },
+    {
+      "type": "bonk_with_each_hob",
+      "text": "Bonk a Hob with each of your Hobs"
+    },
+    {
+      "type": "no_hob_bonked",
+      "text": "No Hob of yours Bonked"
+    }
+  ],
+  "map_note": "Twin humps with a dip between. The Rival has a tall tower and a low room.",
+  "new_thing": "+Quill. Pick the shooter. Fine Tune."
+}

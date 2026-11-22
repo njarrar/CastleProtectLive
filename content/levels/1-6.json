@@ -1,0 +1,104 @@
+{
+  "id": "1-6",
+  "name": "Roof Trouble",
+  "type": "siege",
+  "size": "M",
+  "width": 2400,
+  "height": 720,
+  "ground": {
+    "points": [
+      [
+        0,
+        260
+      ],
+      [
+        300,
+        250
+      ],
+      [
+        500,
+        230
+      ],
+      [
+        800,
+        280
+      ],
+      [
+        1100,
+        340
+      ],
+      [
+        1400,
+        400
+      ],
+      [
+        1700,
+        450
+      ],
+      [
+        2000,
+        500
+      ],
+      [
+        2400,
+        540
+      ]
+    ]
+  },
+  "pads": [
+    {
+      "x": 420
+    },
+    {
+      "x": 1550
+    }
+  ],
+  "player": {
+    "crew": [
+      "marge",
+      "quill",
+      "jax"
+    ],
+    "crew_size": 3,
+    "blueprint": "bp_home_3_cobble"
+  },
+  "rival": {
+    "name": "Warden Privet Snedd",
+    "habit": "Aims at roofs.",
+    "blueprint": "bp_r1_beanpole",
+    "crew": [
+      "hedge_snipper",
+      "hedge_snipper",
+      "pebble_pitcher"
+    ],
+    "aim": 1
+  },
+  "rules": {
+    "round_cap": 15,
+    "wind": {
+      "min": 0,
+      "max": 2
+    },
+    "rummage": {
+      "pool": 0,
+      "picks": 0
+    }
+  },
+  "pennants": [
+    {
+      "type": "win",
+      "text": "Win"
+    },
+    {
+      "type": "no_hob_bonked",
+      "text": "No Hob of yours Bonked"
+    },
+    {
+      "type": "kettle_above_pct",
+      "text": "Your kettle above 60%",
+      "value": 60
+    }
+  ],
+  "map_note": "A long slope up to the right. The Stamp Tower stands half way up. You in a hollow below.",
+  "new_thing": "The Workshop with 3 Cobble blocks. +Grub on clear."
+}

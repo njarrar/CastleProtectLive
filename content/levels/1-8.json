@@ -1,0 +1,126 @@
+{
+  "id": "1-8",
+  "name": "Rummage Sale",
+  "type": "siege",
+  "size": "M",
+  "width": 2400,
+  "height": 720,
+  "ground": {
+    "points": [
+      [
+        0,
+        330
+      ],
+      [
+        300,
+        350
+      ],
+      [
+        600,
+        360
+      ],
+      [
+        850,
+        330
+      ],
+      [
+        1050,
+        250
+      ],
+      [
+        1250,
+        250
+      ],
+      [
+        1450,
+        330
+      ],
+      [
+        1700,
+        360
+      ],
+      [
+        1950,
+        350
+      ],
+      [
+        2400,
+        340
+      ]
+    ],
+    "patches": [
+      [
+        1500,
+        1560,
+        400,
+        340,
+        "rock"
+      ]
+    ]
+  },
+  "pads": [
+    {
+      "x": 420
+    },
+    {
+      "x": 1800
+    }
+  ],
+  "player": {
+    "crew": [
+      "marge",
+      "quill",
+      "jax",
+      "grub"
+    ],
+    "crew_size": 4,
+    "blueprint": "bp_home_4"
+  },
+  "rival": {
+    "name": "Sergeant Posy Rakewell",
+    "habit": "Grabs the biggest shell in the Rummage.",
+    "blueprint": "bp_r1_orchard",
+    "crew": [
+      "hedge_snipper",
+      "pebble_pitcher",
+      "rake_hand",
+      "mower_minder"
+    ],
+    "aim": 2
+  },
+  "rules": {
+    "round_cap": 15,
+    "wind": {
+      "min": 0,
+      "max": 2
+    },
+    "rummage": {
+      "pool": 4,
+      "picks": 2
+    }
+  },
+  "pennants": [
+    {
+      "type": "win",
+      "text": "Win"
+    },
+    {
+      "type": "bonk_with_trick",
+      "text": "Bonk a Hob with a Trick Shell"
+    },
+    {
+      "type": "use_tricks",
+      "text": "Use both your Trick Shells",
+      "value": 2
+    }
+  ],
+  "map_note": "Two orchards on two low hills, a stream gully between, a low stone ridge in front of the Rival.",
+  "new_thing": "The Rummage. +Bobbin on clear.",
+  "water": [
+    {
+      "x0": 1060,
+      "x1": 1240,
+      "level": 290
+    }
+  ]
+}

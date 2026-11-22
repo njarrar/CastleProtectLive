@@ -1,0 +1,107 @@
+{
+  "id": "d1",
+  "name": "Twin Puddings",
+  "type": "skirmish",
+  "size": "M",
+  "width": 2400,
+  "height": 720,
+  "ground": {
+    "points": [
+      [
+        0,
+        300
+      ],
+      [
+        300,
+        310
+      ],
+      [
+        700,
+        420
+      ],
+      [
+        1000,
+        330
+      ],
+      [
+        1100,
+        300
+      ],
+      [
+        1200,
+        320
+      ],
+      [
+        1300,
+        300
+      ],
+      [
+        1400,
+        330
+      ],
+      [
+        1700,
+        420
+      ],
+      [
+        2100,
+        310
+      ],
+      [
+        2400,
+        300
+      ]
+    ]
+  },
+  "pads": [
+    {
+      "x": 450
+    },
+    {
+      "x": 1950
+    }
+  ],
+  "player": {
+    "crew": [
+      "marge",
+      "quill",
+      "jax",
+      "grub"
+    ],
+    "blueprint": "bp_home_4"
+  },
+  "rival": {
+    "name": "Skirmish Rival",
+    "habit": "Plays it straight.",
+    "blueprint": "bp_r1_orchard",
+    "crew": [
+      "hedge_snipper",
+      "rake_hand",
+      "pebble_pitcher",
+      "mower_minder"
+    ],
+    "aim": 3
+  },
+  "rules": {
+    "round_cap": 15,
+    "wind": {
+      "min": 0,
+      "max": 4
+    },
+    "rummage": {
+      "pool": 6,
+      "picks": 2
+    },
+    "first_turn": 2
+  },
+  "pennants": [],
+  "map_note": "Two equal round hills, a stream between. The fair, even map.",
+  "new_thing": "",
+  "water": [
+    {
+      "x0": 1100,
+      "x1": 1300,
+      "level": 315
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = ["castle-core", "castle-ffi", "castle-wasm"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "=1.0.219", features = ["derive"] }
+serde_json = "=1.0.140"
+wasm-bindgen = "=0.2.100"
+cbindgen = { version = "=0.28.0", default-features = false }
+
+# Rules code must never wrap silently. Overflow is a bug on every target.
+[profile.dev]
+opt-level = 1
+overflow-checks = true
+
+[profile.test]
+opt-level = 3
+overflow-checks = true
+
+[profile.release]
+overflow-checks = true
+lto = true
+codegen-units = 1

@@ -1,0 +1,392 @@
+<title>Castle Protect Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap">
+<style>
+/* Layout: a storybook field guide. Wide key art opens, then stitched "patch" sections on a hill-green ground, one column of reading text with wide tables and art. */
+:root{
+  --ink:#3a2440;        /* warm plum outline from the art direction */
+  --paper:#fbf5e9;
+  --paper-2:#f2e8d3;
+  --fg:#2d2230;
+  --muted:#6e5f6c;
+  --hob:#2F6FDE;        /* player team blue */
+  --rival:#E8730C;      /* rival orange */
+  --grass:#6fa85a;
+  --gold:#f2b632;
+  --line:#d9c9ad;
+  --stitch:#b79b72;
+  --display:"Fredoka","Trebuchet MS","Arial Rounded MT Bold",system-ui,sans-serif;
+  --body:"Nunito","Segoe UI",system-ui,-apple-system,sans-serif;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --ink:#e9d8ec;--paper:#1f1923;--paper-2:#2a2230;--fg:#efe6ee;--muted:#b9a9b6;
+  --hob:#6b9bff;--rival:#ff9a45;--grass:#86c26f;--gold:#f5c95a;--line:#463a4b;--stitch:#7c6a58;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --ink:#e9d8ec;--paper:#1f1923;--paper-2:#2a2230;--fg:#efe6ee;--muted:#b9a9b6;
+  --hob:#6b9bff;--rival:#ff9a45;--grass:#86c26f;--gold:#f5c95a;--line:#463a4b;--stitch:#7c6a58;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.6;margin:0}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);color:var(--ink);line-height:1.15;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.2rem,6vw,3.6rem);font-weight:700}
+h2{font-size:clamp(1.5rem,3.6vw,2.1rem);font-weight:600}
+h3{font-size:1.2rem;font-weight:600}
+p{margin:0;max-width:68ch}
+a{color:var(--hob)}
+a:focus-visible,button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.eyebrow{font:700 .78rem/1 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.hero{padding-block:28px 8px}
+.hero-grid{display:grid;gap:20px}
+.hero img{width:100%;border-radius:var(--r);border:3px solid var(--ink);display:block}
+.lede{font-size:1.15rem;color:var(--fg)}
+.status{display:inline-flex;align-items:center;gap:8px;background:var(--paper-2);border:2px dashed var(--stitch);border-radius:999px;padding:6px 14px;font-weight:700;font-size:.9rem}
+.status i{width:10px;height:10px;border-radius:50%;background:var(--gold);display:inline-block}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px;padding-block:18px}
+nav.toc a{font-weight:700;font-size:.9rem;text-decoration:none;color:var(--ink);background:var(--paper-2);border:2px solid var(--line);border-radius:999px;padding:4px 12px}
+nav.toc a:hover{border-color:var(--ink)}
+section{padding-block:34px;border-top:2px dashed var(--stitch);display:grid;gap:16px}
+.cols{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.cols>*{min-width:0}
+.patch{background:var(--paper-2);border:2px solid var(--line);border-radius:var(--r);padding:16px 18px;display:grid;gap:6px;align-content:start}
+.patch b{font-family:var(--display);font-weight:600;color:var(--ink);font-size:1.05rem}
+.tbl{overflow-x:auto;border:2px solid var(--line);border-radius:var(--r)}
+table{border-collapse:collapse;width:100%;font-size:.94rem;font-variant-numeric:tabular-nums}
+th,td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{background:var(--paper-2);font-family:var(--display);font-weight:600;color:var(--ink);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num{text-align:right;white-space:nowrap}
+.tag{display:inline-block;font:800 .72rem/1 var(--body);padding:3px 7px;border-radius:6px;border:1.5px solid currentColor;white-space:nowrap}
+.tag.l{color:var(--grass)} .tag.u{color:var(--muted)}
+.you{color:var(--hob);font-weight:800}.them{color:var(--rival);font-weight:800}
+figure{margin:0;display:grid;gap:8px}
+figure img{width:100%;height:auto;border-radius:var(--r);border:2px solid var(--line);display:block;background:var(--paper-2)}
+figcaption{font-size:.88rem;color:var(--muted)}
+.gallery{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.gallery a{text-decoration:none;color:inherit}
+.gallery a:hover img{border-color:var(--ink)}
+.timeline{display:grid;gap:10px}
+.step{display:grid;grid-template-columns:5.5rem 1fr;gap:14px;align-items:start;background:var(--paper-2);border:2px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.step .wk{font-family:var(--display);font-weight:700;color:var(--hob);font-size:1.05rem}
+.step>div{min-width:0}
+.decide td:first-child{font-family:var(--display);font-weight:700;color:var(--ink)}
+ul{margin:0;padding-left:1.2em;max-width:68ch}
+li{margin-block:3px}
+footer{padding-block:30px 50px;border-top:2px dashed var(--stitch);color:var(--muted);font-size:.9rem}
+code{font-size:.9em;background:var(--paper-2);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+@media (min-width:860px){.hero-grid{grid-template-columns:1.25fr 1fr;align-items:center}}
+</style>
+
+<div class="wrap">
+<header class="hero">
+  <div class="hero-grid">
+    <img src="art/02-key-art-battle.jpg" alt="Key art: two walking forts on green hills trade shots; a pot bomb arcs toward the enemy fort and bursts on its wall.">
+    <div style="display:grid;gap:14px">
+      <span class="status"><i></i>Final plan, waiting for your go</span>
+      <h1>Castle Protect</h1>
+      <p class="eyebrow">The Unflattening · Native iOS, native Android, Web · 1 or 2 players · Free · Offline</p>
+      <p class="lede">A turn-based artillery game where your crew lives inside a walking fort you built yourself. Every shot breaks wood, stone and ground in a way you can read and plan. Win by bonking the whole enemy crew or popping the steam kettle at the heart of their fort.</p>
+      <p>Completely free: no price, no purchases, no ads, no timers, no energy. Two players can share one device. A hand-made campaign, a real tech tree, and an AI that misses like a person.</p>
+    </div>
+  </div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#why">Why it wins</a><a href="#world">World</a><a href="#battle">Battle</a><a href="#content">Content</a><a href="#crew">Crew</a><a href="#weapons">Weapons</a><a href="#enemies">Enemies</a><a href="#campaign">Campaign</a><a href="#progress">Progress</a><a href="#couch">Couch Duel</a><a href="#tech">Tech</a><a href="#build">Build plan</a><a href="#decide">Your decisions</a><a href="#art">All art</a><a href="#method">How we got here</a>
+  </nav>
+</header>
+
+<section id="why">
+  <p class="eyebrow">The gap in the market</p>
+  <h2>No one sells a deep, offline, single-player castle artillery game</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Game</th><th>What it does well</th><th>What it lacks, that we bring</th></tr></thead>
+    <tbody>
+      <tr><td>Pocket Tanks</td><td>Deep weapon list, weapon draft, 20+ years of fans</td><td>No campaign, no castle, nothing to earn, no aim line. In our playtest its CPU beat us at level 2 of 7 every time by burying our tank</td></tr>
+      <tr><td>Castle Busters (once Castle Clashers)</td><td>Crew inside a breakable castle, 10M+ downloads</td><td>Online only, no campaign or bosses, a 30 s turn clock, an ad button above Continue, a daily reward cap, pay to win. Ratings fell from 3.3 to 2.4 stars after an update cut players' progress</td></tr>
+      <tr><td>Tank Stars</td><td>Polish, health bars, campaign path</td><td>Ads after every fight, 6.99 USD a week to remove them, paid power</td></tr>
+      <tr><td>Worms</td><td>Chaos and charm</td><td>Slow turns, many rules, mostly multiplayer</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="world">
+  <p class="eyebrow">The world</p>
+  <h2>Brickabrac, a lumpy land the Flatteners want rolled flat</h2>
+  <p>Small, stubborn <b>Hobs</b> claim hills and build walking forts from whatever they can stack. Each fort runs on a <b>Heartkettle</b> that drives its clockwork legs. <b>Baron Levelwell</b> and his <b>Flatteners</b> want every hill rolled flat, because flat is tidy (and he once spilled his tea on a hill). You fight to keep Brickabrac lumpy, and every region you win back gets its hills back. The genre's worst habit, flat boring maps, becomes the story.</p>
+  <div class="cols">
+    <figure><img src="art/13-walking-fort-cutaway.jpg" alt="Cutaway of a walking fort showing clockwork legs, footing row, crew rooms, gun slots and the kettle room." loading="lazy"><figcaption>A walking fort: Stompers, Footing, Nooks, Loopholes and the Kettle Room.</figcaption></figure>
+    <figure><img src="art/11-baron-levelwell.jpg" alt="Baron Levelwell riding the Grand Roller, with a teacup and a flat cap." loading="lazy"><figcaption>Baron Levelwell on the Grand Roller. The teacup stays.</figcaption></figure>
+  </div>
+  <p>Tone: bloodless slapstick, safe for a nine-year-old, not babyish for a forty-year-old. A Hob at 0 HP is <b>Bonked</b> and floats off on a Snooze Balloon. Art style: "patchwork storybook", round chunky shapes and plum outlines. Hobs are round; Flatteners are square.</p>
+</section>
+
+<section id="battle">
+  <p class="eyebrow">How a battle plays</p>
+  <h2>Read it, then nail it</h2>
+  <div class="cols">
+    <div class="patch"><b>Turns</b><span>Strict turns. An optional Walk (costs Steam), then one Action. No turn timer.</span></div>
+    <div class="patch"><b>Aim</b><span>Drag anywhere to aim. Lifting your finger does not fire; a big Fire button does. A Fine Tune pad and exact numbers stay on screen.</span></div>
+    <div class="patch"><b>Aim help</b><span>The preview shows 30% of the arc (45% and 60% with upgrades). Your last two shots stay as a Ghost with Pins. Recall restores an old aim once.</span></div>
+    <div class="patch"><b>Wind</b><span>Holds for 3 rounds. The next front is shown in advance, free.</span></div>
+    <div class="patch"><b>Two ways to win</b><span><b>Clean Sweep</b>: bonk every enemy Hob. <b>Kettle Pop</b>: break their 300 HP Heartkettle. Both bars always show.</span></div>
+    <div class="patch"><b>No stalemates</b><span>At round 15 the <b>Sudden Squall</b> starts: both forts crumble at once and wind grows. Every fight ends within 3 more rounds.</span></div>
+  </div>
+  <figure><img src="art/16-hud-battle-mockup.jpg" alt="Battle screen mockup on a phone in landscape: crew portraits on the left, shot tray at the bottom, angle and power readout, large Fire button." loading="lazy"><figcaption>Battle screen on a phone. The field keeps 71 to 85% of the screen, 88% while aiming. Fire is 76 pt.</figcaption></figure>
+  <div class="cols">
+    <div class="patch"><b>Read the fort</b><span>Hold any block to see what would fall. Weakly held blocks shimmer. A "Drop!" callout marks the first big collapse.</span></div>
+    <div class="patch"><b>Loophole Flap</b><span>After a shot threads a gun slot, that slot closes to threads until the wind changes. One kept aim cannot win every turn.</span></div>
+    <div class="patch"><b>Shove Off</b><span>Dig out a buried Hob for 15 Steam during your Walk, not your whole turn.</span></div>
+    <div class="patch"><b>Squall in 3</b><span>A warning two rounds before the cap. Battles run about 4 to 6 minutes at real speed.</span></div>
+  </div>
+  <figure><img src="art/24-portrait-hud-mockup.jpg" alt="Phone portrait battle screen with the target fort at the top, a strip map in the middle and your fort with controls at the bottom." loading="lazy"><figcaption>Portrait battle view: stacked lenses. Target fort on top, a strip map of both forts, your fort and every control in the bottom 220 pt.</figcaption></figure>
+  <h3>Fairness rules that answer the genre's top complaints</h3>
+  <ul>
+    <li>The AI misses like a person: wide first, then short, long, hit. It only sees what you see, and it has no hidden catch-up cheats.</li>
+    <li>No status effect ever skips your turn.</li>
+    <li>A "No line" mark warns before battle when a Hob has no clear shot on the map.</li>
+    <li>The game saves every turn. A crash or phone call never costs a match.</li>
+    <li>You never lose what you earned. If an update weakens something, you get a full refund.</li>
+    <li>The bottom row of every fort (Footing) cannot be dug, so "dig out the base" stops winning every time.</li>
+    <li>Your own blasts hurt you at 50% and never knock out your own Hob, and a buried fort always digs out. No unfair traps.</li>
+  </ul>
+</section>
+
+<section id="content">
+  <p class="eyebrow">Scope</p>
+  <h2>Launch lean, then three free updates</h2>
+  <div class="tbl"><table>
+    <thead><tr><th></th><th>Launch 1.0</th><th>U1 Long Siege</th><th>U2 Frostwhisker Peaks</th><th>U3 Clankmouth Mines</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td>Regions</td><td class="num">4</td><td></td><td class="num">+1</td><td class="num">+1</td><td class="num">6</td></tr>
+      <tr><td>Campaign levels</td><td class="num">40</td><td></td><td class="num">+10</td><td class="num">+10</td><td class="num">60</td></tr>
+      <tr><td>Crew classes</td><td class="num">7</td><td></td><td class="num">+Peeper</td><td></td><td class="num">8</td></tr>
+      <tr><td>Named Hobs</td><td class="num">16</td><td class="num">+2</td><td class="num">+5</td><td class="num">+5</td><td class="num">28</td></tr>
+      <tr><td>Trick Shells</td><td class="num">30</td><td class="num">+8</td><td class="num">+10</td><td class="num">+10</td><td class="num">58</td></tr>
+      <tr><td>Doodads (gadgets)</td><td class="num">8</td><td class="num">+2</td><td class="num">+2</td><td class="num">+2</td><td class="num">14</td></tr>
+      <tr><td>Tinker Tree nodes</td><td class="num">36</td><td></td><td class="num">+12</td><td class="num">+12</td><td class="num">60</td></tr>
+      <tr><td>Enemy unit types</td><td class="num">14</td><td class="num">+3</td><td class="num">+6</td><td class="num">+5</td><td class="num">28</td></tr>
+      <tr><td>Maps</td><td class="num">59</td><td class="num">+14</td><td class="num">+11</td><td class="num">+11</td><td class="num">95</td></tr>
+      <tr><td>Modes</td><td>Campaign, Skirmish, Couch Duel, Test Yard, Trials, Daily</td><td>+Long Siege</td><td>+Ironclad</td><td>+Baron Rush</td><td class="num">9</td></tr>
+    </tbody>
+  </table></div>
+  <p>Nothing designed is thrown away. Later content is tagged for its update in the design docs.</p>
+</section>
+
+<section id="crew">
+  <p class="eyebrow">Units</p>
+  <h2>7 classes and 16 Hobs at launch</h2>
+  <figure><img src="art/09-hob-crew-lineup.jpg" alt="Lineup of eight Hob classes, each with a different hat, plus silhouette tests at small sizes." loading="lazy"><figcaption>Each class reads by its hat alone, even at 16 px. The blue scarf marks your team.</figcaption></figure>
+  <div class="tbl"><table>
+    <thead><tr><th>Class</th><th>Role</th><th>Plain Shot</th><th>Launch Hobs and their Knack</th></tr></thead>
+    <tbody>
+      <tr><td>Lobber</td><td>Wrecks walls</td><td>Clodpot</td><td>Marge (Grand Dumpling), Old Thumper (Tick-Tock Crock), Pip (Chimney Drop)</td></tr>
+      <tr><td>Zinger</td><td>Snipes crew</td><td>Hatpin</td><td>Quill (Sunspear), Dame Flicka (Long Skewer)</td></tr>
+      <tr><td>Scatterjack</td><td>Area spread</td><td>Gravel Sneeze</td><td>Jax (Pepper Rain), Nan (Pan Parade), Fizz (Rising Fizz)</td></tr>
+      <tr><td>Delver</td><td>Digs under</td><td>Nibbler</td><td>Grub (Burrowbomb), Truffle (Molehill Surprise)</td></tr>
+      <tr><td>Boinker</td><td>Bounces and rolls</td><td>Bouncebean</td><td>Bobbin (Rolypoly), Skip (Skimmerstone)</td></tr>
+      <tr><td>Sizzler</td><td>Fire and water</td><td>Emberpot</td><td>Ember (Scaldspill), Brine (Drenchbarrel)</td></tr>
+      <tr><td>Patcher</td><td>Repairs and shields</td><td>Mendglob</td><td>Hetty (Barn Raising), Poultice (Bubble Bonnet)</td></tr>
+      <tr><td>Peeper <span class="tag u">U2</span></td><td>Scouts hidden crew</td><td>Peep Pip</td><td>Arrives in Update 2</td></tr>
+    </tbody>
+  </table></div>
+  <figure><img src="art/22-launch-hob-roster.jpg" alt="The 16 launch Hobs, each with a class hat and one personal touch." loading="lazy"><figcaption>The 16 launch Hobs. Each keeps its class hat and adds one personal touch.</figcaption></figure>
+  <h3>New roles from the reference games</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Hob</th><th>Passive</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td>Grub</td><td>Broad Back: the Hob behind him keeps cover even if their wall breaks</td><td>Front tank</td></tr>
+      <tr><td>Hetty</td><td>Ridgepole: blocks above her room cannot fall while she stands</td><td>Column holder</td></tr>
+      <tr><td>Old Thumper</td><td>Old Grudge: a bigger shot after a neighbour is knocked out</td><td>Reacts to a loss</td></tr>
+      <tr><td>Nan</td><td>Clatter Call: neighbours hit 15% harder after she hits a Hob</td><td>Buffs neighbours</td></tr>
+      <tr><td>Fizz</td><td>Rising Fizz Knack: bubbles that fall upward onto roofs</td><td>New shot shape</td></tr>
+      <tr><td>Marge</td><td>Low Blow: her big shot hits the bottom rows harder</td><td>Rewards aiming low</td></tr>
+    </tbody>
+  </table></div>
+  <p>Up to 5 Hobs in a fort. Any Hob can fire any Trick Shell; the matching class fires it better. Hobs grow in 3 ranks, each a perk choice, never raw power. Every Hob has a personality and voice lines in made-up Hob gibberish with subtitles.</p>
+</section>
+
+<section id="weapons">
+  <p class="eyebrow">Weapons</p>
+  <h2>Every shot must change the picture</h2>
+  <div class="cols">
+    <div class="patch"><b>8 Plain Shots</b><span>One per class, always free.</span></div>
+    <div class="patch"><b>28 Knacks</b><span>One per named Hob, 2 uses per battle. 16 at launch.</span></div>
+    <div class="patch"><b>58 Trick Shells</b><span>Splash, cluster, digger, roller, bouncer, guided, fire, ground builders, gravity, timed and more. 30 at launch.</span></div>
+    <div class="patch"><b>Joke Duds</b><span>Old Turnip, Soggy Sock, Squeaky Duck. Always labeled.</span></div>
+    <div class="patch"><b>14 Doodads</b><span>Gadgets such as Scarecrow, Mole Mine and Kettle Lid.</span></div>
+    <div class="patch"><b>26 combos</b><span>Tinder and Bellows (fire plus wind), Cold Snap (frost plus falling stone) and more.</span></div>
+  </div>
+  <figure><img src="art/15-shots-vfx.jpg" alt="Ten shot and impact studies including pot bomb, bolt, fan spread, borer, bouncer, fire and frost." loading="lazy"><figcaption>Shot and impact studies.</figcaption></figure>
+  <figure><img src="art/21-pre-battle-screen-mockup.jpg" alt="Pre-battle screen mockup with level card, crew seats, draft strip, Doodads and Fight button." loading="lazy"><figcaption>One pre-battle screen: level card, seats, draft strip, Doodads, then Fight.</figcaption></figure>
+  <p>Before each battle you and the Rival draft 4 shells each from a pool of 10 (the <b>Rummage</b>). One formula scores every shot, and bots check 20 balance red flags each night.</p>
+</section>
+
+<section id="enemies">
+  <p class="eyebrow">Enemies and bosses</p>
+  <h2>Fair bosses with tells, and a final fight about raising hills</h2>
+  <div class="cols">
+    <figure><img src="art/10-flattener-lineup.jpg" alt="Flattener enemy crew in grey pressed uniforms and flat caps." loading="lazy"><figcaption>Flatteners: Hobs in creased grey uniforms and pancake caps.</figcaption></figure>
+    <figure><img src="art/23-grand-forts.jpg" alt="The four launch Grand Fort boss castles." loading="lazy" onerror="this.closest('figure').hidden=true"><figcaption>The four launch Grand Forts.</figcaption></figure>
+  </div>
+  <ul>
+    <li>Launch bosses: Marshal Trimm (Topiary Keep), Dame Scree (Sanding Stair), Admiral Drainwell (Great Sump), then Steward Plumb and Baron Levelwell (The Last Level).</li>
+    <li>Boss forts have 3 phases. A boss always warns a turn before a big attack and never heals back past a phase line.</li>
+    <li>The final boss has 2 stages, the Grand Roller then the Level Engine. You win by raising hills, and you can retry from the stage.</li>
+    <li>14 enemy unit types at launch, 16 castle styles that each teach something, and 8 AI personalities such as Bully, Sniper, Gambler and Coward. Each Rival states one habit you can build against.</li>
+  </ul>
+</section>
+
+<section id="campaign">
+  <p class="eyebrow">Campaign</p>
+  <h2>The Unflattening: 40 levels at launch, 60 in all</h2>
+  <figure><img src="art/14-biomes.jpg" alt="Six region thumbnails with their palettes." loading="lazy"><figcaption>The six regions.</figcaption></figure>
+  <div class="tbl"><table>
+    <thead><tr><th>#</th><th>Region</th><th>Look</th><th>New idea taught</th><th>Boss</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Puddingstone Downs <span class="tag l">Free trial</span></td><td>Grass hills, hedges, streams</td><td>Aim, crew, kettle, wind, a Knack, building, draft, walking</td><td>Topiary Keep</td></tr>
+      <tr><td class="num">2</td><td>Crumblecrag</td><td>Cliffs, ledges, gorges</td><td>Height, falls, digging, bank shots, fire on wood</td><td>Sanding Stair</td></tr>
+      <tr><td class="num">3</td><td>Soggybottom Fen</td><td>Marsh, ponds, mud</td><td>Water, mud, soaked, fire against water, tide</td><td>Great Sump</td></tr>
+      <tr><td class="num">4</td><td>The Flats</td><td>Rolled flat land, chained hills</td><td>Raising and dropping ground, fighting machines</td><td>The Last Level</td></tr>
+      <tr><td class="num">5</td><td>Frostwhisker Peaks <span class="tag u">U2</span></td><td>Snow, ice lakes</td><td>Strong wind, frost, ice, hidden crew, escort</td><td>Glidehall</td></tr>
+      <tr><td class="num">6</td><td>Clankmouth Mines <span class="tag u">U3</span></td><td>Caves, rails, lava</td><td>Ceilings, shock chains, magnets, Moonbrick</td><td>Stampmill</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li>Launch mix: 25 Siege, 4 Demolition, 4 Rescue, 3 Puzzle, 4 Grand Fort. Each level has 3 Pennant goals.</li>
+    <li>The first five levels teach only aim, picking a Hob, the kettle, wind and one Knack. Building opens at 1-6, the draft at 1-8, the Tinker Tree at 1-10.</li>
+    <li>Side modes: Trials, a seeded Daily Dust-up that works offline with no streak pressure, Skirmish and the Test Yard sandbox.</li>
+  </ul>
+</section>
+
+<section id="progress">
+  <p class="eyebrow">Progression</p>
+  <h2>Two currencies, a free fort editor, no grind wall</h2>
+  <div class="cols">
+    <div class="patch"><b>Buttons</b><span>Earned in every battle, win or lose. Spent on blocks and Hob ranks.</span></div>
+    <div class="patch"><b>Pennants</b><span>Up to 3 per level. Spent on the Tinker Tree.</span></div>
+    <div class="patch"><b>Tinker Tree</b><span>4 branches (Aim, Fort, Crew, Kit), 36 nodes at launch, 60 in all. Free resets. Info readouts are free.</span></div>
+    <div class="patch"><b>Workshop</b><span>Build your fort with undo, mirror and test fire. 5 saved Blueprints. Blocks sell back at full price.</span></div>
+  </div>
+  <div class="cols">
+    <figure><img src="art/18-workshop-mockup.jpg" alt="Workshop castle builder mockup with material palette and grid." loading="lazy"><figcaption>Workshop castle builder.</figcaption></figure>
+    <figure><img src="art/19-tinker-tree-mockup.jpg" alt="Tinker Tree screen mockup." loading="lazy"><figcaption>Tinker Tree.</figcaption></figure>
+  </div>
+  <p>A script checked every level: a player who earns only 1 Pennant per level and never replays can still afford what each region needs. The launch campaign takes about 5 hours; full completion takes 12 to 14.</p>
+</section>
+
+<section id="couch">
+  <p class="eyebrow">Two players</p>
+  <h2>Couch Duel: two players, one device, at launch</h2>
+  <figure><img src="art/25-couch-duel-mockup.jpg" alt="Couch Duel setup screen and the hand-off card between turns." loading="lazy"><figcaption>One-screen setup, then a hand-off card between turns with the last shot and a Ready button.</figcaption></figure>
+  <ul>
+    <li>Everything is open to both players, including the draft and hidden gadgets.</li>
+    <li>Even Starter Box forts are ready from the first launch, or bring your own fort and crew.</li>
+    <li>Help levels per player (None, Some, Lots) are shown openly.</li>
+    <li>An optional Kind Clock, off by default, nudges a slow player but never fires for them.</li>
+    <li>Win by knockout or by Volley Points. Table mode in portrait gives each player their own half.</li>
+    <li>No AI, fully offline, no rewards to farm.</li>
+  </ul>
+</section>
+
+<section id="tech">
+  <p class="eyebrow">Tech</p>
+  <h2>Native apps on one shared rules core</h2>
+  <div class="tbl"><table>
+    <tbody>
+      <tr><th>Shared core</th><td>Rust: rules, AI, content, saves, the Daily and bots. Whole-number maths (Q16.16 fixed point), so all three apps give exactly the same result</td></tr>
+      <tr><th>iPhone and iPad</th><td>Swift, SwiftUI and Metal. The core ships as an XCFramework</td></tr>
+      <tr><th>Android</th><td>Kotlin, Jetpack Compose and OpenGL ES 3.0. The core ships as NDK libraries</td></tr>
+      <tr><th>Web</th><td>TypeScript and WebGL2, with the core as WebAssembly. Installs and works offline</td></tr>
+      <tr><th>Collapse</th><td>Our own support check in the core. Each renderer adds the creak, lean and dust</td></tr>
+      <tr><th>AI</th><td>Its own thread, under 400 ms on a 2 GB phone</td></tr>
+      <tr><th>Tests</th><td>The same recorded battles must match on iOS, Android, Linux, macOS and three browser engines. 20,000 bot battles each night</td></tr>
+      <tr><th>Money</th><td>None. No purchase, ad or analytics code</td></tr>
+    </tbody>
+  </table></div>
+  <p>Five options were scored. The shared Rust core won with 93 of 115. Three separate apps scored 69 and would cost about 290 engineer-weeks.</p>
+</section>
+
+<section id="build">
+  <p class="eyebrow">Build plan</p>
+  <h2>48 to 54 weeks to launch on all three platforms</h2>
+  <div class="timeline">
+    <div class="step"><span class="wk">Wk 1-6</span><div><b>Risk prototype.</b> Identical results on every target, terrain at 60 fps in all three renderers on a 2 GB phone, castle collapse, the core to app link frozen, AI speed, and quick click, portrait, VoiceOver and TalkBack checks.</div></div>
+    <div class="step"><span class="wk">Wk 16</span><div><b>Vertical slice.</b> Half of Region 1 on iOS, Android and web, with Couch Duel. 70% of 20 testers finish in one sitting.</div></div>
+    <div class="step"><span class="wk">Wk 32</span><div><b>Alpha.</b> All 40 levels on all three. Bots clear every level with no upgrades.</div></div>
+    <div class="step"><span class="wk">Wk 44</span><div><b>Beta.</b> Final art and audio, 5 languages, store builds.</div></div>
+    <div class="step"><span class="wk">Wk 48-54</span><div><b>Launch</b> on iOS, Android and web on the same day. Free updates follow every 8 to 10 weeks.</div></div>
+  </div>
+  <p>Team: 6 to 7 engineers (3 core, 1 each for iOS, Android and web, half a build role), 1 artist plus a contract animator, 1 designer, 1 level designer, part-time audio. About 200 engineer-weeks for launch.</p>
+</section>
+
+<section id="decide">
+  <p class="eyebrow">Your decisions</p>
+  <h2>Decided, and what is left</h2>
+  <div class="tbl decide"><table>
+    <thead><tr><th>Item</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Money</td><td>Decided: everything free, nothing monetized</td></tr>
+      <tr><td>Platforms</td><td>Decided: native iOS and Android, plus web</td></tr>
+      <tr><td>Couch Duel</td><td>Decided: ships at launch</td></tr>
+      <tr><td>Orientation</td><td>Decided: portrait and landscape</td></tr>
+      <tr><td>Final art</td><td>Decided: human artists</td></tr>
+      <tr><td>Squall tie, wind, first gadget</td><td>Decided: more total HP wins; gentle wind with an off option; first gadget at 1-9</td></tr>
+      <tr><td>Launch size</td><td>Open. Recommended: 4 regions and 40 levels, then 3 free updates to 60</td></tr>
+      <tr><td>Oldest devices</td><td>Open. Recommended: iOS 16 and Android 8</td></tr>
+      <tr><td>Analytics</td><td>Open. Recommended: none at launch</td></tr>
+      <tr><td>Daily delay</td><td>Open. Recommended: new Daily tables go live 14 days after an update</td></tr>
+      <tr><td>Next step</td><td>Start the 6-week risk prototype on your go</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="art">
+  <p class="eyebrow">Concept art</p>
+  <h2>Every sheet</h2>
+  <div class="gallery" id="gallery"></div>
+</section>
+
+<section id="method">
+  <p class="eyebrow">How we got here</p>
+  <h2>Research, design, three reviews, one fix pass</h2>
+  <div class="tbl"><table>
+    <tbody>
+      <tr><th>Market</th><td>20 games compared, with trends, gaps and player types</td></tr>
+      <tr><th>Played</th><td>Tank Duel, both Pocket Tanks copies the owner linked, Tank Stars (web), Castle Siege Artillery and Archery Bastions, with screenshots</td></tr>
+      <tr><th>Mac playtest</th><td>Castle Busters (6 battles, about 30 min) and Pocket Tanks (4 matches, about 28 min) played as iPad apps on the Mac, with 34 screenshots</td></tr>
+      <tr><th>Stores</th><td>Store pages, 20 store screenshots and about 1,600 App Store reviews</td></tr>
+      <tr><th>Code</th><td>Both linked repos read in depth and about 30 more surveyed</td></tr>
+      <tr><th>Design</th><td>A lead designer, then 7 specialists across two model families</td></tr>
+      <tr><th>Review</th><td>Consistency (89 conflicts found and settled), fun and scope, and technical feasibility</td></tr>
+      <tr><th>Lessons</th><td>Two independent reviews of the playtest, merged into 11 gameplay and 11 unit changes</td></tr>
+      <tr><th>Fix</th><td>One rulings file, 4 editors, then a final 18-check verification across all docs</td></tr>
+    </tbody>
+  </table></div>
+  <p>Full detail lives in the repository under <code>docs/</code>, starting with <code>docs/PLAN.md</code>.</p>
+</section>
+
+<footer>Castle Protect planning pack. Draft for approval. No game code has been written yet.</footer>
+</div>
+
+<script>
+const sheets=[
+["01-logo-title","Logo and title card"],["02-key-art-battle","Key art battle scene"],
+["03-material-wicker","Wicker block, 4 damage states"],["04-material-timber","Timber block, 4 damage states"],
+["05-material-cobble","Cobble block, 4 damage states"],["06-material-brassbound","Brassbound block, 4 damage states"],
+["07-material-moonbrick","Moonbrick block (Update 3)"],["08-material-footing","Footing row, the stub that never falls"],
+["09-hob-crew-lineup","Hob classes and silhouette tests"],["10-flattener-lineup","Flattener crew"],
+["11-baron-levelwell","Baron Levelwell"],["12-heartkettle","Heartkettle in 4 states"],
+["13-walking-fort-cutaway","Walking fort cutaway"],["14-biomes","Six regions"],
+["15-shots-vfx","Shot and impact studies"],["16-hud-battle-mockup","Battle screen"],
+["17-campaign-map-mockup","Campaign map"],["18-workshop-mockup","Workshop builder"],
+["19-tinker-tree-mockup","Tinker Tree"],["20-palette-and-style","Palette and style guide"],
+["21-pre-battle-screen-mockup","Pre-battle screen"],["22-launch-hob-roster","The 16 launch Hobs"],
+["23-grand-forts","The 4 launch Grand Forts"],["24-portrait-hud-mockup","Portrait battle view"],["25-couch-duel-mockup","Couch Duel setup and hand-off"]];
+const g=document.getElementById('gallery');
+for(const [f,c] of sheets){
+  const a=document.createElement('a');a.href='art/'+f+'.jpg';a.target='_blank';a.rel='noopener';
+  a.innerHTML='<figure><img loading="lazy" src="art/'+f+'.jpg" alt="'+c+'"><figcaption>'+c+'</figcaption></figure>';
+  a.querySelector('img').onerror=()=>{a.hidden=true};
+  g.appendChild(a);
+}
+</script>

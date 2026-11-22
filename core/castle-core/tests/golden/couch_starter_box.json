@@ -1,0 +1,21 @@
+{
+  "name": "couch_starter_box",
+  "about": "Couch Duel with Starter Box kits. Quick Pick for both, a walk, a Mend Bucket, a Pot Lid, then bots play it out.",
+  "setup": {"level": "d1", "mode": "couch", "first_turn": 0, "sides": [{"kit": "kit_oak"}, {"kit": "kit_stone"}]},
+  "seed": 77,
+  "script": [
+    {"cmd": "end_draft"},
+    {"cmd": "walk", "dx": 40},
+    {"cmd": "aim", "angle": 450, "power": 80},
+    {"cmd": "fire"},
+    {"step": 3000},
+    {"cmd": "doodad", "doodad": "pot_lid", "room": "kettle"},
+    {"step": 100},
+    {"cmd": "pick_hob", "hob": 1},
+    {"cmd": "pick_shot", "shot": "knack"},
+    {"cmd": "aim", "angle": 300, "power": 75},
+    {"cmd": "fire"},
+    {"step": 3000},
+    {"auto": 60}
+  ]
+}

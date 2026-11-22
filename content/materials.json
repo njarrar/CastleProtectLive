@@ -1,0 +1,135 @@
+{
+  "terrain": [
+    {
+      "id": "air",
+      "code": 0,
+      "solid": false,
+      "carve_pct": 0
+    },
+    {
+      "id": "loam",
+      "code": 1,
+      "solid": true,
+      "loose": true,
+      "carve_pct": 100,
+      "bore_pct": 100
+    },
+    {
+      "id": "clay",
+      "code": 2,
+      "solid": true,
+      "carve_pct": 50,
+      "bore_pct": 50
+    },
+    {
+      "id": "rock",
+      "code": 3,
+      "solid": true,
+      "carve_pct": 0,
+      "heavy_carve_pct": 60,
+      "bore_pct": 0
+    },
+    {
+      "id": "bedrock",
+      "code": 4,
+      "solid": true,
+      "carve_pct": 0,
+      "bore_pct": 0
+    },
+    {
+      "id": "mud",
+      "code": 5,
+      "solid": true,
+      "carve_pct": 100,
+      "bore_pct": 50
+    },
+    {
+      "id": "water",
+      "code": 6,
+      "solid": false,
+      "liquid": true,
+      "carve_pct": 0
+    }
+  ],
+  "blocks": [
+    {
+      "id": "wicker",
+      "name": "Wicker",
+      "glyph": "w",
+      "hp": 30,
+      "cost": 5,
+      "side_support": 2,
+      "crush_pct": 0,
+      "mult": {
+        "blast": 120,
+        "pierce": 100,
+        "dig": 100,
+        "fire": 150,
+        "crush": 100
+      }
+    },
+    {
+      "id": "timber",
+      "name": "Timber",
+      "glyph": "t",
+      "hp": 50,
+      "cost": 15,
+      "side_support": 2,
+      "crush_pct": 100,
+      "mult": {
+        "blast": 100,
+        "pierce": 100,
+        "dig": 100,
+        "fire": 150,
+        "crush": 100
+      }
+    },
+    {
+      "id": "cobble",
+      "name": "Cobble",
+      "glyph": "c",
+      "hp": 80,
+      "cost": 35,
+      "side_support": 1,
+      "crush_pct": 200,
+      "mult": {
+        "blast": 80,
+        "pierce": 60,
+        "dig": 70,
+        "fire": 20,
+        "crush": 100
+      }
+    },
+    {
+      "id": "footing",
+      "name": "Footing",
+      "glyph": "F",
+      "hp": 400,
+      "cost": 0,
+      "side_support": 0,
+      "crush_pct": 0,
+      "never_falls": true,
+      "mult": {
+        "blast": 25,
+        "pierce": 10,
+        "dig": 0,
+        "fire": 0,
+        "crush": 0
+      }
+    }
+  ],
+  "hob": {
+    "blast": 100,
+    "pierce": 150,
+    "dig": 50,
+    "fire": 100,
+    "crush": 100
+  },
+  "kettle": {
+    "blast": 50,
+    "pierce": 100,
+    "dig": 0,
+    "fire": 0,
+    "crush": 50
+  }
+}

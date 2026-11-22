@@ -1,0 +1,142 @@
+{
+  "id": "1-9",
+  "name": "Over Loaf Hill",
+  "type": "siege",
+  "size": "M",
+  "width": 2400,
+  "height": 720,
+  "ground": {
+    "points": [
+      [
+        0,
+        340
+      ],
+      [
+        300,
+        360
+      ],
+      [
+        450,
+        400
+      ],
+      [
+        560,
+        370
+      ],
+      [
+        720,
+        330
+      ],
+      [
+        900,
+        360
+      ],
+      [
+        1000,
+        330
+      ],
+      [
+        1150,
+        470
+      ],
+      [
+        1300,
+        480
+      ],
+      [
+        1450,
+        380
+      ],
+      [
+        1550,
+        420
+      ],
+      [
+        1850,
+        420
+      ],
+      [
+        2000,
+        380
+      ],
+      [
+        2400,
+        360
+      ]
+    ],
+    "patches": [
+      [
+        1550,
+        1850,
+        380,
+        120,
+        "rock"
+      ]
+    ]
+  },
+  "pads": [
+    {
+      "x": 300
+    },
+    {
+      "x": 1700
+    }
+  ],
+  "player": {
+    "crew": [
+      "marge",
+      "quill",
+      "jax",
+      "bobbin"
+    ],
+    "crew_size": 4,
+    "blueprint": "bp_home_4"
+  },
+  "rival": {
+    "name": "Lance Corporal Sod Turfwick",
+    "habit": "Slow to find his range. Starts over when you move.",
+    "blueprint": "bp_r1_pancake",
+    "crew": [
+      "hedge_snipper",
+      "hedge_snipper",
+      "rake_hand",
+      "mower_minder"
+    ],
+    "aim": 2
+  },
+  "rules": {
+    "round_cap": 14,
+    "wind": {
+      "min": 0,
+      "max": 2
+    },
+    "rummage": {
+      "pool": 6,
+      "picks": 2
+    }
+  },
+  "pennants": [
+    {
+      "type": "win",
+      "text": "Win"
+    },
+    {
+      "type": "hits_from_spots",
+      "text": "Land hits from two different spots",
+      "value": 2
+    },
+    {
+      "type": "no_hob_bonked",
+      "text": "No Hob of yours Bonked"
+    }
+  ],
+  "map_note": "Home Knoll, a ford, a low hump, then Loaf Hill between you and the Rival on High Hill.",
+  "new_thing": "Walk and Steam.",
+  "water": [
+    {
+      "x0": 600,
+      "x1": 720,
+      "level": 345
+    }
+  ]
+}

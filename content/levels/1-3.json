@@ -1,0 +1,98 @@
+{
+  "id": "1-3",
+  "name": "Kettle on the Knoll",
+  "type": "siege",
+  "size": "S",
+  "width": 1600,
+  "height": 720,
+  "ground": {
+    "points": [
+      [
+        0,
+        280
+      ],
+      [
+        350,
+        290
+      ],
+      [
+        700,
+        260
+      ],
+      [
+        950,
+        300
+      ],
+      [
+        1150,
+        380
+      ],
+      [
+        1450,
+        390
+      ],
+      [
+        1600,
+        370
+      ]
+    ]
+  },
+  "pads": [
+    {
+      "x": 380
+    },
+    {
+      "x": 1300
+    }
+  ],
+  "player": {
+    "crew": [
+      "marge",
+      "quill"
+    ],
+    "crew_size": 2,
+    "blueprint": "bp_home_3",
+    "loose_shells": [
+      "lid_lifter"
+    ]
+  },
+  "rival": {
+    "name": "Corporal Fernsby Clip",
+    "habit": "Hides his crew deep. Leaves the kettle near the wall.",
+    "blueprint": "bp_r1_kettle_knoll",
+    "crew": [
+      "hedge_snipper",
+      "rake_hand",
+      "straw_stuffer"
+    ],
+    "aim": 1
+  },
+  "rules": {
+    "round_cap": 12,
+    "wind": {
+      "min": 0,
+      "max": 0
+    },
+    "rummage": {
+      "pool": 0,
+      "picks": 0
+    }
+  },
+  "pennants": [
+    {
+      "type": "win",
+      "text": "Win"
+    },
+    {
+      "type": "kettle_pop",
+      "text": "Win by Kettle Pop"
+    },
+    {
+      "type": "kettle_above_pct",
+      "text": "Your kettle above 50%",
+      "value": 50
+    }
+  ],
+  "map_note": "Shallow valley. Rival on a knoll 100 cells up, kettle one block behind a thin wall.",
+  "new_thing": "Kettle Pop."
+}
