@@ -84,18 +84,21 @@ jobs:
         with:
           workspaces: core -> target
 
-      - name: Install wasm-opt
-        if: steps.check.outputs.wasm == 'true'
-        run: sudo apt-get install -y --no-install-recommends binaryen || echo "::warning::binaryen not installed, the wasm ships without wasm-opt."
-
-      - name: Build castle-wasm
-        if: steps.check.outputs.wasm == 'true'
-        run: scripts/build-wasm.sh --target web
-
       - uses: actions/setup-node@v7
         if: steps.check.outputs.web == 'true'
         with:
           node-version: ${{ env.NODE_VERSION }}
+
+      # wasm-opt from a pinned binaryen on npm. The apt package on ubuntu-24.04 is binaryen 108,
+      # whose wasm-opt breaks the externref table wasm-bindgen emits (the core then fails to load
+      # with "WebAssembly.Table.grow(): failed to grow table").
+      - name: Install wasm-opt
+        if: steps.check.outputs.wasm == 'true'
+        run: npm install -g binaryen@123.0.0 && wasm-opt --version
+
+      - name: Build castle-wasm
+        if: steps.check.outputs.wasm == 'true'
+        run: scripts/build-wasm.sh --target web
 
       - name: Cache npm
         if: steps.check.outputs.web == 'true'

@@ -65,6 +65,16 @@ fi
 mkdir -p "$OUT_DIR"
 wasm-bindgen "$WASM_FILE" --out-dir "$OUT_DIR" --target "$BINDGEN_TARGET"
 
+# Older wasm-opt (binaryen 108, the ubuntu-24.04 apt package) breaks the externref table that
+# wasm-bindgen emits, and the core then fails to load in the browser. Skip it rather than ship that.
+MIN_WASM_OPT=123
+if [ "${WASM_OPT:-1}" != "0" ] && [ "$PROFILE" = "release" ] && command -v wasm-opt >/dev/null 2>&1; then
+  opt_version="$(wasm-opt --version | grep -oE '[0-9]+' | head -1)"
+  if [ "${opt_version:-0}" -lt "$MIN_WASM_OPT" ]; then
+    echo "wasm-opt version ${opt_version:-unknown} is older than $MIN_WASM_OPT, skipping it." >&2
+    WASM_OPT=0
+  fi
+fi
 if [ "${WASM_OPT:-1}" != "0" ] && [ "$PROFILE" = "release" ] && command -v wasm-opt >/dev/null 2>&1; then
   for f in "$OUT_DIR"/*_bg.wasm; do
     if wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int \
