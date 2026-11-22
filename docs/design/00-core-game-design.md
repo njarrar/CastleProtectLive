@@ -115,10 +115,11 @@ The single source for these values. Where another doc differs, this table wins u
 | Block cap | 80 grid cells including Footing. Block Budget 72, shown as x / 72 |
 | Nooks | Never fewer than seated Hobs. Cap 5. Enemy forts 1 to 5 |
 | Kettle Room | 2 x 2, at least one block in from every outer face |
-| Materials (HP, Buttons, side support) | Wicker 30, 5, 2. Timber 50, 15, 2. Cobble 80, 35, 1. Brassbound 110, 70, 2. Moonbrick [U3] 140, 150, 1. Footing 400, free, never falls |
+| Materials (HP, Buttons, side support) | Wicker 30, 5, 2. Timber 50, 15, 1 (was 2, tuned for pacing in core v0.2). Cobble 80, 35, 1. Brassbound 110, 70, 2. Moonbrick [U3] 140, 150, 1. Footing 400, free, never falls |
 | Moonbrick heal [U3] | 7 HP at its owner's turn start; none if it was hit since its owner's last turn, if Brittle, or with a Cuckoo Clock on it |
 | Heartkettle | 300 HP on every fort, bosses included. Blast 50%, crush 50% (falling chunks hit it at 50%), Pierce 100%, Zap 100% [U3]. Fire, Dig, Frost 0. A Beam that has passed through a block deals half to it. Never Brittle |
-| Cover | 50% off area payloads (Tiny band or larger, any type) centred outside an intact Nook. Intact: every block on all four sides stands |
+| Cover | 65% off area payloads (was 50%, tuned for pacing in core v0.2; value lives in `content/materials.json` as `cover_pct`) (Tiny band or larger, any type) centred outside an intact Nook. Intact: every block on all four sides stands |
+| Pacing tune (core v0.2) | Timber, Cobble and Hob crush raised. Measured on 96 Fair vs Fair bot battles: median end round 10, 63% end on rounds 7 to 11, 12.5% go past the round cap. Rerun with `cargo run -p castle-core --example pacing` |
 | Self damage | Your own blasts hurt your own blocks and Hobs at 50%. A self hit never Bonks your own Hob (stops at 1 HP) |
 | Thump, fall, crush | Drop over 48: 10 to every block and Hob. Fall over 32: 10 per 16, max 40. Crush 15 per block (Cobble x2, Wicker 0) |
 
