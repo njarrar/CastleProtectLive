@@ -119,7 +119,7 @@
     }
   ],
   "hob": {
-    "blast": 100,
+    "blast": 150,
     "pierce": 150,
     "dig": 50,
     "fire": 100,
@@ -131,5 +131,6 @@
     "dig": 0,
     "fire": 0,
     "crush": 50
-  }
+  },
+  "cover_pct": 75
 }

@@ -34,9 +34,20 @@ enum Theme {
         }
     }
 
-    static func title(_ size: CGFloat) -> Font { .system(size: size, weight: .heavy, design: .rounded) }
-    static func label(_ size: CGFloat) -> Font { .system(size: size, weight: .semibold, design: .rounded) }
-    static func number(_ size: CGFloat) -> Font { .system(size: size, weight: .bold, design: .rounded).monospacedDigit() }
+    /// Text size steps (UX 7.2): the system text size, capped so the HUD still
+    /// fits, times 1.2 with the Large text setting. Set from AppModel.
+    nonisolated(unsafe) static var largeText = false
+
+    /// A point size scaled for the reader's text size, never under the 12 pt floor.
+    static func scaled(_ size: CGFloat) -> CGFloat {
+        let system = UIFontMetrics.default.scaledValue(for: size)
+        let capped = min(system, size * 1.4)
+        return max(12, capped * (largeText ? 1.2 : 1))
+    }
+
+    static func title(_ size: CGFloat) -> Font { .system(size: scaled(size), weight: .heavy, design: .rounded) }
+    static func label(_ size: CGFloat) -> Font { .system(size: scaled(size), weight: .semibold, design: .rounded) }
+    static func number(_ size: CGFloat) -> Font { .system(size: scaled(size), weight: .bold, design: .rounded).monospacedDigit() }
 }
 
 /// Places a view at a rect given in the parent's coordinate space.
@@ -121,21 +132,61 @@ struct SpriteIcon: View {
     }
 }
 
+/// The repeat loop behind a held key. It ends when cancelled, when the
+/// action refuses (returns false), or when its owner goes away, so a held key
+/// can never repeat for ever (C1, UX 3.10 rule 6).
+@MainActor
+final class Repeater {
+    private var task: Task<Void, Never>?
+    /// True once the held key has acted at least once by repeating.
+    private(set) var repeated = false
+
+    var isRunning: Bool { task != nil }
+
+    nonisolated init() {}
+
+    func start(delay: Double, rate: Double, fastRate: Double, action: @escaping @MainActor () -> Bool) {
+        cancel()
+        repeated = false
+        task = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(max(0, delay) * 1_000_000_000))
+            let begun = Date()
+            while !Task.isCancelled {
+                self?.repeated = true
+                if !action() { break }
+                let r = Date().timeIntervalSince(begun) > 1 ? fastRate : rate
+                try? await Task.sleep(nanoseconds: UInt64(1_000_000_000 / max(1, r)))
+            }
+            if !Task.isCancelled { self?.task = nil }
+        }
+    }
+
+    func cancel() {
+        task?.cancel()
+        task = nil
+    }
+}
+
 /// A button that acts on release with no minimum press, and repeats while
 /// held (first repeat at `delay`, then `rate` a second, rising to `fastRate`
 /// after a second). A press that repeated does not also act on release.
 /// With `tapOnly` the hold does nothing extra (UX 3.10 rule 2).
+///
+/// The repeat stops when the finger lifts, when the system cancels the touch
+/// (`@GestureState` resets), when the button leaves the screen, when the app
+/// leaves the foreground, when the button is disabled, and when the action
+/// refuses (C1).
 struct RepeatButton<Label: View>: View {
     let delay: Double
     let rate: Double
     let fastRate: Double
     let tapOnly: Bool
     let accessibilityName: String
-    let action: () -> Void
+    let action: () -> Bool
     let label: () -> Label
 
     init(delay: Double = 0.35, rate: Double = 8, fastRate: Double = 20, tapOnly: Bool = false,
-         accessibilityName: String, action: @escaping () -> Void, @ViewBuilder label: @escaping () -> Label) {
+         accessibilityName: String, action: @escaping () -> Bool, @ViewBuilder label: @escaping () -> Label) {
         self.delay = delay
         self.rate = rate
         self.fastRate = fastRate
@@ -145,48 +196,54 @@ struct RepeatButton<Label: View>: View {
         self.label = label
     }
 
+    @GestureState private var isPressing = false
     @State private var pressed = false
-    @State private var repeated = false
-    @State private var task: Task<Void, Never>?
+    @State private var repeater = Repeater()
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         label()
             .contentShape(Rectangle())
             .scaleEffect(pressed ? 0.94 : 1)
+            .opacity(isEnabled ? 1 : 0.5)
             .gesture(
                 DragGesture(minimumDistance: 0)
+                    .updating($isPressing) { _, state, _ in state = true }
                     .onChanged { _ in
-                        guard !pressed else { return }
+                        guard !pressed, isEnabled else { return }
                         pressed = true
-                        repeated = false
                         startRepeat()
                     }
                     .onEnded { value in
-                        pressed = false
-                        task?.cancel()
-                        task = nil
+                        let didRepeat = repeater.repeated
+                        stopRepeat()
                         let moved = hypot(value.translation.width, value.translation.height)
-                        if !repeated && moved < 40 { action() }
+                        if !didRepeat && moved < 40 && isEnabled { _ = action() }
                     }
             )
+            .onChange(of: isPressing) { pressing in
+                if !pressing { stopRepeat() }
+            }
+            .onChange(of: scenePhase) { _ in stopRepeat() }
+            .onChange(of: isEnabled) { enabled in
+                if !enabled { stopRepeat() }
+            }
+            .onDisappear { stopRepeat() }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityName)
             .accessibilityAddTraits(.isButton)
-            .accessibilityAction { action() }
+            .accessibilityAction { _ = action() }
     }
 
     private func startRepeat() {
         guard !tapOnly else { return }
-        task?.cancel()
-        task = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            let begun = Date()
-            while !Task.isCancelled {
-                repeated = true
-                action()
-                let r = Date().timeIntervalSince(begun) > 1 ? fastRate : rate
-                try? await Task.sleep(nanoseconds: UInt64(1_000_000_000 / max(1, r)))
-            }
-        }
+        let act = action
+        repeater.start(delay: delay, rate: rate, fastRate: fastRate) { act() }
+    }
+
+    private func stopRepeat() {
+        pressed = false
+        repeater.cancel()
     }
 }

@@ -1,5 +1,6 @@
 # iOS app: build the core XCFramework, generate the Xcode project with
-# XcodeGen, then build and test for the iPhone simulator without signing.
+# XcodeGen, then build and test for the iPhone simulator without signing,
+# then build Release for a device (unsigned) and check the privacy manifest.
 # Skips with a notice while apps/ios does not exist yet.
 # macOS minutes cost 10x Linux minutes on private repos, so this workflow only
 # runs when iOS-related paths change.
@@ -160,13 +161,68 @@ jobs:
         working-directory: apps/ios
         run: |
           grep -q "Linking the real core" build/xcodebuild-build.log || { echo "::error::The build used the stand-in core, not CastleCore.xcframework."; exit 1; }
-          for t in testRealCoreWhenLinked testRefusedSetupIsReported; do
+          for t in testRealCoreWhenLinked testRefusedSetupIsReported testRescueLevelHasProps testGoldenHashesMatch testMultiTurnReplayMatchesTheHash; do
             if ! grep -qE "Test Case .*${t}\]' passed" build/xcodebuild-test.log; then
               echo "::error::Real-core test ${t} did not pass (skipped or missing)."
               exit 1
             fi
           done
           echo "Real core linked and real-core tests passed."
+
+      # A Release build for a device (unsigned), the way an archive is built.
+      # core-module.sh and CoreBridge.swift fail a Release build without the
+      # real core, so this proves the device slice links and the stand-in
+      # cannot ship.
+      - name: Build Release for device (unsigned)
+        if: steps.check.outputs.core == 'true'
+        working-directory: apps/ios
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "${{ steps.pick.outputs.project }}" \
+            -scheme "${{ steps.pick.outputs.scheme }}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build/xcodebuild-release.log
+          grep -q "Linking the real core from .*ios-arm64" build/xcodebuild-release.log || { echo "::error::The Release device build did not link the real core's device slice."; exit 1; }
+
+      # Required reason APIs (privacy manifest): list what the linked binary,
+      # Rust std included, imports, and fail when a category is used but not
+      # declared in PrivacyInfo.xcprivacy.
+      - name: Check the privacy manifest against the binary
+        if: steps.check.outputs.core == 'true'
+        working-directory: apps/ios
+        run: |
+          app="build/DerivedData/Build/Products/Release-iphoneos/CastleProtect.app"
+          bin="$app/CastleProtect"
+          test -f "$bin" || { echo "::error::No Release binary at $bin"; exit 1; }
+          nm -u "$bin" | sed 's/^ *U *//' | sort -u > build/undefined-symbols.txt
+          manifest="$app/PrivacyInfo.xcprivacy"
+          test -f "$manifest" || { echo "::error::PrivacyInfo.xcprivacy is not in the app bundle"; exit 1; }
+          fail=0
+          check() {
+            local category="$1"; shift
+            local hits=""
+            for sym in "$@"; do
+              if grep -qx "_${sym}" build/undefined-symbols.txt; then hits="$hits $sym"; fi
+            done
+            if [ -n "$hits" ]; then
+              echo "$category:$hits"
+              if ! plutil -convert xml1 -o - "$manifest" | grep -q "$category"; then
+                echo "::error::The binary calls$hits ($category) but PrivacyInfo.xcprivacy does not declare it."
+                fail=1
+              fi
+            fi
+          }
+          check NSPrivacyAccessedAPICategoryFileTimestamp stat stat64 fstat fstat64 fstatat lstat lstat64 getattrlist fgetattrlist getattrlistbulk getattrlistat
+          check NSPrivacyAccessedAPICategorySystemBootTime mach_absolute_time
+          check NSPrivacyAccessedAPICategoryDiskSpace statfs statfs64 fstatfs fstatfs64 statvfs fstatvfs
+          check NSPrivacyAccessedAPICategoryActiveKeyboards activeInputModes
+          echo "Undefined symbols checked: $(wc -l < build/undefined-symbols.txt)"
+          exit $fail
 
       - name: Zip simulator app
         if: steps.check.outputs.app == 'true'
@@ -195,6 +251,7 @@ jobs:
           path: |
             apps/ios/build/TestResults.xcresult
             apps/ios/build/*.log
+            apps/ios/build/undefined-symbols.txt
           if-no-files-found: ignore
 
   # Signed archive for TestFlight. Turn on once the Apple secrets exist

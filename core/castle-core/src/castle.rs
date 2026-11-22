@@ -236,6 +236,44 @@ pub fn validate_blueprint(content: &Content, bp: &Blueprint, seats: i32) -> Resu
     Ok(())
 }
 
+/// Workshop numbers for a blueprint: (Buttons cost, blocks used against
+/// the budget, problem cells). Problem cells are blocks with no support
+/// and the open wall slots of rooms that must be walled. Never fails: a
+/// blueprint that does not parse gives no cells.
+pub fn blueprint_report(content: &Content, bp: &Blueprint) -> (i32, i32, Vec<(i32, i32)>) {
+    let Ok((cols, rows, slots, nooks, k)) = parse(content, bp) else {
+        return (0, 0, vec![]);
+    };
+    let mut cost = 0;
+    for sl in &slots {
+        if let Slot::Block(b) = sl {
+            cost += content.materials.blocks[b.mat as usize].cost;
+        }
+    }
+    let used = slots[cols as usize..]
+        .iter()
+        .filter(|s| !matches!(s, Slot::Empty))
+        .count() as i32;
+    let mut cells = vec![];
+    for (c, r) in nooks.iter().copied().chain(std::iter::once(k)) {
+        for d in 0..2 {
+            for p in [(c + d, r - 1), (c + d, r + 2), (c - 1, r + d), (c + 2, r + d)] {
+                if !is_block(&slots, cols, rows, p.0, p.1) && !cells.contains(&p) {
+                    cells.push(p);
+                }
+            }
+        }
+    }
+    if let Ok(cs) = Castle::from_blueprint(content, bp, 0, 0) {
+        for p in cs.falling_chunks(content, &[]).into_iter().flatten() {
+            if !cells.contains(&p) {
+                cells.push(p);
+            }
+        }
+    }
+    (cost, used, cells)
+}
+
 impl Castle {
     pub fn from_blueprint(
         content: &Content,

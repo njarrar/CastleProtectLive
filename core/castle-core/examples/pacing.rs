@@ -31,6 +31,9 @@ fn main() {
     let mut think: Vec<u128> = vec![];
     let mut lock_sides = 0;
     let mut sides = 0;
+    let mut shots_all = 0;
+    let (mut kettle_lost, mut blocks_lost, mut hobs_lost) = (0i64, 0i64, 0i64);
+    let mut hits_all = 0;
     for i in 0..n {
         let lvl = &levels[i % levels.len()];
         let setup = format!(
@@ -63,6 +66,13 @@ fn main() {
             b.run_until_plan(100_000);
             guard += 1;
         }
+        for s in 0..2 {
+            kettle_lost += b.stats[s].kettle_lost;
+            blocks_lost += b.stats[s].blocks_lost as i64;
+            hobs_lost += b.stats[s].own_bonked as i64;
+            shots_all += b.stats[s].shots;
+            hits_all += b.stats[s].hits;
+        }
         let r = b.result.as_ref().expect("ended");
         *rounds.entry(r.round).or_insert(0) += 1;
         *hows.entry(r.how.clone()).or_insert(0) += 1;
@@ -93,9 +103,11 @@ fn main() {
     println!("ends: {hows:?}");
     hob_max_share.sort();
     println!("busiest Hob share per side: median {}%, over 60%: {lock_sides} of {sides} sides", hob_max_share.get(hob_max_share.len() / 2).copied().unwrap_or(0));
+    let sides_n = 2 * total as i64;
+    println!("per side at the end: kettle lost {}, blocks lost {}, Hobs Bonked {}", kettle_lost / sides_n, blocks_lost / sides_n, hobs_lost * 10 / sides_n);
+    println!("hit rate: {}% of {shots_all} shots", hits_all * 100 / shots_all.max(1));
     println!("Plain Shot share: {}%", plain * 100 / fired.max(1));
-    println!("ai_turn ms: p50 {:.1} p95 {:.1} max {:.1}",
-        think[think.len() / 2] as f64 / 1000.0,
-        think[think.len() * 95 / 100] as f64 / 1000.0,
-        *think.last().unwrap() as f64 / 1000.0);
+    let ms = |us: u128| format!("{}.{}", us / 1000, us % 1000 / 100);
+    println!("ai_turn ms: p50 {} p95 {} max {}",
+        ms(think[think.len() / 2]), ms(think[think.len() * 95 / 100]), ms(*think.last().unwrap()));
 }

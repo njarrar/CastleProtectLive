@@ -104,6 +104,10 @@ targets:
         type: folder
         buildPhase: resources
         optional: true
+      # Golden replay hashes, to prove the linked arm64 core gives the same results.
+      - path: ../../core/castle-core/tests/golden/expected.txt
+        buildPhase: resources
+        optional: true
     dependencies:
       - target: CastleProtect
     settings:

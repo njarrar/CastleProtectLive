@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import QuartzCore
 
 /// Everything the HUD shows, taken from one snapshot. Equatable so SwiftUI
 /// redraws only when something visible changed, not on every frame.
@@ -26,6 +27,8 @@ struct HudState: Equatable {
     var aim = AimView()
     var canFire = false
     var dugIn = false
+    var doodads: [String] = []
+    var puffUp = false
     var steam = 0
     var steamTurn = 0
     var steamMax = 100
@@ -58,6 +61,8 @@ struct HudState: Equatable {
         aim = s.aim
         canFire = s.canFire
         dugIn = s.dugIn
+        doodads = s.doodads
+        puffUp = s.puffUp
         steam = s.steam
         steamTurn = s.steamTurn
         steamMax = s.steamMax
@@ -86,6 +91,41 @@ struct DragOverlay: Equatable {
     var armed: Bool
 }
 
+/// The Aim Drag band, kept apart from the session so a touch move redraws
+/// only the band, not the whole HUD (H8).
+@MainActor
+final class DragModel: ObservableObject {
+    @Published var overlay: DragOverlay?
+}
+
+/// Calls `onFrame` once per display refresh on the main run loop.
+@MainActor
+final class FrameClock: NSObject {
+    private var link: CADisplayLink?
+    private let onFrame: () -> Void
+
+    init(onFrame: @escaping () -> Void) {
+        self.onFrame = onFrame
+        super.init()
+    }
+
+    var isRunning: Bool { link != nil }
+
+    func start() {
+        guard link == nil else { return }
+        let l = CADisplayLink(target: self, selector: #selector(fire))
+        l.add(to: .main, forMode: .common)
+        link = l
+    }
+
+    func stop() {
+        link?.invalidate()
+        link = nil
+    }
+
+    @objc private func fire() { onFrame() }
+}
+
 /// A short blast flash drawn by the renderer after a `hit` event. View only.
 struct BlastEffect: Equatable {
     var x: Double
@@ -94,8 +134,14 @@ struct BlastEffect: Equatable {
     var start: UInt64
 }
 
-/// One battle on screen: drives the core clock, turns touches into commands,
-/// and hands the latest snapshot to the renderer and the HUD.
+/// One battle on screen: drives the core clock from the display, turns
+/// touches into commands, and hands the latest snapshot to the renderer and
+/// the HUD.
+///
+/// Every player action goes through one guard (`canAct`, H3): it is the
+/// human's Plan step, the battle is not paused or stopped, and the core is not
+/// busy with the Rival's turn. A refused action returns false, which also ends
+/// any held key repeat (C1).
 @MainActor
 final class BattleSession: ObservableObject {
     let game: CoreGame
@@ -103,31 +149,47 @@ final class BattleSession: ObservableObject {
     let title: String
 
     @Published private(set) var hud = HudState()
-    @Published private(set) var drag: DragOverlay?
+    /// True while an Aim Drag is under way (changes twice a drag).
+    @Published private(set) var dragging = false
     @Published var fineTuneOpen = false
     @Published private(set) var paused = false
     @Published var showPauseCard = false
     @Published private(set) var banner: String?
     @Published private(set) var layout = BattleLayout.empty
+    /// A Doodad picked in the tray: Fire uses it instead of a shot.
+    @Published private(set) var armedDoodad: String?
+    let dragModel = DragModel()
 
     /// The newest frame, read by the renderer each draw.
     private(set) var snapshot = BattleSnapshot()
+    /// Bumps whenever `snapshot` or `effects` change, so the renderer skips idle frames.
+    private(set) var frameVersion = 0
     /// Blast flashes still on screen, read by the renderer.
     private(set) var effects: [BlastEffect] = []
     var settings = GameSettings()
     var isPad = false
+    private(set) var stopped = false
 
     var onTurnStarted: ((BattleSession) -> Void)?
+    /// The result, in the same frame it arrives: record it now (H5).
+    var onResult: ((BattleSession, BattleResult) -> Void)?
+    /// 1.2 s after the result: change screens.
     var onEnded: ((BattleSession, BattleResult) -> Void)?
     var onEvents: (([BattleEvent], BattleSnapshot) -> Void)?
     var onLocalHaptic: ((Haptics.Kind) -> Void)?
+    /// The core stopped answering sensibly (M13).
+    var onFault: ((BattleSession, String) -> Void)?
+    /// Spoken lines (shot results) for VoiceOver.
+    var onAnnounce: ((String) -> Void)?
 
-    private var driver: Task<Void, Never>?
+    private var clock: FrameClock?
     private var bannerTask: Task<Void, Never>?
     private var foldTask: Task<Void, Never>?
+    private var endTask: Task<Void, Never>?
     private var lastNanos: UInt64 = 0
     private var lastTurnSeq = -1
     private var endReported = false
+    private var faultReported = false
     private var gesture: AimGesture?
     private var aimBeforeDrag: AimView?
     private var dragEndedAt: UInt64 = 0
@@ -136,6 +198,11 @@ final class BattleSession: ObservableObject {
     private var squallAnnounced = false
     private var viewSize: CGSize = .zero
     private var viewInsets = Insets()
+    /// The newest drag aim not yet sent, and when one was last sent (H8).
+    private var pendingAim: (angle: Int, power: Int)?
+    private var lastAimSentAt: UInt64 = 0
+    /// Aim commands during a drag go out at most this often.
+    static let aimInterval: UInt64 = 66_000_000
 
     init(game: CoreGame, setup: BattleSetup, title: String) {
         self.game = game
@@ -148,29 +215,46 @@ final class BattleSession: ObservableObject {
         }
     }
 
-    // MARK: Clock
+    // MARK: Guard (H3)
 
-    /// Starts the battle clock. The sim steps whole 120 Hz ticks inside the core.
-    func start() {
-        guard driver == nil else { return }
-        lastNanos = 0
-        driver = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                self.tick()
-                try? await Task.sleep(nanoseconds: 8_000_000)
-            }
-        }
+    /// True when the person at the device may act on the field right now.
+    var canAct: Bool {
+        !stopped && !paused && !game.isBusy && game.isRunning && snapshot.phase == .plan && snapshot.humanTurn
     }
 
+    /// True when the person may pick in the Rummage.
+    var canDraft: Bool {
+        !stopped && !game.isBusy && game.isRunning && snapshot.phase == .draft
+    }
+
+    // MARK: Clock
+
+    /// Starts the battle clock, one step per display frame.
+    func start() {
+        guard clock == nil, !stopped else { return }
+        lastNanos = 0
+        let c = FrameClock { [weak self] in self?.tick() }
+        clock = c
+        c.start()
+    }
+
+    /// Ends the session for good: the clock, every task, any held key.
     func stop() {
-        driver?.cancel()
-        driver = nil
+        stopped = true
+        clock?.stop()
+        clock = nil
         bannerTask?.cancel()
         foldTask?.cancel()
+        endTask?.cancel()
+        endTask = nil
+        gesture = nil
+        pendingAim = nil
+        dragModel.overlay = nil
+        if dragging { dragging = false }
     }
 
     func tick() {
+        guard !stopped else { return }
         let now = DispatchTime.now().uptimeNanoseconds
         if lastNanos == 0 || paused {
             lastNanos = now
@@ -181,13 +265,25 @@ final class BattleSession: ObservableObject {
                 lastNanos += UInt64(ms) * 1_000_000
             }
         }
-        guard let snap = game.frame() else { return }
-        apply(snap)
+        flushAim(now: now, force: false)
+        if let snap = game.frameIfNeeded() {
+            apply(snap)
+        } else if let fault = game.fault, !faultReported {
+            faultReported = true
+            stop()
+            onFault?(self, fault)
+        } else if !effects.isEmpty {
+            // Blast flashes still playing: keep drawing until they are gone.
+            effects.removeAll { now &- $0.start > 600_000_000 }
+            frameVersion &+= 1
+        }
     }
 
     private func apply(_ snap: BattleSnapshot) {
         let wasInFlight = snapshot.phase.isResolving
+        let oldPhase = snapshot.phase
         snapshot = snap
+        frameVersion &+= 1
         let now = DispatchTime.now().uptimeNanoseconds
         effects.removeAll { now &- $0.start > 600_000_000 }
         for e in snap.events where e.type == "hit" {
@@ -198,17 +294,22 @@ final class BattleSession: ObservableObject {
             lastTurnSeq = snap.turnSeq
             turnStarted(snap)
         }
-        let next = HudState(snap)
-        if next != hud { hud = next }
+        if !snap.lean || snap.phase != oldPhase {
+            let next = HudState(snap)
+            if next != hud { hud = next }
+        }
+        if !snap.humanTurn || snap.phase != .plan { armedDoodad = nil }
         if wasInFlight != snap.phase.isResolving {
             if snap.phase.isResolving { endDragKeepingAim(); fineTuneOpen = false }
             relayout()
         }
         if let result = snap.result, !endReported {
             endReported = true
-            Task { [weak self] in
+            // Record at once; only the screen change waits (H5).
+            onResult?(self, result)
+            endTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: 1_200_000_000)
-                guard let self else { return }
+                guard !Task.isCancelled, let self, !self.stopped else { return }
                 self.onEnded?(self, result)
             }
         }
@@ -246,6 +347,30 @@ final class BattleSession: ObservableObject {
         }
     }
 
+    /// A short line for a refused action, so a buzz is never the only answer (H2).
+    private func refused(_ reply: CoreReply) {
+        onLocalHaptic?(.illegal)
+        guard let reason = reply.reason, reason != "busy" else { return }
+        showBanner(Self.refusalText(reason))
+    }
+
+    static func refusalText(_ reason: String) -> String {
+        switch reason {
+        case "not_enough_steam": return "Not enough Steam"
+        case "hob_cannot_fire": return "That Hob cannot fire"
+        case "resting_plain_only": return "Resting: Plain Shot only"
+        case "no_knack_uses": return "No Knack left"
+        case "no_heavy_first_turn": return "No Heavy shot on the first turn"
+        case "cannot_walk_now", "cannot_walk_there": return "Cannot walk there"
+        case "cannot_shove_now", "not_buried": return "Nothing to shove off"
+        case "already_acted": return "You have acted this turn"
+        case "pin_faded": return "That Pin has faded"
+        case "no_ghost": return "No shot to recall yet"
+        case "no_doodad", "cannot_use_now": return "Cannot use that now"
+        default: return reason.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
     // MARK: Layout
 
     func updateViewport(size: CGSize, insets: Insets) {
@@ -259,8 +384,10 @@ final class BattleSession: ObservableObject {
 
     private func relayout() {
         let mode = LayoutMode.resolve(size: viewSize, previous: layout.size == .zero ? nil : layout.mode)
+        // The larger iPad scale only when the window is big enough (Split View, Slide Over: M10).
+        let big = isPad && min(viewSize.width, viewSize.height) >= 600
         let next = BattleLayout.compute(size: viewSize, insets: viewInsets, mode: mode,
-                                        inFlight: snapshot.phase.isResolving, isPad: isPad)
+                                        inFlight: snapshot.phase.isResolving, isPad: big)
         if next != layout { layout = next }
     }
 
@@ -281,7 +408,7 @@ final class BattleSession: ObservableObject {
     // MARK: Aim Drag
 
     func touchBegan(at point: CGPoint) {
-        guard hud.humanTurn, !paused, gesture == nil, layout.aimRegion.contains(point) else { return }
+        guard canAct, gesture == nil, layout.aimRegion.contains(point) else { return }
         gesture = AimGesture(anchor: point, powerSpan: layout.powerSpan, mode: settings.dragMode)
         aimBeforeDrag = snapshot.aim
         hitFullPower = false
@@ -289,30 +416,51 @@ final class BattleSession: ObservableObject {
 
     func touchMoved(to point: CGPoint) {
         guard var g = gesture else { return }
+        guard canAct else {
+            endDragKeepingAim(restore: true)
+            return
+        }
         let started = g.move(to: point)
         gesture = g
         if started {
             onLocalHaptic?(.dragStart)
             fineTuneOpen = false
+            dragging = true
         }
         guard g.isDragging else { return }
-        game.send(.aim(angle: g.angleTenths, power: g.power))
+        // Throttled: the newest aim goes out at most every 66 ms, and always on release (H8).
+        pendingAim = (g.angleTenths, g.power)
         if g.power >= 100 && !hitFullPower {
             hitFullPower = true
             onLocalHaptic?(.tick)
         } else if g.power < 100 {
             hitFullPower = false
         }
-        drag = DragOverlay(anchor: g.anchor, end: g.bandEnd, angle: g.angleTenths, power: g.power,
-                           armed: settings.quickFire && !g.isInCancelRing)
+        dragModel.overlay = DragOverlay(anchor: g.anchor, end: g.bandEnd, angle: g.angleTenths, power: g.power,
+                                        armed: settings.quickFire && !g.isInCancelRing)
+    }
+
+    private func flushAim(now: UInt64, force: Bool) {
+        guard let aim = pendingAim else { return }
+        guard force || now &- lastAimSentAt >= Self.aimInterval else { return }
+        pendingAim = nil
+        lastAimSentAt = now
+        guard canAct else { return }
+        game.send(.aim(angle: aim.angle, power: aim.power))
+    }
+
+    private func clearDrag() {
+        gesture = nil
+        pendingAim = nil
+        dragModel.overlay = nil
+        if dragging { dragging = false }
     }
 
     func touchEnded(at point: CGPoint) {
         guard var g = gesture else { return }
         _ = g.move(to: point)
-        gesture = nil
-        drag = nil
-        guard g.isDragging else { return }
+        clearDrag()
+        guard g.isDragging, canAct else { return }
         if g.isInCancelRing {
             restoreAim()
             return
@@ -334,8 +482,8 @@ final class BattleSession: ObservableObject {
     /// A device turn mid-drag ends the drag as if the finger lifted, keeping the aim. Nothing fires.
     func endDragKeepingAim(restore: Bool = false) {
         guard let g = gesture else { return }
-        gesture = nil
-        drag = nil
+        clearDrag()
+        guard canAct else { return }
         if restore || !g.isDragging || g.isInCancelRing {
             if g.isDragging { restoreAim() }
         } else {
@@ -350,91 +498,163 @@ final class BattleSession: ObservableObject {
 
     // MARK: HUD actions
 
-    /// Fire acts on finger up inside the button, with a 150 ms guard after an Aim Drag.
+    /// Fire acts on finger up inside the button, with a 150 ms guard after an
+    /// Aim Drag. With a Doodad picked it uses the Doodad; with the Hob dug in
+    /// it shoves off.
     func fire() {
+        guard canAct else { return }
         let now = DispatchTime.now().uptimeNanoseconds
         guard now - dragEndedAt >= 150_000_000 else { return }
-        sendFire()
+        if let doodad = armedDoodad {
+            _ = useDoodad(doodad)
+        } else if snapshot.dugIn {
+            _ = shoveOff()
+        } else {
+            sendFire()
+        }
     }
 
     private func sendFire() {
+        guard canAct else { return }
         let reply = game.send(.fire())
         if reply.ok {
             fineTuneOpen = false
             onLocalHaptic?(.fire)
         } else {
-            onLocalHaptic?(.illegal)
+            refused(reply)
         }
+        tick()
+    }
+
+    /// Pass: spend the Action doing nothing, so a turn can always end (H2).
+    @discardableResult
+    func pass() -> Bool {
+        guard canAct else { return false }
+        let reply = game.send(.pass)
+        if reply.ok { onLocalHaptic?(.tick) } else { refused(reply) }
+        tick()
+        return reply.ok
+    }
+
+    /// Shove Off: 15 Steam to clear the selected Hob's buried Loophole. No Action spent.
+    @discardableResult
+    func shoveOff() -> Bool {
+        guard canAct, let id = snapshot.selectedHob, let hob = Int(id) else { return false }
+        let reply = game.send(.shoveOff(hob: hob))
+        if reply.ok { onLocalHaptic?(.tick) } else { refused(reply) }
+        tick()
+        return reply.ok
+    }
+
+    /// Picks a Doodad chip: Fire then uses it. Picking it again puts it down.
+    func armDoodad(_ id: String) {
+        guard canAct else { return }
+        armedDoodad = armedDoodad == id ? nil : id
+        onLocalHaptic?(.tick)
+    }
+
+    /// Uses a Doodad as the Action, with the core's default targets (Mend
+    /// Bucket: the most hurt blocks; Pot Lid: the Kettle Room).
+    @discardableResult
+    func useDoodad(_ id: String) -> Bool {
+        guard canAct else { return false }
+        let reply = game.send(.doodad(doodad: id))
+        armedDoodad = nil
+        if reply.ok { onLocalHaptic?(.fire) } else { refused(reply) }
+        tick()
+        return reply.ok
     }
 
     /// Fine Tune: angle in tenths of a degree, power in whole points.
-    func nudge(angle dAngle: Int, power dPower: Int) {
+    /// Returns false when refused, which also ends a held repeat.
+    @discardableResult
+    func nudge(angle dAngle: Int, power dPower: Int) -> Bool {
+        guard canAct else { return false }
         let a = snapshot.aim
         let angle = min(1800, max(0, a.angle + dAngle))
         let power = min(100, max(0, a.power + dPower))
         if angle == a.angle && power == a.power && a.set {
             onLocalHaptic?(.illegal)
-            return
+            return false
         }
         let reply = game.send(.aim(angle: angle, power: power))
         onLocalHaptic?(reply.ok ? .tick : .illegal)
         scheduleFold()
         tick()
+        return reply.ok
     }
 
     func toggleFineTune() {
+        guard canAct else { return }
         fineTuneOpen.toggle()
         if fineTuneOpen { scheduleFold() }
     }
 
     func recall() {
-        game.recall()
+        guard canAct else { return }
+        let reply = game.recall()
+        if !reply.ok {
+            refused(reply)
+            return
+        }
         fineTuneOpen = true
         scheduleFold()
+        tick()
     }
 
     func pickHob(_ id: String) {
-        let ok = game.send(.pickHob(hob: Int(id) ?? -1)).ok
-        onLocalHaptic?(ok ? .tick : .illegal)
+        guard canAct else { return }
+        let reply = game.send(.pickHob(hob: Int(id) ?? -1))
+        if reply.ok { onLocalHaptic?(.tick) } else { refused(reply) }
         tick()
     }
 
     func pickShot(_ id: String) {
-        let ok = game.send(.pickShot(shot: id)).ok
-        onLocalHaptic?(ok ? .tick : .illegal)
+        guard canAct else { return }
+        armedDoodad = nil
+        let reply = game.send(.pickShot(shot: id))
+        if reply.ok { onLocalHaptic?(.tick) } else { refused(reply) }
         tick()
     }
 
-    /// One Walk step of 4 cells (1 Steam); the HUD repeats it while the key is held.
+    /// One Walk step of 4 cells (1 Steam); the HUD repeats it while the key is
+    /// held. Returns false when refused or not allowed, which ends the repeat.
     @discardableResult
     func walk(_ dir: Int) -> Bool {
-        let ok = game.send(.walk(dx: dir * 4)).ok
-        if !ok { onLocalHaptic?(.illegal) }
-        return ok
+        guard canAct else { return false }
+        let reply = game.send(.walk(dx: dir * 4))
+        if !reply.ok { refused(reply) }
+        return reply.ok
     }
 
     func speedUp() {
+        guard !stopped else { return }
         game.speed = game.speed >= 2 ? 1 : 2
+        game.markDirty()
         tick()
     }
 
     func ready() {
+        guard !stopped else { return }
         game.ready()
         tick()
     }
 
     func draftPick(_ id: String) {
+        guard canDraft else { return }
         let ok = game.send(.pickShell(shell: id)).ok
         onLocalHaptic?(ok ? .tick : .illegal)
         tick()
     }
 
     func quickPick() {
+        guard canDraft else { return }
         game.send(.quickPick())
         tick()
     }
 
     func endDraft() {
+        guard !stopped, game.isRunning else { return }
         game.send(.endDraft)
         tick()
     }

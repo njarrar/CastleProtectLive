@@ -185,16 +185,18 @@ final class CoreGameTests: XCTestCase {
         XCTAssertEqual(after.activeSide, 1)
         XCTAssertFalse(after.humanTurn)
 
-        // The think pose, then ai_turn.
+        // The think pose, then ai_turn on the core queue (off the main thread).
         game.thinkMs = 100
         game.advance(milliseconds: 150)
+        game.waitUntilIdle()
+        XCTAssertFalse(game.isBusy)
         let back = try XCTUnwrap(game.frame())
         XCTAssertEqual(back.activeSide, 0)
         XCTAssertTrue(back.humanTurn)
     }
 
     @MainActor
-    func testSaveAndResume() throws {
+    func testSaveAndResume() async throws {
         let game = CoreGame(bridge: FakeCoreBridge(), catalog: ContentCatalog.load())
         XCTAssertNil(game.start(.campaign("1-1", preset: .fair, seed: 7)))
         _ = game.frame()
@@ -203,11 +205,49 @@ final class CoreGameTests: XCTestCase {
         let bytes = game.save()
         XCTAssertFalse(bytes.isEmpty)
 
+        let header = try XCTUnwrap(CoreGame.header(bytes))
+        XCTAssertEqual(header.rules, game.rulesVersion)
+        XCTAssertNotNil(header.hash)
+
         let other = CoreGame(bridge: FakeCoreBridge(), catalog: ContentCatalog.load())
-        XCTAssertTrue(other.load(bytes))
+        let loaded = await other.load(bytes)
+        XCTAssertEqual(loaded, .ok)
         XCTAssertEqual(other.setup?.level, "1-1")
         XCTAssertNotNil(other.frame())
-        XCTAssertFalse(other.load(Data("nonsense".utf8)))
+        let junk = await other.load(Data("nonsense".utf8))
+        XCTAssertEqual(junk, .damaged)
+    }
+
+    /// H4: a save from other game rules is refused, not replayed.
+    @MainActor
+    func testSaveFromOtherRulesIsRefused() async throws {
+        let game = CoreGame(bridge: FakeCoreBridge(), catalog: ContentCatalog.load())
+        XCTAssertNil(game.start(.campaign("1-1", preset: .fair, seed: 7)))
+        _ = game.frame()
+        var saved = try XCTUnwrap(CoreGame.header(game.save()))
+        saved.rules = game.rulesVersion + 1
+        let other = CoreGame(bridge: FakeCoreBridge(), catalog: ContentCatalog.load())
+        let result = await other.load(try JSONEncoder().encode(saved))
+        XCTAssertEqual(result, .rulesChanged)
+        XCTAssertFalse(other.isRunning)
+        saved.rules = nil
+        let old = await other.load(try JSONEncoder().encode(saved))
+        XCTAssertEqual(old, .rulesChanged, "a save with no rules version is from before this check")
+    }
+
+    /// H4: a replay that lands on another state hash is refused.
+    @MainActor
+    func testReplayWithAnotherHashIsRefused() async throws {
+        let game = CoreGame(bridge: FakeCoreBridge(), catalog: ContentCatalog.load())
+        XCTAssertNil(game.start(.campaign("1-1", preset: .fair, seed: 7)))
+        _ = game.frame()
+        XCTAssertTrue(game.send(.aim(angle: 500, power: 66)).ok)
+        var saved = try XCTUnwrap(CoreGame.header(game.save()))
+        saved.hash = "0000000000000000"
+        let other = CoreGame(bridge: FakeCoreBridge(), catalog: ContentCatalog.load())
+        let result = await other.load(try JSONEncoder().encode(saved))
+        XCTAssertEqual(result, .replayFailed("hash"))
+        XCTAssertFalse(other.isRunning)
     }
 
     @MainActor
@@ -219,7 +259,7 @@ final class CoreGameTests: XCTestCase {
     }
 
     @MainActor
-    func testRealCoreWhenLinked() throws {
+    func testRealCoreWhenLinked() async throws {
         guard CoreFactory.realCoreLinked else {
             throw XCTSkip("CastleCore.xcframework is not linked in this build")
         }
@@ -232,6 +272,9 @@ final class CoreGameTests: XCTestCase {
         XCTAssertEqual(frame.phase, .plan)
         XCTAssertEqual(frame.forts.count, 2)
         XCTAssertGreaterThan(frame.terrain.count, 10)
+        let grid = try XCTUnwrap(frame.ground, "the real cell grid reaches the renderer (H6)")
+        XCTAssertTrue(grid.hasData)
+        XCTAssertTrue(grid.cells.contains { $0 != 0 })
         XCTAssertTrue(game.send(.aim(angle: 450, power: 62)).ok)
         XCTAssertTrue(game.send(.fire()).ok)
         for _ in 0..<200 {
@@ -241,8 +284,10 @@ final class CoreGameTests: XCTestCase {
         let bytes = game.save()
         XCTAssertFalse(bytes.isEmpty)
         let replayed = CoreGame(bridge: CoreFactory.make(preferStandIn: false), catalog: ContentCatalog.load())
-        XCTAssertTrue(replayed.load(bytes))
+        let result = await replayed.load(bytes)
+        XCTAssertEqual(result, .ok)
         XCTAssertEqual(replayed.frame()?.turnSeq, game.frame()?.turnSeq)
+        XCTAssertEqual(replayed.stateHash(), game.stateHash())
     }
 
     @MainActor

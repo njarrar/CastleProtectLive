@@ -93,6 +93,13 @@ pub struct Materials {
     pub blocks: Vec<BlockMat>,
     pub hob: DmgMult,
     pub kettle: DmgMult,
+    /// Percent of an area payload a Hob takes under Cover (seated in an
+    /// intact Nook, burst outside it). Canon 50; a pacing number.
+    #[serde(default = "d50")]
+    pub cover_pct: i32,
+}
+fn d50() -> i32 {
+    50
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

@@ -153,7 +153,7 @@ fn give_up_mid_flight_replays() {
     let r = b.command(&json!({"cmd": "give_up", "side": 0}));
     assert_eq!(r["ok"], true);
     let res = b.result.clone().unwrap();
-    assert_eq!((res.winner, res.how.as_str()), (1, "gave_up"));
+    assert_eq!((res.winner, res.how.as_str()), (1, "give_up"));
     let again = replay::from_log(c, setup, 4, &b.log).unwrap();
     assert_eq!(again.hash(), b.hash());
 }

@@ -191,7 +191,9 @@ fn score_result(before: &Battle, after: &Battle, side: u8, t: &Tuning) -> i64 {
         let lost = (hb.hp - ha.hp.max(0)) as i64;
         if hb.side as usize == o {
             if !hb.dummy {
-                sc += lost * 10;
+                // focus: damage that leaves a Hob low is worth more
+                let gone = (ha.max - ha.hp.max(0)) as i64 * 100 / ha.max.max(1) as i64;
+                sc += lost * 10 + lost * 10 * FOCUS_PCT / 100 * gone / 100;
                 if hb.alive() && !ha.alive() {
                     sc += 1500;
                 }
@@ -204,10 +206,18 @@ fn score_result(before: &Battle, after: &Battle, side: u8, t: &Tuning) -> i64 {
     }
     let kb = before.castles[o].kettle_hp.max(0) as i64;
     let ka = after.castles[o].kettle_hp.max(0) as i64;
-    sc += (kb - ka) * 15;
+    sc += (kb - ka) * KETTLE_WEIGHT;
+    // the kettle path: walls of the Kettle Room are worth more
+    let cb = &before.castles[o];
+    let ca = &after.castles[o];
+    for &(c, r) in cb.room_walls(&cb.kettle).iter().flatten() {
+        let hb = cb.block(c, r).map(|x| x.hp).unwrap_or(0) as i64;
+        let ha = ca.block(c, r).map(|x| x.hp).unwrap_or(0) as i64;
+        sc += (hb - ha).max(0) * KETTLE_WALL_WEIGHT;
+    }
     let bb = before.castles[o].standing_hp(&before.content);
     let ba = after.castles[o].standing_hp(&after.content);
-    sc += (bb - ba).max(0);
+    sc += (bb - ba).max(0) * BLOCK_WEIGHT;
     let dropped = after.stats[s].blocks_dropped - before.stats[s].blocks_dropped;
     sc += dropped as i64 * 80;
     if t.self_care {
@@ -222,8 +232,8 @@ fn shell_cost(b: &Battle, c: &Cand) -> i64 {
     let def = &b.content.shots[c.shot_ix];
     let late = b.round >= b.rules.round_cap - 2 || b.squall_round() > 0;
     let mut cost: i64 = match def.kind {
-        ShotKind::Knack => 150,
-        ShotKind::Trick => def.value as i64 * 3,
+        ShotKind::Knack => KNACK_COST,
+        ShotKind::Trick => def.value as i64 * TRICK_COST_PCT / 100,
         _ => 0,
     };
     if late {
@@ -235,8 +245,23 @@ fn shell_cost(b: &Battle, c: &Cand) -> i64 {
     } else {
         def.weight.rest()
     };
-    cost + rest as i64 * 60
+    cost + rest as i64 * REST_COST
 }
+
+// Pacing numbers (bot tuned, see examples/pacing.rs): what the AI charges
+// itself for spending a Knack use, a Trick Shell (percent of its value) and
+// each turn of Rest. Lower costs mean Knacks and shells are fired when they
+// pay, so fights reach the canon end (rounds 7 to 11) instead of the Squall.
+const KNACK_COST: i64 = 30;
+const TRICK_COST_PCT: i64 = 100;
+const REST_COST: i64 = 20;
+/// Extra weight on damage that brings a Hob close to a Bonk (focus fire).
+const FOCUS_PCT: i64 = 100;
+/// Weight on enemy block HP lost (opens walls toward the kettle).
+const BLOCK_WEIGHT: i64 = 2;
+/// Weight on kettle HP and on the Kettle Room walls (the win path).
+const KETTLE_WEIGHT: i64 = 30;
+const KETTLE_WALL_WEIGHT: i64 = 6;
 
 /// Targets: enemy Hobs, the kettle, and the weakest block by Lean Lines.
 fn targets(k: &Battle, side: u8, units: &mut i64) -> Vec<(i32, i32, i32)> {
@@ -267,6 +292,29 @@ fn targets(k: &Battle, side: u8, units: &mut i64) -> Vec<(i32, i32, i32)> {
     if let Some((_, c, r)) = best {
         let (bx0, by0, bx1, by1) = cs.slot_box(c, r);
         t.push((200 + r * 10 + c, (bx0 + bx1) / 2, (by0 + by1) / 2));
+    }
+    // the walls that stand between us and a win: the Kettle Room's front and
+    // ceiling, and the front wall of the weakest Hob's Nook (its Cover)
+    let mut walls: Vec<(i32, i32)> = vec![];
+    let kw = cs.room_walls(&cs.kettle);
+    walls.extend(kw[3].iter().copied());
+    walls.extend(kw[1].iter().copied());
+    if let Some(h) = k
+        .hobs
+        .iter()
+        .filter(|h| h.side == o && h.alive() && !h.dummy && h.nook.is_some())
+        .min_by_key(|h| (h.hp, h.id))
+    {
+        if let Some(n) = h.nook {
+            let nw = cs.room_walls(&cs.nooks[n as usize]);
+            walls.extend(nw[3].iter().copied());
+        }
+    }
+    for (c, r) in walls {
+        if cs.has_block(c, r) && !t.iter().any(|x| x.0 == 300 + r * 10 + c) {
+            let (bx0, by0, bx1, by1) = cs.slot_box(c, r);
+            t.push((300 + r * 10 + c, (bx0 + bx1) / 2, (by0 + by1) / 2));
+        }
     }
     t
 }

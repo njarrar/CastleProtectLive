@@ -1165,6 +1165,17 @@ impl Battle {
         if !valid {
             self.sel[s].shot = "plain".into();
         }
+        // Test Yard: a side of dummies only (the Straw Stuffer) passes itself
+        if self.mode == "test_yard"
+            && !self
+                .hobs
+                .iter()
+                .any(|h| h.side == side && h.alive() && !h.dummy)
+        {
+            self.acted = true;
+            self.ev(json!({"t": "pass", "side": side, "why": "dummy"}));
+            self.phase = Phase::Settle(1);
+        }
     }
 
     /// Volley Points: a Bonked Hob puffs back at half HP in the lowest free
@@ -2202,6 +2213,59 @@ impl Battle {
         self.cur = None;
     }
 
+    /// Whether `hob` of `side` may fire `which` ("plain", "knack" or a hand
+    /// shell) now, and if not the refusal reason `fire` would give. Sent per
+    /// shot chip in `hud.shots`.
+    pub fn shot_ready(&self, side: u8, hob: u8, which: &str) -> Result<(), &'static str> {
+        if !self.can_fire_hob(side, hob) {
+            let h = self.hobs.get(hob as usize);
+            return Err(if h.is_some_and(|h| h.buried) {
+                "buried"
+            } else if h.is_some_and(|h| h.rest > 0) {
+                "resting"
+            } else {
+                "hob_cannot_fire"
+            });
+        }
+        let h = &self.hobs[hob as usize];
+        if h.rest > 0 && which != "plain" {
+            return Err("resting_plain_only");
+        }
+        let s = side as usize;
+        if self.volley > 0 && self.actions_left[s] <= 0 {
+            return Err("no_actions_left");
+        }
+        match which {
+            "plain" => {}
+            "knack" => {
+                if h.knack.is_none() {
+                    return Err("no_shot");
+                }
+                if h.knack_uses <= 0 {
+                    return Err("no_knack_uses");
+                }
+            }
+            t => {
+                if !self.hands[s].iter().any(|x| x == t) {
+                    return Err("not_in_hand");
+                }
+            }
+        }
+        let Some(id) = self.shot_for(hob, which) else {
+            return Err("no_shot");
+        };
+        let Some(ix) = self.shot_index(&id) else {
+            return Err("unknown_shot");
+        };
+        if self.content.shots[ix].weight == Weight::H
+            && self.turns_taken[s] == 0
+            && side == self.first_side
+        {
+            return Err("no_heavy_first_turn");
+        }
+        Ok(())
+    }
+
     fn fire(&mut self, dial: Option<String>, target: Option<(i32, i32)>) -> Value {
         if self.phase != Phase::Plan {
             return err("not_planning");
@@ -2212,12 +2276,8 @@ impl Battle {
         let side = self.side;
         let s = side as usize;
         let sel = self.sel[s].clone();
-        if !self.can_fire_hob(side, sel.hob) {
-            return err("hob_cannot_fire");
-        }
-        let all_resting = self.hobs[sel.hob as usize].rest > 0;
-        if all_resting && sel.shot != "plain" {
-            return err("resting_plain_only");
+        if let Err(why) = self.shot_ready(side, sel.hob, &sel.shot) {
+            return err(why);
         }
         let Some(shot_id) = self.shot_for(sel.hob, &sel.shot) else {
             return err("no_shot");
@@ -2227,25 +2287,6 @@ impl Battle {
         };
         let def = self.content.shots[shot].clone();
         let h = self.hobs[sel.hob as usize].clone();
-        if self.volley > 0 && self.actions_left[s] <= 0 {
-            return err("no_actions_left");
-        }
-        match sel.shot.as_str() {
-            "plain" => {}
-            "knack" => {
-                if h.knack_uses <= 0 {
-                    return err("no_knack_uses");
-                }
-            }
-            t => {
-                if !self.hands[s].iter().any(|x| x == t) {
-                    return err("not_in_hand");
-                }
-            }
-        }
-        if def.weight == Weight::H && self.turns_taken[s] == 0 && side == self.first_side {
-            return err("no_heavy_first_turn");
-        }
         if let Some(d) = &dial {
             let hop_ok = d == "hops3"
                 && h.has_passive(|p| matches!(p, Passive::HopDial { .. }))
@@ -3039,7 +3080,7 @@ impl Battle {
                 };
                 let side = num(v, "side", 0, 1)?.map(|x| x as u8).unwrap_or(default);
                 self.cur = None;
-                self.end_battle(1 - side, "gave_up");
+                self.end_battle(1 - side, "give_up");
                 json!({"ok": true, "side": side})
             }
             "ai_turn" => {
@@ -3104,6 +3145,21 @@ impl Battle {
             "terrain_all" => {
                 let (w, h) = (self.terrain.w, self.terrain.h);
                 self.terrain.mark_dirty(0, 0, w, h);
+                self.snap_full = true;
+                ok()
+            }
+            "set_wind" => {
+                if self.mode != "test_yard" {
+                    return Err(err("test_yard_only"));
+                }
+                let Some(w) = num(v, "wind", -10, 10)? else {
+                    return Err(err_d("bad_value", "wind must be -10 to 10"));
+                };
+                self.wind = w as i32;
+                for f in self.fronts.iter_mut() {
+                    *f = w as i32;
+                }
+                self.ev(json!({"t": "front", "wind": self.wind, "forecast": self.wind}));
                 ok()
             }
             "log" => json!({"ok": true, "log": *self.log}),
@@ -3122,9 +3178,12 @@ impl Battle {
                     name: String::new(),
                     rows,
                 };
+                let (cost, used, cells) = crate::castle::blueprint_report(&self.content, &bp);
+                let cells: Vec<Value> = cells.iter().map(|p| json!([p.0, p.1])).collect();
                 match crate::castle::validate_blueprint(&self.content, &bp, seats) {
-                    Ok(()) => ok(),
-                    Err(e) => json!({"ok": false, "reason": "invalid_blueprint", "detail": e}),
+                    Ok(()) => json!({"ok": true, "cost": cost, "blocks": used, "budget": crate::castle::BUDGET}),
+                    Err(e) => json!({"ok": false, "reason": "invalid_blueprint", "detail": e, "cells": cells,
+                                     "cost": cost, "blocks": used, "budget": crate::castle::BUDGET}),
                 }
             }
             _ => err("unknown_command"),
@@ -3362,6 +3421,7 @@ fn is_logged(cmd: &str) -> bool {
             | "doodad"
             | "pass"
             | "give_up"
+            | "set_wind"
     )
 }
 

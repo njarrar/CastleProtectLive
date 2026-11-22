@@ -1,8 +1,9 @@
 import SpriteKit
 import UIKit
 
-/// The battle field: an SKView whose scene is rebuilt from the latest core
-/// snapshot on every display frame. It also reads touches for the Aim Drag.
+/// The battle field: an SKView whose scene is updated from the latest core
+/// snapshot when it changes (and four times a second for idle poses). It also
+/// reads touches for the Aim Drag. The battle clock itself runs in the session.
 /// Drawing only: nothing here decides an outcome.
 final class BattleSKView: SKView {
     var session: BattleSession
@@ -10,6 +11,10 @@ final class BattleSKView: SKView {
     private var link: CADisplayLink?
     private var lastBoundsSize: CGSize = .zero
     private var aimTouch: UITouch?
+    private var drawnVersion = -1
+    private var drawnLayout = BattleLayout.empty
+    private var drawnColours = ColourSet.brickabrac
+    private var drawnPose: UInt64 = 0
 
     init(session: BattleSession) {
         self.session = session
@@ -23,7 +28,18 @@ final class BattleSKView: SKView {
         presentScene(battleScene)
         isAccessibilityElement = true
         accessibilityLabel = "Battlefield"
-        accessibilityHint = "Drag on your fort to aim."
+        updateHint()
+        NotificationCenter.default.addObserver(self, selector: #selector(voiceOverChanged),
+                                               name: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil)
+    }
+
+    @objc private func voiceOverChanged() { updateHint() }
+
+    private func updateHint() {
+        // A VoiceOver user cannot drag on the fort: point them at Fine Tune (M5).
+        accessibilityHint = UIAccessibility.isVoiceOverRunning
+            ? "Use the aim readout to open Fine Tune, then Fire."
+            : "Drag on your fort to aim."
     }
 
     @available(*, unavailable)
@@ -42,8 +58,18 @@ final class BattleSKView: SKView {
     }
 
     @objc private func frameTick() {
+        let now = DispatchTime.now().uptimeNanoseconds
+        let pose = now / 250_000_000
+        let colours = session.settings.colourSet
+        // Draw only when something changed: a new frame, a resize, a colour set, or the idle pose step (H8, M1).
+        guard session.frameVersion != drawnVersion || session.layout != drawnLayout || colours != drawnColours
+                || pose != drawnPose else { return }
+        drawnVersion = session.frameVersion
+        drawnLayout = session.layout
+        drawnColours = colours
+        drawnPose = pose
         battleScene.render(snapshot: session.snapshot, layout: session.layout, effects: session.effects,
-                           colours: session.settings.colourSet, now: DispatchTime.now().uptimeNanoseconds)
+                           colours: colours, now: now)
     }
 
     override func layoutSubviews() {
@@ -101,6 +127,8 @@ final class BattleSKView: SKView {
 final class BattleScene: SKScene {
     private let sheet: SpriteSheet
     private var layers: [LensLayer] = []
+    private let textures = TerrainTextures()
+    private var palettes: [ColourSet: Palette] = [:]
 
     init(sheet: SpriteSheet) {
         self.sheet = sheet
@@ -124,8 +152,10 @@ final class BattleScene: SKScene {
         for (i, layer) in layers.enumerated() {
             if i < lenses.count {
                 layer.crop.isHidden = false
-                layer.update(lens: lenses[i], snap: snapshot, effects: effects, palette: Palette(set: colours),
-                             sceneHeight: size.height, now: now)
+                let palette = palettes[colours] ?? Palette(set: colours)
+                palettes[colours] = palette
+                layer.update(lens: lenses[i], snap: snapshot, effects: effects, palette: palette,
+                             sceneHeight: size.height, now: now, textures: textures)
             } else {
                 layer.crop.isHidden = true
             }
@@ -151,6 +181,12 @@ final class LensLayer {
     private var marks: [SKSpriteNode] = []
     private var shells: [SKSpriteNode] = []
     private var effects: [SKSpriteNode] = []
+    private var props: [SKSpriteNode] = []
+    private let terrainLayer = SKNode()
+    private var terrainNodes: [Int: SKSpriteNode] = [:]
+    private var terrainDrawn: [Int: Int] = [:]
+    private var terrainGrid: TerrainGrid?
+    private var terrainVersion = -1
 
     init(sheet: SpriteSheet) {
         self.sheet = sheet
@@ -160,9 +196,12 @@ final class LensLayer {
         crop.addChild(world)
         ground.zPosition = 0
         world.addChild(ground)
+        terrainLayer.zPosition = 0.5
+        world.addChild(terrainLayer)
     }
 
-    func update(lens: Lens, snap: BattleSnapshot, effects fx: [BlastEffect], palette: Palette, sceneHeight: CGFloat, now: UInt64) {
+    func update(lens: Lens, snap: BattleSnapshot, effects fx: [BlastEffect], palette: Palette, sceneHeight: CGFloat, now: UInt64,
+                textures: TerrainTextures) {
         let small = lens.focus == .whole
         let vp = lens.viewport
         let centre = CGPoint(x: vp.midX, y: sceneHeight - vp.midY)
@@ -181,9 +220,16 @@ final class LensLayer {
         let cellsPerPoint = Double(1 / max(0.0001, scale))
         let useArt = !small && !sheet.isEmpty
 
-        updateGround(snap: snap, palette: palette)
+        if let grid = snap.ground, grid.hasData {
+            ground.isHidden = true
+            updateTerrain(grid: grid, textures: textures)
+        } else {
+            ground.isHidden = false
+            terrainLayer.isHidden = true
+            updateGround(snap: snap, palette: palette)
+        }
 
-        var bi = 0, ki = 0, hi = 0, mi = 0, si = 0, ei = 0
+        var bi = 0, ki = 0, hi = 0, mi = 0, si = 0, ei = 0, pi = 0
         let frameIndex = Int((now / 250_000_000) % 6)
 
         for fort in snap.forts {
@@ -194,8 +240,17 @@ final class LensLayer {
                 let wear = ratio > 0.66 ? "fresh" : (ratio > 0.33 ? "scuffed" : "battered")
                 let f = useArt ? (sheet.frame("block_\(b.material)_\(wear)") ?? sheet.frame("block_\(b.material)_fresh")) : nil
                 node.texture = f?.texture
-                node.color = f == nil ? palette.material(b.material) : .white
-                node.colorBlendFactor = f == nil ? 1 : 0
+                // Battered blocks (Fatigue) get a slate tint; the boss weak spot a gold one; shimmer a pale one (M9).
+                if f == nil {
+                    node.color = b.root ? palette.gold : (b.battered ? palette.flattened : palette.material(b.material))
+                    node.colorBlendFactor = 1
+                } else if b.root || b.battered || b.shimmer {
+                    node.color = b.root ? palette.gold : (b.battered ? palette.flattened : palette.paper)
+                    node.colorBlendFactor = b.root ? 0.45 : (b.battered ? 0.35 : 0.25)
+                } else {
+                    node.color = .white
+                    node.colorBlendFactor = 0
+                }
                 node.anchorPoint = .zero
                 node.size = CGSize(width: b.w, height: b.h)
                 node.position = CGPoint(x: b.x, y: b.y)
@@ -237,6 +292,27 @@ final class LensLayer {
                       fallbackSize: CGSize(width: small ? 18 : 14, height: small ? 18 : 16))
                 node.alpha = selected || bonked ? 1 : 0.95
             }
+        }
+
+        // Props: cage bars, the captive, a Crock or a turnip (C2). A broken prop is not drawn.
+        for p in snap.props where !p.broken {
+            let node = Self.take(&props, pi, parent: world, z: 2.5)
+            pi += 1
+            switch p.kind {
+            case "cage_bar":
+                place(node, frame: nil, at: CGPoint(x: p.x, y: p.y), scale: 1, flip: false,
+                      fallback: palette.cage, fallbackSize: CGSize(width: 4, height: 44))
+            case "captive":
+                let frame = useArt ? (sheet.frame("hob_hetty_blue_idle_0") ?? sheet.frame("hob_hetty_blue_bonked_0")) : nil
+                place(node, frame: frame, at: CGPoint(x: p.x, y: p.y), scale: Self.hobCellsPerPixel, flip: false,
+                      fallback: palette.you, fallbackSize: CGSize(width: 14, height: 18))
+            default:
+                let name = p.shot.isEmpty ? "shell_clodpot" : "shell_\(p.shot)"
+                let frame = useArt ? (sheet.frame(name) ?? sheet.frame("shell_clodpot")) : nil
+                place(node, frame: frame, at: CGPoint(x: p.x, y: p.y), scale: 1.2, flip: false,
+                      fallback: palette.kettle, fallbackSize: CGSize(width: 18, height: 18))
+            }
+            node.alpha = CGFloat(0.55 + 0.45 * p.hpFraction)
         }
 
         // The 30% preview dots, in the active side's shape.
@@ -296,6 +372,49 @@ final class LensLayer {
         Self.hide(marks, from: mi)
         Self.hide(shells, from: si)
         Self.hide(effects, from: ei)
+        Self.hide(props, from: pi)
+    }
+
+    /// Draws the real cell grid: one sprite per chunk, its texture rebuilt only
+    /// when that chunk changed (H6). All-air chunks have no sprite.
+    private func updateTerrain(grid: TerrainGrid, textures: TerrainTextures) {
+        terrainLayer.isHidden = false
+        if terrainGrid !== grid {
+            terrainLayer.removeAllChildren()
+            terrainNodes = [:]
+            terrainDrawn = [:]
+            terrainGrid = grid
+            terrainVersion = -1
+        }
+        guard grid.version != terrainVersion else { return }
+        terrainVersion = grid.version
+        let H = CGFloat(grid.h)
+        for i in 0..<grid.chunkVersions.count {
+            let v = grid.chunkVersions[i]
+            guard v > 0, terrainDrawn[i] != v else { continue }
+            terrainDrawn[i] = v
+            let tex = textures.texture(grid: grid, index: i)
+            guard let tex else {
+                terrainNodes[i]?.isHidden = true
+                continue
+            }
+            let node: SKSpriteNode
+            if let n = terrainNodes[i] {
+                node = n
+            } else {
+                node = SKSpriteNode(texture: tex)
+                node.anchorPoint = .zero
+                terrainLayer.addChild(node)
+                terrainNodes[i] = node
+            }
+            let c = i % grid.cols, r = i / grid.cols
+            let x0 = CGFloat(c * grid.chunk), y0 = CGFloat(r * grid.chunk)
+            let size = tex.size()
+            node.texture = tex
+            node.size = size
+            node.position = CGPoint(x: x0, y: H - y0 - size.height)
+            node.isHidden = false
+        }
     }
 
     /// World cells per @1x pixel for Hob frames (72 x 80 px at @1x, bonked 72 x 116),
@@ -369,6 +488,33 @@ final class LensLayer {
     }
 }
 
+/// One texture per terrain chunk, shared by every lens and rebuilt only when
+/// the chunk's version changes.
+@MainActor
+final class TerrainTextures {
+    private weak var grid: TerrainGrid?
+    private var cache: [Int: (version: Int, texture: SKTexture?)] = [:]
+
+    nonisolated init() {}
+
+    func texture(grid g: TerrainGrid, index i: Int) -> SKTexture? {
+        if grid !== g {
+            grid = g
+            cache = [:]
+        }
+        let v = i < g.chunkVersions.count ? g.chunkVersions[i] : 0
+        if let hit = cache[i], hit.version == v { return hit.texture }
+        var tex: SKTexture?
+        if let img = g.rgba(chunkIndex: i) {
+            let t = SKTexture(data: img.data, size: CGSize(width: img.w, height: img.h))
+            t.filteringMode = .nearest
+            tex = t
+        }
+        cache[i] = (v, tex)
+        return tex
+    }
+}
+
 /// View-only camera framing: which part of the field each lens shows.
 /// World units are cells, y up.
 enum Camera {
@@ -421,6 +567,8 @@ struct Palette {
     var flattened = Palette.hex(0x8A90A2)
     var you = Palette.hex(0x2F6FDE)
     var rival = Palette.hex(0xE8730C)
+    var gold = Palette.hex(0xFFC23D)
+    var cage = Palette.hex(0x5B5F6B)
 
     init(set: ColourSet) {
         switch set {

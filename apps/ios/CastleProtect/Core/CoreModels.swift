@@ -27,6 +27,153 @@ struct BlockView: Equatable, Sendable {
     var hp: Int
     var hpMax: Int
     var shimmer = false
+    var battered = false
+    /// The boss weak spot.
+    var root = false
+}
+
+/// A thing on the field (props in core/API.md): a cage bar, the captive, a Crock or a turnip.
+struct PropView: Equatable, Sendable {
+    var id: Int
+    /// "shell", "cage_bar", "captive", or what a newer core sends.
+    var kind: String
+    var tag: String
+    /// Feet position, y up.
+    var x: Double
+    var y: Double
+    var hp: Int
+    var hpMax: Int
+    /// Shot id of a shell prop (sprite pick), else "".
+    var shot: String = ""
+
+    var hpFraction: Double { Double(max(0, hp)) / Double(max(1, hpMax)) }
+    var broken: Bool { hp <= 0 }
+
+    /// Words for the screen reader.
+    var spoken: String {
+        switch kind {
+        case "cage_bar": return "Cage bar"
+        case "captive": return "Captive"
+        case "shell": return shot.isEmpty ? "Shell on the field" : shot.replacingOccurrences(of: "_", with: " ").capitalized
+        default: return kind.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+}
+
+/// The terrain cell grid the core sends in dirty chunks (one material byte a
+/// cell, row major, y down). A reference type: the assembler writes the
+/// chunks, the renderer turns changed chunks into textures. Main thread only.
+final class TerrainGrid: @unchecked Sendable, Equatable {
+    let w: Int
+    let h: Int
+    let chunk: Int
+    private(set) var cells: [UInt8]
+    /// Bumps when a chunk changes; one entry per chunk, row major.
+    private(set) var chunkVersions: [Int]
+    /// Bumps when any chunk changes.
+    private(set) var version = 0
+    private(set) var hasData = false
+
+    /// Largest map the app accepts (cells a side).
+    static let maxSide = 8192
+
+    init(w: Int, h: Int, chunk: Int) {
+        self.w = max(1, min(w, Self.maxSide))
+        self.h = max(1, min(h, Self.maxSide))
+        self.chunk = max(8, min(chunk, 1024))
+        cells = [UInt8](repeating: 0, count: self.w * self.h)
+        chunkVersions = [Int](repeating: 0, count: ((self.w + self.chunk - 1) / self.chunk) * ((self.h + self.chunk - 1) / self.chunk))
+    }
+
+    var cols: Int { (w + chunk - 1) / chunk }
+    var rows: Int { (h + chunk - 1) / chunk }
+
+    static func == (a: TerrainGrid, b: TerrainGrid) -> Bool { a === b }
+
+    func cell(_ x: Int, _ y: Int) -> UInt8 {
+        guard x >= 0, y >= 0, x < w, y < h else { return 0 }
+        return cells[y * w + x]
+    }
+
+    /// Writes one chunk from the core. Returns false (and writes nothing) when
+    /// its sizes are bad or its bytes do not match them (L2).
+    @discardableResult
+    func apply(x cx: Int, y cy: Int, w cw: Int, h ch: Int, base64: String) -> Bool {
+        guard cw > 0, ch > 0, cw <= Self.maxSide, ch <= Self.maxSide, cx >= 0, cy >= 0,
+              let bytes = Data(base64Encoded: base64), bytes.count >= cw * ch else { return false }
+        bytes.withUnsafeBytes { (src: UnsafeRawBufferPointer) in
+            for row in 0..<ch {
+                let gy = cy + row
+                guard gy < h else { break }
+                for col in 0..<cw {
+                    let gx = cx + col
+                    guard gx < w else { break }
+                    cells[gy * w + gx] = src[row * cw + col]
+                }
+            }
+        }
+        let c0 = cx / chunk, c1 = min(cols - 1, (cx + cw - 1) / chunk)
+        let r0 = cy / chunk, r1 = min(rows - 1, (cy + ch - 1) / chunk)
+        if c0 <= c1, r0 <= r1 {
+            for r in r0...r1 {
+                for c in c0...c1 { chunkVersions[r * cols + c] += 1 }
+            }
+        }
+        version += 1
+        hasData = true
+        return true
+    }
+
+    /// Ground height (y up) at column x: the first solid cell from the top.
+    func surface(_ x: Int) -> Int {
+        let cx = min(max(0, x), w - 1)
+        var y = 0
+        while y < h && cells[y * w + cx] == 0 { y += 1 }
+        return h - y
+    }
+
+    /// RGBA bytes for one chunk, bottom row first (SpriteKit textures start at
+    /// the lower left), or nil when the chunk is all air. Grass on Loam that
+    /// has air above it.
+    func rgba(chunkIndex i: Int) -> (data: Data, w: Int, h: Int)? {
+        let c = i % cols, r = i / cols
+        let x0 = c * chunk, y0 = r * chunk
+        let cw = min(chunk, w - x0), ch = min(chunk, h - y0)
+        guard cw > 0, ch > 0 else { return nil }
+        var out = [UInt8](repeating: 0, count: cw * ch * 4)
+        var solid = false
+        for row in 0..<ch {
+            let gy = y0 + row
+            let outRow = ch - 1 - row
+            for col in 0..<cw {
+                let gx = x0 + col
+                let m = cells[gy * w + gx]
+                guard m != 0 else { continue }
+                solid = true
+                var rgb = Self.colour(m)
+                if m == 1, gy > 0, cells[(gy - 1) * w + gx] == 0 || (gy > 2 && cells[(gy - 3) * w + gx] == 0) {
+                    rgb = (0x8B, 0xCB, 0x3A)
+                }
+                let o = (outRow * cw + col) * 4
+                out[o] = rgb.0; out[o + 1] = rgb.1; out[o + 2] = rgb.2; out[o + 3] = 255
+            }
+        }
+        return solid ? (Data(out), cw, ch) : nil
+    }
+
+    /// Material colours from content/materials.json codes: 1 Loam, 2 Clay,
+    /// 3 Rock, 4 Bedrock, 5 Mud, 6 Water.
+    static func colour(_ m: UInt8) -> (UInt8, UInt8, UInt8) {
+        switch m {
+        case 1: return (0x9A, 0x6A, 0x3A)
+        case 2: return (0xB8, 0x62, 0x3E)
+        case 3: return (0x8C, 0x8A, 0x86)
+        case 4: return (0x4E, 0x4A, 0x50)
+        case 5: return (0x6B, 0x4A, 0x2E)
+        case 6: return (0x4A, 0x90, 0xD9)
+        default: return (0x9A, 0x6A, 0x3A)
+        }
+    }
 }
 
 struct HobView: Equatable, Sendable, Identifiable {
@@ -45,6 +192,7 @@ struct HobView: Equatable, Sendable, Identifiable {
     var rest = 0
     var state = "seated"
     var buried = false
+    var canFire = false
 
     var hpFraction: Double { Double(max(0, hp)) / Double(max(1, hpMax)) }
 }
@@ -168,6 +316,8 @@ struct BattleSnapshot: Equatable, Sendable {
     /// "campaign", "skirmish", "duel", "test_yard".
     var mode = ""
     var level = ""
+    /// True when this frame came from a lean snapshot (shell flight only).
+    var lean = false
     var round = 1
     var roundCap = 15
     /// Rounds until the Sudden Squall, or -1 when no warning shows.
@@ -184,7 +334,14 @@ struct BattleSnapshot: Equatable, Sendable {
     var world = WorldSize()
     /// Ground height per column, evenly spaced across the world width.
     var terrain: [Double] = []
+    /// The real cell grid, drawn chunk by chunk (H6). Nil until the core sends terrain.
+    var ground: TerrainGrid?
     var forts: [FortView] = []
+    var props: [PropView] = []
+    /// Doodad ids the HUD side still has (Mend Bucket, Pot Lid).
+    var doodads: [String] = []
+    /// Whether the active side may still use Puff Up.
+    var puffUp = false
     var selectedHob: String?
     var shots: [ShotChip] = []
     var selectedShot: String?

@@ -14,6 +14,7 @@ pub mod castle;
 pub mod content;
 pub mod effects;
 pub mod embedded;
+pub mod fixtures;
 pub mod hash;
 pub mod hob;
 pub mod math;

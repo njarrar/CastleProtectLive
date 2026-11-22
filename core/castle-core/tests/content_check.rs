@@ -169,19 +169,16 @@ fn live_snapshots_match_the_schema() {
 
 #[test]
 fn fixtures_are_current() {
-    // The fixture replies come from the current core.
-    let core = repo().join("core");
-    let f = core.join("fixtures");
-    let setup = read(&f.join("setup_1_1.json"));
-    let cmds = read(&f.join("commands_1_1.json"));
-    let mut g =
-        castle_core::Game::new("", &setup.to_string(), cmds["seed"].as_u64().unwrap()).unwrap();
-    let _ = g.snapshot();
-    let r: serde_json::Value =
-        serde_json::from_str(&g.command(&cmds["commands"].to_string())).unwrap();
-    assert_eq!(
-        r,
-        read(&f.join("replies_1_1.json"))["commands"],
-        "run: cargo run -p castle-core --example make_fixtures"
-    );
+    // Every fixture file (setups, commands, replies, snapshots and their
+    // hashes) is exactly what the current core makes.
+    let f = repo().join("core").join("fixtures");
+    let built = castle_core::fixtures::build();
+    assert!(built.len() >= 10);
+    for (name, v) in built {
+        let on_disk = read(&f.join(name));
+        assert!(
+            on_disk == v,
+            "{name} is stale; run: cargo run -p castle-core --example make_fixtures"
+        );
+    }
 }

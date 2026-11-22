@@ -28,7 +28,8 @@ struct RootView: View {
                 ResumeCard(battle: battle)
             }
         }
-        .dynamicTypeSize(model.save.settings.largeText ? .xxLarge : .large)
+        // Text follows the system size (Theme.scaled), capped so the HUD still fits (M4).
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         .sheet(item: $model.preBattle) { level in
             PreBattleView(level: level)
                 .environmentObject(model)

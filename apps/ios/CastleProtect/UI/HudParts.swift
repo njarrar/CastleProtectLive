@@ -197,7 +197,7 @@ struct ShotChipView: View {
                         .font(.system(size: size * 0.32))
                 }
                 Text(chip.name)
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .font(Theme.label(12))
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
             }
@@ -277,7 +277,7 @@ struct FineTunePad: View {
                 Button {
                     session.recall()
                 } label: {
-                    Text("R").font(Theme.title(15)).frame(width: 40, height: 28).panel(corner: 8, fill: Theme.cream)
+                    Text("R").font(Theme.title(15)).frame(width: 44, height: 44).panel(corner: 8, fill: Theme.cream)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Recall last aim")
@@ -293,7 +293,7 @@ struct FineTunePad: View {
         .panel(corner: 16)
     }
 
-    private func tuneKey(_ symbol: String, _ name: String, _ tapOnly: Bool, _ action: @escaping () -> Void) -> some View {
+    private func tuneKey(_ symbol: String, _ name: String, _ tapOnly: Bool, _ action: @escaping () -> Bool) -> some View {
         RepeatButton(tapOnly: tapOnly, accessibilityName: name, action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 18, weight: .heavy))
@@ -334,7 +334,7 @@ struct WalkPad: View {
 
     private func walkKey(_ dx: Int, _ sprite: String, _ symbol: String, _ name: String) -> some View {
         RepeatButton(delay: 0.12, rate: 10, fastRate: 10, tapOnly: session.settings.tapOnly, accessibilityName: name,
-                     action: { _ = session.walk(dx) }) {
+                     action: { session.walk(dx) }) {
             SpriteIcon(name: sprite, fallback: symbol, size: key * 0.7)
                 .frame(width: key, height: key)
                 .panel(corner: 12, fill: Theme.cream)
@@ -342,32 +342,87 @@ struct WalkPad: View {
     }
 }
 
-/// Fire: acts on finger up inside the button. Locked until a Hob, a shot and an aim exist.
+/// Fire: acts on finger up inside the button. Locked until a Hob, a shot and
+/// an aim exist. With the Hob dug in it is Shove Off (15 Steam); with a Doodad
+/// picked it is Use (H2).
 struct FireButton: View {
     let hud: HudState
     var size: CGFloat = 76
+    var armedDoodad: String? = nil
     let action: () -> Void
+
+    private var mode: String {
+        if armedDoodad != nil { return "use" }
+        if hud.dugIn { return "shove" }
+        return "fire"
+    }
+
+    private var live: Bool {
+        hud.humanTurn && (mode == "fire" ? hud.canFire : true)
+    }
 
     var body: some View {
         Button(action: action) {
             ZStack {
-                Circle().fill(hud.canFire ? Theme.gold : Theme.cream)
+                Circle().fill(live ? Theme.gold : Theme.cream)
                 Circle().stroke(Theme.ink, lineWidth: 3)
                 VStack(spacing: 0) {
-                    if hud.dugIn {
-                        Image(systemName: "mountain.2.fill").font(.system(size: size * 0.22))
+                    switch mode {
+                    case "shove":
+                        Image(systemName: "mountain.2.fill").font(.system(size: size * 0.2))
+                        Text("SHOVE").font(.system(size: size * 0.2, weight: .heavy, design: .rounded))
+                        Text("OFF 15").font(.system(size: size * 0.15, weight: .heavy, design: .rounded))
+                    case "use":
+                        Image(systemName: "bag.fill").font(.system(size: size * 0.2))
+                        Text("USE").font(.system(size: size * 0.27, weight: .heavy, design: .rounded))
+                    default:
+                        Text("FIRE").font(.system(size: size * 0.27, weight: .heavy, design: .rounded))
                     }
-                    Text("FIRE").font(Theme.title(size * 0.27))
                 }
-                .foregroundStyle(hud.canFire ? Theme.ink : Theme.inkSoft.opacity(0.6))
+                .foregroundStyle(live ? Theme.ink : Theme.inkSoft.opacity(0.6))
             }
             .frame(width: size, height: size)
             .shadow(color: Theme.ink.opacity(0.25), radius: 0, x: 0, y: 3)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(hud.dugIn ? "Fire, dug in" : "Fire")
-        .accessibilityValue(hud.canFire ? "ready" : "locked")
+        .disabled(!hud.humanTurn)
+        .accessibilityLabel(mode == "shove" ? "Shove Off, 15 Steam" : (mode == "use" ? "Use \(DoodadNames.name(armedDoodad ?? ""))" : "Fire"))
+        .accessibilityValue(live ? "ready" : (hud.humanTurn ? "locked: pick a Hob, a shot and an aim" : "not your turn"))
         .accessibilityIdentifier("fire")
+    }
+}
+
+/// Pass: spend the Action doing nothing, so a turn can always end (H2).
+struct PassButton: View {
+    @ObservedObject var session: BattleSession
+    var size: CGFloat = 44
+
+    var body: some View {
+        Button {
+            session.pass()
+        } label: {
+            Text("Pass")
+                .font(Theme.label(14))
+                .foregroundStyle(Theme.ink)
+                .frame(minWidth: size, minHeight: 44)
+                .padding(.horizontal, 6)
+                .panel(corner: 12, fill: Theme.cream)
+        }
+        .buttonStyle(.plain)
+        .disabled(!session.hud.humanTurn)
+        .accessibilityLabel("Pass the turn")
+        .accessibilityIdentifier("pass")
+    }
+}
+
+/// Doodad names for chips and the screen reader.
+enum DoodadNames {
+    static func name(_ id: String) -> String {
+        switch id {
+        case "mend_bucket": return "Mend Bucket"
+        case "pot_lid": return "Pot Lid"
+        default: return id.replacingOccurrences(of: "_", with: " ").capitalized
+        }
     }
 }
 

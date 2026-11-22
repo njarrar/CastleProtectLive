@@ -661,7 +661,7 @@ impl Battle {
                             .collect();
                         for h in hit_hobs {
                             let cover = if self.hobs[h as usize].state == HobState::Seated {
-                                50
+                                self.content.materials.cover_pct
                             } else {
                                 100
                             };
@@ -1308,7 +1308,7 @@ impl Battle {
                     x >= b.0 && x <= b.2 && y >= b.1 && y <= b.3
                 });
                 if !inside {
-                    extra.push(50);
+                    extra.push(self.content.materials.cover_pct);
                 }
             }
             self.damage_hob(shooter, h, dmg, dtype, falloff(d), &extra, is_direct);

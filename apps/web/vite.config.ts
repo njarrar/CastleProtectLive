@@ -2,6 +2,8 @@ import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
+// @ts-expect-error plain .mjs build script, no types
+import { buildArt } from './scripts/build-art.mjs';
 
 const here = import.meta.dirname;
 
@@ -43,7 +45,7 @@ function copyFirst(cands: string[], dest: string, label: string, keep: (rel: str
 
 function castleCopy(): Plugin {
   let done = false;
-  const run = (command: string) => {
+  const run = async (command: string) => {
     if (done) return;
     done = true;
     // Only the js glue and the wasm: no .d.ts files in the shipped build.
@@ -51,12 +53,8 @@ function castleCopy(): Plugin {
     if (!haveCore && command === 'build' && !process.env.CASTLE_ALLOW_NO_CORE) {
       throw new Error('[castle] no wasm core pkg found. Run scripts/build-wasm.sh first (or set CASTLE_ALLOW_NO_CORE=1).');
     }
-    // Only what the web build draws: the manifest, the @2x atlas pages, and the
-    // separate textures (backgrounds, terrain tiles, app icons). Keeps the offline cache small.
-    copyFirst(artCandidates, resolve(here, 'public/art'), 'art assets', (rel) =>
-      rel === 'manifest.json' || rel === 'atlas' || rel === 'sprites' ||
-      /^atlas\/castle@2x/.test(rel) ||
-      /^sprites\/(bg_\w+@2x|terrain_\w+|app_icon-(192|512))\.png$/.test(rel));
+    // Only what the web build draws, with the atlas pages as WebP (scripts/build-art.mjs).
+    await buildArt(artCandidates.find((p) => existsSync(p)), resolve(here, 'public/art'));
   };
   return { name: 'castle-copy', config: (_c, env) => run(env.command) };
 }
@@ -87,8 +85,16 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webp,json,wasm,woff2,ogg,mp3}'],
-        maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
+        // First load and offline play need the @1x art only. The @2x pages (high-DPI screens,
+        // loaded after the game starts) are cached the first time they are fetched.
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,json,wasm,woff2,ogg,opus,mp3,m4a}'],
+        globIgnores: ['**/art/atlas/castle@2x-*.{webp,png}', '**/art/sprites/bg_*@2x.*'],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        runtimeCaching: [{
+          urlPattern: ({ url }) => /\/art\/(atlas\/castle@2x-|sprites\/bg_\w+@2x)/.test(url.pathname),
+          handler: 'CacheFirst',
+          options: { cacheName: 'castle-art-2x', expiration: { maxEntries: 16 } },
+        }],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
       },

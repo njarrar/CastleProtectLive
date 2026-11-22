@@ -41,7 +41,7 @@ struct BattleView: View {
                 } else {
                     WideHud(session: session, insets: insets)
                 }
-                DragBandView(drag: session.drag, side: session.hud.activeSide, colours: session.settings.colourSet)
+                DragBandLayer(model: session.dragModel, side: session.hud.activeSide, colours: session.settings.colourSet)
                 if let banner = session.banner {
                     TurnBanner(text: banner, side: session.hud.activeSide, colours: session.settings.colourSet)
                         .frame(maxWidth: .infinity)
@@ -64,6 +64,8 @@ struct BattleView: View {
             }
         }
         .ignoresSafeArea()
+        // A pull-back drag that ends near an edge must not be taken by the home gesture (M10).
+        .defersSystemGestures(on: .all)
         .statusBarHidden(session.layout.mode == .wide)
         .persistentSystemOverlays(.hidden)
     }
@@ -71,6 +73,17 @@ struct BattleView: View {
     private func updateViewport(_ size: CGSize, _ insets: EdgeInsets) {
         session.updateViewport(size: size, insets: Insets(top: insets.top, left: insets.leading,
                                                           bottom: insets.bottom, right: insets.trailing))
+    }
+}
+
+/// Observes only the drag band, so a touch move redraws the band and not the HUD (H8).
+struct DragBandLayer: View {
+    @ObservedObject var model: DragModel
+    let side: Int
+    let colours: ColourSet
+
+    var body: some View {
+        DragBandView(drag: model.overlay, side: side, colours: colours)
     }
 }
 
@@ -123,7 +136,7 @@ struct WideHud: View {
         let pad = session.isPad
         let colours = session.settings.colourSet
         let canAct = hud.humanTurn && !session.paused
-        let dragging = session.drag != nil
+        let dragging = session.dragging
         let showClusters = canAct && !hud.inFlight
         let leftHand = session.settings.leftHand
         VStack(spacing: 0) {
@@ -157,6 +170,7 @@ struct WideHud: View {
             .padding(.trailing, max(insets.trailing, 8))
             .opacity(showClusters ? (dragging ? 0.25 : 1) : 0)
             .allowsHitTesting(showClusters && !dragging)
+            .disabled(!showClusters)
 
             Spacer(minLength: 0)
 
@@ -167,16 +181,19 @@ struct WideHud: View {
                     WalkPad(session: session, key: pad ? 56 : 48)
                         .opacity(showClusters ? (dragging ? 0.25 : 1) : 0)
                         .allowsHitTesting(showClusters && !dragging)
+                        .disabled(!showClusters)
                 }
                 Spacer(minLength: 0)
                 ShotTray(session: session, chip: pad ? 64 : 52)
                     .opacity(showClusters ? (dragging ? 0.25 : 1) : 0)
                     .allowsHitTesting(showClusters && !dragging)
+                    .disabled(!showClusters)
                 Spacer(minLength: 0)
                 if leftHand {
                     WalkPad(session: session, key: pad ? 56 : 48)
                         .opacity(showClusters ? (dragging ? 0.25 : 1) : 0)
                         .allowsHitTesting(showClusters && !dragging)
+                        .disabled(!showClusters)
                 } else {
                     aimCluster(hud, pad: pad, show: showClusters)
                 }
@@ -211,10 +228,14 @@ struct WideHud: View {
                 } else {
                     ReadoutView(hud: hud) { session.toggleFineTune() }
                 }
-                FireButton(hud: hud, size: pad ? 96 : 76) { session.fire() }
+                VStack(spacing: 6) {
+                    PassButton(session: session)
+                    FireButton(hud: hud, size: pad ? 96 : 76, armedDoodad: session.armedDoodad) { session.fire() }
+                }
             }
             .opacity(show ? 1 : 0.0)
-            .allowsHitTesting(show && session.drag == nil)
+            .disabled(!show)
+            .allowsHitTesting(show && !session.dragging)
         }
     }
 }
@@ -230,7 +251,7 @@ struct TallHud: View {
         let colours = session.settings.colourSet
         let pad = session.isPad
         let canAct = hud.humanTurn && !session.paused
-        let dragging = session.drag != nil
+        let dragging = session.dragging
         let showClusters = canAct && !hud.inFlight
         let fade = showClusters ? (dragging ? 0.25 : 1.0) : 0.0
         let bottomLens = layout.lenses.last?.viewport ?? .zero
@@ -264,6 +285,11 @@ struct TallHud: View {
                     WalkPad(session: session, key: 44)
                         .opacity(fade)
                         .allowsHitTesting(showClusters && !dragging)
+                        .disabled(!showClusters)
+                    PassButton(session: session)
+                        .opacity(fade == 0 ? 0.4 : fade)
+                        .allowsHitTesting(showClusters && !dragging)
+                        .disabled(!showClusters)
                     Spacer()
                     Group {
                         if session.fineTuneOpen || pad {
@@ -274,6 +300,7 @@ struct TallHud: View {
                     }
                     .opacity(showClusters ? 1 : 0)
                     .allowsHitTesting(showClusters && !dragging)
+                    .disabled(!showClusters)
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, 6)
@@ -285,13 +312,15 @@ struct TallHud: View {
                     .background(Theme.cream)
                     .opacity(showClusters ? (dragging ? 0.25 : 1) : 0.4)
                     .allowsHitTesting(showClusters && !dragging)
+                    .disabled(!showClusters)
                     .place(layout.tray)
 
                 HStack(spacing: 6) {
                     if session.settings.leftHand {
-                        FireButton(hud: hud, size: pad ? 96 : 76) { session.fire() }
+                        FireButton(hud: hud, size: pad ? 96 : 76, armedDoodad: session.armedDoodad) { session.fire() }
                             .opacity(showClusters ? 1 : 0.4)
                             .allowsHitTesting(showClusters && !dragging)
+                            .disabled(!showClusters)
                         Spacer(minLength: 0)
                     }
                     ForEach(hud.myCrew) { hob in
@@ -302,11 +331,13 @@ struct TallHud: View {
                     }
                     .opacity(fade == 0 ? 0.4 : fade)
                     .allowsHitTesting(showClusters && !dragging)
+                    .disabled(!showClusters)
                     if !session.settings.leftHand {
                         Spacer(minLength: 0)
-                        FireButton(hud: hud, size: pad ? 96 : 76) { session.fire() }
+                        FireButton(hud: hud, size: pad ? 96 : 76, armedDoodad: session.armedDoodad) { session.fire() }
                             .opacity(showClusters ? 1 : 0.4)
                             .allowsHitTesting(showClusters && !dragging)
+                            .disabled(!showClusters)
                     }
                 }
                 .padding(.horizontal, 10)
@@ -332,14 +363,25 @@ struct ShotTray: View {
 
     var body: some View {
         let hud = session.hud
-        HStack(spacing: 4) {
-            ForEach(hud.shots) { shot in
-                ShotChipView(chip: shot, selected: shot.id == hud.selectedShot, size: chip) {
-                    session.pickShot(shot.id)
+        let armed = session.armedDoodad
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(hud.shots) { shot in
+                    ShotChipView(chip: shot, selected: armed == nil && shot.id == hud.selectedShot, size: chip) {
+                        session.pickShot(shot.id)
+                    }
+                }
+                ForEach(Array(hud.doodads.enumerated()), id: \.offset) { _, id in
+                    ShotChipView(chip: ShotChip(id: id, name: DoodadNames.name(id), kind: "doodad", art: id, uses: 1),
+                                 selected: armed == id, size: chip) {
+                        session.armDoodad(id)
+                    }
                 }
             }
+            .padding(.vertical, 2)
+            .padding(.horizontal, 4)
         }
-        .padding(.vertical, 2)
+        .disabled(!hud.humanTurn)
     }
 }
 

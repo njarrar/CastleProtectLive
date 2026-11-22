@@ -16,10 +16,29 @@ struct ResultInfo: Equatable {
             let name = result.winner >= 0 && result.winner < names.count ? names[result.winner] : "Nobody"
             return "\(name) wins!"
         }
-        guard won else { return "Flattened" }
-        switch result.reason {
-        case "kettle_pop": return "Kettle Pop!"
-        default: return "Clean Sweep!"
+        return Self.headline(how: result.reason, won: won)
+    }
+
+    /// One headline per `how` (L9).
+    static func headline(how: String, won: Bool) -> String {
+        switch (how, won) {
+        case ("kettle_pop", true): return "Kettle Pop!"
+        case ("kettle_pop", false): return "Your kettle popped"
+        case ("clean_sweep", true): return "Clean Sweep!"
+        case ("clean_sweep", false): return "Swept clean"
+        case ("squall", true): return "The Squall did it!"
+        case ("squall", false): return "Blown over"
+        case ("double_pop", _): return "Double Pop!"
+        case ("rescue", true): return "Rescued!"
+        case ("rescue", false): return "The captive is lost"
+        case ("round_cap", true): return "He dozed off!"
+        case ("round_cap", false): return "Out of rounds"
+        case ("total_hp", true): return "Won on points!"
+        case ("total_hp", false): return "Lost on points"
+        case ("gave_up", false), ("give_up", false): return "You gave up"
+        case ("gave_up", true), ("give_up", true): return "They gave up"
+        case (_, true): return "Victory!"
+        default: return "Flattened"
         }
     }
 }
@@ -55,6 +74,7 @@ final class AppModel: ObservableObject {
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
         isUITesting = arguments.contains("-uiTesting")
+        // Only Debug builds may use the stand-in core (CoreFactory ignores this in Release).
         let useStandIn = isUITesting || arguments.contains("-useStandIn")
         if isUITesting {
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("CastleProtectUITest", isDirectory: true)
@@ -69,12 +89,21 @@ final class AppModel: ObservableObject {
         self.bridge = bridge
         self.catalog = catalog
         game = CoreGame(bridge: bridge, catalog: catalog)
-        let loaded = store.load()
+        var loaded = store.load()
+        var launchNotice: String?
+        if loaded.resumeInProgress {
+            // The last resume never finished (the app was killed or crashed in the replay): drop that fight (H4).
+            loaded.resumeInProgress = false
+            loaded.battle = nil
+            launchNotice = "Your saved fight could not be resumed last time, so it was cleared. Your progress is safe."
+            try? store.writeNow(loaded)
+        }
         save = loaded
         campaign = catalog.campaign(pennants: loaded.progress.pennants)
         screen = loaded.firstRunDone ? .map : .title
         showResume = loaded.firstRunDone && loaded.battle != nil
         applySettings()
+        notice = launchNotice
     }
 
     // MARK: Save
@@ -95,6 +124,7 @@ final class AppModel: ObservableObject {
 
     private func applySettings() {
         let s = save.settings
+        Theme.largeText = s.largeText
         sound.volume = s.sound
         sound.muted = s.muteAll
         haptics.level = s.haptics
@@ -133,11 +163,12 @@ final class AppModel: ObservableObject {
     func scenePhaseChanged(_ phase: ScenePhase) {
         switch phase {
         case .background, .inactive:
-            if let s = session, screen == .battle {
+            if let s = session, screen == .battle, !s.paused {
+                // Once per app switch: inactive then background saves only the first time (L10).
                 s.pause()
                 autosave()
             }
-            sound.pause()
+            if phase == .background { sound.release() } else { sound.pause() }
             store.flush()
         case .active:
             sound.resume()
@@ -233,7 +264,9 @@ final class AppModel: ObservableObject {
         s.onTurnStarted = { [weak self] _ in self?.autosave() }
         s.onEvents = { [weak self] events, snap in self?.handle(events, snap) }
         s.onLocalHaptic = { [weak self] kind in self?.haptics.play(kind) }
+        s.onResult = { [weak self] session, result in self?.recordResult(session, result) }
         s.onEnded = { [weak self] session, result in self?.battleEnded(session, result) }
+        s.onFault = { [weak self] session, why in self?.battleFault(session, why) }
         return s
     }
 
@@ -264,7 +297,8 @@ final class AppModel: ObservableObject {
     // MARK: Battle
 
     func leaveToMap() {
-        // The battle save stays, so Carry on? greets the player next time.
+        // The battle save stays, so Carry on? greets the player next time
+        // (autosave skips a fight that already has a result: it is recorded).
         autosave()
         endSession(abandon: false)
         screen = .map
@@ -282,7 +316,10 @@ final class AppModel: ObservableObject {
         begin(again, title: title, sheet: nil)
     }
 
-    private func battleEnded(_ s: BattleSession, _ result: BattleResult) {
+    /// The result, in the frame it arrives: Pennants, the duel score and the
+    /// cleared battle save are stored at once, so leaving or a kill in the next
+    /// moment loses nothing (H5).
+    func recordResult(_ s: BattleSession, _ result: BattleResult) {
         guard session === s else { return }
         let names = [s.snapshot.name(0), s.snapshot.name(1)]
         let goals = campaign.levels.first { $0.id == s.setup.level }?.goals ?? []
@@ -294,10 +331,28 @@ final class AppModel: ObservableObject {
         }
         save.battle = nil
         persist()
+        store.flush()
         refreshCampaign()
+    }
+
+    /// 1.2 s after the result: only the screen changes.
+    private func battleEnded(_ s: BattleSession, _ result: BattleResult) {
+        guard session === s else { return }
         endSession(abandon: false)
         if result.pennants > 0 { haptics.play(.pennant) }
         screen = .results
+    }
+
+    /// The core stopped answering (M13): leave the fight, keep the last autosave.
+    private func battleFault(_ s: BattleSession, _ why: String) {
+        guard session === s else { return }
+        endSession(abandon: false)
+        screen = .map
+        showResume = save.battle != nil
+        refreshCampaign()
+        notice = save.battle != nil
+            ? "This fight hit a snag. Your last autosave is kept: tap Carry on to try again from there."
+            : "This fight hit a snag and had to stop."
     }
 
     func nextLevel() {
@@ -340,20 +395,42 @@ final class AppModel: ObservableObject {
 
     // MARK: Resume (S18)
 
+    /// True while a saved fight is being replayed off the main thread.
+    @Published private(set) var resuming = false
+
     func carryOn() {
         showResume = false
-        guard let saved = save.battle else { return }
+        guard let saved = save.battle, !resuming else { return }
         endSession(abandon: false)
-        guard game.load(saved.core) else {
-            notice = "This fight could not be saved."
-            save.battle = nil
-            persist()
-            return
+        resuming = true
+        // Mark the replay as under way first: if it kills the app, the next launch drops this save (H4).
+        save.resumeInProgress = true
+        save.counter += 1
+        try? store.writeNow(save)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await self.game.load(saved.core)
+            self.resuming = false
+            self.save.resumeInProgress = false
+            switch result {
+            case .ok:
+                self.persist()
+                let s = self.makeSession(setup: saved.setup, title: saved.title)
+                self.session = s
+                s.start()
+                self.screen = .battle
+            case .rulesChanged:
+                self.dropSavedBattle("This saved fight was made by an older version of the game rules, so it cannot be carried on.")
+            case .damaged, .replayFailed:
+                self.dropSavedBattle("This saved fight could not be loaded, so it was cleared. Your progress is safe.")
+            }
         }
-        let s = makeSession(setup: saved.setup, title: saved.title)
-        session = s
-        s.start()
-        screen = .battle
+    }
+
+    private func dropSavedBattle(_ text: String) {
+        notice = text
+        save.battle = nil
+        persist()
     }
 
     func leaveIt() {
@@ -368,15 +445,40 @@ final class AppModel: ObservableObject {
     private func handle(_ events: [BattleEvent], _ snap: BattleSnapshot) {
         for e in events {
             switch e.type {
+            case "fire":
+                shotDamage = 0
+                shotBonks = 0
+                shotLive = true
+                sound.play("fire_launch")
+            case "damage":
+                shotDamage += max(0, e.amount)
+                if e.text == "hob", e.side == 0, !snap.isDuel { haptics.play(.hobHit) }
+            case "bonk":
+                shotBonks += 1
+                sound.play("hob_bonk")
+                haptics.play(e.side == 0 && !snap.isDuel ? .bonkYours : .bonkTheirs)
             case "turn":
+                var shot = ""
+                if shotLive {
+                    // One short line per shot for VoiceOver (M5), spoken with the turn line.
+                    shotLive = false
+                    shot = shotDamage > 0 ? "Hit for \(shotDamage) damage" : "Missed"
+                    if shotBonks > 0 { shot += ", \(shotBonks) Bonked" }
+                    shot += ". "
+                }
                 let side = e.side >= 0 ? e.side : snap.activeSide
                 let who = snap.isDuel ? "\(snap.name(side))'s turn" : (snap.isHuman(side) ? "Your turn" : "\(snap.name(side)) aims")
-                announce("\(who). Wind \(abs(snap.wind)) \(snap.wind >= 0 ? "right" : "left").")
+                announce("\(shot)\(who). Wind \(abs(snap.wind)) \(snap.wind >= 0 ? "right" : "left").")
                 sound.play(snap.isHuman(side) && !snap.isDuel ? "turn_yours" : (side == 0 ? "turn_yours" : "turn_theirs"))
+            case "kettle_pop":
+                sound.play("kettle_pop")
+                haptics.play(.kettlePop)
+                announce(e.side == 0 && !snap.isDuel ? "Your kettle popped!" : "\(snap.name(e.side)) kettle popped!")
             case "end":
+                let headline = ResultInfo.headline(how: e.text, won: e.side == 0)
+                announce(snap.isDuel ? "\(snap.name(e.side)) wins!" : headline)
                 let win = snap.isDuel || e.side == 0
                 sound.play(win ? "win_fanfare" : "loss_sting")
-                if e.text == "kettle_pop" { haptics.play(.kettlePop) }
             case "squall_warn":
                 if !e.text.isEmpty { announce(e.text) }
                 sound.play("squall_warn")
@@ -409,6 +511,10 @@ final class AppModel: ObservableObject {
         default: return nil
         }
     }
+
+    private var shotDamage = 0
+    private var shotBonks = 0
+    private var shotLive = false
 
     private func announce(_ text: String) {
         guard !text.isEmpty, UIAccessibility.isVoiceOverRunning else { return }

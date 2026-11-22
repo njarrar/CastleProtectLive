@@ -16,7 +16,8 @@ final class SoundEngine {
         "win_fanfare", "loss_sting", "squall_warn",
     ]
 
-    private let engine = AVAudioEngine()
+    private var engine = AVAudioEngine()
+    private var observers: [NSObjectProtocol] = []
     private var players: [AVAudioPlayerNode] = []
     private var buffers: [String: AVAudioPCMBuffer] = [:]
     private var nextPlayer = 0
@@ -31,6 +32,57 @@ final class SoundEngine {
     init() {
         format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)
             ?? AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 1, interleaved: false)!
+        observe()
+    }
+
+    // MARK: Session events (M6)
+
+    private func observe() {
+        let nc = NotificationCenter.default
+        observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            let began = raw == AVAudioSession.InterruptionType.began.rawValue
+            MainActor.assumeIsolated { self?.interrupted(began: began) }
+        })
+        observers.append(nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.rebuild() }
+        })
+        observers.append(nc.addObserver(forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.restartIfNeeded() }
+        })
+    }
+
+    private func interrupted(began: Bool) {
+        guard started else { return }
+        if began {
+            for p in players { p.stop() }
+            engine.pause()
+        } else {
+            try? AVAudioSession.sharedInstance().setActive(true)
+            restartIfNeeded()
+        }
+    }
+
+    private func restartIfNeeded() {
+        guard started, !engine.isRunning else { return }
+        try? engine.start()
+    }
+
+    /// Media services were reset: every node is gone. Build the graph again on the next sound.
+    private func rebuild() {
+        players = []
+        nextPlayer = 0
+        started = false
+        failed = false
+        engine = AVAudioEngine()
+    }
+
+    /// The app went to the background: let go of the audio session (UX 8.3).
+    func release() {
+        guard started else { return }
+        for p in players { p.stop() }
+        engine.pause()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     func play(_ cue: String) {
@@ -53,6 +105,7 @@ final class SoundEngine {
 
     func resume() {
         guard started, !engine.isRunning else { return }
+        try? AVAudioSession.sharedInstance().setActive(true)
         try? engine.start()
     }
 
@@ -108,6 +161,7 @@ final class SoundEngine {
                 && raw.format.commonFormat == format.commonFormat {
                 return raw
             }
+            print("warning: sounds/\(cue).\(ext) is \(raw.format.sampleRate) Hz, \(raw.format.channelCount) ch; the engine needs 44.1 kHz mono float. Using the built in sound.")
         }
         return nil
     }

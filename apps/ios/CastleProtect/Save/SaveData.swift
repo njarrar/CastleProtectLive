@@ -89,7 +89,9 @@ struct CampaignProgress: Codable, Equatable, Sendable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        pennants = c.value(.pennants, [:])
+        // Strict: damaged Pennants make the whole file count as damaged, so the
+        // backup is read instead of an empty record that a later write would keep (M11).
+        pennants = try c.decodeIfPresent([String: Int].self, forKey: .pennants) ?? [:]
         buttons = c.value(.buttons, 0)
     }
 
@@ -191,6 +193,8 @@ struct SaveData: Codable, Equatable, Sendable {
     var skirmish = SkirmishOptions()
     /// Last level played, so the map opens on it.
     var lastLevel: String?
+    /// Set while a saved battle is being replayed; still set at launch means the replay killed the app (H4).
+    var resumeInProgress = false
 
     init() {}
 
@@ -201,14 +205,15 @@ struct SaveData: Codable, Equatable, Sendable {
         counter = c.value(.counter, d.counter)
         firstRunDone = c.value(.firstRunDone, d.firstRunDone)
         settings = c.value(.settings, d.settings)
-        progress = c.value(.progress, d.progress)
+        progress = try c.decodeIfPresent(CampaignProgress.self, forKey: .progress) ?? d.progress
         battle = c.value(.battle, nil)
         duel = c.value(.duel, d.duel)
         skirmish = c.value(.skirmish, d.skirmish)
         lastLevel = c.value(.lastLevel, nil)
+        resumeInProgress = c.value(.resumeInProgress, false)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schema, counter, firstRunDone, settings, progress, battle, duel, skirmish, lastLevel
+        case schema, counter, firstRunDone, settings, progress, battle, duel, skirmish, lastLevel, resumeInProgress
     }
 }

@@ -47,6 +47,15 @@ enum CoreFactory {
         #endif
     }
 
+    /// The golden replay hashes from the linked core, or nil with the stand-in.
+    static func goldenHashes() -> String? {
+        #if canImport(CastleCoreFFI)
+        return FFICoreBridge.goldenHashes()
+        #else
+        return nil
+        #endif
+    }
+
     static var realCoreLinked: Bool {
         #if canImport(CastleCoreFFI)
         return true

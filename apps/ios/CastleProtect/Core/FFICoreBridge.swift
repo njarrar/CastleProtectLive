@@ -57,6 +57,11 @@ final class FFICoreBridge: CoreBridge {
         handle = nil
     }
 
+    /// `cp_golden_hashes()`: the golden replays run inside this build of the core, `name hash` per line.
+    static func goldenHashes() -> String {
+        take(cp_golden_hashes()) ?? ""
+    }
+
     /// Copies a core string and frees it.
     private static func take(_ p: UnsafeMutablePointer<CChar>?) -> String? {
         guard let p else { return nil }

@@ -201,6 +201,26 @@ impl Battle {
         } else {
             Value::Null
         };
+        // readiness of every shot chip for the selected Hob of the side on turn
+        let shots: Vec<Value> = {
+            let hob = self.sel[s].hob;
+            let mut list: Vec<String> = vec!["plain".into()];
+            if self.hobs.get(hob as usize).is_some_and(|h| h.knack.is_some()) {
+                list.push("knack".into());
+            }
+            list.extend(self.hands[s].iter().cloned());
+            list.dedup();
+            list.iter()
+                .map(|w| {
+                    let r = if matches!(self.phase, Phase::Plan) && !self.acted {
+                        self.shot_ready(self.side, hob, w)
+                    } else {
+                        Err("not_planning")
+                    };
+                    json!({"shot": w, "id": self.shot_for(hob, w), "ready": r.is_ok(), "why": r.err()})
+                })
+                .collect()
+        };
         let hud = json!({
             "turn": self.turn, "round": self.round, "round_cap": self.rules.round_cap, "side": self.side,
             "wind": self.wind, "forecast": self.forecast(), "front_rounds_left": self.front_rounds_left(),
@@ -215,6 +235,8 @@ impl Battle {
             "score": [self.stats[0].score, self.stats[1].score],
             "puff_up": [self.puff_up_allowed[0] && !self.puff_up_used[0], self.puff_up_allowed[1] && !self.puff_up_used[1]],
             "steam_max": self.steam_max,
+            "shove_off_cost": crate::battle::SHOVE_OFF,
+            "shots": shots,
             "handicap": [handicap(0), handicap(1)],
             "volley": if self.volley > 0 { json!({"actions": self.volley, "left": self.actions_left}) } else { Value::Null },
             "boss": boss,
