@@ -98,18 +98,16 @@ final class CoreHost: @unchecked Sendable {
     }
 
     /// A quick call: runs on the core thread and waits for it.
-    func sync<T>(_ work: (any CoreBridge) -> T) -> T {
+    func sync<T>(_ work: @escaping (any CoreBridge) -> T) -> T {
         if thread.isCurrent { return work(bridge) }
         let done = DispatchSemaphore(value: 0)
         var result: T?
         let bridge = self.bridge
-        withoutActuallyEscaping(work) { work in
-            thread.enqueue {
-                result = work(bridge)
-                done.signal()
-            }
-            done.wait()
+        thread.enqueue {
+            result = work(bridge)
+            done.signal()
         }
+        done.wait()
         switch result {
         case .some(let value): return value
         case .none: preconditionFailure("the core thread did not run the call")
