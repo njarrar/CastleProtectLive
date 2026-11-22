@@ -116,6 +116,32 @@ linked; `-uiTesting` also starts from an empty save in a temp folder (UI tests u
   app state shown at each turn start with Side by side seats, and Ready ignores taps for
   its first 400 ms.
 
+## Core rules 3 and QA playtest 1
+
+The app speaks core rules 3 (`core/API.md`, "Changes for QA playtest 1"). Tests are in
+`Tests/CastleProtectTests/QAPlaytestOneTests.swift`; the real-core ones are required by CI.
+
+- Fire is lit from `hud.fire`. Unready shot chips stay tappable and show the core's `why`
+  (a short word) and `text` (VoiceOver and the banner). A `shot_switch` event shows the
+  chip's words after the turn banner. A refused Fire shows the core's `detail` and moves the
+  pick to its `ready_shot`.
+- Fatigue: the round label reads "Fatigue in 3", "2", "1", then "Fatigue"; a "Fatigue next
+  round" banner shows at the start of round 9; the round 10 collapse (`why: "fatigue"`)
+  plays like any collapse.
+- Results show "Your best shot" from `stats[0].best_shot` (and the winner's
+  `result.best_shot` after a loss); the Couch Duel results show each player's.
+- Retry keeps the seed and sends the next `attempt`; the Daily Dust-up never sends one.
+- Test Yard: side 1 is the Dummy side and passes itself; the app treats only side 0 as a
+  person and the round label reads "Test Yard".
+- A save from rules 2 is refused with a plain message and cleared; progress is kept.
+- Layout: the landscape plan frame holds both forts while blocks draw at 8 pt or more,
+  else your fort and the arc with a "Rival fort" marker on the edge. Fine Tune sits on the
+  side away from your fort and hides while a finger aims or pans. A pull into the screen
+  edge keeps its angle and only power follows; full power comes before the edge (never
+  under 64 pt). A press away from your fort pans the camera. The Couch Duel setup and the
+  hand-off card are compact on a short screen. There is no Workshop screen on iOS yet, so
+  the 24 pt cell rule has nothing to apply to.
+
 ## Known gaps in v0.1
 
 - The core has no handicap, give up, Volley Points or Buttons economy yet, so Help and

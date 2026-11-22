@@ -64,16 +64,34 @@ struct BattleLayout: Equatable, Sendable {
     var fieldStrip: CGRect = .zero
     var tray: CGRect = .zero
     var crewRow: CGRect = .zero
+    /// Where the Fine Tune pad sits: on the side away from the fort of the side the HUD
+    /// shows, so it never covers your fort (QA playtest 1, M7). Zero in flight.
+    var fineTune: CGRect = .zero
 
     static let empty = BattleLayout(mode: .wide, size: .zero, insets: Insets(), lenses: [], aimRegion: .zero)
 
     /// Power 100 is a drag of 40% of the screen's short side, in either layout.
     var powerSpan: CGFloat { max(40, min(size.width, size.height) * 0.4) }
 
-    static func compute(size: CGSize, insets: Insets, mode: LayoutMode, inFlight: Bool, isPad: Bool) -> BattleLayout {
+    /// The Fine Tune pad's size for a key size (three columns: angle keys, the readout and
+    /// Recall, power keys).
+    static func fineTuneSize(key: CGFloat) -> CGSize {
+        CGSize(width: key * 2 + 64 + 8 + 12, height: max(key * 2 + 4, 92) + 12)
+    }
+
+    /// Fine Tune key size per layout.
+    static func fineTuneKey(mode: LayoutMode, isPad: Bool) -> CGFloat {
+        isPad ? 56 : (mode == .wide ? 48 : 44)
+    }
+
+    static func compute(size: CGSize, insets: Insets, mode: LayoutMode, inFlight: Bool, isPad: Bool,
+                        hudSide: Int = 0, leftHand: Bool = false) -> BattleLayout {
         let w = size.width, h = size.height
         guard w > 0, h > 0 else { return .empty }
         let scale: CGFloat = isPad ? 1.25 : 1
+        let pad = fineTuneSize(key: fineTuneKey(mode: mode, isPad: isPad))
+        // Your fort is on the left for side 0 and on the right for side 1: the pad goes on the other side.
+        let padRight = hudSide == 0
         switch mode {
         case .wide:
             let full = CGRect(origin: .zero, size: size)
@@ -82,9 +100,17 @@ struct BattleLayout: Equatable, Sendable {
             let left = insets.left + (inFlight ? 16 : 64 * scale)
             let right = insets.right + 16
             let clear = CGRect(x: left, y: top, width: max(10, w - left - right), height: max(10, h - top - bottom))
-            return BattleLayout(mode: .wide, size: size, insets: insets,
-                                lenses: [Lens(viewport: full, frame: clear, focus: inFlight ? .follow : .both)],
-                                aimRegion: full)
+            var layout = BattleLayout(mode: .wide, size: size, insets: insets,
+                                      lenses: [Lens(viewport: full, frame: clear, focus: inFlight ? .follow : .both)],
+                                      aimRegion: full)
+            if !inFlight {
+                // Under the top strip, away from your fort; clear of the crew column when it is on that side.
+                let column: CGFloat = (padRight == leftHand) ? 48 * scale + 16 : 0
+                let y = insets.top + 36 * scale + 16
+                let x = padRight ? w - max(insets.right, 10) - column - pad.width : max(insets.left, 10) + column
+                layout.fineTune = CGRect(x: x, y: y, width: pad.width, height: pad.height)
+            }
+            return layout
         case .tall:
             let stripH: CGFloat = 56 * scale
             let fieldH: CGFloat = 32
@@ -109,11 +135,15 @@ struct BattleLayout: Equatable, Sendable {
             // Pause, the Walk pad and the readout float along the Bottom lens foot.
             let bottomFrame = CGRect(x: bottomLens.minX + 8, y: bottomLens.minY + 8,
                                      width: bottomLens.width - 16, height: max(10, bottomLens.height - 72))
+            // Docked in the Bottom lens above the readout row, on the side away from your fort.
+            let padY = max(bottomLens.minY + 4, bottomLens.maxY - 6 - 44 - 8 - pad.height)
+            let padX = padRight ? w - 8 - pad.width : 8
             return BattleLayout(mode: .tall, size: size, insets: insets,
                                 lenses: [Lens(viewport: topLens, frame: topLens.insetBy(dx: 8, dy: 8), focus: .target),
                                          Lens(viewport: field, frame: field.insetBy(dx: 4, dy: 2), focus: .whole),
                                          Lens(viewport: bottomLens, frame: bottomFrame, focus: .own)],
-                                aimRegion: bottomLens, topStrip: topStrip, fieldStrip: field, tray: tray, crewRow: crew)
+                                aimRegion: bottomLens, topStrip: topStrip, fieldStrip: field, tray: tray, crewRow: crew,
+                                fineTune: CGRect(x: padX, y: padY, width: pad.width, height: pad.height))
         }
     }
 }
@@ -124,17 +154,30 @@ struct AimGesture: Equatable, Sendable {
     static let dragThreshold: CGFloat = 8
     static let cancelRadius: CGFloat = 12
 
+    /// The shortest pull for power 100 when the screen edge is close (QA playtest 1, m3).
+    static let minPowerSpan: CGFloat = 64
+    /// A finger this close to the screen edge is on the edge.
+    static let edgeMargin: CGFloat = 2
+
     let anchor: CGPoint
     private(set) var finger: CGPoint
     private(set) var isDragging = false
-    let powerSpan: CGFloat
+    /// The pull for power 100: 40% of the short side, or the room left toward the edge the
+    /// drag heads for (set when the drag starts), never under 64 pt.
+    private(set) var powerSpan: CGFloat
     let mode: DragMode
+    /// The screen, so a pull into its edge keeps its angle; nil means no edge rule.
+    let bounds: CGRect?
+    /// The angle the drag had before the finger met the edge; while on the edge only power follows.
+    private(set) var edgeAngle: Int?
+    private var lastAngle: Int?
 
-    init(anchor: CGPoint, powerSpan: CGFloat, mode: DragMode) {
+    init(anchor: CGPoint, powerSpan: CGFloat, mode: DragMode, bounds: CGRect? = nil) {
         self.anchor = anchor
         self.finger = anchor
         self.powerSpan = max(1, powerSpan)
         self.mode = mode
+        self.bounds = bounds
     }
 
     var distance: CGFloat { hypot(finger.x - anchor.x, finger.y - anchor.y) }
@@ -142,18 +185,55 @@ struct AimGesture: Equatable, Sendable {
     /// True when the finger is back inside the cancel ring around the anchor.
     var isInCancelRing: Bool { distance <= Self.cancelRadius }
 
+    /// True when `point` is on the screen edge.
+    func isOnEdge(_ point: CGPoint) -> Bool {
+        guard let b = bounds else { return false }
+        let m = Self.edgeMargin
+        return point.x <= b.minX + m || point.x >= b.maxX - m || point.y <= b.minY + m || point.y >= b.maxY - m
+    }
+
+    /// Room from the anchor to the screen edge along the direction toward `point`.
+    func roomToEdge(toward point: CGPoint) -> CGFloat? {
+        guard let b = bounds else { return nil }
+        let dx = point.x - anchor.x, dy = point.y - anchor.y
+        let len = hypot(dx, dy)
+        guard len > 0 else { return nil }
+        let ux = dx / len, uy = dy / len
+        var t = CGFloat.greatestFiniteMagnitude
+        if ux > 0 { t = min(t, (b.maxX - anchor.x) / ux) }
+        if ux < 0 { t = min(t, (b.minX - anchor.x) / ux) }
+        if uy > 0 { t = min(t, (b.maxY - anchor.y) / uy) }
+        if uy < 0 { t = min(t, (b.minY - anchor.y) / uy) }
+        return max(0, t - Self.edgeMargin * 2)
+    }
+
     /// Moves the finger. Returns true on the move that turns a touch into a drag.
     mutating func move(to point: CGPoint) -> Bool {
         finger = point
+        var started = false
         if !isDragging && distance >= Self.dragThreshold {
             isDragging = true
-            return true
+            started = true
+            // Full power comes before the finger meets the edge it heads for.
+            if let room = roomToEdge(toward: point) {
+                powerSpan = max(Self.minPowerSpan, min(powerSpan, room))
+            }
         }
-        return false
+        if isOnEdge(point) && isDragging {
+            // On the edge the angle keeps the direction it had; only power follows the finger.
+            if edgeAngle == nil { edgeAngle = lastAngle ?? rawAngleTenths }
+        } else {
+            edgeAngle = nil
+            lastAngle = rawAngleTenths
+        }
+        return started
     }
 
     /// Angle in tenths of a degree, snapped to 0.5 degree, 0 right to 1800 left.
-    var angleTenths: Int {
+    var angleTenths: Int { edgeAngle ?? rawAngleTenths }
+
+    /// The angle from the anchor to the finger, edge or not.
+    private var rawAngleTenths: Int {
         var dx = finger.x - anchor.x
         var dy = finger.y - anchor.y
         if mode == .pullBack { dx = -dx; dy = -dy }

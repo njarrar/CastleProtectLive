@@ -319,7 +319,7 @@ final class RealCoreV02Tests: XCTestCase {
     func testGiveUpOnTheRealCore() throws {
         guard CoreFactory.realCoreLinked else { throw XCTSkip("CastleCore.xcframework is not linked in this build") }
         let game = CoreGame(bridge: CoreFactory.make(preferStandIn: false), catalog: ContentCatalog.load())
-        XCTAssertEqual(game.rulesVersion, 2)
+        XCTAssertEqual(game.rulesVersion, 3)
         var setup = BattleSetup.campaign("1-1", preset: .fair, seed: 21)
         setup.progress = CoreProgress()
         XCTAssertNil(game.start(setup))

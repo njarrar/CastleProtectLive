@@ -8,7 +8,7 @@ import Foundation
 final class FakeCoreBridge: CoreBridge {
     let name = "Stand-in core (fixture player, no XCFramework linked)"
     let isStandIn = true
-    let version = #"{"sim":"fixtures","rules":2,"tick_hz":120}"#
+    let version = #"{"sim":"fixtures","rules":3,"tick_hz":120}"#
     /// Tests: the next command panics, and every call after it is `dead_handle` (core/API.md).
     var panicNext = false
     private var dead = false

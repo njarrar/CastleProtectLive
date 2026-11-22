@@ -193,13 +193,19 @@ final class FrameAssembler {
         v.wind = hud.wind
         v.forecast = hud.forecast
         v.names = hud.names.count >= 2 ? hud.names : ["You", "Rival"]
-        if v.mode == "campaign" || v.mode == "skirmish" { v.names[0] = "You" }
+        if v.mode == "campaign" || v.mode == "skirmish" || v.mode == "daily" { v.names[0] = "You" }
         v.humans = hud.control.count >= 2 ? hud.control.map { $0 == "human" } : [true, false]
+        // Test Yard (rules 3): side 1 is always the Dummy side and passes itself, so only side 0
+        // is ever a person, whatever the setup said.
+        if s.mode == "test_yard" { v.humans = [true, false] }
         v.world = WorldSize(w: Double(s.map.w), h: H)
         v.terrain = groundHeights(fallback: s)
         v.ground = grid
         v.speed = speed
         let humanActive = s.side >= 0 && s.side < v.humans.count ? v.humans[s.side] : false
+        v.fatigue = hud.fatigue
+        v.fatigueRound = hud.fatigueRound
+        v.fatigueIn = hud.fatigueIn
         // The Rival's live aim is never shown (core/API.md, M8), nor during the hand-off card.
         let showAim = humanActive && handoffTo == nil
 
@@ -294,13 +300,21 @@ final class FrameAssembler {
                 for i in shots.indices {
                     if let state = hud.shots.first(where: { $0.shot == shots[i].id }) {
                         shots[i].ready = state.ready
-                        shots[i].why = state.why
+                        shots[i].why = state.ready ? nil : state.why
+                        shots[i].text = state.ready ? nil : (state.text ?? state.why.map(BattleSession.refusalText))
                     }
                 }
             }
             v.shots = shots
         }
-        v.canFire = s.phase == "plan" && s.awaiting == "human" && (selected?.canFire ?? false) && handoffTo == nil
+        // Rules 3: Fire is lit only when the core says the selected shot would go (`hud.fire`).
+        // An older core has no `hud.fire`: the Hob's `can_fire` decides, as before.
+        let fireReady = hud.fire?.ready ?? (selected?.canFire ?? false)
+        let planning = s.phase == "plan" && s.awaiting == "human" && handoffTo == nil
+        v.canFire = planning && fireReady
+        if planning, showAim, let fire = hud.fire, !fire.ready {
+            v.fireText = fire.text ?? fire.why.map(BattleSession.refusalText)
+        }
 
         var flat: [Double] = []
         flat.reserveCapacity(s.preview.count * 2)
@@ -339,6 +353,13 @@ final class FrameAssembler {
             v.result = BattleResult(winner: r.winner, reason: r.how, pennants: r.pennants.filter { $0 }.count,
                                     buttons: r.buttons, round: r.round, goals: goals, pennantFlags: r.pennants,
                                     pennantsNew: r.pennantsNew, score: r.score, stats: r.stats, broke: r.broke)
+            v.result?.bestShots = r.stats.map(\.bestShot)
+            // `best_shot` is the winner's; never show a shot of the losing side as "Best shot".
+            if let best = r.bestShot, best.side == r.winner {
+                v.result?.bestShot = best
+            } else if r.winner >= 0, r.winner < r.stats.count {
+                v.result?.bestShot = r.stats[r.winner].bestShot
+            }
         }
         if let to = handoffTo {
             v.handoff = HandoffView(line: lastShotLine, toSide: to)
@@ -372,6 +393,10 @@ final class FrameAssembler {
         case "kettle_pop": return BattleEvent(type: "kettle_pop", side: e.side ?? -1)
         case "squall_warning": return BattleEvent(type: "squall_warn", amount: e.n ?? 0, text: e.text ?? "")
         case "squall", "squall_round": return BattleEvent(type: "squall", amount: e.n ?? 0)
+        case "fatigue_warning":
+            return BattleEvent(type: "fatigue_warn", amount: e.round ?? 0, text: e.text ?? "Fatigue next round")
+        case "fatigue": return BattleEvent(type: "fatigue", amount: e.round ?? 0, text: "Fatigue! Battered blocks weaken")
+        case "shot_switch": return BattleEvent(type: "shot_switch", side: e.side ?? -1, amount: e.hob ?? -1, text: e.why ?? "")
         case "thump": return BattleEvent(type: "thump", side: e.side ?? -1)
         case "threaded": return BattleEvent(type: "threaded", side: e.side ?? -1)
         case "win": return BattleEvent(type: "end", side: e.winner ?? -1, text: e.how ?? "")

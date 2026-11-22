@@ -293,6 +293,21 @@ struct ShotChip: Equatable, Sendable, Identifiable {
     var ready: Bool = true
     /// Why `fire` would refuse it (from `hud.shots`), or nil.
     var why: String?
+    /// The same in plain words, shown on an unready chip (rules 3), or nil.
+    var text: String?
+
+    /// A word or two for an unready chip, from the core's `why`.
+    static func shortReason(why: String?) -> String {
+        switch why {
+        case "resting_plain_only", "resting": return "Resting"
+        case "no_knack_uses": return "Used up"
+        case "no_heavy_first_turn": return "Not yet"
+        case "buried": return "Dug in"
+        case "no_actions_left": return "No shots"
+        case "not_in_hand", "no_shot": return "Spent"
+        default: return "Not ready"
+        }
+    }
 }
 
 struct AimView: Equatable, Sendable {
@@ -365,6 +380,16 @@ struct BattleResult: Equatable, Sendable {
     var stats: [CoreStats] = []
     /// What broke the losing side.
     var broke: CoreBroke?
+    /// The winner's best shot (core `result.best_shot`), and each side's (`stats[i].best_shot`).
+    var bestShot: CoreBestShot?
+    var bestShots: [CoreBestShot?] = []
+
+    /// The best shot of `side`, or nil (never the other side's).
+    func bestShot(of side: Int) -> CoreBestShot? {
+        if side >= 0, side < bestShots.count, let shot = bestShots[side] { return shot }
+        if let shot = bestShot, shot.side == side { return shot }
+        return nil
+    }
 }
 
 struct HandoffView: Equatable, Sendable {
@@ -424,6 +449,8 @@ struct BattleSnapshot: Equatable, Sendable {
     var selectedShot: String?
     var aim = AimView()
     var canFire = false
+    /// Why Fire is grey, in plain words (core `hud.fire.text`), or nil.
+    var fireText: String?
     var dugIn = false
     var steam = 0
     var steamTurn = 0
@@ -453,6 +480,10 @@ struct BattleSnapshot: Equatable, Sendable {
     var score: [Int] = [0, 0]
     /// Shimmer cells per side, for the shimmer effect.
     var squall = false
+    /// Fatigue is on (from round 10); rounds until it starts, or nil (core `hud.fatigue_in`).
+    var fatigue = false
+    var fatigueRound = 10
+    var fatigueIn: Int?
 
     func fort(_ side: Int) -> FortView? { forts.first { $0.side == side } }
     func name(_ side: Int) -> String { side >= 0 && side < names.count ? names[side] : (side == 0 ? "You" : "Rival") }

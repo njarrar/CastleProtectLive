@@ -81,7 +81,8 @@ final class BattleSKView: SKView {
         drawnColours = colours
         drawnPose = pose
         battleScene.render(snapshot: session.snapshot, layout: session.layout, fx: session.fx, colours: colours,
-                           dragging: session.dragging, reduceMotion: session.settings.reduceMotion)
+                           dragging: session.dragging, reduceMotion: session.settings.reduceMotion,
+                           pan: session.cameraPan, panning: session.panning)
     }
 
     override func layoutSubviews() {
@@ -167,7 +168,8 @@ final class BattleScene: SKScene {
     /// Only shown lenses count: a rig left easing when its lens was hidden must not keep the scene at 60 fps.
     var cameraMoving: Bool { layers.contains { !$0.crop.isHidden && $0.rig.moving } }
 
-    func render(snapshot: BattleSnapshot, layout: BattleLayout, fx: FieldFX, colours: ColourSet, dragging: Bool, reduceMotion: Bool) {
+    func render(snapshot: BattleSnapshot, layout: BattleLayout, fx: FieldFX, colours: ColourSet, dragging: Bool, reduceMotion: Bool,
+                pan: Double = 0, panning: Bool = false) {
         let nanos = DispatchTime.now().uptimeNanoseconds
         let dt = lastNanos == 0 ? 16.0 : min(100, Double(nanos &- lastNanos) / 1_000_000)
         lastNanos = nanos
@@ -183,7 +185,8 @@ final class BattleScene: SKScene {
                 let palette = palettes[colours] ?? Palette(set: colours)
                 palettes[colours] = palette
                 layer.update(lens: lenses[i], snap: snapshot, fx: fx, palette: palette, sceneHeight: size.height,
-                             textures: textures, dt: dt, dragging: dragging, reduceMotion: reduceMotion)
+                             textures: textures, dt: dt, dragging: dragging, reduceMotion: reduceMotion,
+                             pan: pan, panning: panning)
             } else {
                 layer.crop.isHidden = true
             }
@@ -256,6 +259,11 @@ final class LensLayer {
     private var terrainDrawn: [Int: Int] = [:]
     private var terrainGrid: TerrainGrid?
     private var terrainVersion = -1
+    /// "Rival fort" on the screen edge when the fort being shot at is out of frame (QA playtest 1, M3).
+    private let marker = SKNode()
+    private let markerLabel = SKLabelNode(fontNamed: "AvenirNext-Heavy")
+    private let markerArrow = SKShapeNode()
+    private let markerPlate = SKShapeNode()
 
     /// World cells per @1x pixel for Hob frames (72 x 80 px at @1x), so a Hob
     /// stands about two blocks tall in its Nook. Blocks are 1 cell a pixel.
@@ -282,6 +290,50 @@ final class LensLayer {
             world.addChild(n)
             fortNodes.append(n)
         }
+        marker.zPosition = 20
+        marker.isHidden = true
+        markerPlate.lineWidth = 2
+        markerPlate.strokeColor = Palette.hex(0x2B1E2E)
+        markerPlate.fillColor = Palette.hex(0xFFF4DE)
+        marker.addChild(markerPlate)
+        markerLabel.text = "Rival fort"
+        markerLabel.fontSize = 13
+        markerLabel.fontColor = Palette.hex(0x2B1E2E)
+        markerLabel.verticalAlignmentMode = .center
+        marker.addChild(markerLabel)
+        markerArrow.lineWidth = 2
+        markerArrow.strokeColor = Palette.hex(0x2B1E2E)
+        marker.addChild(markerArrow)
+        crop.addChild(marker)
+    }
+
+    /// Places the Rival fort marker on the lens edge at the fort's height, or hides it.
+    private func updateRivalMarker(show: Bool, snap: BattleSnapshot, worldRect: CGRect, lens: Lens,
+                                   sceneHeight: CGFloat, palette: Palette) {
+        guard show, let edge = Camera.rivalEdge(worldRect: worldRect, snap: snap) else {
+            marker.isHidden = true
+            return
+        }
+        marker.isHidden = false
+        let rivalSide = 1 - snap.activeSide
+        let fort = Camera.fortRect(rivalSide, snap: snap)
+        let at = Camera.viewRect(of: fort, worldRect: worldRect, frame: lens.frame)
+        let vp = lens.viewport
+        let w: CGFloat = 104, h: CGFloat = 28
+        let x = edge > 0 ? vp.maxX - 8 - w / 2 : vp.minX + 8 + w / 2
+        let y = min(max(at.midY, lens.frame.minY + h), lens.frame.maxY - h)
+        marker.position = CGPoint(x: x, y: sceneHeight - y)
+        markerPlate.path = CGPath(roundedRect: CGRect(x: -w / 2, y: -h / 2, width: w, height: h),
+                                  cornerWidth: 8, cornerHeight: 8, transform: nil)
+        markerPlate.strokeColor = palette.side(rivalSide)
+        markerLabel.position = CGPoint(x: CGFloat(-edge) * 8, y: 0)
+        let tip = CGFloat(edge) * (w / 2 - 4)
+        let arrow = CGMutablePath()
+        arrow.move(to: CGPoint(x: tip - CGFloat(edge) * 10, y: 7))
+        arrow.addLine(to: CGPoint(x: tip, y: 0))
+        arrow.addLine(to: CGPoint(x: tip - CGFloat(edge) * 10, y: -7))
+        markerArrow.path = arrow
+        markerArrow.strokeColor = palette.side(rivalSide)
     }
 
     // MARK: Pools
@@ -322,7 +374,8 @@ final class LensLayer {
     // MARK: Frame
 
     func update(lens: Lens, snap: BattleSnapshot, fx: FieldFX, palette: Palette, sceneHeight: CGFloat,
-                textures: TerrainTextures, dt: Double, dragging: Bool, reduceMotion: Bool) {
+                textures: TerrainTextures, dt: Double, dragging: Bool, reduceMotion: Bool,
+                pan: Double = 0, panning: Bool = false) {
         let small = lens.focus == .whole
         let vp = lens.viewport
         let centre = CGPoint(x: vp.midX, y: sceneHeight - vp.midY)
@@ -333,10 +386,13 @@ final class LensLayer {
         backdrop.color = small ? palette.paper : palette.sky
 
         // Camera: ease toward the lens's target, then fit it into the Clear Rect.
-        let target = Camera.worldRect(for: lens.focus, snap: snap, fx: fx, current: rig.rect)
+        var target = Camera.worldRect(for: lens.focus, snap: snap, fx: fx, current: rig.rect, frame: lens.frame.size)
+        let aimLens = lens.focus == .both || lens.focus == .own
+        if aimLens { target = Camera.panned(target, by: pan, worldW: snap.world.w) }
         let follow: CGPoint? = lens.focus == .follow && !snap.shells.isEmpty && !reduceMotion
             ? CGPoint(x: snap.shells[0].x, y: snap.shells[0].y) : nil
-        let worldRect = rig.update(target: target, dt: dt, cut: reduceMotion || small, hold: dragging && !small, follow: follow)
+        let worldRect = rig.update(target: target, dt: dt, cut: reduceMotion || small || (panning && aimLens),
+                                   hold: dragging && !small, follow: follow)
         let scale = min(lens.frame.width / max(1, worldRect.width), lens.frame.height / max(1, worldRect.height))
         world.setScale(scale)
         let frameCentre = CGPoint(x: lens.frame.midX, y: sceneHeight - lens.frame.midY)
@@ -346,6 +402,8 @@ final class LensLayer {
                                  y: frameCentre.y - worldRect.midY * scale + shake.y)
         map = small ? nil : LensMap(viewport: vp, frameCentre: frameCentre, worldRect: worldRect, scale: scale,
                                     sceneHeight: sceneHeight)
+        updateRivalMarker(show: lens.focus == .both && (snap.phase == .plan || snap.phase == .handoff),
+                          snap: snap, worldRect: worldRect, lens: lens, sceneHeight: sceneHeight, palette: palette)
         let cellsPerPoint = Double(1 / max(0.0001, scale))
         let useArt = !small && !sheet.isEmpty
         let now = fx.now
@@ -856,20 +914,89 @@ enum Camera {
         return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
-    /// Both forts plus the arc you can see, biased 55/45 toward the fort being shot at.
-    static func planRect(_ snap: BattleSnapshot) -> CGRect {
-        var r = fortRect(0, snap: snap).union(fortRect(1, snap: snap))
+    /// Blocks must draw at least this big (points) for the plan frame to hold both forts
+    /// (QA playtest 1, M3); smaller, it frames your fort and the arc, with a Rival edge marker.
+    static let minBlockPoints: CGFloat = 8
+
+    /// The size a 16-cell block draws at when `rect` is fitted into a frame of `frame`.
+    static func blockPoints(_ rect: CGRect, in frame: CGSize) -> CGFloat {
+        guard rect.width > 0, rect.height > 0 else { return 0 }
+        return 16 * min(frame.width / rect.width, frame.height / rect.height)
+    }
+
+    /// The arc you can see, as a rect (null when there is none).
+    private static func previewRect(_ snap: BattleSnapshot) -> CGRect {
+        var r = CGRect.null
         var i = 0
         while i + 1 < snap.preview.count {
             r = r.union(CGRect(x: snap.preview[i] - 8, y: snap.preview[i + 1] - 8, width: 16, height: 16))
             i += 2
         }
-        r = r.insetBy(dx: -90, dy: -40).offsetBy(dx: 0, dy: 60)
-        let bias = r.width * 0.05 * (snap.activeSide == 0 ? 1 : -1)
-        return r.offsetBy(dx: bias, dy: 0)
+        return r
     }
 
-    static func worldRect(for focus: LensFocus, snap: BattleSnapshot, fx: FieldFX? = nil, current: CGRect? = nil) -> CGRect {
+    /// Margins, and the 55/45 lean toward the fort being shot at. The lean widens the frame on
+    /// the target side instead of sliding it, so it never pushes a fort out (QA playtest 1, M3).
+    private static func framed(_ r: CGRect, activeSide: Int) -> CGRect {
+        var out = r.insetBy(dx: -90, dy: -40).offsetBy(dx: 0, dy: 60)
+        let lean = out.width * 0.1
+        out.size.width += lean
+        if activeSide != 0 { out.origin.x -= lean }
+        return out
+    }
+
+    /// Both forts plus the arc you can see.
+    static func bothRect(_ snap: BattleSnapshot) -> CGRect {
+        let r = fortRect(0, snap: snap).union(fortRect(1, snap: snap)).union(previewRect(snap))
+        return framed(r, activeSide: snap.activeSide)
+    }
+
+    /// Your fort (the side on turn) plus the arc you can see.
+    static func ownPlanRect(_ snap: BattleSnapshot) -> CGRect {
+        let r = fortRect(snap.activeSide, snap: snap).union(previewRect(snap))
+        return framed(r, activeSide: snap.activeSide)
+    }
+
+    /// The plan frame: both forts when their blocks still draw at 8 pt or more in a frame of
+    /// `frame`, else your fort and the arc. Without a frame size, both forts.
+    static func planRect(_ snap: BattleSnapshot, frame: CGSize? = nil) -> CGRect {
+        let both = bothRect(snap)
+        guard let frame, frame.width > 0, frame.height > 0 else { return both }
+        return blockPoints(both, in: frame) >= minBlockPoints ? both : ownPlanRect(snap)
+    }
+
+    /// A press away from your fort pans the plan camera by `pan` cells; the frame stays within
+    /// the field (with a little margin).
+    static func panned(_ rect: CGRect, by pan: Double, worldW: Double) -> CGRect {
+        guard pan != 0 else { return rect }
+        let margin = 120.0
+        let lo = min(rect.minX, -margin)
+        let hi = max(rect.minX, worldW + margin - rect.width)
+        let x = min(max(rect.minX + pan, lo), hi)
+        return CGRect(x: x, y: rect.minY, width: rect.width, height: rect.height)
+    }
+
+    /// Where `world` (cells, y up) lands in view points when `worldRect` is fitted into `frame`.
+    static func viewRect(of world: CGRect, worldRect: CGRect, frame: CGRect) -> CGRect {
+        let scale = min(frame.width / max(1, worldRect.width), frame.height / max(1, worldRect.height))
+        let x0 = frame.midX + (world.minX - worldRect.midX) * scale
+        let x1 = frame.midX + (world.maxX - worldRect.midX) * scale
+        let yTop = frame.midY - (world.maxY - worldRect.midY) * scale
+        let yBottom = frame.midY - (world.minY - worldRect.midY) * scale
+        return CGRect(x: x0, y: yTop, width: x1 - x0, height: yBottom - yTop)
+    }
+
+    /// The Rival fort edge marker: -1 when the fort being shot at is off the left of the frame,
+    /// +1 off the right, nil when it is in view.
+    static func rivalEdge(worldRect: CGRect, snap: BattleSnapshot) -> Int? {
+        let rival = fortRect(1 - snap.activeSide, snap: snap)
+        if rival.midX > worldRect.maxX { return 1 }
+        if rival.midX < worldRect.minX { return -1 }
+        return nil
+    }
+
+    static func worldRect(for focus: LensFocus, snap: BattleSnapshot, fx: FieldFX? = nil, current: CGRect? = nil,
+                          frame: CGSize? = nil) -> CGRect {
         let worldW = snap.world.w
         switch focus {
         case .whole:
@@ -877,7 +1004,7 @@ enum Camera {
             let top = (snap.terrain.max() ?? 300) + 140
             return CGRect(x: 0, y: low - 20, width: worldW, height: max(100, top - low))
         case .both:
-            return planRect(snap)
+            return planRect(snap, frame: frame)
         case .own:
             return fortRect(snap.activeSide, snap: snap).insetBy(dx: -170, dy: -60).offsetBy(dx: snap.activeSide == 0 ? 110 : -110, dy: 40)
         case .target:

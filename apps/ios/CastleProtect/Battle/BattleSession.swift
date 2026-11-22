@@ -48,6 +48,11 @@ struct HudState: Equatable {
     /// Rescue: what to break, for the round label.
     var objective: String?
     var isYard = false
+    /// Why Fire is grey, in the core's words (rules 3), or nil.
+    var fireText: String?
+    /// Fatigue (rules 3): on, and rounds until it starts.
+    var fatigue = false
+    var fatigueIn: Int?
 
     init() {}
 
@@ -91,7 +96,21 @@ struct HudState: Equatable {
         cutShown = s.boss?.cut != nil
         objective = s.objective
         isYard = s.mode == "test_yard"
+        fireText = s.fireText
+        fatigue = s.fatigue
+        fatigueIn = s.fatigueIn
     }
+
+    /// "Fatigue in 3", "2", "1" before Fatigue starts, "Fatigue" once it is on, else nil.
+    var fatigueText: String? {
+        if isYard || isVolley { return nil }
+        if fatigue { return "Fatigue" }
+        if let n = fatigueIn, n >= 1, n <= 3 { return "Fatigue in \(n)" }
+        return nil
+    }
+
+    /// The round label's main words: the Test Yard has no rounds to count.
+    var roundText: String { isYard ? "Test Yard" : "Round \(round)/\(roundCap)" }
 
     var isVolley: Bool { volleyActions > 0 }
     /// "Shots left 7/10" for the side the HUD shows.
@@ -180,6 +199,15 @@ final class BattleSession: ObservableObject {
     /// A Doodad picked in the tray: Fire uses it instead of a shot.
     @Published private(set) var armedDoodad: String?
     let dragModel = DragModel()
+    /// Banners waiting for the one on screen (a turn line, then Fatigue or a shot switch).
+    private(set) var bannerQueue: [String] = []
+    /// The plan camera's pan in world cells: a press away from your fort drags the view
+    /// (QA playtest 1). Read by the renderer each draw; reset at each turn start.
+    private(set) var cameraPan: Double = 0
+    /// True while a finger pans the camera (the camera follows it without easing).
+    @Published private(set) var panning = false
+    private var panStart: (point: CGPoint, pan: Double, scale: CGFloat)?
+    private var fatigueWarnedRound = -1
 
     /// The newest frame, read by the renderer each draw.
     private(set) var snapshot = BattleSnapshot()
@@ -380,6 +408,7 @@ final class BattleSession: ObservableObject {
             lastTurnSeq = snap.turnSeq
             turnStarted(snap)
         }
+        noteRulesEvents(snap)
         // A lean frame can still move what the HUD shows: the aim after `aim` (Fine Tune, the
         // readout, VoiceOver), Fire after READY, and the 2x label (review 2, H1 and H2).
         if fx.collapseShowing && snap.phase == oldPhase {
@@ -393,7 +422,7 @@ final class BattleSession: ObservableObject {
         }
         if !snap.humanTurn || snap.phase != .plan { armedDoodad = nil }
         if wasInFlight != snap.phase.isResolving {
-            if snap.phase.isResolving { endDragKeepingAim(); fineTuneOpen = false }
+            if snap.phase.isResolving { endDragKeepingAim(); endPan(); cameraPan = 0; fineTuneOpen = false }
             relayout()
         }
         if let result = snap.result, !endReported {
@@ -418,6 +447,8 @@ final class BattleSession: ObservableObject {
     }
 
     private func turnStarted(_ snap: BattleSnapshot) {
+        // Test Yard: the Dummy side passes itself in a blink; no banner for it (rules 3).
+        if snap.mode == "test_yard" && !snap.isHuman(snap.activeSide) { return }
         let name = snap.name(snap.activeSide)
         var text: String
         if snap.isDuel {
@@ -435,28 +466,85 @@ final class BattleSession: ObservableObject {
             text = "Squall in 3"
         }
         game.rivalFast = settings.rivalTurnsFast
+        cameraPan = 0
+        endPan()
+        bannerQueue = []
         showBanner(text)
+        // Fatigue next round: a warning one round before it starts (rules 3, QA playtest 1 M2).
+        if snap.fatigueIn == 1 && !snap.fatigue && fatigueWarnedRound != snap.round {
+            fatigueWarnedRound = snap.round
+            showBanner("Fatigue next round", queued: true)
+        }
+        // The Fine Tune pad moves to the side away from the fort on turn (Couch Duel).
+        relayout()
         onTurnStarted?(self)
     }
 
-    private func showBanner(_ text: String) {
+    /// Banners for the rules 3 events: the Fatigue warning and start, and a picked shot that
+    /// moved to the Plain Shot. Each waits for the banner on screen.
+    private func noteRulesEvents(_ snap: BattleSnapshot) {
+        for e in snap.events {
+            switch e.type {
+            case "fatigue_warn":
+                if fatigueWarnedRound != snap.round {
+                    fatigueWarnedRound = snap.round
+                    showBanner(e.text.isEmpty ? "Fatigue next round" : e.text, queued: true)
+                }
+            case "fatigue":
+                showBanner(e.text.isEmpty ? "Fatigue!" : e.text, queued: true)
+            case "shot_switch":
+                guard snap.isHuman(e.side) else { break }
+                showBanner(Self.shotSwitchText(e, snap: snap), queued: true)
+            default:
+                break
+            }
+        }
+    }
+
+    /// The line for a `shot_switch`: the unready chip's own words when the core sent them.
+    static func shotSwitchText(_ e: BattleEvent, snap: BattleSnapshot) -> String {
+        let from = e.raw?.fromShot ?? ""
+        if let chip = snap.shots.first(where: { $0.id == from }), let text = chip.text, !text.isEmpty {
+            return text
+        }
+        let hob = snap.forts.flatMap(\.hobs).first { $0.id == String(e.amount) }
+        let reason = e.text.isEmpty ? "" : refusalText(e.text)
+        if let hob, !reason.isEmpty { return "\(hob.name): \(reason)" }
+        return "Switched to the Plain Shot"
+    }
+
+    /// Shows a banner for 1.2 s. A queued one waits for the banner on screen to finish.
+    private func showBanner(_ text: String, queued: Bool = false) {
+        if queued, banner != nil {
+            if banner != text && !bannerQueue.contains(text) { bannerQueue.append(text) }
+            return
+        }
         banner = text
         bannerTask?.cancel()
         bannerTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_200_000_000)
-            guard !Task.isCancelled else { return }
-            self?.banner = nil
+            guard !Task.isCancelled, let self else { return }
+            if self.bannerQueue.isEmpty {
+                self.banner = nil
+            } else {
+                self.showBanner(self.bannerQueue.removeFirst())
+            }
         }
     }
 
-    /// A short line for a refused action, so a buzz is never the only answer (H2).
+    /// A short line for a refused action, so a buzz is never the only answer (H2). A refusal
+    /// with the core's own words (rules 3 `detail`) shows those.
     private func refused(_ reply: CoreReply) {
         onLocalHaptic?(.illegal)
         guard let reason = reply.reason, reason != "busy" else { return }
-        showBanner(Self.refusalText(reason))
+        if let detail = reply.detail, !detail.isEmpty, reply.shot != nil || reply.readyShot != nil {
+            showBanner(detail)
+        } else {
+            showBanner(Self.refusalText(reason))
+        }
     }
 
-    static func refusalText(_ reason: String) -> String {
+    nonisolated static func refusalText(_ reason: String) -> String {
         switch reason {
         case "not_enough_steam": return "Not enough Steam"
         case "hob_cannot_fire": return "That Hob cannot fire"
@@ -498,8 +586,10 @@ final class BattleSession: ObservableObject {
         let mode = LayoutMode.resolve(size: viewSize, previous: layout.size == .zero ? nil : layout.mode)
         // The larger iPad scale only when the window is big enough (Split View, Slide Over: M10).
         let big = isPad && min(viewSize.width, viewSize.height) >= 600
+        let hudSide = snapshot.isDuel ? snapshot.activeSide : 0
         let next = BattleLayout.compute(size: viewSize, insets: viewInsets, mode: mode,
-                                        inFlight: snapshot.phase.isResolving, isPad: big)
+                                        inFlight: snapshot.phase.isResolving, isPad: big,
+                                        hudSide: hudSide, leftHand: settings.leftHand)
         if next != layout { layout = next }
     }
 
@@ -523,10 +613,52 @@ final class BattleSession: ObservableObject {
     // MARK: Aim Drag
 
     func touchBegan(at point: CGPoint) {
-        guard canAct, gesture == nil, layout.aimRegion.contains(point), aimMayStart(at: point) else { return }
-        gesture = AimGesture(anchor: point, powerSpan: layout.powerSpan, mode: settings.dragMode)
+        guard canAct, gesture == nil, panStart == nil, layout.aimRegion.contains(point) else { return }
+        guard aimMayStart(at: point) else {
+            // A press away from your fort pans the camera instead (QA playtest 1).
+            beginPan(at: point)
+            return
+        }
+        gesture = AimGesture(anchor: point, powerSpan: layout.powerSpan, mode: settings.dragMode,
+                             bounds: CGRect(origin: .zero, size: viewSize == .zero ? layout.size : viewSize))
         aimBeforeDrag = snapshot.aim
         hitFullPower = false
+    }
+
+    // MARK: Camera pan
+
+    private func beginPan(at point: CGPoint) {
+        let scale = lensMap?(point)?.scale ?? 1
+        panStart = (point, cameraPan, max(0.0001, scale))
+    }
+
+    /// Moves the plan camera with the finger: dragging right shows more of the left.
+    private func movePan(to point: CGPoint) {
+        guard let start = panStart else { return }
+        let dx = point.x - start.point.x
+        if !panning && abs(dx) < AimGesture.dragThreshold { return }
+        if !panning {
+            panning = true
+            fineTuneOpen = false
+        }
+        let limit = max(1, snapshot.world.w)
+        cameraPan = min(limit, max(-limit, start.pan - Double(dx / start.scale)))
+        frameVersion &+= 1
+    }
+
+    private func endPan() {
+        panStart = nil
+        if panning {
+            panning = false
+            frameVersion &+= 1
+        }
+    }
+
+    /// Pans the plan camera by `cells` (tests and the screen reader).
+    func pan(by cells: Double) {
+        let limit = max(1, snapshot.world.w)
+        cameraPan = min(limit, max(-limit, cameraPan + cells))
+        frameVersion &+= 1
     }
 
     /// Design 00, 2.3: an Aim Drag only starts on the player's own fort (its blocks' box grown
@@ -552,6 +684,10 @@ final class BattleSession: ObservableObject {
     }
 
     func touchMoved(to point: CGPoint) {
+        if panStart != nil {
+            movePan(to: point)
+            return
+        }
         guard var g = gesture else { return }
         guard canAct else {
             endDragKeepingAim(restore: true)
@@ -594,6 +730,11 @@ final class BattleSession: ObservableObject {
     }
 
     func touchEnded(at point: CGPoint) {
+        if panStart != nil {
+            movePan(to: point)
+            endPan()
+            return
+        }
         guard var g = gesture else { return }
         _ = g.move(to: point)
         clearDrag()
@@ -613,6 +754,7 @@ final class BattleSession: ObservableObject {
 
     /// A second finger, a lost touch or the app leaving: the old aim returns.
     func touchCancelled() {
+        endPan()
         endDragKeepingAim(restore: true)
     }
 
@@ -658,7 +800,13 @@ final class BattleSession: ObservableObject {
             fineTuneOpen = false
             onLocalHaptic?(.fire)
         } else {
+            // Rules 3: a refused Fire spends nothing. Show the core's words, and move the pick to
+            // the shot it names (`ready_shot`), so the next tap fires (QA playtest 1, M1).
             refused(reply)
+            if let next = reply.readyShot, !next.isEmpty, next != snapshot.selectedShot, canAct {
+                let switched = game.send(.pickShot(shot: next))
+                if switched.ok { onLocalHaptic?(.tick) }
+            }
         }
         tick()
     }
@@ -750,7 +898,17 @@ final class BattleSession: ObservableObject {
         guard canAct else { return }
         armedDoodad = nil
         let reply = game.send(.pickShot(shot: id))
-        if reply.ok { onLocalHaptic?(.tick) } else { refused(reply) }
+        if reply.ok {
+            onLocalHaptic?(.tick)
+            // The pick stands even when it cannot fire now; say why (rules 3).
+            if reply.ready == false {
+                let chip = snapshot.shots.first { $0.id == id }
+                let text = reply.text ?? chip?.text ?? reply.why.map(Self.refusalText)
+                if let text, !text.isEmpty { showBanner(text) }
+            }
+        } else {
+            refused(reply)
+        }
         tick()
     }
 

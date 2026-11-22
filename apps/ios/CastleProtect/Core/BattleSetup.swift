@@ -5,6 +5,8 @@ import Foundation
 
 enum GameMode: String, Codable, Sendable, CaseIterable {
     case campaign, skirmish, duel, yard
+    /// The Daily Dust-up: a Skirmish on the day's seed that pays the Daily reward.
+    case daily
 }
 
 enum Preset: String, Codable, Sendable, CaseIterable, Identifiable {
@@ -85,6 +87,27 @@ struct BattleSetup: Codable, Equatable, Sendable {
     var forts: [String] = []
     /// What the save holds for this level, so the core can work out the Buttons (campaign).
     var progress: CoreProgress?
+    /// Which try at this fight: nil or 0 the first, 1 the first Retry, and so on. Sent as the
+    /// setup's `attempt`, so a Retry with the same seed is a new fight (QA playtest 1, M6).
+    /// Optional so a save written before rules 3 still reads (and is then refused by rules).
+    var attempt: Int?
+
+    /// The same fight tried again: same seed, the next attempt.
+    func retried() -> BattleSetup {
+        var next = self
+        next.attempt = min(1_000_000, (attempt ?? 0) + 1)
+        return next
+    }
+
+    /// The `attempt` the core is sent: none on a first try, and never in the Daily Dust-up,
+    /// which stays one fight per date (core/API.md).
+    var coreAttempt: Int? {
+        guard let attempt, attempt > 0, !isDaily else { return nil }
+        return min(1_000_000, attempt)
+    }
+
+    /// The Daily Dust-up (setup mode `daily`): one fight per date, so a Retry sends no `attempt`.
+    var isDaily: Bool { mode == .daily }
 
     static func campaign(_ level: String, preset: Preset, seed: UInt64) -> BattleSetup {
         BattleSetup(mode: .campaign, level: level, preset: preset, seed: seed)
@@ -120,12 +143,13 @@ extension BattleSetup {
         case .campaign:
             return CoreSetup(level: level ?? "1-1", mode: "campaign",
                              sides: [CoreSideConfig(control: "human"), CoreSideConfig(control: "ai", preset: preset.rawValue)],
-                             progress: progress)
-        case .skirmish:
-            return CoreSetup(level: map ?? "d1", mode: "skirmish",
+                             progress: progress, attempt: coreAttempt)
+        case .skirmish, .daily:
+            return CoreSetup(level: map ?? "d1", mode: mode == .daily ? "daily" : "skirmish",
                              sides: [CoreSideConfig(control: "human", help: help(0).core, previewPct: help(0).previewPct),
                                      CoreSideConfig(control: "ai", preset: preset.rawValue)],
-                             firstTurn: .coin, roundCap: cap, wind: wind.coreWind, rummage: rummage, volley: volley)
+                             firstTurn: .coin, roundCap: cap, wind: wind.coreWind, rummage: rummage, volley: volley,
+                             attempt: coreAttempt)
         case .duel:
             let sides = (0..<2).map { i in
                 CoreSideConfig(control: "human",
@@ -134,8 +158,10 @@ extension BattleSetup {
                                help: help(i).core, previewPct: help(i).previewPct)
             }
             return CoreSetup(level: map ?? "d1", mode: "couch", sides: sides, firstTurn: .coin,
-                             roundCap: cap, wind: wind.coreWind, rummage: rummage, volley: volley)
+                             roundCap: cap, wind: wind.coreWind, rummage: rummage, volley: volley, attempt: coreAttempt)
         case .yard:
+            // Side 1 is the Dummy side whatever is sent: the core seats Straw Stuffers and passes
+            // its turns (rules 3), so the app sends no sides at all.
             return CoreSetup(level: map ?? "d1", mode: "test_yard")
         }
     }

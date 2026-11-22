@@ -89,6 +89,13 @@ struct ResultsView: View {
         if let mine = info.result.stats.first {
             StatsRow(stats: mine)
         }
+        // "Best shot" is always the side's own (rules 3 `stats[i].best_shot`), never the Rival's.
+        if let best = info.result.bestShot(of: 0) {
+            BestShotLine(label: "Your best shot", shot: best)
+        }
+        if !info.won, info.result.winner == 1, let theirs = info.result.bestShot {
+            BestShotLine(label: "Their best shot", shot: theirs)
+        }
         HStack(spacing: 12) {
             Button("Map") { model.screen = .map }.buttonStyle(PaperButtonStyle())
             if info.won {
@@ -117,6 +124,13 @@ struct ResultsView: View {
         }
         .padding(16)
         .panel()
+        if info.result.winner >= 0, info.result.winner < info.names.count, let best = info.result.bestShot {
+            BestShotLine(label: "Best shot, \(info.names[info.result.winner])", shot: best)
+        }
+        let loser = 1 - info.result.winner
+        if loser >= 0, loser < info.names.count, let theirs = info.result.bestShot(of: loser) {
+            BestShotLine(label: "Best shot, \(info.names[loser])", shot: theirs)
+        }
         if let broke = info.result.broke, broke.side >= 0, broke.side < info.names.count {
             BrokeView(broke: broke, who: info.names[broke.side])
         }
@@ -273,6 +287,30 @@ struct BrokeView: View {
         .padding(14)
         .frame(maxWidth: 420, alignment: .leading)
         .panel()
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// One side's best shot: the shot, who fired it, the aim and the damage.
+struct BestShotLine: View {
+    let label: String
+    let shot: CoreBestShot
+
+    static func text(_ shot: CoreBestShot) -> String {
+        let name = shot.shotName.isEmpty ? shot.shot.replacingOccurrences(of: "_", with: " ").capitalized : shot.shotName
+        let who = shot.hobName.isEmpty ? "" : " by \(shot.hobName)"
+        let aim = String(format: "%.1f\u{00B0}, power %d", Double(shot.angle) / 10, shot.power)
+        return "\(name)\(who), round \(shot.round): \(shot.dmg) damage (\(aim))"
+    }
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(label).font(Theme.title(16)).foregroundStyle(Theme.ink)
+            Text(Self.text(shot)).font(Theme.label(14)).foregroundStyle(Theme.inkSoft).multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .panel(corner: 14)
         .accessibilityElement(children: .combine)
     }
 }

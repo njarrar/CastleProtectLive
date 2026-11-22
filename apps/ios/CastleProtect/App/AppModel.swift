@@ -394,8 +394,9 @@ final class AppModel: ObservableObject {
 
     func retry() {
         guard let setup = session?.setup ?? lastResult?.setup else { return }
-        var again = setup
-        again.seed = Self.newSeed()
+        // Same seed, the next try (QA playtest 1, M6): the core mixes `attempt` into the seed,
+        // so the Retry is a new fight under the same rules. The Daily sends no attempt.
+        let again = setup.retried()
         let title = session?.title ?? lastResult?.title ?? ""
         save.battle = nil
         persist()
@@ -525,7 +526,7 @@ final class AppModel: ObservableObject {
                 self.sound.startBattleMusic()
                 self.screen = .battle
             case .rulesChanged:
-                self.dropSavedBattle("This saved fight was made by an older version of the game rules, so it cannot be carried on.")
+                self.dropSavedBattle(Self.rulesChangedNotice)
             case .damaged, .replayFailed:
                 self.dropSavedBattle("This saved fight could not be loaded, so it was cleared. Your progress is safe.")
             case .superseded:
@@ -533,6 +534,10 @@ final class AppModel: ObservableObject {
             }
         }
     }
+
+    /// The plain words for a save made under older game rules (rules 2 before QA playtest 1).
+    nonisolated static let rulesChangedNotice =
+        "The game rules changed since this fight was saved, so it cannot be carried on. Your progress and Pennants are safe."
 
     private func dropSavedBattle(_ text: String) {
         notice = text

@@ -16,17 +16,25 @@ struct DuelSetupView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let wide = geo.size.width >= geo.size.height * 1.2
+            let m = Self.metrics(size: geo.size)
+            let wide = m.wide
             VStack(spacing: 0) {
                 HStack {
                     ScreenHeader(title: "Couch Duel") { model.leaveDuel() }
+                    if m.compact {
+                        Text("2 players, 1 device.")
+                            .font(Theme.label(13)).foregroundStyle(Theme.inkSoft)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                    }
                     Button("Swap sides") { swapSides() }
                         .buttonStyle(PaperButtonStyle(height: 44))
                         .padding(.trailing, 12)
                 }
                 .background(Theme.cream)
-                Text("2 players, 1 device. Free forever, no ads.")
-                    .font(Theme.label(14)).foregroundStyle(Theme.inkSoft).padding(.top, 6)
+                if !m.compact {
+                    Text("2 players, 1 device. Free forever, no ads.")
+                        .font(Theme.label(14)).foregroundStyle(Theme.inkSoft).padding(.top, 6)
+                }
                 ScrollView {
                     VStack(spacing: 12) {
                         if wide {
@@ -41,16 +49,24 @@ struct DuelSetupView: View {
                         rulesCard
                     }
                     .padding(12)
+                    .padding(.bottom, 12)
+                }
+                // A fade over the rows under the pinned buttons, so they read as scrolled (QA playtest 1, M8).
+                .overlay(alignment: .bottom) {
+                    LinearGradient(colors: [Theme.paper.opacity(0), Theme.paper], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 18)
+                        .allowsHitTesting(false)
                 }
                 HStack {
                     Button("Quick start") { model.startDuel(DuelOptions.quickStart(names: options.names)) }
-                        .buttonStyle(PaperButtonStyle(height: 56))
+                        .buttonStyle(PaperButtonStyle(height: m.button))
                     Spacer()
                     Button("FIGHT") { model.startDuel(cleaned()) }
-                        .buttonStyle(GoldButtonStyle())
+                        .buttonStyle(GoldButtonStyle(height: m.button))
                         .accessibilityIdentifier("duelFight")
                 }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.vertical, m.barPadding)
                 .background(Theme.cream)
             }
         }
@@ -63,6 +79,27 @@ struct DuelSetupView: View {
         }
     }
 
+    struct Metrics: Equatable {
+        /// Player cards side by side.
+        var wide: Bool
+        /// A short screen (phone landscape): the tagline moves into the header and the
+        /// pinned buttons shrink, so the cards keep their room.
+        var compact: Bool
+        var button: CGFloat
+        var barPadding: CGFloat
+
+        /// Height left for the scrolling cards under the header and over the buttons.
+        func cardRoom(height: CGFloat) -> CGFloat {
+            height - 48 - (compact ? 0 : 26) - (button + barPadding * 2)
+        }
+    }
+
+    static func metrics(size: CGSize) -> Metrics {
+        let wide = size.width >= size.height * 1.2
+        let compact = size.height < 500
+        return Metrics(wide: wide, compact: compact, button: compact ? 44 : 56, barPadding: compact ? 6 : 16)
+    }
+
     private func playerCard(_ side: Int) -> some View {
         let colour = Theme.side(side, model.save.settings.colourSet)
         return VStack(alignment: .leading, spacing: 10) {
@@ -72,8 +109,10 @@ struct DuelSetupView: View {
                 }
                 .frame(width: 24, height: 24)
                 Text("PLAYER \(side + 1)").font(Theme.title(16)).foregroundStyle(colour)
+                    .lineLimit(1).fixedSize()
                 TextField("Player \(side + 1)", text: nameBinding(side))
                     .font(Theme.label(18))
+                    .frame(minWidth: 60)
                     .textFieldStyle(.roundedBorder)
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()

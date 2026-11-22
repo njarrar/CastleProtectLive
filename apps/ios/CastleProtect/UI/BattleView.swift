@@ -147,6 +147,7 @@ struct WideHud: View {
         let dragging = session.dragging
         let showClusters = canAct && !hud.inFlight
         let leftHand = session.settings.leftHand
+        ZStack(alignment: .topLeading) {
         VStack(spacing: 0) {
             // Top strip: display only, except Pause.
             HStack(spacing: 8) {
@@ -210,6 +211,8 @@ struct WideHud: View {
             .padding(.trailing, max(insets.trailing, 10))
             .padding(.bottom, max(insets.bottom, 8))
         }
+            FineTuneDock(session: session, key: pad ? 56 : 48, show: showClusters && (session.fineTuneOpen || pad))
+        }
     }
 
     @ViewBuilder
@@ -231,9 +234,10 @@ struct WideHud: View {
             SpeedButton(session: session)
         } else {
             HStack(alignment: .bottom, spacing: 8) {
-                if session.fineTuneOpen || pad {
-                    FineTunePad(session: session, key: pad ? 56 : 48)
-                } else {
+                VStack(alignment: .trailing, spacing: 4) {
+                    if let why = hud.fireText, show {
+                        FireReason(text: why)
+                    }
                     ReadoutView(hud: hud) { session.toggleFineTune() }
                 }
                 VStack(spacing: 6) {
@@ -299,13 +303,7 @@ struct TallHud: View {
                         .allowsHitTesting(showClusters && !dragging)
                         .disabled(!showClusters)
                     Spacer()
-                    Group {
-                        if session.fineTuneOpen || pad {
-                            FineTunePad(session: session, key: pad ? 56 : 44)
-                        } else {
-                            ReadoutView(hud: hud) { session.toggleFineTune() }
-                        }
-                    }
+                    ReadoutView(hud: hud) { session.toggleFineTune() }
                     .opacity(showClusters ? 1 : 0)
                     .allowsHitTesting(showClusters && !dragging)
                     .disabled(!showClusters)
@@ -314,6 +312,15 @@ struct TallHud: View {
                 .padding(.bottom, 6)
                 .frame(width: bottomLens.width, height: bottomLens.height, alignment: .bottom)
                 .position(x: bottomLens.midX, y: bottomLens.midY)
+
+                FineTuneDock(session: session, key: pad ? 56 : 44, show: showClusters && (session.fineTuneOpen || pad))
+
+                if let why = hud.fireText, showClusters {
+                    // By Fire in portrait: the core's reason Fire is grey (QA playtest 1, M1).
+                    FireReason(text: why)
+                        .frame(maxWidth: max(0, layout.size.width - 24), alignment: session.settings.leftHand ? .leading : .trailing)
+                        .position(x: layout.size.width / 2, y: max(0, layout.tray.minY - 14))
+                }
 
                 ShotTray(session: session, chip: pad ? 60 : 48)
                     .frame(maxWidth: .infinity)
@@ -362,6 +369,41 @@ struct TallHud: View {
                 .position(x: joined.midX, y: joined.midY)
             }
         }
+    }
+}
+
+/// The Fine Tune pad at its layout spot, away from your fort. It hides while a finger
+/// aims or pans and while the lenses are joined (QA playtest 1, M7).
+struct FineTuneDock: View {
+    @ObservedObject var session: BattleSession
+    var key: CGFloat
+    var show: Bool
+
+    var body: some View {
+        let rect = session.layout.fineTune
+        if show && !session.dragging && !session.panning && rect.width > 0 {
+            FineTunePad(session: session, key: key)
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+                .transition(.opacity)
+        }
+    }
+}
+
+/// Why Fire is grey, in the core's words.
+struct FireReason: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(Theme.label(13))
+            .foregroundStyle(Theme.ink)
+            .lineLimit(2)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .panel(corner: 10, fill: Theme.cream)
+            .accessibilityLabel("Fire is locked: \(text)")
     }
 }
 
@@ -522,23 +564,36 @@ struct HandOffCard: View {
         let name = side < hud.names.count ? hud.names[side] : "Player \(side + 1)"
         let help = side < session.setup.help.count ? session.setup.help[side] : .none
         let colours = session.settings.colourSet
+        GeometryReader { geo in
+        let m = Self.metrics(height: geo.size.height)
         ZStack {
             Theme.ink.opacity(0.6).ignoresSafeArea()
-            VStack(spacing: 12) {
+            ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: m.spacing) {
                 if !handoff.line.isEmpty {
-                    Text(handoff.line).font(Theme.label(17)).foregroundStyle(Theme.inkSoft)
+                    Text(handoff.line).font(Theme.label(m.compact ? 15 : 17)).foregroundStyle(Theme.inkSoft)
                 }
-                AnimSprite(clip: "ui_handoff_flip", size: 48, start: shownAt,
-                           reduceMotion: session.settings.reduceMotion, fallback: "arrow.left.arrow.right")
-                    .accessibilityHidden(true)
-                Group {
-                    if side == 0 { Circle().fill(Theme.side(0, colours)) } else { Diamond().fill(Theme.side(1, colours)) }
+                if !m.compact {
+                    AnimSprite(clip: "ui_handoff_flip", size: 48, start: shownAt,
+                               reduceMotion: session.settings.reduceMotion, fallback: "arrow.left.arrow.right")
+                        .accessibilityHidden(true)
                 }
-                .frame(width: 56, height: 56)
-                .overlay(Group { if side == 0 { Circle().stroke(Theme.ink, lineWidth: 3) } else { Diamond().stroke(Theme.ink, lineWidth: 3) } })
-                Text("Pass the device to").font(Theme.label(18)).foregroundStyle(Theme.ink)
+                HStack(spacing: 10) {
+                    Group {
+                        if side == 0 { Circle().fill(Theme.side(0, colours)) } else { Diamond().fill(Theme.side(1, colours)) }
+                    }
+                    .frame(width: m.crest, height: m.crest)
+                    .overlay(Group { if side == 0 { Circle().stroke(Theme.ink, lineWidth: 3) } else { Diamond().stroke(Theme.ink, lineWidth: 3) } })
+                    if m.compact {
+                        Text("Pass the device to").font(Theme.label(16)).foregroundStyle(Theme.ink)
+                    }
+                }
+                if !m.compact {
+                    Text("Pass the device to").font(Theme.label(18)).foregroundStyle(Theme.ink)
+                }
                 Text(name.uppercased() + (side < hud.helpMarks.count && !hud.helpMarks[side].isEmpty ? " \(hud.helpMarks[side])" : ""))
-                    .font(Theme.title(34)).foregroundStyle(Theme.side(side, colours))
+                    .font(Theme.title(m.title)).foregroundStyle(Theme.side(side, colours))
+                    .lineLimit(1).minimumScaleFactor(0.6)
                 if help != .none {
                     Text("Help: \(help.label) \(help.marks)").font(Theme.label(15)).foregroundStyle(Theme.goldDark)
                 }
@@ -552,21 +607,24 @@ struct HandOffCard: View {
                     guard Date().timeIntervalSince(shownAt) >= 0.4 else { return }
                     session.ready()
                 }
-                .buttonStyle(GoldButtonStyle(height: 72, minWidth: 200))
+                .buttonStyle(GoldButtonStyle(height: m.ready, minWidth: 200))
                 .accessibilityLabel("Ready")
                 .accessibilityIdentifier("ready")
             }
-            .padding(28)
+            .padding(m.padding)
             .frame(maxWidth: 440)
             .background(
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .fill(Theme.paper)
-                    .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Theme.side(side, colours), lineWidth: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Theme.side(side, colours), lineWidth: m.compact ? 6 : 10))
             )
-            .padding(24)
+            .padding(m.compact ? 8 : 24)
+            .frame(maxWidth: .infinity, minHeight: geo.size.height)
+            }
             .modifier(KeyframeIn(scale: AnimationLibrary.shared.motion.handoffScale,
                                  opacity: AnimationLibrary.shared.motion.handoffOpacity,
                                  start: shownAt, reduceMotion: session.settings.reduceMotion))
+        }
         }
         .onAppear {
             shownAt = Date()
@@ -575,6 +633,33 @@ struct HandOffCard: View {
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
         .accessibilityLabel("Pass the device to \(name)")
+    }
+}
+
+extension HandOffCard {
+    struct Metrics: Equatable {
+        var compact: Bool
+        var spacing: CGFloat
+        var crest: CGFloat
+        var title: CGFloat
+        var ready: CGFloat
+        var padding: CGFloat
+
+        /// The card's height estimate: the shot line, crest, name, Help, the status row and READY.
+        var estimatedHeight: CGFloat {
+            let rows: [CGFloat] = compact
+                ? [20, crest, title + 6, 18, 32, ready]
+                : [22, 48, crest, 22, title + 6, 18, 32, ready]
+            return rows.reduce(0, +) + spacing * CGFloat(rows.count - 1) + padding * 2 + (compact ? 16 : 48)
+        }
+    }
+
+    /// A short screen (phone landscape) gets the compact card, so READY is fully on screen
+    /// (QA playtest 1, M8). It also scrolls inside the scrim when it must.
+    static func metrics(height: CGFloat) -> Metrics {
+        height < 560
+            ? Metrics(compact: true, spacing: 6, crest: 32, title: 26, ready: 56, padding: 14)
+            : Metrics(compact: false, spacing: 12, crest: 56, title: 34, ready: 72, padding: 28)
     }
 }
 

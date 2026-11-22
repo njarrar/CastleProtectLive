@@ -86,7 +86,11 @@ struct RoundLabel: View {
                 SpriteIcon(name: "ui_squall", fallback: "cloud.bolt.fill", size: 20)
                 Text("Squall \(hud.squallRound) of 3")
             } else {
-                Text("Round \(hud.round)/\(hud.roundCap)")
+                Text(hud.roundText)
+                if let fatigue = hud.fatigueText {
+                    Text(fatigue)
+                        .foregroundStyle(hud.fatigue ? Theme.goldDark : Theme.slate)
+                }
                 if hud.squallIn > 0 && hud.squallIn <= 3 {
                     SpriteIcon(name: "ui_squall", fallback: "cloud.fill", size: 14 + CGFloat(4 - hud.squallIn) * 3)
                     Text("Squall in \(hud.squallIn)")
@@ -238,11 +242,26 @@ struct ShotChipView: View {
                     .padding(3)
                 }
             }
-            .opacity(chip.ready ? 1 : 0.5)
+            .overlay(alignment: .bottom) {
+                // An unready chip says why in a word or two (rules 3 `hud.shots[].text`).
+                if !chip.ready {
+                    Text(ShotChip.shortReason(why: chip.why))
+                        .font(Theme.label(9))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 3)
+                        .background(Capsule().fill(Theme.inkSoft))
+                        .offset(y: 6)
+                        .accessibilityHidden(true)
+                }
+            }
+            .opacity(chip.ready ? 1 : 0.6)
         }
         .buttonStyle(.plain)
-        .disabled(!chip.ready)
+        // The pick stands even when the shot cannot fire now, so the chip stays tappable and says why.
         .accessibilityLabel("\(chip.name)\(chip.uses >= 0 ? ", \(chip.uses) left" : "")\(chip.weight > 0 ? ", weight \(chip.weight)" : "")\(selected ? ", picked" : "")")
+        .accessibilityValue(chip.ready ? "" : (chip.text ?? "not ready"))
     }
 }
 
@@ -396,7 +415,7 @@ struct FireButton: View {
         .buttonStyle(.plain)
         .disabled(!hud.humanTurn)
         .accessibilityLabel(mode == "shove" ? "Shove Off, \(hud.shoveOffCost) Steam" : (mode == "use" ? "Use \(DoodadNames.name(armedDoodad ?? ""))" : "Fire"))
-        .accessibilityValue(live ? "ready" : (hud.humanTurn ? "locked: pick a Hob, a shot and an aim" : "not your turn"))
+        .accessibilityValue(live ? "ready" : (hud.humanTurn ? "locked: \(hud.fireText ?? "pick a Hob, a shot and an aim")" : "not your turn"))
         .accessibilityIdentifier("fire")
     }
 }
