@@ -100,7 +100,9 @@ final class FieldFX {
     /// 2x resolve: hit stops halve, slow motion is skipped.
     var fast = false
 
-    // Clock state (real time ns)
+    // Clock state (real time ns). `clock` is the newest real time handed in, so the
+    // effects never read the wall clock themselves (tests drive it by hand).
+    private var clock: UInt64 = 0
     private var hitStopUntil: UInt64 = 0
     private var lastHitStop: UInt64 = 0
     private var slowUntil: UInt64 = 0
@@ -135,7 +137,7 @@ final class FieldFX {
     var isActive: Bool {
         !sprites.isEmpty || !pieces.isEmpty || !walks.isEmpty || trauma > 0.001
             || !kettlePops.filter { now - $0.value.start < 1200 }.isEmpty
-            || !hobAnims.isEmpty || DispatchTime.now().uptimeNanoseconds < slowUntil
+            || !hobAnims.isEmpty || clock < slowUntil
     }
 
     func reset() {
@@ -164,6 +166,7 @@ final class FieldFX {
 
     /// Real time passed. Returns the view time that passed (0 during hit stop).
     func advance(realMs: Double, nowNanos: UInt64) -> Double {
+        clock = max(clock, nowNanos)
         var scale = 1.0
         if nowNanos < hitStopUntil {
             scale = 0
@@ -310,7 +313,7 @@ final class FieldFX {
                     case "crack": onSound?("ket_crack", 0, 1)
                     case "pop":
                         onSound?("ket_pop", 0, 1)
-                        let ns = DispatchTime.now().uptimeNanoseconds
+                        let ns = clock
                         hitStop(80, nowNanos: ns)
                         addTrauma(1.0, decayMs: 600)
                         slowMotion(0.25, ms: 1200, nowNanos: ns, ending: true)
@@ -357,6 +360,7 @@ final class FieldFX {
     /// Turns the core's events into effects, sounds and timing. `old` is the
     /// frame before them (blocks that just fell are still in it).
     func ingest(_ events: [BattleEvent], old: BattleSnapshot, new: BattleSnapshot, nowNanos: UInt64) {
+        clock = max(clock, nowNanos)
         var breaks = 0
         var hobHitThisBatch = false
         for e in events where e.type == "break" { _ = e; breaks += 1 }
@@ -749,7 +753,7 @@ final class FieldFX {
             guard let self else { return }
             self.onSound?("col_chunk_land", 0, Float(min(1, 0.5 + Double(n - 1) * 0.1)))
             self.addTrauma(min(0.4, 0.05 * Double(n)), decayMs: 250)
-            if n >= 3 { self.hitStop(50, nowNanos: DispatchTime.now().uptimeNanoseconds) }
+            if n >= 3 { self.hitStop(50, nowNanos: self.clock) }
         }
         if n >= 6 { slowMotion(0.5, ms: 600, nowNanos: nowNanos) }
     }

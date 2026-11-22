@@ -172,7 +172,6 @@ final class SoundEngine {
     private var layerFiles: [String: AVAudioFile] = [:]
     private var layerGain: [String: Float] = [:]
     private var layerTarget: [String: Float] = [:]
-    private var musicStartHost: UInt64 = 0
     private var musicTrack: String?
     private var stingPlayer: AVAudioPlayerNode?
     private let store = BufferStore()
@@ -502,10 +501,12 @@ final class SoundEngine {
         guard unlocked, prepare() else { return }
         musicTrack = "mus_r1"
         let ids = ["base": "mus_r1_base", "stir": "mus_r1_stir", "peril": "mus_r1_peril"]
-        // One start time for all three, a little ahead, so they share the first sample.
-        let lead = AVAudioTime.hostTime(forSeconds: 0.12)
-        let startHost = mach_absolute_time() + lead
-        musicStartHost = startHost
+        // One start time for all three on the engine's sample clock, a little ahead,
+        // so they share the first sample.
+        var startTime: AVAudioTime?
+        if let last = engine.outputNode.lastRenderTime, last.isSampleTimeValid {
+            startTime = AVAudioTime(sampleTime: last.sampleTime + AVAudioFramePosition(0.12 * last.sampleRate), atRate: last.sampleRate)
+        }
         for (layer, id) in ids {
             guard let entry = manifest.sounds[id], let url = Self.url(for: entry), let file = try? AVAudioFile(forReading: url) else { continue }
             let p = AVAudioPlayerNode()
@@ -520,7 +521,7 @@ final class SoundEngine {
             let frames = AVAudioFrameCount(entry.samples > 0 ? min(Int64(entry.samples), file.length) : file.length)
             // Two copies queued; each finished copy queues the next, so the loop never gaps.
             scheduleLoop(p, file: file, frames: frames, copies: 2)
-            p.play(at: AVAudioTime(hostTime: startHost))
+            p.play(at: startTime)
         }
     }
 
@@ -579,8 +580,11 @@ final class SoundEngine {
 
     private func fadeStep() {
         let bar = manifest.sounds["mus_r1_base"]?.barSeconds ?? 1.111111
-        let hostNow = mach_absolute_time()
-        let elapsed = musicStartHost == 0 || hostNow < musicStartHost ? 0 : AVAudioTime.seconds(forHostTime: hostNow - musicStartHost)
+        // Where the Base layer is in its loop, from its own sample clock.
+        var elapsed = 0.0
+        if let base = layers["base"], let node = base.lastRenderTime, let t = base.playerTime(forNodeTime: node), t.sampleRate > 0 {
+            elapsed = max(0, Double(t.sampleTime) / t.sampleRate)
+        }
         let intoBar = bar > 0 ? elapsed.truncatingRemainder(dividingBy: bar) : 0
         var busy = false
         for (layer, target) in layerTarget {
@@ -639,7 +643,6 @@ final class SoundEngine {
         layerTarget = [:]
         fadeStartedOnBar = [:]
         musicTrack = nil
-        musicStartHost = 0
     }
 
     // MARK: Barks (Hob-speak)

@@ -148,7 +148,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO > build/xcodebuild-test.log 2>&1
           status=$?
           set -e
-          grep -E "Test Case .* (passed|failed|skipped)|Executed [0-9]+ test" build/xcodebuild-test.log || true
+          grep -E "Test Case .* (passed|failed|skipped)|Executed [0-9]+ test|: error: " build/xcodebuild-test.log || true
           tail -n 40 build/xcodebuild-test.log
           if [ "$status" -ne 0 ] && grep -q "is not currently configured for the test action" build/xcodebuild-test.log; then
             echo "::notice::Scheme has no tests yet, skipping tests."
