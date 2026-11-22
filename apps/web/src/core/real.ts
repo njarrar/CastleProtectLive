@@ -722,7 +722,7 @@ export class RealCore implements CoreApi {
 /** The core's best shot (v0.3 result.best_shot) in view form; null stays undefined. */
 function fromBlow(b: PBestShot | null): ResultView['bestShot'] {
   if (!b) return undefined;
-  return { side: b.side as Side, hob: b.hob_name.split(' ')[0], round: b.round, dmg: b.dmg, angle: b.angle, power: b.power };
+  return { side: b.side as Side, hob: b.hob_name ? b.hob_name.split(' ')[0] : '', round: b.round, dmg: b.dmg, angle: b.angle, power: b.power };
 }
 
 /** The winner's best shot (kept by the view for a core without result.best_shot); on a draw the better of the two. */
@@ -741,7 +741,7 @@ const WHY: Record<string, string> = {
 function brokeLine(r: PSnapshot['result']): string {
   const b = r?.broke;
   if (!b) return lossCause(r?.how ?? '');
-  const by = b.last ? (b.last.shot === 'squall' ? 'the Squall' : b.last.shot === 'ground' ? 'a fall' : `${b.last.hob_name.split(' ')[0]}'s ${b.last.shot_name}`) : '';
+  const by = b.last ? (b.last.shot === 'squall' ? 'the Squall' : b.last.shot === 'ground' ? 'a fall' : (b.last.hob_name ? `${b.last.hob_name.split(' ')[0]}'s ${b.last.shot_name ?? 'shot'}` : (b.last.shot_name ?? 'a shot'))) : '';
   const lost = [b.blocks_lost ? `${b.blocks_lost} blocks` : '', b.hobs_bonked ? `${b.hobs_bonked} ${b.hobs_bonked === 1 ? 'Hob' : 'Hobs'} Bonked` : ''].filter(Boolean).join(', ');
   return `${lossCause(b.how)}${by ? ` The last blow: ${by}${b.last?.round ? ` in round ${b.last.round}` : ''}.` : ''}${lost ? ` Lost ${lost}.` : ''}`;
 }

@@ -134,8 +134,8 @@ export interface PHandicap { help: string; steam: number; preview_pct: number; c
 export interface PBoss { phase: number; roller: PProp | null; roller_done: boolean; shears: PProp | null; cut: [number, number, number, number] | null; jam: number }
 export interface PDraft { pool: string[]; picks: [string[], string[]]; next: PSide; picks_each: number; wish: string | null }
 export interface PResultStats { shots: number; hits: number; blocks_dropped: number; bonks: number; blocks_lost: number; kettle_lost: number; hobs_lost: number; best_streak: number; best_shot?: PBestShot | null }
-export interface PBestShot { side: PSide; hob: number; hob_name: string; shot: string; shot_name: string; angle: number; power: number; round: number; dmg: number }
-export interface PBlow { shot: string; shot_name: string; hob: number; hob_name: string; round?: number; dmg?: number }
+export interface PBestShot { side: PSide; hob: number; hob_name: string | null; shot: string; shot_name: string | null; angle: number; power: number; round: number; dmg: number }
+export interface PBlow { shot: string; shot_name: string | null; hob: number; hob_name: string | null; round?: number; dmg?: number }
 export interface PResult {
   winner: PSide; how: string; round: number; pennants: boolean[];
   // v0.2
