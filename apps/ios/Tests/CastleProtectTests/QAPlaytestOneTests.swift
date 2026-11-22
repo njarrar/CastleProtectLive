@@ -241,7 +241,8 @@ final class FatigueTests: XCTestCase {
         XCTAssertEqual(out[0].text, "Fatigue next round: hurt blocks hold less")
     }
 
-    /// The warning banner shows one round before Fatigue, after the turn line.
+    /// The warning banner shows one round before Fatigue, and the turn line waits for it
+    /// (QA playtest 2, N1).
     @MainActor
     func testFatigueNextRoundBannerAtTurnStart() throws {
         let bridge = RulesThreeBridge()
@@ -263,8 +264,8 @@ final class FatigueTests: XCTestCase {
         let session = BattleSession(game: game, setup: setup, title: "1-1")
         game.markDirty()
         session.tick()
-        XCTAssertEqual(session.banner, "Your turn")
-        XCTAssertEqual(session.bannerQueue, ["Fatigue next round"], "once a round, not twice for the event too")
+        XCTAssertEqual(session.banner, "Fatigue next round: hurt blocks hold less", "Fatigue comes first")
+        XCTAssertEqual(session.bannerQueue, ["Your turn"], "once a round, not twice for the event too; the turn waits")
         XCTAssertEqual(session.hud.fatigueText, "Fatigue in 1")
     }
 
@@ -374,11 +375,11 @@ final class RetryAttemptTests: XCTestCase {
         XCTAssertEqual(saved.rules, 2)
     }
 
-    /// Rules 3: a rules 2 save is refused with plain words, not replayed.
+    /// A rules 2 save is refused with plain words, not replayed (rules 4 now).
     @MainActor
     func testARulesTwoSaveIsRefused() async throws {
         let game = CoreGame(bridge: FakeCoreBridge(), catalog: ContentCatalog.load())
-        XCTAssertEqual(game.rulesVersion, 3)
+        XCTAssertEqual(game.rulesVersion, 4)
         let old = #"{"setup":{"mode":"campaign","level":"1-1","preset":"fair","seed":5,"rounds":15,"wind":"light","shells":"draft","winBy":"knockout","seats":"side_by_side","names":[],"help":[],"forts":[]},"log":"[]","rules":2}"#
         let result = await game.load(Data(old.utf8))
         XCTAssertEqual(result, .rulesChanged)
@@ -595,7 +596,7 @@ final class RealCoreRulesThreeTests: XCTestCase {
     @MainActor
     func testRestTurnOnTheRealCore() throws {
         guard CoreFactory.realCoreLinked else { throw XCTSkip("CastleCore.xcframework is not linked in this build") }
-        XCTAssertEqual(CoreGame(bridge: CoreFactory.make(preferStandIn: false), catalog: ContentCatalog.load()).rulesVersion, 3)
+        XCTAssertEqual(CoreGame(bridge: CoreFactory.make(preferStandIn: false), catalog: ContentCatalog.load()).rulesVersion, 4)
         let game = CoreGame(bridge: CoreFactory.make(preferStandIn: false), catalog: ContentCatalog.load())
         game.thinkMs = 0
         let setup = BattleSetup.campaign("1-1", preset: .fair, seed: 3)
@@ -679,7 +680,8 @@ final class RealCoreRulesThreeTests: XCTestCase {
             session.tick()
             let snap = session.snapshot
             if snap.events.contains(where: { $0.type == "fatigue" }) { started = true }
-            if session.bannerQueue.contains("Fatigue next round") || session.banner == "Fatigue next round" { warned = true }
+            if session.bannerQueue.contains(where: { $0.hasPrefix("Fatigue next round") })
+                || session.banner?.hasPrefix("Fatigue next round") == true { warned = true }
             if snap.round == 9 && snap.fatigueIn == 1 && session.hud.fatigueText == "Fatigue in 1" { countdown = true }
             if snap.round >= 10 && snap.fatigue && snap.phase == .plan { break }
             if snap.phase == .ended { break }

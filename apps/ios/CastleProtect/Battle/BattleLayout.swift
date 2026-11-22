@@ -47,6 +47,9 @@ struct Lens: Equatable, Sendable {
     /// The part of the viewport the camera frames into (the Clear Rect).
     var frame: CGRect
     var focus: LensFocus
+    /// The smallest block size (points) at which the plan frame still holds both forts: 6 on a
+    /// phone, 8 elsewhere (QA playtest 2, N3). Under it, your fort and a Rival marker.
+    var minBlock: CGFloat = 8
 }
 
 /// Layout is a pure function of the window size, the safe areas and the
@@ -101,7 +104,8 @@ struct BattleLayout: Equatable, Sendable {
             let right = insets.right + 16
             let clear = CGRect(x: left, y: top, width: max(10, w - left - right), height: max(10, h - top - bottom))
             var layout = BattleLayout(mode: .wide, size: size, insets: insets,
-                                      lenses: [Lens(viewport: full, frame: clear, focus: inFlight ? .follow : .both)],
+                                      lenses: [Lens(viewport: full, frame: clear, focus: inFlight ? .follow : .both,
+                                                    minBlock: isPad ? 8 : 6)],
                                       aimRegion: full)
             if !inFlight {
                 // Under the top strip, away from your fort; clear of the crew column when it is on that side.

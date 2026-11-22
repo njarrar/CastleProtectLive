@@ -209,6 +209,13 @@ struct SkirmishOptions: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey { case map, preset, rounds, wind, winBy, shells, help }
 }
 
+/// The one fort the Workshop keeps: the core's glyph rows, top first, the Footing last
+/// (core/API.md, `sides[i].rows`).
+struct WorkshopFort: Codable, Equatable, Sendable {
+    var name = "My Fort"
+    var rows: [String] = []
+}
+
 /// Everything the app keeps on the device, in one Codable file.
 struct SaveData: Codable, Equatable, Sendable {
     static let currentSchema = 1
@@ -226,6 +233,11 @@ struct SaveData: Codable, Equatable, Sendable {
     var lastLevel: String?
     /// Set while a saved battle is being replayed; still set at launch means the replay killed the app (H4).
     var resumeInProgress = false
+    /// Aims started from the fort, up to 3: the gold ring on the picked Hob shows until then
+    /// (QA playtest 2, owner rule).
+    var aimStarts = 0
+    /// The fort saved in the Workshop, or nil.
+    var fort: WorkshopFort?
 
     init() {}
 
@@ -242,9 +254,12 @@ struct SaveData: Codable, Equatable, Sendable {
         skirmish = c.value(.skirmish, d.skirmish)
         lastLevel = c.value(.lastLevel, nil)
         resumeInProgress = c.value(.resumeInProgress, false)
+        aimStarts = max(0, c.value(.aimStarts, 0))
+        fort = c.value(.fort, nil)
     }
 
     private enum CodingKeys: String, CodingKey {
         case schema, counter, firstRunDone, settings, progress, battle, duel, skirmish, lastLevel, resumeInProgress
+        case aimStarts, fort
     }
 }

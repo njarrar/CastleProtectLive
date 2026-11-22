@@ -195,6 +195,22 @@ struct HobView: Equatable, Sendable, Identifiable {
     var canFire = false
 
     var hpFraction: Double { Double(max(0, hp)) / Double(max(1, hpMax)) }
+
+    /// Out of the fight: only `bonked`, or 0 HP (core/API.md, rules 4). `squashed`, `dropped`
+    /// and `tumbled` Hobs are hurt but alive and may act.
+    var isOut: Bool { bonked || hp <= 0 }
+
+    /// Crushed by a falling chunk (`squashed`, or `dropped` down to 1 HP, as the round 10 Fatigue
+    /// collapse leaves them): drawn flattened with stars, still live, back up at the end of its
+    /// side's turn (QA playtest 2, N2).
+    var isCrushed: Bool { !isOut && (state == "squashed" || (state == "dropped" && hp <= 1)) }
+
+    /// Words for the screen reader and the portrait label.
+    var stateWords: String {
+        if isOut { return "Bonked" }
+        if isCrushed { return "Squashed, back up soon" }
+        return ""
+    }
 }
 
 /// A Nook (or the Kettle Room) as the renderer needs it: world boxes, y up.

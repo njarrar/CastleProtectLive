@@ -162,7 +162,7 @@ jobs:
         working-directory: apps/ios
         run: |
           grep -q "Linking the real core" build/xcodebuild-build.log || { echo "::error::The build used the stand-in core, not CastleCore.xcframework."; exit 1; }
-          for t in testRealCoreWhenLinked testRefusedSetupIsReported testRescueLevelHasProps testGoldenHashesMatch testMultiTurnReplayMatchesTheHash testGiveUpOnTheRealCore testHelpVolleyAndBossSetupsStart testLeanAimReachesTheHudOnTheRealCore testCouchDuelAfterReadyOnTheRealCore testRestTurnOnTheRealCore testRetryIsANewFightOnTheRealCore testFatigueIsAnnouncedOnTheRealCore testTestYardDummyPassesItselfOnTheRealCore testBestShotBelongsToTheWinnerOnTheRealCore; do
+          for t in testRealCoreWhenLinked testRefusedSetupIsReported testRescueLevelHasProps testGoldenHashesMatch testMultiTurnReplayMatchesTheHash testGiveUpOnTheRealCore testHelpVolleyAndBossSetupsStart testLeanAimReachesTheHudOnTheRealCore testCouchDuelAfterReadyOnTheRealCore testRestTurnOnTheRealCore testRetryIsANewFightOnTheRealCore testFatigueIsAnnouncedOnTheRealCore testTestYardDummyPassesItselfOnTheRealCore testBestShotBelongsToTheWinnerOnTheRealCore testRulesFourOnTheRealCore testWorkshopValidatesOnTheRealCore; do
             if ! grep -qE "Test Case .*${t}\]' passed" build/xcodebuild-test.log; then
               echo "::error::Real-core test ${t} did not pass (skipped or missing)."
               exit 1
@@ -171,8 +171,8 @@ jobs:
           # A test that quietly goes missing must not leave the run green.
           passed="$(grep -cE "Test Case .*' passed" build/xcodebuild-test.log || true)"
           echo "Passed test cases: $passed"
-          if [ "$passed" -lt 120 ]; then
-            echo "::error::Only $passed test cases passed; at least 120 are expected."
+          if [ "$passed" -lt 140 ]; then
+            echo "::error::Only $passed test cases passed; at least 140 are expected."
             exit 1
           fi
           echo "Real core linked and real-core tests passed."

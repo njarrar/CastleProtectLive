@@ -138,6 +138,19 @@ struct DragOverlay: Equatable {
     var armed: Bool
 }
 
+/// "Drag from your fort to aim": a short line by the player's fort (view points).
+struct AimNudge: Equatable {
+    var text: String
+    var point: CGPoint
+
+    /// Above the fort, kept on screen with room for the line.
+    static func clamped(_ p: CGPoint, in size: CGSize) -> CGPoint {
+        let x = min(max(p.x, 120), max(120, size.width - 120))
+        let y = min(max(p.y - 20, 70), max(70, size.height - 60))
+        return CGPoint(x: x, y: y)
+    }
+}
+
 /// The Aim Drag band, kept apart from the session so a touch move redraws
 /// only the band, not the whole HUD (H8).
 @MainActor
@@ -208,6 +221,23 @@ final class BattleSession: ObservableObject {
     @Published private(set) var panning = false
     private var panStart: (point: CGPoint, pan: Double, scale: CGFloat)?
     private var fatigueWarnedRound = -1
+    private var fatigueShownRound = -1
+    /// The fort the camera holds while the round 10 Fatigue collapse plays and settles, so your
+    /// own fort is in view when your turn opens (QA playtest 2, N1). Cleared by the next shot.
+    private(set) var cameraHome: Int?
+    /// Phone landscape: a tap on the Rival fort marker shows both forts at any zoom; a second tap,
+    /// a shot or the next turn brings the camera home (QA playtest 2, N3).
+    @Published private(set) var rivalPeek = false
+    /// Aims started from the fort so far (saved). The gold ring on the picked Hob shows until 3.
+    var aimStarts = 0
+    /// "Drag from your fort to aim", shown once a battle when a drag starts in the sky.
+    @Published private(set) var aimNudge: AimNudge?
+    private var skyNudged = false
+    /// How many times the nudge showed this battle (at most once).
+    private(set) var nudgeCount = 0
+    private var nudgeTask: Task<Void, Never>?
+    /// The turn whose opening Hob was checked (n1: open each turn on a Hob who can act).
+    private var openCheckedTurn = -1
 
     /// The newest frame, read by the renderer each draw.
     private(set) var snapshot = BattleSnapshot()
@@ -234,6 +264,8 @@ final class BattleSession: ObservableObject {
     var onFault: ((BattleSession, String) -> Void)?
     /// Spoken lines (shot results) for VoiceOver.
     var onAnnounce: ((String) -> Void)?
+    /// An Aim Drag started from the fort: the app counts it toward hiding the gold ring.
+    var onAimStarted: ((Int) -> Void)?
     /// Where a view point lands in the world, from the field view's lens cameras.
     var lensMap: ((CGPoint) -> LensMap?)?
     /// Each new frame, for loops and music layers.
@@ -267,6 +299,20 @@ final class BattleSession: ObservableObject {
     private var hudHeld = false
     /// Aim commands during a drag go out at most this often.
     static let aimInterval: UInt64 = 66_000_000
+
+    /// The gold ring on the picked Hob shows until this many aims were started from the fort.
+    nonisolated static let ownerRingAims = 3
+    nonisolated static let skyNudgeText = "Drag from your fort to aim"
+    /// Round 9: one round before Fatigue. Round 10: the collapse starts (shown in red).
+    nonisolated static let fatigueWarnText = "Fatigue next round: hurt blocks hold less"
+    nonisolated static let fatigueStartText = "Fatigue! Battered blocks give way"
+
+    /// True for the Fatigue banners, which the turn banner waits for.
+    nonisolated static func isFatigueBanner(_ text: String) -> Bool { text.hasPrefix("Fatigue") }
+
+    /// The gold ring shows on the picked Hob on the player's Plan step until 3 aims were started
+    /// from the fort (QA playtest 2, owner rule).
+    var showOwnerRing: Bool { aimStarts < Self.ownerRingAims && snapshot.humanTurn }
 
     init(game: CoreGame, setup: BattleSetup, title: String) {
         self.game = game
@@ -332,6 +378,7 @@ final class BattleSession: ObservableObject {
         foldTask?.cancel()
         endTask?.cancel()
         subtitleTask?.cancel()
+        nudgeTask?.cancel()
         endTask = nil
         gesture = nil
         pendingAim = nil
@@ -400,6 +447,8 @@ final class BattleSession: ObservableObject {
             fx.noteState(snap)
         }
         if !snap.shells.isEmpty || !old.shells.isEmpty { fx.trail(snap.shells, ids: Array(0..<snap.shells.count)) }
+        // A shell in the air: the Fatigue hold and any Rival peek end, the camera follows it.
+        if !snap.shells.isEmpty { cameraHome = nil; if rivalPeek { rivalPeek = false } }
         snapshot = snap
         frameVersion &+= 1
         if !snap.events.isEmpty { onEvents?(snap.events, snap) }
@@ -409,6 +458,7 @@ final class BattleSession: ObservableObject {
             turnStarted(snap)
         }
         noteRulesEvents(snap)
+        openOnAnActingHob(snap)
         // A lean frame can still move what the HUD shows: the aim after `aim` (Fine Tune, the
         // readout, VoiceOver), Fire after READY, and the 2x label (review 2, H1 and H2).
         if fx.collapseShowing && snap.phase == oldPhase {
@@ -422,7 +472,10 @@ final class BattleSession: ObservableObject {
         }
         if !snap.humanTurn || snap.phase != .plan { armedDoodad = nil }
         if wasInFlight != snap.phase.isResolving {
-            if snap.phase.isResolving { endDragKeepingAim(); endPan(); cameraPan = 0; fineTuneOpen = false }
+            if snap.phase.isResolving {
+                endDragKeepingAim(); endPan(); cameraPan = 0; fineTuneOpen = false
+                if rivalPeek { rivalPeek = false }
+            }
             relayout()
         }
         if let result = snap.result, !endReported {
@@ -468,12 +521,20 @@ final class BattleSession: ObservableObject {
         game.rivalFast = settings.rivalTurnsFast
         cameraPan = 0
         endPan()
-        bannerQueue = []
-        showBanner(text)
-        // Fatigue next round: a warning one round before it starts (rules 3, QA playtest 1 M2).
-        if snap.fatigueIn == 1 && !snap.fatigue && fatigueWarnedRound != snap.round {
-            fatigueWarnedRound = snap.round
-            showBanner("Fatigue next round", queued: true)
+        if rivalPeek { rivalPeek = false }
+        // Fatigue comes first and the turn banner waits for it (QA playtest 2, N1): "Fatigue next
+        // round" in round 9, a red "Fatigue!" in round 10 while the collapse plays.
+        let lead = fatigueLead(snap)
+        let holding = banner.map(Self.isFatigueBanner) ?? false
+        if !holding { bannerQueue = [] }
+        if let lead {
+            if snap.events.contains(where: { $0.type == "fatigue" }) { holdHome(snap) }
+            showBanner(lead, seconds: Self.fatigueBannerSeconds)
+            showBanner(text, queued: true)
+        } else if holding {
+            showBanner(text, queued: true)
+        } else {
+            showBanner(text)
         }
         // The Fine Tune pad moves to the side away from the fort on turn (Couch Duel).
         relayout()
@@ -488,10 +549,16 @@ final class BattleSession: ObservableObject {
             case "fatigue_warn":
                 if fatigueWarnedRound != snap.round {
                     fatigueWarnedRound = snap.round
-                    showBanner(e.text.isEmpty ? "Fatigue next round" : e.text, queued: true)
+                    showBanner(e.text.isEmpty ? Self.fatigueWarnText : e.text, queued: true)
                 }
             case "fatigue":
-                showBanner(e.text.isEmpty ? "Fatigue!" : e.text, queued: true)
+                holdHome(snap)
+                if fatigueShownRound != snap.round {
+                    fatigueShownRound = snap.round
+                    // The collapse starts now: its banner takes over at once, and a turn banner
+                    // that follows waits for it.
+                    showBanner(Self.fatigueStartText, seconds: Self.fatigueBannerSeconds)
+                }
             case "shot_switch":
                 guard snap.isHuman(e.side) else { break }
                 showBanner(Self.shotSwitchText(e, snap: snap), queued: true)
@@ -499,6 +566,52 @@ final class BattleSession: ObservableObject {
                 break
             }
         }
+    }
+
+    /// How long a Fatigue banner stays up before the turn banner it holds back.
+    static let fatigueBannerSeconds = 1.8
+
+    /// The Fatigue banner a turn start opens with, or nil. Marks it shown for this round.
+    private func fatigueLead(_ snap: BattleSnapshot) -> String? {
+        if snap.events.contains(where: { $0.type == "fatigue" }), fatigueShownRound != snap.round {
+            fatigueShownRound = snap.round
+            return Self.fatigueStartText
+        }
+        let warn = snap.events.first { $0.type == "fatigue_warn" }
+        if (warn != nil || (snap.fatigueIn == 1 && !snap.fatigue)), fatigueWarnedRound != snap.round {
+            fatigueWarnedRound = snap.round
+            if let text = warn?.text, !text.isEmpty { return text }
+            return Self.fatigueWarnText
+        }
+        return nil
+    }
+
+    /// Holds the camera on the player's own fort while the Fatigue collapse plays and settles.
+    private func holdHome(_ snap: BattleSnapshot) {
+        cameraHome = snap.isDuel ? snap.activeSide : 0
+        frameVersion &+= 1
+    }
+
+    /// n1 (QA playtest 2): when the player's turn opens on a Hob who has no shot it may fire this
+    /// turn, the first crewmate who has one is picked. If nobody can, Fire offers Pass as before.
+    private func openOnAnActingHob(_ snap: BattleSnapshot) {
+        guard snap.phase == .plan, snap.humanTurn, openCheckedTurn != snap.turnSeq, canAct else { return }
+        openCheckedTurn = snap.turnSeq
+        guard let id = Self.hobToOpen(snap), let hob = Int(id) else { return }
+        // No tick here: the next frame shows the pick.
+        game.send(.pickHob(hob: hob))
+    }
+
+    /// The Hob a turn should open on, or nil when the picked Hob can act (or nobody can).
+    nonisolated static func hobToOpen(_ snap: BattleSnapshot) -> String? {
+        guard snap.phase == .plan, snap.humanTurn, let fort = snap.fort(snap.activeSide) else { return nil }
+        if let id = snap.selectedHob, let hob = fort.hobs.first(where: { $0.id == id }) {
+            // Dug in counts as able to act: Shove Off clears it.
+            let shotReady = snap.shots.isEmpty || snap.shots.contains { $0.ready }
+            if !hob.isOut && ((hob.canFire && shotReady) || hob.buried) { return nil }
+            return fort.hobs.first { $0.id != id && !$0.isOut && $0.canFire }?.id
+        }
+        return fort.hobs.first { !$0.isOut && $0.canFire }?.id
     }
 
     /// The line for a `shot_switch`: the unready chip's own words when the core sent them.
@@ -513,16 +626,18 @@ final class BattleSession: ObservableObject {
         return "Switched to the Plain Shot"
     }
 
-    /// Shows a banner for 1.2 s. A queued one waits for the banner on screen to finish.
-    private func showBanner(_ text: String, queued: Bool = false) {
+    /// Shows a banner for 1.2 s (a Fatigue banner longer). A queued one waits for the banner on
+    /// screen to finish.
+    private func showBanner(_ text: String, queued: Bool = false, seconds: Double? = nil) {
         if queued, banner != nil {
             if banner != text && !bannerQueue.contains(text) { bannerQueue.append(text) }
             return
         }
         banner = text
         bannerTask?.cancel()
+        let wait = seconds ?? (Self.isFatigueBanner(text) ? Self.fatigueBannerSeconds : 1.2)
         bannerTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
             guard !Task.isCancelled, let self else { return }
             if self.bannerQueue.isEmpty {
                 self.banner = nil
@@ -615,8 +730,13 @@ final class BattleSession: ObservableObject {
     func touchBegan(at point: CGPoint) {
         guard canAct, gesture == nil, panStart == nil, layout.aimRegion.contains(point) else { return }
         guard aimMayStart(at: point) else {
-            // A press away from your fort pans the camera instead (QA playtest 1).
+            // A press away from your fort pans the camera instead (QA playtest 1), and once a
+            // battle says where to press (QA playtest 2, owner rule).
             beginPan(at: point)
+            if !skyNudged {
+                skyNudged = true
+                showNudge(near: point)
+            }
             return
         }
         gesture = AimGesture(anchor: point, powerSpan: layout.powerSpan, mode: settings.dragMode,
@@ -661,6 +781,41 @@ final class BattleSession: ObservableObject {
         frameVersion &+= 1
     }
 
+    // MARK: Teaching the owner rule
+
+    /// Shows "Drag from your fort to aim" next to the player's fort for 2.5 s.
+    private func showNudge(near point: CGPoint) {
+        var at = point
+        if let map = lensMap?(point), let fort = snapshot.fort(snapshot.activeSide) {
+            let top = (fort.blocks.map { $0.y + $0.h }.max() ?? fort.baseY + fort.block) + 24
+            at = map.view(CGPoint(x: fort.originX + Double(fort.cols) * fort.block / 2, y: top))
+        }
+        aimNudge = AimNudge(text: Self.skyNudgeText, point: at)
+        nudgeCount += 1
+        nudgeTask?.cancel()
+        nudgeTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            guard !Task.isCancelled else { return }
+            self?.aimNudge = nil
+        }
+    }
+
+    // MARK: Rival fort peek
+
+    /// True while the plan camera may peek at the Rival fort.
+    var canPeek: Bool {
+        !stopped && !paused && (snapshot.phase == .plan || snapshot.phase == .handoff) && layout.mode == .wide
+    }
+
+    /// The Rival fort marker was tapped: both forts at any zoom, or back home on a second tap.
+    func toggleRivalPeek() {
+        guard canPeek || rivalPeek else { return }
+        rivalPeek.toggle()
+        if rivalPeek { cameraPan = 0; endPan() }
+        onLocalHaptic?(.tick)
+        frameVersion &+= 1
+    }
+
     /// Design 00, 2.3: an Aim Drag only starts on the player's own fort (its blocks' box grown
     /// by 32 cells, two blocks) or within 48 pt of the picked Hob. A press anywhere else never
     /// changes the aim. Without a lens camera yet (no draw so far) the old rule holds.
@@ -699,6 +854,11 @@ final class BattleSession: ObservableObject {
             onLocalHaptic?(.dragStart)
             fineTuneOpen = false
             dragging = true
+            if aimStarts < Self.ownerRingAims {
+                aimStarts += 1
+                frameVersion &+= 1
+                onAimStarted?(aimStarts)
+            }
         }
         guard g.isDragging else { return }
         // Throttled: the newest aim goes out at most every 66 ms, and always on release (H8).
@@ -798,6 +958,7 @@ final class BattleSession: ObservableObject {
         let reply = game.send(.fire())
         if reply.ok {
             fineTuneOpen = false
+            if rivalPeek { rivalPeek = false }
             onLocalHaptic?(.fire)
         } else {
             // Rules 3: a refused Fire spends nothing. Show the core's words, and move the pick to

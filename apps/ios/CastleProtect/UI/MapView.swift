@@ -72,7 +72,12 @@ struct MapView: View {
             }
             .buttonStyle(PaperButtonStyle(height: 52))
             .accessibilityHint("Play one battle against the AI")
-            Spacer()
+            Spacer(minLength: 4)
+            Button("Workshop") { model.openWorkshop() }
+                .buttonStyle(PaperButtonStyle(height: 52))
+                .accessibilityHint("Build and save your own fort")
+                .accessibilityIdentifier("workshop")
+            Spacer(minLength: 4)
             Button {
                 model.openDuelSetup()
             } label: {

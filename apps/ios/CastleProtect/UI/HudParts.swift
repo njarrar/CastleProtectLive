@@ -25,7 +25,8 @@ struct KettleGauge: View {
     }
 }
 
-/// Crew pips: round for side 0, diamond for side 1, filled by HP; grey when Bonked.
+/// Crew pips: round for side 0, diamond for side 1, filled by HP; grey and hollow only when
+/// Bonked. A squashed Hob keeps a filled pip with a dashed ring (QA playtest 2, N2).
 struct PipRow: View {
     let crew: [HobView]
     let side: Int
@@ -39,20 +40,31 @@ struct PipRow: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(crew.filter { !$0.bonked && $0.hp > 0 }.count) of \(crew.count) Hobs standing")
+        .accessibilityLabel("\(crew.filter { !$0.isOut }.count) of \(crew.count) Hobs standing"
+            + (crew.contains { $0.isCrushed } ? ", \(crew.filter { $0.isCrushed }.count) squashed" : ""))
+    }
+
+    /// How much of a pip is filled: a squashed Hob's pip stays full, a Bonked one is grey.
+    static func fill(_ hob: HobView) -> Double {
+        if hob.isOut || hob.isCrushed { return 1 }
+        return hob.hpFraction
     }
 
     @ViewBuilder
     private func pip(_ hob: HobView) -> some View {
-        let down = hob.bonked || hob.hp <= 0
+        let down = hob.isOut
         let colour = down ? Theme.slate : Theme.side(side, colours)
         ZStack(alignment: .bottom) {
             pipShape.fill(Theme.paper)
             pipShape.fill(colour)
                 .mask(alignment: .bottom) {
-                    Rectangle().frame(height: size * CGFloat(down ? 1 : hob.hpFraction))
+                    Rectangle().frame(height: size * CGFloat(Self.fill(hob)))
                 }
-            pipShape.stroke(Theme.ink, lineWidth: 2)
+            if hob.isCrushed {
+                pipShape.stroke(Theme.ink, style: StrokeStyle(lineWidth: 2, dash: [3, 2]))
+            } else {
+                pipShape.stroke(Theme.ink, lineWidth: 2)
+            }
         }
         .frame(width: size, height: size)
     }
@@ -152,7 +164,7 @@ struct HobPortrait: View {
     let action: () -> Void
 
     var body: some View {
-        let down = hob.bonked || hob.hp <= 0
+        let down = hob.isOut
         Button(action: action) {
             ZStack {
                 Circle().fill(Theme.paper)
@@ -176,6 +188,16 @@ struct HobPortrait: View {
                         .background(Circle().fill(Theme.inkSoft))
                         .offset(x: size * 0.36, y: size * 0.36)
                 }
+                if hob.isCrushed {
+                    // Squashed: a star badge, the portrait stays live (QA playtest 2, N2).
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundStyle(Theme.gold)
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(Theme.ink))
+                        .offset(x: -size * 0.36, y: -size * 0.36)
+                        .accessibilityHidden(true)
+                }
             }
             .frame(width: size, height: size)
             .overlay(alignment: .top) {
@@ -189,7 +211,7 @@ struct HobPortrait: View {
         }
         .buttonStyle(.plain)
         .disabled(down)
-        .accessibilityLabel("\(hob.name), \(hob.cls). \(hob.hp) of \(hob.hpMax) HP\(down ? ", Bonked" : "")\(selected ? ", picked" : "")")
+        .accessibilityLabel("\(hob.name), \(hob.cls). \(hob.hp) of \(hob.hpMax) HP\(hob.stateWords.isEmpty ? "" : ", \(hob.stateWords)")\(selected ? ", picked" : "")")
     }
 }
 
@@ -454,19 +476,47 @@ enum DoodadNames {
     }
 }
 
-/// Turn banner: slides in for 1.2 s and never blocks taps.
+/// How a banner looks: the side colour, slate for the Squall, red for the Fatigue collapse and
+/// dark gold for the Fatigue warning (QA playtest 2, N1).
+enum BannerStyle: Equatable {
+    case side, squall, fatigue, fatigueWarning
+
+    static func of(_ text: String) -> BannerStyle {
+        if text.hasPrefix("Fatigue!") { return .fatigue }
+        if text.hasPrefix("Fatigue") { return .fatigueWarning }
+        if text.contains("Squall") { return .squall }
+        return .side
+    }
+}
+
+/// Turn banner: slides in for 1.2 s and never blocks taps. Long lines wrap to the screen.
 struct TurnBanner: View {
     let text: String
     let side: Int
     var colours: ColourSet = .brickabrac
 
+    static let fatigueRed = Color(hex: 0xE5484D)
+
+    private var fill: Color {
+        switch BannerStyle.of(text) {
+        case .fatigue: return Self.fatigueRed
+        case .fatigueWarning: return Theme.goldDark
+        case .squall: return Theme.slate
+        case .side: return Theme.side(side, colours)
+        }
+    }
+
     var body: some View {
         Text(text)
             .font(Theme.title(22))
             .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .minimumScaleFactor(0.7)
             .padding(.horizontal, 28)
+            .padding(.vertical, 4)
             .frame(minWidth: 260, minHeight: 44)
-            .background(Capsule().fill(text.contains("Squall") ? Theme.slate : Theme.side(side, colours)))
+            .background(Capsule().fill(fill))
             .overlay(Capsule().stroke(Theme.ink, lineWidth: 3))
             .allowsHitTesting(false)
             .accessibilityAddTraits(.isHeader)

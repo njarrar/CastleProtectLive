@@ -48,7 +48,7 @@ final class BattleSKView: SKView {
         // A VoiceOver user cannot drag on the fort: point them at Fine Tune (M5).
         accessibilityHint = UIAccessibility.isVoiceOverRunning
             ? "Use the aim readout to open Fine Tune, then Fire."
-            : "Drag on your fort to aim."
+            : "Drag from your fort to aim."
     }
 
     @available(*, unavailable)
@@ -73,6 +73,7 @@ final class BattleSKView: SKView {
         let pose = now / 200_000_000
         let colours = session.settings.colourSet
         let busy = session.fx.isActive || session.snapshot.phase.isResolving || battleScene.cameraMoving
+            || session.showOwnerRing
         // Draw only when something changed (H8, M1).
         guard busy || session.frameVersion != drawnVersion || session.layout != drawnLayout || colours != drawnColours
                 || pose != drawnPose else { return }
@@ -82,7 +83,9 @@ final class BattleSKView: SKView {
         drawnPose = pose
         battleScene.render(snapshot: session.snapshot, layout: session.layout, fx: session.fx, colours: colours,
                            dragging: session.dragging, reduceMotion: session.settings.reduceMotion,
-                           pan: session.cameraPan, panning: session.panning)
+                           pan: session.cameraPan, panning: session.panning,
+                           extras: LensExtras(home: session.cameraHome, peek: session.rivalPeek,
+                                              ownerRing: session.showOwnerRing))
     }
 
     override func layoutSubviews() {
@@ -114,6 +117,11 @@ final class BattleSKView: SKView {
         let p = t.location(in: self)
         // Touches that start inside the safe-area insets are palm and edge touches.
         guard bounds.inset(by: safeAreaInsets).contains(p) else { return }
+        // The Rival fort marker is a button: one tap peeks at both forts (QA playtest 2, N3).
+        if battleScene.markerHit(p) {
+            session.toggleRivalPeek()
+            return
+        }
         aimTouch = t
         session.touchBegan(at: p)
     }
@@ -165,11 +173,16 @@ final class BattleScene: SKScene {
         return nil
     }
 
+    /// True when a view point is on the Rival fort marker of a shown lens.
+    func markerHit(_ point: CGPoint) -> Bool {
+        layers.contains { !$0.crop.isHidden && ($0.markerRect?.contains(point) ?? false) }
+    }
+
     /// Only shown lenses count: a rig left easing when its lens was hidden must not keep the scene at 60 fps.
     var cameraMoving: Bool { layers.contains { !$0.crop.isHidden && $0.rig.moving } }
 
     func render(snapshot: BattleSnapshot, layout: BattleLayout, fx: FieldFX, colours: ColourSet, dragging: Bool, reduceMotion: Bool,
-                pan: Double = 0, panning: Bool = false) {
+                pan: Double = 0, panning: Bool = false, extras: LensExtras = LensExtras()) {
         let nanos = DispatchTime.now().uptimeNanoseconds
         let dt = lastNanos == 0 ? 16.0 : min(100, Double(nanos &- lastNanos) / 1_000_000)
         lastNanos = nanos
@@ -186,7 +199,7 @@ final class BattleScene: SKScene {
                 palettes[colours] = palette
                 layer.update(lens: lenses[i], snap: snapshot, fx: fx, palette: palette, sceneHeight: size.height,
                              textures: textures, dt: dt, dragging: dragging, reduceMotion: reduceMotion,
-                             pan: pan, panning: panning)
+                             pan: pan, panning: panning, extras: extras)
             } else {
                 layer.crop.isHidden = true
             }
@@ -264,6 +277,10 @@ final class LensLayer {
     private let markerLabel = SKLabelNode(fontNamed: "AvenirNext-Heavy")
     private let markerArrow = SKShapeNode()
     private let markerPlate = SKShapeNode()
+    /// Where the marker is, in view points, while it shows (a tap there peeks).
+    private(set) var markerRect: CGRect?
+    /// The gold ring on the picked Hob while the owner rule is being taught (QA playtest 2).
+    private let ownerRing = SKShapeNode()
 
     /// World cells per @1x pixel for Hob frames (72 x 80 px at @1x), so a Hob
     /// stands about two blocks tall in its Nook. Blocks are 1 cell a pixel.
@@ -305,24 +322,55 @@ final class LensLayer {
         markerArrow.strokeColor = Palette.hex(0x2B1E2E)
         marker.addChild(markerArrow)
         crop.addChild(marker)
+        ownerRing.zPosition = 3.5
+        ownerRing.strokeColor = Palette.hex(0xFFC23D)
+        ownerRing.fillColor = .clear
+        ownerRing.isHidden = true
+        world.addChild(ownerRing)
     }
 
-    /// Places the Rival fort marker on the lens edge at the fort's height, or hides it.
-    private func updateRivalMarker(show: Bool, snap: BattleSnapshot, worldRect: CGRect, lens: Lens,
+    /// The gold ring around the picked Hob of the side on turn, pulsing, until 3 aims were
+    /// started from the fort.
+    private func updateOwnerRing(show: Bool, snap: BattleSnapshot, cellsPerPoint: Double, now: Double, reduceMotion: Bool) {
+        guard show, let id = snap.selectedHob,
+              let hob = snap.fort(snap.activeSide)?.hobs.first(where: { $0.id == id }), !hob.isOut else {
+            ownerRing.isHidden = true
+            return
+        }
+        ownerRing.isHidden = false
+        let radius = CGFloat(max(18, 26 * cellsPerPoint))
+        ownerRing.path = CGPath(ellipseIn: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2), transform: nil)
+        ownerRing.lineWidth = CGFloat(max(2, 4 * cellsPerPoint))
+        ownerRing.position = CGPoint(x: hob.x, y: hob.y + 18)
+        let pulse = reduceMotion ? 1 : 0.85 + 0.15 * sin(now / 260)
+        ownerRing.setScale(CGFloat(pulse))
+        ownerRing.alpha = reduceMotion ? 1 : CGFloat(0.75 + 0.25 * sin(now / 260))
+    }
+
+    /// Places the Rival fort marker on the lens edge at the fort's height, or hides it. It is a
+    /// button (QA playtest 2, N3): "View Rival fort" peeks at both forts; while peeking it stays
+    /// up as "Back to my fort".
+    private func updateRivalMarker(show: Bool, peek: Bool, snap: BattleSnapshot, worldRect: CGRect, lens: Lens,
                                    sceneHeight: CGFloat, palette: Palette) {
-        guard show, let edge = Camera.rivalEdge(worldRect: worldRect, snap: snap) else {
+        let rivalSide = 1 - snap.activeSide
+        let edgeNow: Int? = Camera.rivalEdge(worldRect: worldRect, snap: snap)
+        let peekEdge: Int? = rivalSide == 1 ? 1 : -1
+        guard show, let edge = peek ? peekEdge : edgeNow else {
             marker.isHidden = true
+            markerRect = nil
             return
         }
         marker.isHidden = false
-        let rivalSide = 1 - snap.activeSide
+        markerLabel.text = Camera.markerText(peek: peek)
         let fort = Camera.fortRect(rivalSide, snap: snap)
         let at = Camera.viewRect(of: fort, worldRect: worldRect, frame: lens.frame)
         let vp = lens.viewport
-        let w: CGFloat = 104, h: CGFloat = 28
+        let w: CGFloat = 144, h: CGFloat = 32
         let x = edge > 0 ? vp.maxX - 8 - w / 2 : vp.minX + 8 + w / 2
-        let y = min(max(at.midY, lens.frame.minY + h), lens.frame.maxY - h)
+        let y = peek ? lens.frame.minY + h : min(max(at.midY, lens.frame.minY + h), lens.frame.maxY - h)
         marker.position = CGPoint(x: x, y: sceneHeight - y)
+        // The tap target, in view points: at least 44 pt tall.
+        markerRect = CGRect(x: x - w / 2, y: y - 22, width: w, height: 44)
         markerPlate.path = CGPath(roundedRect: CGRect(x: -w / 2, y: -h / 2, width: w, height: h),
                                   cornerWidth: 8, cornerHeight: 8, transform: nil)
         markerPlate.strokeColor = palette.side(rivalSide)
@@ -375,7 +423,7 @@ final class LensLayer {
 
     func update(lens: Lens, snap: BattleSnapshot, fx: FieldFX, palette: Palette, sceneHeight: CGFloat,
                 textures: TerrainTextures, dt: Double, dragging: Bool, reduceMotion: Bool,
-                pan: Double = 0, panning: Bool = false) {
+                pan: Double = 0, panning: Bool = false, extras: LensExtras = LensExtras()) {
         let small = lens.focus == .whole
         let vp = lens.viewport
         let centre = CGPoint(x: vp.midX, y: sceneHeight - vp.midY)
@@ -386,9 +434,11 @@ final class LensLayer {
         backdrop.color = small ? palette.paper : palette.sky
 
         // Camera: ease toward the lens's target, then fit it into the Clear Rect.
-        var target = Camera.worldRect(for: lens.focus, snap: snap, fx: fx, current: rig.rect, frame: lens.frame.size)
+        let peek = extras.peek && lens.focus == .both
+        var target = Camera.worldRect(for: lens.focus, snap: snap, fx: fx, current: rig.rect, frame: lens.frame.size,
+                                      minBlock: lens.minBlock, home: extras.home, peek: peek)
         let aimLens = lens.focus == .both || lens.focus == .own
-        if aimLens { target = Camera.panned(target, by: pan, worldW: snap.world.w) }
+        if aimLens && !peek { target = Camera.panned(target, by: pan, worldW: snap.world.w) }
         let follow: CGPoint? = lens.focus == .follow && !snap.shells.isEmpty && !reduceMotion
             ? CGPoint(x: snap.shells[0].x, y: snap.shells[0].y) : nil
         let worldRect = rig.update(target: target, dt: dt, cut: reduceMotion || small || (panning && aimLens),
@@ -403,7 +453,9 @@ final class LensLayer {
         map = small ? nil : LensMap(viewport: vp, frameCentre: frameCentre, worldRect: worldRect, scale: scale,
                                     sceneHeight: sceneHeight)
         updateRivalMarker(show: lens.focus == .both && (snap.phase == .plan || snap.phase == .handoff),
-                          snap: snap, worldRect: worldRect, lens: lens, sceneHeight: sceneHeight, palette: palette)
+                          peek: peek, snap: snap, worldRect: worldRect, lens: lens, sceneHeight: sceneHeight, palette: palette)
+        updateOwnerRing(show: extras.ownerRing && lens.focus != .whole && lens.focus != .target && snap.phase == .plan,
+                        snap: snap, cellsPerPoint: Double(1 / max(0.0001, scale)), now: fx.now, reduceMotion: reduceMotion)
         let cellsPerPoint = Double(1 / max(0.0001, scale))
         let useArt = !small && !sheet.isEmpty
         let now = fx.now
@@ -695,13 +747,57 @@ final class LensLayer {
             if useArt, let pick = fx.hobSprite(side: fort.side, hob: h, selected: selected, aiming: aiming, power: snap.aim.power) {
                 placeClip(node, pick.0, pick.1, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: fort.side == 1)
             } else {
-                let bonked = h.bonked || h.hp <= 0
+                let bonked = h.isOut
                 place(node, frame: nil, at: at, scale: 1, flip: fort.side == 1,
                       fallback: bonked ? palette.flattened : palette.side(fort.side),
                       fallbackSize: CGSize(width: small ? 18 : 14, height: small ? 18 : 16))
             }
+            // Squashed is not Bonked (QA playtest 2, N2): drawn flattened, with three small
+            // stars over its head, and still live.
+            if h.isCrushed {
+                node.yScale = Self.crushedScale
+                if !small {
+                    for i in 0..<3 {
+                        let star = take("star", parent: body, z: 3.2)
+                        star.texture = Self.starTexture
+                        star.color = .white
+                        star.colorBlendFactor = 0
+                        star.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+                        star.size = CGSize(width: 9, height: 9)
+                        let turn = (reduceMotion ? 0 : now / 600) + Double(i) * 2.094
+                        star.position = CGPoint(x: at.x + CGFloat(11 * cos(turn)), y: at.y + CGFloat(24 + 4 * sin(turn)))
+                        star.zRotation = CGFloat(reduceMotion ? 0 : now / 400)
+                    }
+                }
+            }
         }
     }
+
+    /// How flat a squashed Hob is drawn (its height, as a share).
+    static let crushedScale: CGFloat = 0.55
+
+    /// A small gold star, drawn once.
+    private static let starTexture: SKTexture = {
+        let size = CGSize(width: 18, height: 18)
+        let image = UIGraphicsImageRenderer(size: size).image { ctx in
+            let path = UIBezierPath()
+            let c = CGPoint(x: 9, y: 9)
+            for k in 0..<10 {
+                let r: CGFloat = k % 2 == 0 ? 8.5 : 3.6
+                let a = CGFloat(k) * .pi / 5 - .pi / 2
+                let p = CGPoint(x: c.x + r * cos(a), y: c.y + r * sin(a))
+                if k == 0 { path.move(to: p) } else { path.addLine(to: p) }
+            }
+            path.close()
+            UIColor(red: 1, green: 0.76, blue: 0.24, alpha: 1).setFill()
+            path.fill()
+            UIColor(red: 0.17, green: 0.12, blue: 0.18, alpha: 1).setStroke()
+            path.lineWidth = 1.2
+            path.stroke()
+            _ = ctx
+        }
+        return SKTexture(image: image)
+    }()
 
     private func drawLid(key: String, on: Bool, at point: CGPoint, fx: FieldFX, body: SKNode) {
         guard let clip = fx.library.clip("pot_lid_raise") else { return }
@@ -891,6 +987,13 @@ final class TerrainTextures {
     }
 }
 
+/// What a lens needs beyond the frame: the Fatigue home hold, the Rival peek, the owner ring.
+struct LensExtras: Equatable {
+    var home: Int?
+    var peek = false
+    var ownerRing = false
+}
+
 /// View-only camera framing: which part of the field each lens wants to show
 /// (UX 3.5). The rig eases toward it. World units are cells, y up.
 @MainActor
@@ -917,6 +1020,8 @@ enum Camera {
     /// Blocks must draw at least this big (points) for the plan frame to hold both forts
     /// (QA playtest 1, M3); smaller, it frames your fort and the arc, with a Rival edge marker.
     static let minBlockPoints: CGFloat = 8
+    /// On a phone the plan frame may go down to 6 pt blocks to hold both forts (QA playtest 2, N3).
+    static let phoneMinBlockPoints: CGFloat = 6
 
     /// The size a 16-cell block draws at when `rect` is fitted into a frame of `frame`.
     static func blockPoints(_ rect: CGRect, in frame: CGSize) -> CGFloat {
@@ -945,24 +1050,28 @@ enum Camera {
         return out
     }
 
-    /// Both forts plus the arc you can see.
-    static func bothRect(_ snap: BattleSnapshot) -> CGRect {
+    /// Both forts plus the arc you can see, leaning toward the fort `side` shoots at.
+    static func bothRect(_ snap: BattleSnapshot, side: Int? = nil) -> CGRect {
         let r = fortRect(0, snap: snap).union(fortRect(1, snap: snap)).union(previewRect(snap))
-        return framed(r, activeSide: snap.activeSide)
+        return framed(r, activeSide: side ?? snap.activeSide)
     }
 
-    /// Your fort (the side on turn) plus the arc you can see.
-    static func ownPlanRect(_ snap: BattleSnapshot) -> CGRect {
-        let r = fortRect(snap.activeSide, snap: snap).union(previewRect(snap))
-        return framed(r, activeSide: snap.activeSide)
+    /// Your fort (the side on turn, or `side`) plus the arc you can see.
+    static func ownPlanRect(_ snap: BattleSnapshot, side: Int? = nil) -> CGRect {
+        let own = side ?? snap.activeSide
+        let r = fortRect(own, snap: snap).union(previewRect(snap))
+        return framed(r, activeSide: own)
     }
 
-    /// The plan frame: both forts when their blocks still draw at 8 pt or more in a frame of
-    /// `frame`, else your fort and the arc. Without a frame size, both forts.
-    static func planRect(_ snap: BattleSnapshot, frame: CGSize? = nil) -> CGRect {
-        let both = bothRect(snap)
+    /// The plan frame: both forts when their blocks still draw at `minBlock` points or more in a
+    /// frame of `frame` (8, or 6 on a phone), else your fort and the arc. Without a frame size,
+    /// and while peeking at the Rival fort, both forts at any zoom.
+    static func planRect(_ snap: BattleSnapshot, frame: CGSize? = nil, minBlock: CGFloat = 8,
+                         side: Int? = nil, peek: Bool = false) -> CGRect {
+        let both = bothRect(snap, side: side)
+        if peek { return both }
         guard let frame, frame.width > 0, frame.height > 0 else { return both }
-        return blockPoints(both, in: frame) >= minBlockPoints ? both : ownPlanRect(snap)
+        return blockPoints(both, in: frame) >= minBlock ? both : ownPlanRect(snap, side: side)
     }
 
     /// A press away from your fort pans the plan camera by `pan` cells; the frame stays within
@@ -986,6 +1095,9 @@ enum Camera {
         return CGRect(x: x0, y: yTop, width: x1 - x0, height: yBottom - yTop)
     }
 
+    /// The marker's words: a button that peeks at both forts, then brings you back.
+    static func markerText(peek: Bool) -> String { peek ? "Back to my fort" : "View Rival fort" }
+
     /// The Rival fort edge marker: -1 when the fort being shot at is off the left of the frame,
     /// +1 off the right, nil when it is in view.
     static func rivalEdge(worldRect: CGRect, snap: BattleSnapshot) -> Int? {
@@ -995,21 +1107,28 @@ enum Camera {
         return nil
     }
 
+    /// `home`: while the Fatigue collapse plays and settles, the camera holds that side's fort
+    /// (both forts when they fit) instead of the hit (QA playtest 2, N1). `peek`: both forts.
     static func worldRect(for focus: LensFocus, snap: BattleSnapshot, fx: FieldFX? = nil, current: CGRect? = nil,
-                          frame: CGSize? = nil) -> CGRect {
+                          frame: CGSize? = nil, minBlock: CGFloat = 8, home: Int? = nil,
+                          peek: Bool = false) -> CGRect {
         let worldW = snap.world.w
+        let own = home ?? snap.activeSide
         switch focus {
         case .whole:
             let low = snap.terrain.min() ?? 0
             let top = (snap.terrain.max() ?? 300) + 140
             return CGRect(x: 0, y: low - 20, width: worldW, height: max(100, top - low))
         case .both:
-            return planRect(snap, frame: frame)
+            return planRect(snap, frame: frame, minBlock: minBlock, side: home, peek: peek)
         case .own:
-            return fortRect(snap.activeSide, snap: snap).insetBy(dx: -170, dy: -60).offsetBy(dx: snap.activeSide == 0 ? 110 : -110, dy: 40)
+            return fortRect(own, snap: snap).insetBy(dx: -170, dy: -60).offsetBy(dx: own == 0 ? 110 : -110, dy: 40)
         case .target:
-            return fortRect(1 - snap.activeSide, snap: snap).insetBy(dx: -150, dy: -50).offsetBy(dx: 0, dy: 30)
+            return fortRect(1 - own, snap: snap).insetBy(dx: -150, dy: -50).offsetBy(dx: 0, dy: 30)
         case .follow:
+            if let home, snap.shells.isEmpty {
+                return planRect(snap, frame: frame, minBlock: minBlock, side: home)
+            }
             let base = fortRect(0, snap: snap).union(fortRect(1, snap: snap)).insetBy(dx: -80, dy: -40)
             if !snap.shells.isEmpty {
                 // Follow the shell with lookahead along its flight, and keep the fort it heads for in view.

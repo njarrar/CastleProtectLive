@@ -8,7 +8,7 @@ import Foundation
 final class FakeCoreBridge: CoreBridge {
     let name = "Stand-in core (fixture player, no XCFramework linked)"
     let isStandIn = true
-    let version = #"{"sim":"fixtures","rules":3,"tick_hz":120}"#
+    let version = #"{"sim":"fixtures","rules":4,"tick_hz":120}"#
     /// Tests: the next command panics, and every call after it is `dead_handle` (core/API.md).
     var panicNext = false
     private var dead = false
@@ -139,7 +139,9 @@ final class FakeCoreBridge: CoreBridge {
             return reply(["ok": true, "log": log])
         case "hash":
             return reply(["ok": true, "hash": current["hash"] as? String ?? "0"])
-        case "terrain_all", "lean_lines", "shimmer", "validate_blueprint":
+        case "validate_blueprint":
+            return reply(Self.validate(rows: obj["rows"] as? [String] ?? [], seats: obj["seats"] as? Int ?? 0))
+        case "terrain_all", "lean_lines", "shimmer":
             return reply(["ok": true])
         default:
             return reply(["ok": false, "reason": "unknown_command"])
@@ -165,6 +167,36 @@ final class FakeCoreBridge: CoreBridge {
     }
 
     // MARK: Helpers
+
+    /// A rough stand-in for the core's Workshop check (core/API.md, `validate_blueprint`): the
+    /// grid size, a Kettle Room, enough Nooks and the 72 block budget. The real core also runs
+    /// the support solver; this one does not.
+    static func validate(rows: [String], seats: Int) -> [String: Any] {
+        let costs: [Character: Int] = ["w": 5, "t": 15, "c": 35]
+        let body = rows.dropLast()
+        let used = body.reduce(0) { $0 + $1.filter { $0 != "." }.count }
+        let cost = body.reduce(0) { sum, line in sum + line.reduce(0) { $0 + (costs[$1] ?? 0) } }
+        var out: [String: Any] = ["cost": cost, "used": used, "budget": 72]
+        let cols = rows.first?.count ?? 0
+        var detail: String?
+        if rows.isEmpty { detail = "no rows" }
+        else if rows.contains(where: { $0.count != cols }) { detail = "rows differ in width" }
+        else if cols > 8 || rows.count > 10 || cols < 3 || rows.count < 3 {
+            detail = "grid \(cols)x\(rows.count) outside 3x3 to 8x10"
+        } else if rows.last?.allSatisfy({ $0 == "F" }) != true { detail = "row 0 must be full Footing" }
+        else if !body.contains(where: { $0.contains("K") }) { detail = "Kettle Room must be walled" }
+        else if Set(body.joined().filter { $0.isNumber }).count < seats { detail = "Not enough Nooks for \(seats) Hobs" }
+        else if used > 72 { detail = "Block Budget \(used) over 72" }
+        if let detail {
+            out["ok"] = false
+            out["reason"] = "invalid_blueprint"
+            out["detail"] = detail
+            out["cells"] = [[Int]]()
+        } else {
+            out["ok"] = true
+        }
+        return out
+    }
 
     /// The current frame again with no events and no terrain (sent after a change).
     private func quiet(_ frame: [String: Any]) -> [String: Any] {

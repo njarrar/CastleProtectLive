@@ -42,10 +42,18 @@ struct BattleView: View {
                     WideHud(session: session, insets: insets)
                 }
                 DragBandLayer(model: session.dragModel, side: session.hud.activeSide, colours: session.settings.colourSet)
+                if let nudge = session.aimNudge {
+                    // A drag from the sky: where to press, by your fort (QA playtest 2, owner rule).
+                    SubtitleView(text: nudge.text, side: session.hud.activeSide, colours: session.settings.colourSet)
+                        .fixedSize()
+                        .position(AimNudge.clamped(nudge.point, in: geo.size))
+                        .transition(.opacity)
+                }
                 if let banner = session.banner {
                     MovingBanner(text: banner, side: session.hud.activeSide, colours: session.settings.colourSet,
                                  reduceMotion: session.settings.reduceMotion)
                         .id(banner)
+                        .padding(.horizontal, 16)
                         .frame(maxWidth: .infinity)
                         .padding(.top, insets.top + (session.layout.mode == .tall ? 120 : 56))
                         .transition(.opacity)

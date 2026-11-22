@@ -19,6 +19,14 @@ struct ResultInfo: Equatable {
         return Self.headline(how: result.reason, won: won)
     }
 
+    /// "Double Pop!": both kettles popped in the same Squall round. Says how the winner was
+    /// picked (QA playtest 2, n5).
+    static let doublePopNote =
+        "Both kettles popped in the same Squall round. The kettle that had more left before that round wins."
+
+    /// The line under the headline that explains the result, or nil.
+    var explainer: String? { result.reason == "double_pop" ? Self.doublePopNote : nil }
+
     /// One headline per `how` (L9).
     static func headline(how: String, won: Bool) -> String {
         switch (how, won) {
@@ -51,7 +59,7 @@ struct ResultInfo: Equatable {
 @MainActor
 final class AppModel: ObservableObject {
     enum Screen: Equatable {
-        case title, map, battle, results, skirmish, duelSetup
+        case title, map, battle, results, skirmish, duelSetup, workshop
     }
 
     @Published var screen: Screen
@@ -292,6 +300,9 @@ final class AppModel: ObservableObject {
         haptics.warmUp()
         s.isPad = UIDevice.current.userInterfaceIdiom == .pad
         s.onTurnStarted = { [weak self] _ in self?.autosave() }
+        // The gold ring on the picked Hob shows until 3 aims were started from the fort (saved).
+        s.aimStarts = save.aimStarts
+        s.onAimStarted = { [weak self] count in self?.noteAimStarted(count) }
         s.onEvents = { [weak self] events, snap in self?.handle(events, snap) }
         s.onLocalHaptic = { [weak self] kind in
             guard let self else { return }
@@ -535,7 +546,30 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The plain words for a save made under older game rules (rules 2 before QA playtest 1).
+    /// One more aim started from the fort (up to 3), kept so the ring stays gone next time.
+    func noteAimStarted(_ count: Int) {
+        let next = min(BattleSession.ownerRingAims, max(save.aimStarts, count))
+        guard next != save.aimStarts else { return }
+        save.aimStarts = next
+        persist()
+    }
+
+    // MARK: Workshop (S10)
+
+    func openWorkshop() {
+        sound.play("ui_tap")
+        screen = .workshop
+    }
+
+    /// Keeps one fort. Only a fort the core accepted is offered for saving.
+    func saveWorkshopFort(_ rows: [String]) {
+        save.fort = WorkshopFort(name: "My Fort", rows: rows)
+        persist()
+        sound.play("meta_pennant_stamp")
+    }
+
+    /// The plain words for a save made under older game rules (rules 3 before QA playtest 2,
+    /// rules 2 before QA playtest 1). The core's rules version is stored with every save.
     nonisolated static let rulesChangedNotice =
         "The game rules changed since this fight was saved, so it cannot be carried on. Your progress and Pennants are safe."
 

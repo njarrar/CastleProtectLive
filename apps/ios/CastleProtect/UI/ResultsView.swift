@@ -19,6 +19,14 @@ struct ResultsView: View {
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityIdentifier("resultTitle")
                     Text("Round \(info.result.round)").font(Theme.label(17)).foregroundStyle(Theme.inkSoft)
+                    if let why = info.explainer {
+                        // "Double Pop!" says how the winner was picked (QA playtest 2, n5).
+                        Text(why)
+                            .font(Theme.label(15)).foregroundStyle(Theme.ink)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 420)
+                            .accessibilityIdentifier("resultExplainer")
+                    }
                     if info.isDuel {
                         duelBody(info)
                     } else {
@@ -268,14 +276,15 @@ struct BrokeView: View {
             Text(who == "You" ? "What broke you" : "What broke \(who)")
                 .font(Theme.title(18)).foregroundStyle(Theme.ink)
                 .accessibilityAddTraits(.isHeader)
-            if let last = broke.last, !last.shotName.isEmpty {
-                Text("Last blow: \(last.shotName)\(last.hobName.isEmpty ? "" : " from \(last.hobName)"), round \(last.round)")
+            if let last = broke.last, let line = Self.lastLine(last) {
+                Text(line)
                     .font(Theme.label(14)).foregroundStyle(Theme.inkSoft)
             }
             ForEach(Array(broke.top.prefix(3).enumerated()), id: \.offset) { _, blow in
+                let names = Self.names(blow)
                 HStack {
-                    Text(blow.shotName.isEmpty ? blow.shot.replacingOccurrences(of: "_", with: " ").capitalized : blow.shotName)
-                    if !blow.hobName.isEmpty { Text(blow.hobName).foregroundStyle(Theme.inkSoft) }
+                    Text(names.main)
+                    if !names.detail.isEmpty { Text(names.detail).foregroundStyle(Theme.inkSoft) }
                     Spacer()
                     Text("\(blow.dmg)").font(Theme.number(15))
                 }
@@ -288,6 +297,29 @@ struct BrokeView: View {
         .frame(maxWidth: 420, alignment: .leading)
         .panel()
         .accessibilityElement(children: .combine)
+    }
+}
+
+extension BrokeView {
+    /// The shot's own name, or its id in words.
+    nonisolated static func shotWords(_ blow: CoreBlow) -> String {
+        blow.shotName.isEmpty ? blow.shot.replacingOccurrences(of: "_", with: " ").capitalized : blow.shotName
+    }
+
+    /// A blow's names, read from `by` (rules 4): a Hob's shot is "Grand Dumpling", "Marge
+    /// Dumpling"; a field blow is the core's own name for it ("The Squall", "A fall", "Fatigue").
+    nonisolated static func names(_ blow: CoreBlow) -> (main: String, detail: String) {
+        if blow.byHob { return (shotWords(blow), blow.hobName) }
+        let field = blow.hobName.isEmpty ? shotWords(blow) : blow.hobName
+        return (field, "")
+    }
+
+    /// "Last blow: Grand Dumpling from Marge Dumpling, round 9", or "Last blow: The Squall, round 12".
+    nonisolated static func lastLine(_ blow: CoreBlow) -> String? {
+        let n = names(blow)
+        guard !n.main.isEmpty else { return nil }
+        let from = n.detail.isEmpty ? "" : " from \(n.detail)"
+        return "Last blow: \(n.main)\(from), round \(blow.round)"
     }
 }
 

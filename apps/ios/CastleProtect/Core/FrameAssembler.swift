@@ -394,8 +394,9 @@ final class FrameAssembler {
         case "squall_warning": return BattleEvent(type: "squall_warn", amount: e.n ?? 0, text: e.text ?? "")
         case "squall", "squall_round": return BattleEvent(type: "squall", amount: e.n ?? 0)
         case "fatigue_warning":
-            return BattleEvent(type: "fatigue_warn", amount: e.round ?? 0, text: e.text ?? "Fatigue next round")
-        case "fatigue": return BattleEvent(type: "fatigue", amount: e.round ?? 0, text: "Fatigue! Battered blocks weaken")
+            let words = e.text.map { $0.isEmpty ? BattleSession.fatigueWarnText : $0 } ?? BattleSession.fatigueWarnText
+            return BattleEvent(type: "fatigue_warn", amount: e.round ?? 0, text: words)
+        case "fatigue": return BattleEvent(type: "fatigue", amount: e.round ?? 0, text: BattleSession.fatigueStartText)
         case "shot_switch": return BattleEvent(type: "shot_switch", side: e.side ?? -1, amount: e.hob ?? -1, text: e.why ?? "")
         case "thump": return BattleEvent(type: "thump", side: e.side ?? -1)
         case "threaded": return BattleEvent(type: "threaded", side: e.side ?? -1)

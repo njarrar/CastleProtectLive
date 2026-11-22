@@ -23,6 +23,8 @@ struct RootView: View {
                 SkirmishSetupView()
             case .duelSetup:
                 DuelSetupView()
+            case .workshop:
+                WorkshopView(model: model)
             }
             if model.showResume, model.screen == .map, let battle = model.save.battle {
                 ResumeCard(battle: battle)

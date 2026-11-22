@@ -301,6 +301,12 @@ struct CoreReply: Decodable, Equatable, Sendable {
     var ready: Bool?
     var why: String?
     var text: String?
+    /// `validate_blueprint`: Buttons cost, blocks used against the budget, the budget, and the
+    /// cells to mark (`[c, r]`, row 0 the Footing) when refused.
+    var cost: Int?
+    var used: Int?
+    var budget: Int?
+    var cells: [[Int]]?
 
     /// The handle is dead (a panic, or every call after one): rebuild with cp_new and resume.
     var isDeadHandle: Bool { reason == "panic" || reason == "dead_handle" }
@@ -329,6 +335,10 @@ struct CoreReply: Decodable, Equatable, Sendable {
         ready = c.value(.ready, nil)
         why = c.value(.why, nil)
         text = c.value(.text, nil)
+        cost = c.value(.cost, nil)
+        used = c.value(.used, nil)
+        budget = c.value(.budget, nil)
+        cells = c.value(.cells, nil)
     }
 
     static func decode(_ json: String) -> CoreReply {
@@ -337,6 +347,7 @@ struct CoreReply: Decodable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case ok, reason, detail, angle, power, moved, steam, hash, applied, index, shot, hob, ready, why, text
+        case cost, used, budget, cells
         case canFire = "can_fire", readyShot = "ready_shot"
     }
 }
@@ -898,15 +909,28 @@ struct CoreBlow: Decodable, Equatable, Sendable {
     var shot = "", shotName = "", hobName = ""
     var hob: Int?
     var round = 0, dmg = 0
+    /// Who dealt it (rules 4): `hob`, or the field: `squall`, `ground`, `fatigue`, `self`,
+    /// `shears`, `prop`. An older core sends none: then a Hob id means `hob`.
+    var by = ""
+
+    init(shot: String = "", shotName: String = "", hobName: String = "", hob: Int? = nil, round: Int = 0,
+         dmg: Int = 0, by: String = "") {
+        self.shot = shot; self.shotName = shotName; self.hobName = hobName; self.hob = hob
+        self.round = round; self.dmg = dmg; self.by = by
+    }
 
     init(from decoder: Decoder) throws {
         let k = try decoder.container(keyedBy: CodingKeys.self)
         shot = k.value(.shot, ""); shotName = k.value(.shotName, ""); hobName = k.value(.hobName, "")
         hob = k.value(.hob, nil); round = k.value(.round, 0); dmg = k.value(.dmg, 0)
+        by = k.value(.by, "")
     }
 
+    /// True when a Hob dealt the blow (`by: "hob"`, or a Hob id from a core without `by`).
+    var byHob: Bool { by.isEmpty ? hob != nil : by == "hob" }
+
     private enum CodingKeys: String, CodingKey {
-        case shot, hob, round, dmg
+        case shot, hob, round, dmg, by
         case shotName = "shot_name", hobName = "hob_name"
     }
 }
