@@ -1,7 +1,7 @@
 // App rule numbers that are not in the core snapshot yet. They live in content/app.json
 // (schema: content/schema/app.schema.json), never in TypeScript. See the "Core requests"
 // section of docs/review/code/web-review-1.md for the ones the core should send instead.
-import data from '../../../../content/app.json';
+import data from '../../../../content/app.json' with { type: 'json' };
 
 export interface AppRules {
   version: number;

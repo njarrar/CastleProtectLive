@@ -28,7 +28,7 @@ impl Battle {
             return vec![];
         }
         let h = &self.hobs[sel.hob as usize];
-        let mut share = self.rules.preview_pct;
+        let mut share = self.preview[s];
         if sel.shot == "plain" {
             if let Some(Passive::PreviewBonus { pct }) = &h.passive {
                 share += share * pct / 100;
@@ -80,6 +80,34 @@ impl Battle {
         for d in self.terrain.dirty.iter_mut() {
             *d = false;
         }
+        let shells: Vec<Value> = self
+            .actors
+            .iter()
+            .map(|a| {
+                let rot = crate::math::atan2_t(-(a.vy as i64), a.vx as i64);
+                json!([a.id, cell(a.x), cell(a.y), rot, content.shots[a.shot].id])
+            })
+            .collect();
+        // lean first: the full parts are built only when needed
+        let full = self.snap_full || !self.events.is_empty();
+        self.snap_full = false;
+        let awaiting = match self.phase {
+            Phase::Draft => ctl(self.control[self.draft.next as usize]),
+            Phase::Plan => ctl(self.control[self.side as usize]),
+            _ => "none",
+        };
+        if !full {
+            let mut lean = json!({"tick": self.tick, "phase": self.phase.name(), "side": self.side, "awaiting": awaiting, "full": false, "terrain": {"chunks": chunks}, "shells": shells, "events": []});
+            if std::mem::take(&mut self.snap_aim) {
+                // an aim drag: the new aim and preview, nothing else
+                let s = self.side as usize;
+                let h = &self.hobs[self.sel[s].hob as usize];
+                lean["aim"] = json!({"side": self.side, "hob": h.id, "angle": h.angle, "power": h.power});
+                lean["preview"] = json!(self.preview().iter().map(|p| json!([p.0, p.1])).collect::<Vec<_>>());
+            }
+            return lean;
+        }
+        self.snap_aim = false;
         let castles: Vec<Value> = self
             .castles
             .iter()
@@ -128,28 +156,11 @@ impl Battle {
                     "rest": h.rest.max(0), "knack": h.knack, "knack_uses": h.knack_uses, "plain": h.plain,
                     "buried": h.buried, "cover": h.state == crate::hob::HobState::Seated, "dummy": h.dummy,
                     "grudge": h.grudge, "clatter": h.clatter, "can_fire": h.side == self.side && self.can_fire_hob(h.side, h.id),
-                    "aim": {"angle": h.angle, "power": h.power},
+                    // only the side on turn sees its live aim
+                    "aim": if h.side == self.side { json!({"angle": h.angle, "power": h.power}) } else { Value::Null },
                 })
             })
             .collect();
-        let shells: Vec<Value> = self
-            .actors
-            .iter()
-            .map(|a| {
-                let rot = crate::math::atan2_t(-(a.vy as i64), a.vx as i64);
-                json!([a.id, cell(a.x), cell(a.y), rot, content.shots[a.shot].id])
-            })
-            .collect();
-        let full = self.snap_full || !self.events.is_empty();
-        self.snap_full = false;
-        if !full {
-            let awaiting = match self.phase {
-                Phase::Draft => ctl(self.control[self.draft.next as usize]),
-                Phase::Plan => ctl(self.control[self.side as usize]),
-                _ => "none",
-            };
-            return json!({"tick": self.tick, "phase": self.phase.name(), "side": self.side, "awaiting": awaiting, "full": false, "terrain": {"chunks": chunks}, "shells": shells, "events": []});
-        }
         let props: Vec<Value> = self
             .props
             .iter()
@@ -175,6 +186,21 @@ impl Battle {
                 })
                 .collect()
         };
+        let handicap = |side: usize| -> Value {
+            json!({"help": self.help[side], "steam": self.steam_max[side], "preview_pct": self.preview[side],
+                   "crew": self.hobs.iter().filter(|h| h.side as usize == side).count()})
+        };
+        let boss = if self.rules.boss.is_some() {
+            let prop = |id: Option<u32>| -> Value {
+                id.and_then(|i| self.props.iter().find(|p| p.id == i))
+                    .map(|p| json!({"id": p.id, "x": p.x, "y": p.y, "hp": p.hp.max(0), "max": p.max}))
+                    .unwrap_or(Value::Null)
+            };
+            json!({"phase": self.boss.phase, "roller": prop(self.boss.roller), "roller_done": self.boss.roller_done,
+                   "shears": prop(self.boss.hinge), "cut": self.boss.cut.map(|c| json!([c.0, c.1, c.2, c.3])), "jam": self.boss.jam})
+        } else {
+            Value::Null
+        };
         let hud = json!({
             "turn": self.turn, "round": self.round, "round_cap": self.rules.round_cap, "side": self.side,
             "wind": self.wind, "forecast": self.forecast(), "front_rounds_left": self.front_rounds_left(),
@@ -188,6 +214,11 @@ impl Battle {
             "names": self.names, "control": [ctl(self.control[0]), ctl(self.control[1])],
             "score": [self.stats[0].score, self.stats[1].score],
             "puff_up": [self.puff_up_allowed[0] && !self.puff_up_used[0], self.puff_up_allowed[1] && !self.puff_up_used[1]],
+            "steam_max": self.steam_max,
+            "handicap": [handicap(0), handicap(1)],
+            "volley": if self.volley > 0 { json!({"actions": self.volley, "left": self.actions_left}) } else { Value::Null },
+            "boss": boss,
+            "rules": {"objective": self.rules.objective.as_ref().map(|o| json!({"tag": o.tag, "count": o.count})), "cap_win": self.rules.cap_win},
         });
         let draft = if self.phase == Phase::Draft
             || !self.draft.pool.is_empty()
@@ -197,12 +228,12 @@ impl Battle {
         } else {
             Value::Null
         };
-        let awaiting = match self.phase {
-            Phase::Draft => ctl(self.control[self.draft.next as usize]),
-            Phase::Plan => ctl(self.control[s]),
-            _ => "none",
-        };
         let events = std::mem::take(&mut self.events);
+        let stats = |side: usize| -> Value {
+            let st = &self.stats[side];
+            json!({"shots": st.shots, "hits": st.hits, "blocks_dropped": st.blocks_dropped, "bonks": st.bonks,
+                   "blocks_lost": st.blocks_lost, "kettle_lost": st.kettle_lost, "hobs_lost": st.own_bonked, "best_streak": st.best_streak})
+        };
         json!({
             "tick": self.tick, "phase": self.phase.name(), "side": self.side, "awaiting": awaiting, "full": true,
             "level": self.level.id, "mode": self.mode,
@@ -212,7 +243,13 @@ impl Battle {
             "preview": preview, "ghosts": ghosts,
             "hud": hud, "draft": draft,
             "events": events,
-            "result": self.result.as_ref().map(|r| json!({"winner": r.winner, "how": r.how, "round": r.round, "pennants": r.pennants})),
+            "result": self.result.as_ref().map(|r| json!({
+                "winner": r.winner, "how": r.how, "round": r.round, "pennants": r.pennants,
+                "pennants_new": r.pennants_new, "buttons": r.buttons,
+                "score": [self.stats[0].score, self.stats[1].score],
+                "stats": [stats(0), stats(1)],
+                "broke": r.broke,
+            })),
             "last_ai": self.last_ai,
             "hash": crate::hash::hex(self.hash()),
         })

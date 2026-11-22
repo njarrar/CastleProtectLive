@@ -577,6 +577,51 @@ pub struct Rules {
     /// Boss rule: while the root block stands, one lost block regrows per turn.
     #[serde(default)]
     pub regrow: bool,
+    /// Grand Fort phases 2 and 3 (1-10: the lawn roller and the shears).
+    #[serde(default)]
+    pub boss: Option<BossDef>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct BossDef {
+    /// Phase 2 starts when the boss kettle falls under this percent, or the
+    /// root block breaks.
+    pub phase2_pct: i32,
+    /// Phase 3 starts under this percent.
+    pub phase3_pct: i32,
+    #[serde(default)]
+    pub roller: Option<RollerDef>,
+    #[serde(default)]
+    pub shears: Option<ShearsDef>,
+}
+
+/// Big Smoothie Jr.: rolls toward the player each boss turn start and shaves
+/// the hill down to a flat line. Its boiler (a prop) stops it when broken; it
+/// can not climb dirt piled more than `climb` cells over the map's own ground.
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct RollerDef {
+    /// Start x (cells), on the ground there.
+    pub x: i32,
+    pub hp: i32,
+    /// Cells rolled per boss turn.
+    pub step: i32,
+    pub climb: i32,
+    /// The flat line, as a height above the map bottom.
+    pub flat_height: i32,
+}
+
+/// The Big Snip: open one boss turn (the cut line shows), snip the next.
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ShearsDef {
+    /// Hinge prop HP; any hit that breaks it jams the shears.
+    pub hp: i32,
+    /// Rows cut from the top of the tallest column.
+    pub rows: i32,
+    /// Boss turns a jam lasts.
+    pub jam_turns: i32,
 }
 fn d15() -> i32 {
     15
@@ -602,6 +647,7 @@ impl Default for Rules {
             preview_pct: 30,
             objective: None,
             regrow: false,
+            boss: None,
         }
     }
 }
@@ -706,6 +752,10 @@ pub struct Content {
     pub rummage: RummageSource,
     pub levels: Vec<LevelDef>,
     pub starter_box: StarterBox,
+    /// `content/app.json`: app numbers the core also reads (Help Steam,
+    /// Buttons rewards). Optional; defaults follow the design canon.
+    #[serde(default)]
+    pub app: serde_json::Value,
 }
 
 macro_rules! finder {
@@ -739,9 +789,42 @@ impl Content {
         self.materials.terrain.iter().find(|m| m.code == code)
     }
 
+    /// Steam pool for a Help level ("none" gives 0: use the level's pool).
+    pub fn app_help_steam(&self, help: &str) -> Option<i32> {
+        if help == "none" {
+            return Some(0);
+        }
+        if let Some(v) = self.app["help_steam"][help].as_i64() {
+            return Some(v as i32);
+        }
+        match help {
+            "some" => Some(120),
+            "lots" => Some(140),
+            _ => None,
+        }
+    }
+
+    /// A Buttons reward number from app.json `rewards`, or the canon default.
+    pub fn reward(&self, key: &str) -> i32 {
+        if let Some(v) = self.app["rewards"][key].as_i64() {
+            return v as i32;
+        }
+        match key {
+            "first_clear" => 200,
+            "first_clear_grand_fort" => 500,
+            "per_pennant" => 25,
+            "replay" => 80,
+            "replay_grand_fort" => 150,
+            "per_new_pennant" => 10,
+            "loss" => 40,
+            "daily" => 60,
+            _ => 0,
+        }
+    }
+
     /// Parse a content bundle. Empty input gives the built in content.
     pub fn from_json(s: &str) -> Result<Content, String> {
-        if s.trim().is_empty() || s.trim() == "{}" {
+        if s.trim().is_empty() {
             return Ok(crate::embedded::content());
         }
         let c: Content = serde_json::from_str(s).map_err(|e| format!("content: {e}"))?;
@@ -752,6 +835,78 @@ impl Content {
     /// Cross reference checks. Returns the first problem found.
     pub fn check(&self) -> Result<(), String> {
         let mut errs = Vec::new();
+        // duplicate ids: finders return the first, the shot index the last
+        fn dups<'a>(what: &str, ids: impl Iterator<Item = &'a String>, errs: &mut Vec<String>) {
+            let mut seen: Vec<&String> = vec![];
+            for id in ids {
+                if seen.contains(&id) {
+                    errs.push(format!("duplicate {what} id {id}"));
+                }
+                seen.push(id);
+            }
+        }
+        dups("class", self.classes.iter().map(|x| &x.id), &mut errs);
+        dups("hob", self.hobs.iter().map(|x| &x.id), &mut errs);
+        dups("shot", self.shots.iter().map(|x| &x.id), &mut errs);
+        dups("doodad", self.doodads.iter().map(|x| &x.id), &mut errs);
+        dups("blueprint", self.blueprints.iter().map(|x| &x.id), &mut errs);
+        dups("level", self.levels.iter().map(|x| &x.id), &mut errs);
+        dups("material", self.materials.blocks.iter().map(|x| &x.id), &mut errs);
+        for m in &self.materials.blocks {
+            if m.hp <= 0 {
+                errs.push(format!("material {} needs HP above 0", m.id));
+            }
+            let g: Vec<char> = m.glyph.chars().collect();
+            if g.len() != 1 || matches!(g[0], '.' | 'K' | 'r' | '1'..='9') {
+                errs.push(format!("material {} glyph must be one free letter", m.id));
+            }
+        }
+        for h in &self.hobs {
+            if h.hp <= 0 {
+                errs.push(format!("hob {} needs HP above 0", h.id));
+            }
+        }
+        for c in &self.classes {
+            if c.hp <= 0 {
+                errs.push(format!("class {} needs HP above 0", c.id));
+            }
+        }
+        // split and prop chains must end: no shot may reach itself
+        for (i, _) in self.shots.iter().enumerate() {
+            let mut stack = vec![(i, 0)];
+            while let Some((j, depth)) = stack.pop() {
+                if depth > self.shots.len() {
+                    errs.push(format!("shot {} splits or turns into itself", self.shots[i].id));
+                    break;
+                }
+                for child in self.children(j) {
+                    if child == i {
+                        errs.push(format!("shot {} splits or turns into itself", self.shots[i].id));
+                        stack.clear();
+                        break;
+                    }
+                    stack.push((child, depth + 1));
+                }
+            }
+        }
+        for sh in &self.shots {
+            let f = &sh.flight;
+            if f.gravity_pct <= 0 && f.kind != FlightKind::Beam && f.life_ticks <= 0 {
+                errs.push(format!(
+                    "shot {} has no gravity and is not a beam: set life_ticks",
+                    sh.id
+                ));
+            }
+            for t in &sh.triggers {
+                for e in &t.effects {
+                    if let Effect::Explode { dmg, .. } | Effect::Column { dmg, .. } = e {
+                        if *dmg > 110 {
+                            errs.push(format!("shot {} deals over the 110 Thwack cap", sh.id));
+                        }
+                    }
+                }
+            }
+        }
         for c in &self.classes {
             if self.shot(&c.plain).is_none() {
                 errs.push(format!("class {} plain shot {} missing", c.id, c.plain));
@@ -841,6 +996,56 @@ impl Content {
             if l.pennants.len() != 3 && l.kind != "skirmish" {
                 errs.push(format!("level {} needs 3 pennants", l.id));
             }
+            for p in &l.pennants {
+                if !PENNANT_TYPES.contains(&p.kind.as_str()) {
+                    errs.push(format!("level {} unknown pennant type {}", l.id, p.kind));
+                }
+            }
+            if l.width < 640 || l.height < 240 || l.width > 8192 || l.height > 2048 {
+                errs.push(format!("level {} map size out of range", l.id));
+            }
+            // a fort is at most 8 blocks (128 cells) wide; pads a fort plus 64 apart
+            if (l.pads[1].x - l.pads[0].x) < 128 + 64
+                || l.pads[0].x < 64
+                || l.pads[1].x > l.width - 64
+            {
+                errs.push(format!("level {} pads too close or off the map", l.id));
+            }
+            if l.rules.first_turn > 2 {
+                errs.push(format!("level {} first_turn must be 0, 1 or 2", l.id));
+            }
+            if l.rules.cap_win.is_some_and(|w| w > 1) {
+                errs.push(format!("level {} cap_win must be 0 or 1", l.id));
+            }
+            if l.rules.round_cap < 1 || l.rules.round_cap > 40 {
+                errs.push(format!("level {} round_cap must be 1 to 40", l.id));
+            }
+            if l.kind == "rescue" && (l.rules.squall || l.rules.objective.is_none()) {
+                errs.push(format!(
+                    "level {}: a Rescue has no Squall and needs an objective",
+                    l.id
+                ));
+            }
+            for o in &l.objects {
+                if o.hp <= 0 || o.x < 0 || o.x >= l.width {
+                    errs.push(format!("level {} object {} out of range", l.id, o.kind));
+                }
+            }
+            if let Some(bd) = &l.rules.boss {
+                if !(0..=100).contains(&bd.phase3_pct) || bd.phase3_pct > bd.phase2_pct {
+                    errs.push(format!("level {} boss phase percents", l.id));
+                }
+                if let Some(r) = &bd.roller {
+                    if r.x < 0 || r.x >= l.width || r.hp <= 0 || r.step <= 0 {
+                        errs.push(format!("level {} roller out of range", l.id));
+                    }
+                }
+                if let Some(sh) = &bd.shears {
+                    if sh.hp <= 0 || sh.rows <= 0 || sh.jam_turns < 0 {
+                        errs.push(format!("level {} shears out of range", l.id));
+                    }
+                }
+            }
             if l.ground.points.len() < 2 {
                 errs.push(format!("level {} needs a heightline", l.id));
             }
@@ -879,4 +1084,37 @@ impl Content {
             Err(errs.join("; "))
         }
     }
+
+    /// Shots a shot turns into: split children and props.
+    fn children(&self, i: usize) -> Vec<usize> {
+        let s = &self.shots[i];
+        let mut out = vec![];
+        let effs = s.triggers.iter().flat_map(|t| t.effects.iter()).chain(s.self_effects.iter());
+        for e in effs {
+            if let Effect::Split { child, .. } | Effect::BecomeProp { shot: child } = e {
+                if let Some(j) = self.shots.iter().position(|x| &x.id == child) {
+                    out.push(j);
+                }
+            }
+        }
+        out
+    }
 }
+
+/// Pennant goal types the core knows.
+pub const PENNANT_TYPES: &[&str] = &[
+    "win",
+    "win_by_round",
+    "no_hob_bonked",
+    "kettle_above_pct",
+    "hits_in_a_row",
+    "kettle_pop",
+    "bonk_with_each_hob",
+    "bonk_with_knack",
+    "bonk_with_trick",
+    "use_tricks",
+    "hits_from_spots",
+    "captive_safe",
+    "root_by_round",
+    "hill_half",
+];

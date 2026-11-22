@@ -414,7 +414,7 @@ const shared = {};
 
 // ================================================================ animation frames and data
 // All new frames are added after the v0.1 sprites, so the old SVG files do not change.
-const anim = buildAnim({ add: (n, grp, w, h, vb, body, purpose, o = {}) => add(n, grp, w, h, vb, body, purpose, { ...o, anim: true }), solidBlock, SHELLS, shared, HOB_NAME });
+const anim = buildAnim({ find: (n) => sprites.find(s => s.name === n), add: (n, grp, w, h, vb, body, purpose, o = {}) => add(n, grp, w, h, vb, body, purpose, { ...o, anim: true }), solidBlock, SHELLS, shared, HOB_NAME });
 
 // ================================================================ write
 fs.rmSync(path_.join(ASSETS, 'svg'), { recursive: true, force: true });

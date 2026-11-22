@@ -34,6 +34,7 @@ export function battleScreen(app: App, route: Route): Screen {
   try {
     if (r.resume) core.loadBattle(r.resume);
     else if (!r.prepared) core.newBattle(setup);
+    else core.resendTerrain?.(); // the pre-battle sheet already read the first snapshot
   } catch (e) {
     if (r.resume) { void dropBattleSave(); throw new Error(e instanceof SaveError ? `${e.message} It was put aside.` : 'That saved fight could not be loaded. It was put aside.'); }
     throw new Error(`This fight cannot start: ${e instanceof Error ? e.message : String(e)}`);
@@ -232,7 +233,8 @@ export function battleScreen(app: App, route: Route): Screen {
         t.cx += bias * (setup.mode === 'duel' ? 0 : 1);
       }
       // Spare height goes to the sky, not the soil: keep the ground under the forts near the bottom.
-      if (!(following && rm)) t.cy = Math.max(t.cy, by0 + cr.h / 2 / t.s - 24 / t.s);
+      const base = Math.min(f[0].y, f[1].y);
+      if (!(following && rm)) t.cy = Math.max(t.cy, base + cr.h / 2 / t.s - 36 / t.s);
       if (manual && !following) return;
       if (following) manual = false;
       t.s *= zoomWide;

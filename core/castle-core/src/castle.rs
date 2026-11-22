@@ -222,6 +222,17 @@ pub fn validate_blueprint(content: &Content, bp: &Blueprint, seats: i32) -> Resu
     if used > BUDGET {
         return Err(format!("Block Budget {} over {}", used, BUDGET));
     }
+    // every block must stand: run the support solver on the new fort
+    let cs = Castle::from_blueprint(content, bp, 0, 0)?;
+    let hanging: Vec<(i32, i32)> = cs.falling_chunks(content, &[]).into_iter().flatten().collect();
+    if let Some(&(c, r)) = hanging.first() {
+        return Err(format!(
+            "{} block(s) have no support, first at column {} row {}",
+            hanging.len(),
+            c + 1,
+            r
+        ));
+    }
     Ok(())
 }
 
@@ -567,13 +578,16 @@ impl Castle {
                 Slot::Block(b) => {
                     hs.i32(b.mat as i32);
                     hs.i32(b.hp);
+                    hs.i32(b.max);
                     hs.i32(b.peephole as i32);
+                    hs.i32(b.root as i32);
                 }
             }
         }
         for n in &self.nooks {
             hs.i32(n.flap as i32);
             hs.i32(n.lid as i32);
+            hs.i64(n.buried_tick);
         }
         hs.i32(self.kettle.lid as i32);
     }

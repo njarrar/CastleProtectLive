@@ -7,7 +7,7 @@ const layout = (page: Page) => page.evaluate(() => (window as unknown as { __cas
 test('loads, starts level 1-1, fires a shot, rotates to portrait', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto('./');
+  await page.goto('./?debug=1');
   await expect(page.locator('html[data-ready=true]')).toBeAttached();
   await expect(page.getByText('Castle')).toBeVisible();
 
@@ -49,14 +49,15 @@ test('loads, starts level 1-1, fires a shot, rotates to portrait', async ({ page
 
 test('map, pre-battle, Couch Duel setup and settings open', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('./#map');
+  await page.goto('./?debug=1#map');
   await expect(page.locator('.screen.map')).toBeVisible();
   await page.locator('[data-level="1-1"]').click();
   await expect(page.getByTestId('fight')).toBeVisible();
-  await page.goto('./#duel');
+  await page.goto('./?debug=1#duel');
   await expect(page.getByTestId('duel-fight')).toBeVisible();
   await page.getByTestId('duel-fight').click();
   await expect(page.locator('.battle')).toBeVisible();
-  await page.goto('./#settings');
+  // A hash change never drops a fight (M12), so load the settings link as a fresh page.
+  await page.goto('./?debug=2#settings');
   await expect(page.getByText('Reduce motion')).toBeVisible();
 });

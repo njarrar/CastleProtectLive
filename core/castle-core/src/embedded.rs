@@ -41,6 +41,7 @@ pub fn bundle_json() -> Value {
         "rummage": parse(c!("rummage.json")),
         "levels": LEVEL_FILES.iter().map(|s| parse(s)).collect::<Vec<_>>(),
         "starter_box": parse(c!("starter_box.json")),
+        "app": parse(c!("app.json")),
     })
 }
 

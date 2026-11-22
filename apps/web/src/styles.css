@@ -339,3 +339,37 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .draft[hidden], [hidden] { display: none !important; }
 /* keep the centring transform while pressed, or the press slides off the node */
 .node:active { transform: translate(-50%, -47%) scale(1.04); }
+
+/* ---- review 1 fixes ---- */
+/* L8: 44 pt floor for Pause and the Hob keys in short landscape */
+.hud.wide .topstrip .pause { width: 44px; height: 44px; min-height: 44px; min-width: 44px; }
+@media (max-height: 420px) { .hud.wide .hobs .btn.hob { width: 44px; height: 44px; min-height: 44px; min-width: 44px; } .hud.wide .topstrip { height: calc(var(--sat) + 48px); } }
+/* L8: the save quill shows for a moment and then is gone, even with Reduce motion */
+.savetick { visibility: hidden; pointer-events: none; }
+.savetick.show { visibility: visible; animation: tick 0.9s 1 forwards; }
+.reduce-motion .savetick.show { visibility: hidden; }
+/* L8: portrait top strip is two fixed rows: kettle, round, kettle / your pips, wind, rival pips */
+.hud.tall .topstrip { display: grid; grid-template-columns: 1fr auto 1fr; grid-template-areas: "k0 rd k1" "p0 wd p1"; align-items: center; column-gap: 6px; row-gap: 3px; position: relative; }
+.hud.tall .topstrip .kettle.side0 { grid-area: k0; justify-self: start; }
+.hud.tall .topstrip .round { grid-area: rd; justify-self: center; }
+.hud.tall .topstrip .kettle.side1 { grid-area: k1; justify-self: end; }
+.hud.tall .topstrip .pips.side0 { grid-area: p0; justify-self: start; }
+.hud.tall .topstrip .wind { grid-area: wd; justify-self: center; }
+.hud.tall .topstrip .pips.side1 { grid-area: p1; justify-self: end; }
+.hud.tall .topstrip .savetick { position: absolute; right: calc(var(--sar) + 4px); bottom: 2px; }
+.hud.tall .topstrip .pips { flex-wrap: nowrap; }
+.hud.tall .topstrip .pip { width: 16px; height: 16px; }
+.hud.tall .topstrip .kettle, .hud.tall .topstrip .round { font-size: 14px; padding: 1px 8px; }
+/* Fire states: Shove Off and Pass read as different actions */
+.btn.fire[data-state=dug] { font-size: 14px; line-height: 1.05; background: radial-gradient(circle at 50% 30%, #E9C9A6, #B9733A 60%); }
+.btn.fire[data-state=pass] { font-size: 18px; background: radial-gradient(circle at 50% 30%, #fff, #CFCAC0 60%); }
+.btn.chip.doodad { border-style: dashed; }
+/* Notices, update chip, error screen, Workshop rows, screen reader text */
+.notice { position: fixed; left: 50%; bottom: calc(var(--sab, 0px) + 16px); transform: translateX(-50%); z-index: 100; max-width: min(92vw, 520px); background: var(--ink); color: #fff; border-radius: 14px; padding: 10px 16px; font: 600 15px var(--body, system-ui); text-align: center; }
+.update-chip { position: fixed; right: calc(var(--sar, 0px) + 12px); bottom: calc(var(--sab, 0px) + 12px); z-index: 90; display: flex; gap: 10px; align-items: center; background: var(--paper); border: 3px solid var(--ink); border-radius: 999px; padding: 4px 4px 4px 14px; font: 700 15px var(--title); }
+.screen.fatal { display: grid; place-items: center; min-height: 100vh; padding: 16px; background: var(--sky, #9ED8EC); }
+.screen.fatal .sheet { max-width: 420px; display: grid; gap: 12px; text-align: center; }
+.warn { background: #FFF0C2; border: 2px solid var(--ink); border-radius: 12px; padding: 8px 12px; font-size: 14px; }
+.grid .gridrow { display: contents; }
+.grid .cell:focus-visible { outline: 3px solid var(--gold-dark); outline-offset: 1px; z-index: 1; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

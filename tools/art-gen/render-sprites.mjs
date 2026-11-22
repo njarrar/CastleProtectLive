@@ -1,10 +1,12 @@
 // Render assets/svg/*.svg to PNG at @1x and @2x, pack the atlases, and draw the contact sheet.
 // Needs Playwright chromium (same as render.mjs). Run gen-sprites.mjs first.
 //   node tools/art-gen/render-sprites.mjs            all steps
-//   node tools/art-gen/render-sprites.mjs sheet      only the contact sheet
+//   node tools/art-gen/render-sprites.mjs sheet      only the contact sheets and the previews
+//   node tools/art-gen/render-sprites.mjs anim       only the animation sheet and the previews
 import { createRequire } from 'module';
 import fs from 'fs';
 import path from 'path';
+import zlib from 'zlib';
 const require = createRequire(process.env.PLAYWRIGHT_ROOT || '/opt/node22/lib/node_modules/');
 const { chromium } = require('playwright');
 
@@ -74,7 +76,7 @@ if (only === 'all') {
 }
 
 // ---- contact sheet: every sprite at @2x on paper, grouped
-{
+if (only !== 'anim') {
   const order = ['blocks', 'fort', 'kettle', 'stompers', 'hobs', 'portraits', 'shells', 'icons', 'effects', 'ui', 'terrain', 'backgrounds', 'app'];
   let html = '';
   for (const grp of order) {
@@ -102,6 +104,187 @@ img{display:block;image-rendering:auto}figcaption{max-width:150px;margin:2px aut
   await openHtml(`<!doctype html><html><head><style>${css}</style></head><body><h1>Castle Protect v0.1 sprites</h1><div>${manifest.count} sprites, shown at @2x (small ones enlarged). Made by tools/art-gen.</div>${html}</body></html>`);
   await page.screenshot({ path: path.join(ASSETS, 'contact-sheet.png'), fullPage: true });
   console.log('contact sheet done');
+}
+
+// ---- animation contact sheet: every animation as a strip of frames in play order
+const ANIM = JSON.parse(fs.readFileSync(path.join(ASSETS, 'animations.json'), 'utf8'));
+const byName = Object.fromEntries(manifest.sprites.map(s => [s.name, s]));
+const CHECK = `background-color:#EADFC6;background-image:linear-gradient(45deg,#DCCFB2 25%,transparent 25%,transparent 75%,#DCCFB2 75%),linear-gradient(45deg,#DCCFB2 25%,transparent 25%,transparent 75%,#DCCFB2 75%);background-size:16px 16px;background-position:0 0,8px 8px`;
+{
+  const SECT = [['Hobs', k => k.startsWith('hob_')], ['Fort', k => /^(stomper|kettle|fx_kettle|loophole|pot_lid)/.test(k)], ['Collapse pieces', k => /^fx_(crack|chunk|dustcloud|rubble)/.test(k)], ['Shots and effects', k => k.startsWith('fx_')], ['UI motion', k => k.startsWith('ui_')]];
+  const seen = new Set();
+  let html = '';
+  for (const [title, test] of SECT) {
+    const keys = Object.keys(ANIM.animations).filter(k => !seen.has(k) && test(k));
+    keys.forEach(k => seen.add(k));
+    html += `<h2>${title} (${keys.length} animations)</h2><div class="row">`;
+    let last = '';
+    for (const k of keys) {
+      const a = ANIM.animations[k];
+      const w = a.w * 2, h = a.h * 2;
+      const z = title === 'Hobs' ? .6 : w < 40 ? 3 : w < 80 ? 2 : 1;
+      // one line per Hob and team
+      const who = title === 'Hobs' ? k.split('_').slice(0, 3).join('_') : '';
+      if (who && who !== last) { html += `</div><h3>${who}</h3><div class="row">`; last = who; }
+      const cells = a.frames.map((n, i) => `<div class="cell${a.events && Object.values(a.events).includes(i) ? ' ev' : ''}" style="width:${w * z}px;height:${h * z}px"><img src="file://${path.join(ASSETS, byName[n].files['2x'])}" style="width:${w * z}px;height:${h * z}px"></div>`).join('');
+      const total = a.ms.reduce((x, y) => x + y, 0);
+      html += `<figure><div class="strip">${cells}</div><figcaption>${who ? k.slice(who.length + 1) : k} · ${a.pick ? 'pick by ' + a.pick : total + ' ms'}${a.loop ? ' loop' : ''}</figcaption></figure>`;
+    }
+    html += '</div>';
+  }
+  const css = `body{margin:0;padding:24px;background:#FFF4DE;font:11px/1.2 sans-serif;color:#2B1E2E;width:2352px}
+h1{font-size:28px;margin:0 0 4px}h2{font-size:18px;margin:22px 0 8px;border-bottom:2px dashed #D9952B;padding-bottom:4px}h3{font-size:12px;margin:10px 0 3px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}figure{margin:0;text-align:center}.strip{display:flex;gap:2px}
+.cell{${CHECK};border-radius:4px;overflow:hidden;box-sizing:content-box;border-bottom:3px solid transparent}.cell.ev{border-bottom-color:#E5484D}
+img{display:block}figcaption{margin:2px auto 0;opacity:.8;font-size:9px}`;
+  await page.setViewportSize({ width: 2400, height: 1200 });
+  await openHtml(`<!doctype html><html><head><style>${css}</style></head><body><h1>Castle Protect animation frames</h1><div>${ANIM.count} animations from animations.json, frames in play order. A red bar marks a frame with an event. Made by tools/art-gen.</div>${html}</body></html>`);
+  await page.screenshot({ path: path.join(ASSETS, 'contact-sheet-anim.png'), fullPage: true });
+  console.log('animation contact sheet done');
+}
+
+// ---- previews: animated PNG (APNG) files in assets/previews/. Any browser plays them
+{
+  const PRE = path.join(ASSETS, 'previews');
+  fs.rmSync(PRE, { recursive: true, force: true });
+  fs.mkdirSync(PRE, { recursive: true });
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const crc = Buffer.alloc(4); crc.writeUInt32BE(zlib.crc32(td) >>> 0); return Buffer.concat([len, td, crc]); };
+  const parse = (buf) => { const out = []; let p = 8; while (p < buf.length) { const len = buf.readUInt32BE(p); out.push({ type: buf.toString('latin1', p + 4, p + 8), data: buf.subarray(p + 8, p + 8 + len) }); p += 12 + len; } return out; };
+  // frames: [{ png: Buffer, ms }], all the same size
+  const apng = (frames) => {
+    const first = parse(frames[0].png), ihdr = first.find(c => c.type === 'IHDR').data;
+    const parts = [Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr)];
+    const actl = Buffer.alloc(8); actl.writeUInt32BE(frames.length, 0); actl.writeUInt32BE(0, 4);
+    parts.push(chunk('acTL', actl));
+    let seq = 0;
+    frames.forEach((fr, i) => {
+      const ch = i ? parse(fr.png) : first;
+      if (!ch.find(c => c.type === 'IHDR').data.equals(ihdr)) throw new Error('preview frames differ in size or type');
+      const fc = Buffer.alloc(26); fc.writeUInt32BE(seq++, 0); fc.writeUInt32BE(ihdr.readUInt32BE(0), 4); fc.writeUInt32BE(ihdr.readUInt32BE(4), 8); fc.writeUInt16BE(Math.round(fr.ms), 20); fc.writeUInt16BE(1000, 22);
+      parts.push(chunk('fcTL', fc));
+      for (const c of ch) if (c.type === 'IDAT') { if (!i) parts.push(chunk('IDAT', c.data)); else { const sq = Buffer.alloc(4); sq.writeUInt32BE(seq++); parts.push(chunk('fdAT', Buffer.concat([sq, c.data]))); } }
+    });
+    parts.push(chunk('IEND', Buffer.alloc(0)));
+    return Buffer.concat(parts);
+  };
+  const img = (name, x, y, z, extra = '') => { const s = byName[name]; return `<img src="file://${path.join(ASSETS, s.files['2x'])}" style="left:${x - s.anchor[0] * z}px;top:${y - s.anchor[1] * z}px;width:${s.w * z}px;height:${s.h * z}px;${extra}">`; };
+  const cache = new Map();
+  const snap = async (w, h, html) => {
+    const key = w + 'x' + h + html;
+    if (!cache.has(key)) {
+      await page.setViewportSize({ width: w, height: h });
+      await openHtml(`<!doctype html><html><head><style>html,body{margin:0;overflow:hidden;background:#FFF4DE}img,div{position:absolute;display:block}</style></head><body>${html}</body></html>`);
+      cache.set(key, await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h } }));
+    }
+    return cache.get(key);
+  };
+  // steps of a chain of animations: [[sprite, ms], ...]. A loop plays `loops` times
+  const chain = (keys, loops = 2) => {
+    const st = [];
+    for (const k of keys) {
+      const a = ANIM.animations[k];
+      if (!a) { st.push([k, 500]); continue; }   // a plain sprite name: hold it
+      const lf = a.loop ? (a.loop_from || 0) : a.frames.length;
+      for (let i = 0; i < lf; i++) st.push([a.frames[i], a.ms[i]]);
+      if (a.loop) for (let n = 0; n < loops; n++) for (let i = lf; i < a.frames.length; i++) st.push([a.frames[i], a.ms[i]]);
+      if (a.hold) st.push([a.hold, 500]);
+    }
+    return st;
+  };
+  // side by side columns, each a chain. z = screen px per @1x px
+  const columns = async (file, cols, z, loops) => {
+    const chains = cols.map(c => chain(c, loops));
+    let up = 0, down = 0, x = 12;
+    const xs = [];
+    for (const ch of chains) {
+      let l = 0, r = 0;
+      for (const [n] of ch) { const s = byName[n]; l = Math.max(l, s.anchor[0]); r = Math.max(r, s.w - s.anchor[0]); up = Math.max(up, s.anchor[1]); down = Math.max(down, s.h - s.anchor[1]); }
+      xs.push(x + l * z); x += (l + r) * z + 12;
+    }
+    const W = Math.ceil(x), H = Math.ceil((up + down) * z + 24), y0 = 12 + up * z;
+    const tot = chains.map(ch => ch.reduce((a, [, ms]) => a + ms, 0)), T = Math.max(...tot);
+    const cuts = new Set([0]);
+    chains.forEach((ch, i) => { for (let t0 = 0; t0 < T; t0 += tot[i]) { let t = t0; for (const [, ms] of ch) { if (t < T) cuts.add(t); t += ms; } } });
+    const ts = [...cuts].sort((a, b) => a - b);
+    const at = (ch, total, t) => { let u = t % total; for (const [n, ms] of ch) { if (u < ms) return n; u -= ms; } return ch[ch.length - 1][0]; };
+    const frames = [];
+    for (let i = 0; i < ts.length; i++) {
+      const html = `<div style="left:0;top:${y0}px;width:${W}px;height:2px;background:#D9952B;opacity:.5"></div>` + chains.map((ch, c) => img(at(ch, tot[c], ts[i]), xs[c], y0, z)).join('');
+      frames.push({ png: await snap(W, H, html), ms: (ts[i + 1] ?? T) - ts[i] });
+    }
+    fs.writeFileSync(path.join(PRE, file), apng(frames));
+    console.log('preview', file, frames.length, 'frames');
+  };
+  const track = (tr, t) => { if (t <= tr[0][0]) return tr[0][1]; for (let i = 1; i < tr.length; i++) if (t <= tr[i][0]) { const [t0, v0] = tr[i - 1], [t1, v1] = tr[i]; return v0 + (v1 - v0) * (t - t0) / (t1 - t0); } return tr[tr.length - 1][1]; };
+  const frameAt = (a, t, loop = true) => { const total = a.ms.reduce((x, y) => x + y, 0); let u = loop ? t % total : Math.min(t, total - 1); for (let i = 0; i < a.ms.length; i++) { if (u < a.ms[i]) return i; u -= a.ms[i]; } return a.ms.length - 1; };
+
+  const H = (h, t, list) => [list.map(n => `hob_${h}_${t}_${n}`)].flat();
+  await columns('hobs_fire.png', ['marge', 'thumper', 'quill', 'jax', 'nan', 'grub', 'bobbin', 'hetty'].map((h, i) => H(h, i % 2 ? 'orange' : 'blue', ['idle', 'fire', 'idle'])), 2, 1);
+  await columns('hob_idle_hit_bonked.png', [H('quill', 'orange', ['idle', 'hit', 'bonked'])], 3, 3);
+  await columns('hob_tumble_land.png', [H('grub', 'blue', ['tumble', 'land', 'idle'])], 3, 3);
+  await columns('hob_cheer.png', [H('bobbin', 'orange', ['cheer', 'idle']), H('marge', 'blue', ['cheer', 'idle'])], 3, 1);
+  await columns('hob_dig_nextdoor.png', [H('hetty', 'blue', ['dig', 'idle']), H('nan', 'orange', ['nextdoor']), H('thumper', 'blue', ['nextdoor'])], 3, 2);
+  await columns('kettle_pop.png', [['kettle_critical', 'kettle_pop']], 5, 1);
+  await columns('fort_parts.png', [['fx_kettle_steam'], ['loophole_open', 'loophole_flap_blue_close'], ['loophole_open', 'loophole_flap_orange_close'], ['pot_lid_raise']], 6, 3);
+  await columns('collapse_pieces.png', [['fx_crack_cobble'], ['fx_chunk_cobble'], ['fx_chunk_timber'], ['fx_chunk_wicker'], ['fx_rubble_cobble'], ['fx_rubble_wicker'], ['fx_dustcloud']], 6, 3);
+  await columns('trails.png', ['blast', 'pierce', 'dig', 'fire', 'mend'].map(n => ['fx_trail_' + n]), 8, 1);
+  await columns('effects.png', [['fx_impact_cobble'], ['fx_impact_wicker'], ['fx_impact_dirt'], ['fx_splash'], ['fx_fizz_bubble', 'fx_fizz_pop'], ['fx_squall'], ['fx_wind_leaf'], ['fx_pin_p1_drop'], ['fx_pin_p2_drop'], ['fx_ghost_dot_p1_pulse'], ['fx_ghost_dot_p2_pulse'], ['fx_shimmer']], 5, 3);
+  await columns('ui_motion.png', [['ui_fire', 'ui_fire_press'], ['ui_pennant_empty', 'ui_pennant_earn'], ['ui_button_coin_spin'], ['ui_handoff_flip']], 3, 3);
+
+  // fort walk: a small fort on four Stompers, moved by data.fort_bob. Shows how the data is used
+  {
+    const z = 4, W = 420, Hh = 420, gx = 100, ground = 360, hipY = ground - (30 - 4.57) * z + 2;
+    const bob = ANIM.data.fort_bob, wa = ANIM.animations.stomper_blue_walk, frames = [];
+    const rows = [['timber', 'timber', 'timber'], ['cobble', 'cobble', 'cobble'], ['footing', 'footing', 'footing']];
+    for (let i = 0; i < 12; i++) {
+      const fi = i % 6, t = i * bob.frame_ms;
+      let body = '';
+      rows.forEach((r, ry) => r.forEach((m, cx) => { body += img(`block_${m}_fresh`, cx * 16 * z, ry * 16 * z, z); }));
+      body += img('hob_marge_blue_idle_' + [0, 1, 0, 3][Math.floor(t / 400) % 4], 24 * z, 0, 24 / 50 * z) + img('flag_blue', 2 * z, 0, z);
+      let html = `<div style="left:0;top:${ground}px;width:${W}px;height:${Hh - ground}px;background:#7CC46A"></div>`;
+      // ground marks slide back so the fort reads as walking on the spot
+      for (let k = 0; k < 6; k++) html += `<div style="left:${((k * 80 - i * 13) % 480 + 480) % 480 - 30}px;top:${ground + 14}px;width:26px;height:5px;border-radius:3px;background:#5AA555"></div>`;
+      for (const [hx, ph, back] of [[10, 3, true], [38, 0, true], [10, 0, false], [38, 3, false]]) html += img(`stomper_blue_walk_${(fi + ph) % 6}`, gx + hx * z, hipY + bob.dy[fi] * z * .5, z, back ? 'filter:brightness(.7)' : '');
+      html += `<div style="left:${gx}px;top:${hipY - 48 * z + 4 + bob.dy[fi] * z}px;width:${48 * z}px;height:${48 * z}px;transform-origin:50% 100%;transform:rotate(${bob.tilt[fi]}deg)">${body}</div>`;
+      if (bob.stomp_frames.includes(fi)) html += img('fx_dust_0', gx + (fi ? 12 : 54) * z, ground - 4, z * .8);
+      frames.push({ png: await snap(W, Hh, html), ms: bob.frame_ms });
+    }
+    fs.writeFileSync(path.join(PRE, 'fort_walk.png'), apng(frames));
+    console.log('preview fort_walk.png');
+  }
+  // collapse: creak, lean, staggered drop, land, break. Driven by data.collapse
+  {
+    const z = 5, W = 420, Hh = 460, x0 = 150, floor = 400, c = ANIM.data.collapse, m = 'cobble', frames = [];
+    const fall = 32 * z, T0 = 300, T1 = T0 + c.lean.ms, step = 40, end = 2300;
+    for (let t = 0; t < end; t += step) {
+      let html = `<div style="left:0;top:${floor}px;width:${W}px;height:${Hh - floor}px;background:#9A6440"></div>`;
+      html += img('block_footing_fresh', x0 - 16 * z, floor - 16 * z, z) + img('block_footing_fresh', x0, floor - 16 * z, z) + img('block_cobble_fresh', x0 - 16 * z, floor - 32 * z, z) + img('block_cobble_fresh', x0 - 16 * z, floor - 48 * z, z);
+      // two blocks hang over a gap. Row 0 is the lower one and lets go first
+      for (let r = 0; r < 2; r++) {
+        const start = T1 + r * c.drop.row_gap_ms, restY = floor - 16 * z - 16 * z * (r + 1), dur = 260 + r * 20;
+        const u = Math.min(1, Math.max(0, (t - start) / dur)), y = restY - fall + fall * u * u, landed = t - (start + dur);
+        const sh = t < T0 ? track(c.creak.shiver_x, t) * z : 0, wob = t < T0 ? track(c.wobble_deg[m], t) : 0;
+        const lean = t >= T0 && landed < 0 ? c.lean.deg[m] * track(c.lean.track, t - T0) : 0;
+        const breakAt = 60;
+        if (landed < breakAt) {
+          const sq = landed >= 0 ? track(c.land.squash_y, landed) : 1;
+          html += `<div style="left:${x0 + 16 * z + sh}px;top:${y}px;width:${16 * z}px;height:${16 * z}px;transform-origin:0% 100%;transform:rotate(${wob + lean}deg) scaleY(${sq})">${img(`block_${m}_${r ? 'scuffed' : 'battered'}`, 0, 0, z)}${t < T1 ? img(`fx_crack_${m}_${Math.min(2, Math.floor(t / 100))}`, 0, 0, z) : ''}</div>`;
+        } else {
+          const b = landed - breakAt, ra = ANIM.animations[`fx_rubble_${m}`], bx = x0 + 16 * z, by = floor - 16 * z * (r + 1);
+          if (r === 0 && b < 1500 + 270) html += img(b < 240 ? ra.frames[frameAt(ra, b, false)] : ra.hold, bx, by + 16 * z * 0, z, `opacity:${b > 1400 ? Math.max(0, 1 - (b - 1400) / 300) : 1}`);
+          if (b < c.break.ms + 150) for (let k = 0; k < c.break.chunks_per_block[m]; k++) {
+            const vx = (k - 1.5) * 34 + r * 12, v = b / 1000, ca = ANIM.animations[`fx_chunk_${m}`];
+            html += img(ca.frames[(frameAt(ca, b) + k) % 4], bx + 8 * z + vx * v * z, by + 8 * z + (-70 * v + 260 * v * v) * z * (1 + k * .15), z);
+          }
+          const da = ANIM.animations.fx_dustcloud;
+          if (r === 0 && b < 450) html += img(da.frames[frameAt(da, b, false)], bx + 8 * z, floor, z * c.break.dust_scale[m]);
+        }
+      }
+      frames.push({ png: await snap(W, Hh, html), ms: step });
+    }
+    fs.writeFileSync(path.join(PRE, 'collapse.png'), apng(frames));
+    console.log('preview collapse.png', frames.length, 'frames');
+  }
 }
 fs.rmSync(TMP, { force: true });
 await browser.close();

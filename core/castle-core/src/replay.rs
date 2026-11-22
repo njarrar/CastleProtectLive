@@ -56,6 +56,46 @@ pub fn auto(b: &mut Battle, turns: i32) {
     }
 }
 
+/// Apply a command log to a battle, stepping tick by tick between commands
+/// exactly as a live app does (every command is sent in `draft` or `plan`;
+/// `give_up` carries the tick it was sent on). Returns the index and the
+/// reply of the first entry the battle refused.
+pub fn replay_log(b: &mut Battle, log: &[Value]) -> Result<(), (usize, Value)> {
+    for (i, c) in log.iter().enumerate() {
+        if c["cmd"] == "give_up" {
+            if let Some(t) = c["tick"].as_i64() {
+                while b.tick < t && matches!(b.phase, Phase::Resolve | Phase::Settle(_)) {
+                    b.step(1);
+                }
+            }
+        } else {
+            b.run_until_plan(1_000_000);
+        }
+        let mut cmd = c.clone();
+        if let Some(o) = cmd.as_object_mut() {
+            o.remove("tick");
+        }
+        let r = b.command(&cmd);
+        if r["ok"] != serde_json::json!(true) {
+            return Err((i, r));
+        }
+    }
+    b.run_until_plan(1_000_000);
+    Ok(())
+}
+
+/// Build a battle from its setup, seed and command log (a save).
+pub fn from_log(
+    content: Arc<Content>,
+    setup: &str,
+    seed: u64,
+    log: &[Value],
+) -> Result<Battle, String> {
+    let mut b = Battle::new(content, setup, seed)?;
+    replay_log(&mut b, log).map_err(|(i, r)| format!("log entry {i} refused: {r}"))?;
+    Ok(b)
+}
+
 /// "<name> <hash>" lines for every golden replay.
 pub fn golden_lines() -> String {
     let content = Arc::new(crate::embedded::content());

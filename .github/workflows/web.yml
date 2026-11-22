@@ -19,6 +19,15 @@ on:
       - "scripts/build-wasm.sh"
       - "scripts/setup-rust.sh"
       - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "core/**"
+      - "content/**"
+      - "assets/**"
+      - "apps/web/**"
+      - "scripts/build-wasm.sh"
+      - "scripts/setup-rust.sh"
+      - ".github/workflows/web.yml"
   workflow_dispatch:
 
 permissions:
@@ -28,17 +37,21 @@ concurrency:
   group: web-${{ github.ref }}
   cancel-in-progress: true
 
+# The Rust toolchain comes from core/rust-toolchain.toml and the wasm-bindgen CLI version
+# from core/Cargo.lock (scripts/setup-rust.sh and scripts/build-wasm.sh read them), so no
+# version is pinned here.
 env:
-  RUST_VERSION: "1.99.1"
   NODE_VERSION: "22"
-  # Used only if core/Cargo.lock has no wasm-bindgen entry; the lock wins.
-  WASM_BINDGEN_VERSION: "0.2.130"
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Pages serves the site under /<repo name>/. Set for the whole job so the build, vite
+    # preview and the Playwright baseURL all use the same base.
+    env:
+      VITE_BASE: /${{ github.event.repository.name }}/
     outputs:
       built: ${{ steps.check.outputs.web }}
     steps:
@@ -70,6 +83,10 @@ jobs:
         with:
           workspaces: core -> target
 
+      - name: Install wasm-opt
+        if: steps.check.outputs.wasm == 'true'
+        run: sudo apt-get install -y --no-install-recommends binaryen || echo "::warning::binaryen not installed, the wasm ships without wasm-opt."
+
       - name: Build castle-wasm
         if: steps.check.outputs.wasm == 'true'
         run: scripts/build-wasm.sh --target web
@@ -100,9 +117,6 @@ jobs:
       - name: Build
         if: steps.check.outputs.web == 'true'
         working-directory: apps/web
-        env:
-          # Pages serves the site under /<repo name>/.
-          VITE_BASE: /${{ github.event.repository.name }}/
         run: npm run build
 
       - name: Playwright smoke test
@@ -155,9 +169,6 @@ jobs:
       (github.ref == 'refs/heads/castle-protect-plan' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Pages may be off or unavailable (private repo on a free plan). Do not turn
-    # the whole run red for that; the web-dist artifact is the fallback.
-    continue-on-error: true
     permissions:
       pages: write
       id-token: write
@@ -168,6 +179,13 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Pages may be off or unavailable (private repo on a free plan). The run stays green
+      # for that, but the failure shows as a warning, not hidden; web-dist is the fallback.
       - name: Deploy to GitHub Pages
         id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@v5
+
+      - name: Report a failed deploy
+        if: steps.deployment.outcome == 'failure'
+        run: echo "::warning title=Pages deploy failed::The site was not deployed. Download the web-dist artifact from this run (see docs/RELEASE.md)."

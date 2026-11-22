@@ -132,6 +132,11 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     const [, floorY] = toScreen(r, cam, 0, 0);
     ctx.fillStyle = '#9A6440';
     if (floorY < r.y + r.h) ctx.fillRect(r.x, floorY - 1, r.w, r.y + r.h - floorY + 1);
+    // past the left and right map ends: carry the edge ground level on, so no sky gap shows
+    const [lx] = toScreen(r, cam, 0, 0);
+    const [rx] = toScreen(r, cam, terr.w, 0);
+    if (lx > r.x) { const [, gy] = toScreen(r, cam, 0, terr.tops[0] ?? 0); ctx.fillRect(r.x, gy, lx - r.x + 1, r.y + r.h - gy); }
+    if (rx < r.x + r.w) { const [, gy] = toScreen(r, cam, 0, terr.tops[terr.w - 1] ?? 0); ctx.fillRect(rx - 1, gy, r.x + r.w - rx + 1, r.y + r.h - gy); }
   }
 
   // ghosts and pins under the forts
@@ -625,6 +630,12 @@ export function drawStrip(ctx: CanvasRenderingContext2D, r: Rect, snap: Snapshot
     if (i === 0) { ctx.fillRect(wx(f.x), wy(f.y + f.h) , Math.max(6, f.w * sx), Math.max(6, f.h * sy)); ctx.strokeRect(wx(f.x), wy(f.y + f.h), Math.max(6, f.w * sx), Math.max(6, f.h * sy)); }
     else { diamond(ctx, wx(f.x + f.w / 2), wy(f.y + f.h / 2), Math.max(5, f.h * sy * 0.6)); ctx.fill(); ctx.stroke(); }
   });
+  // level objects (the 1-7 cage and captive): small marks, so the goal shows in portrait too
+  for (const p of snap.props ?? []) {
+    ctx.fillStyle = p.kind === 'captive' ? '#2FB7A6' : INK;
+    if (p.kind === 'cage_bar') ctx.fillRect(wx(p.x) - 1, wy(p.y + 40), 2, Math.max(4, 40 * sy));
+    else { ctx.beginPath(); ctx.arc(wx(p.x), wy(p.y + 12), 3, 0, Math.PI * 2); ctx.fill(); }
+  }
   for (const p of snap.pins.slice(-4)) {
     ctx.fillStyle = TEAM[p.side];
     if (p.side === you) { ctx.beginPath(); ctx.arc(wx(p.x), wy(p.y) - 4, 3, 0, Math.PI * 2); ctx.fill(); }

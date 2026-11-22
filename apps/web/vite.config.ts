@@ -5,9 +5,10 @@ import { resolve } from 'node:path';
 
 const here = import.meta.dirname;
 
-// The core is built to WebAssembly by scripts/build-wasm.sh (wasm-pack, target web).
+// The core is built to WebAssembly by scripts/build-wasm.sh (cargo + wasm-bindgen, target web).
 // We look for its pkg folder and copy it to public/core so the app can load it at
-// runtime from `core/castle_wasm.js`. With no pkg the app falls back to the mock core.
+// runtime from `core/castle_wasm.js`. There is no stand-in core in a production build, so
+// `vite build` fails when no pkg is found (set CASTLE_ALLOW_NO_CORE=1 to build anyway).
 const wasmCandidates = [
   process.env.CASTLE_WASM_PKG,
   resolve(here, '../../core/castle-wasm/pkg'),
@@ -20,12 +21,12 @@ const artCandidates = [process.env.CASTLE_ASSETS, resolve(here, '../../assets')]
   (p): p is string => !!p,
 );
 
-function copyFirst(cands: string[], dest: string, label: string, keep: (rel: string) => boolean = () => true): void {
+function copyFirst(cands: string[], dest: string, label: string, keep: (rel: string) => boolean = () => true): boolean {
   const src = cands.find((p) => existsSync(p));
   rmSync(dest, { recursive: true, force: true });
   if (!src) {
     console.log(`[castle] no ${label} found, skipping`);
-    return;
+    return false;
   }
   mkdirSync(dest, { recursive: true });
   cpSync(src, dest, {
@@ -37,22 +38,27 @@ function copyFirst(cands: string[], dest: string, label: string, keep: (rel: str
     },
   });
   console.log(`[castle] copied ${label} from ${src}`);
+  return true;
 }
 
 function castleCopy(): Plugin {
   let done = false;
-  const run = () => {
+  const run = (command: string) => {
     if (done) return;
     done = true;
-    copyFirst(wasmCandidates, resolve(here, 'public/core'), 'wasm core pkg');
+    // Only the js glue and the wasm: no .d.ts files in the shipped build.
+    const haveCore = copyFirst(wasmCandidates, resolve(here, 'public/core'), 'wasm core pkg', (rel) => !rel.endsWith('.d.ts') && rel !== 'package.json');
+    if (!haveCore && command === 'build' && !process.env.CASTLE_ALLOW_NO_CORE) {
+      throw new Error('[castle] no wasm core pkg found. Run scripts/build-wasm.sh first (or set CASTLE_ALLOW_NO_CORE=1).');
+    }
     // Only what the web build draws: the manifest, the @2x atlas pages, and the
     // separate textures (backgrounds, terrain tiles, app icons). Keeps the offline cache small.
     copyFirst(artCandidates, resolve(here, 'public/art'), 'art assets', (rel) =>
       rel === 'manifest.json' || rel === 'atlas' || rel === 'sprites' ||
       /^atlas\/castle@2x/.test(rel) ||
-      /^sprites\/(bg_\w+@2x|terrain_\w+|app_icon-\d+)\.png$/.test(rel));
+      /^sprites\/(bg_\w+@2x|terrain_\w+|app_icon-(192|512))\.png$/.test(rel));
   };
-  return { name: 'castle-copy', config: run };
+  return { name: 'castle-copy', config: (_c, env) => run(env.command) };
 }
 
 export default defineConfig({
@@ -60,7 +66,8 @@ export default defineConfig({
   plugins: [
     castleCopy(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': a new version waits; the app offers "Update" on the title or map, never mid fight.
+      registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icon.svg'],
       manifest: {
@@ -87,7 +94,8 @@ export default defineConfig({
       },
     }),
   ],
-  build: { target: 'es2022', sourcemap: true },
-  server: { port: 5173 },
+  build: { target: 'es2022', sourcemap: false },
+  // content/app.json is imported from outside the app folder.
+  server: { port: 5173, fs: { allow: [resolve(here, '../..')] } },
   preview: { port: 4173 },
 });

@@ -4,7 +4,6 @@
 //! error that narrows shot by shot. All work is counted in work units (one
 //! unit is one actor tick), never in time.
 
-use crate::actor::Hit;
 use crate::battle::{Battle, Control, Phase};
 use crate::content::{FlightKind, ShotKind, Weight};
 use crate::math::*;
@@ -140,8 +139,10 @@ struct Cand {
 }
 
 impl Battle {
-    /// What `side` may know: the other side's hand, Doodads and live aims are
-    /// wiped. Everything else on the field is public.
+    /// What `side` may know: the other side's hand, Doodads, draft picks,
+    /// live aims, memory and random streams are wiped, and so are the Weather
+    /// Fronts past the forecast and the Squall direction. Everything else on
+    /// the field is public. The view is quiet (no events) and has no log.
     pub fn knowledge(&self, side: u8) -> Battle {
         let mut k = self.clone();
         let o = 1 - side as usize;
@@ -156,9 +157,25 @@ impl Battle {
         }
         k.sel[o].shot = "plain".into();
         k.ai_mem[o] = AiMemory::default();
+        k.rng.ai[o] = crate::rng::Sfc32::new(0, "hidden");
+        k.rng.battle = crate::rng::Sfc32::new(0, "hidden");
+        k.rng.hazard = crate::rng::Sfc32::new(0, "hidden");
+        let fr = k.rules.wind.front_rounds.max(1);
+        let known = ((k.round - 1).max(0) / fr + 1) as usize;
+        for (i, f) in k.fronts.iter_mut().enumerate() {
+            if i > known {
+                *f = 0;
+            }
+        }
+        k.squall_dir = 1;
         k.events.clear();
-        k.log.clear();
+        k.log = std::sync::Arc::new(vec![]);
+        k.last_ai.clear();
+        k.quiet = true;
+        // keep own preset (Cozy never Threads); the other side reads as human
+        let own = k.control[side as usize];
         k.control = [Control::Human, Control::Human];
+        k.control[side as usize] = own;
         k
     }
 }
@@ -254,71 +271,82 @@ fn targets(k: &Battle, side: u8, units: &mut i64) -> Vec<(i32, i32, i32)> {
     t
 }
 
-/// Find the best angle and power for a probe to land at (tx, ty).
-fn solve_aim(
+/// Aim a beam straight at the target.
+fn beam_aim(w: &Battle, hob: u8, tx: i32, ty: i32) -> (i32, i32, i32) {
+    let (lx, ly) = w.launch_point(hob);
+    let a = atan2_t((ly - ty) as i64, (tx - lx) as i64);
+    (a.clamp(0, 1800), 80, 0)
+}
+
+/// Power for a probe at `angle` to land near (tx, ty): a few probes, each
+/// rescaling power by the square root of wanted over reached range (range
+/// grows about with the square of speed). Returns (power, miss in cells).
+fn quick_solve(
     w: &Battle,
     side: u8,
     hob: u8,
     shot: usize,
+    angle: i32,
     tx: i32,
     ty: i32,
     units: &mut i64,
     budget: i64,
-) -> Option<(i32, i32, i32)> {
-    let def = &w.content.shots[shot];
-    let (lx, ly) = w.launch_point(hob);
+) -> Option<(i32, i32)> {
+    let (lx, _) = w.launch_point(hob);
     let front = w.castles[side as usize].front_dir();
-    if def.flight.kind == FlightKind::Beam {
-        let a = atan2_t((ly - ty) as i64, (tx - lx) as i64);
-        return Some((a.clamp(0, 1800), 80, 0));
-    }
-    let angles: &[i32] =
-        if def.flight.kind == FlightKind::Roller || def.flight.kind == FlightKind::Dig {
-            &[150, 300, 450]
+    let want = ((tx - lx) * front).max(8) as i64;
+    let mut p: i32 = 60;
+    let mut best: Option<(i32, i32)> = None;
+    let mut tried: Vec<i32> = vec![];
+    for _ in 0..4 {
+        if *units > budget || tried.contains(&p) {
+            break;
+        }
+        tried.push(p);
+        let a = w.aim_probe(side, hob, shot, angle, p);
+        let (_, end, _) = w.probe_path(a, 600, false, units);
+        let miss = isqrt(((end.0 - tx) as i64).pow(2) as u64 + ((end.1 - ty) as i64).pow(2) as u64)
+            as i32;
+        if best.is_none_or(|b| miss < b.1) {
+            best = Some((p, miss));
+        }
+        if miss <= 6 {
+            break;
+        }
+        let reach = ((end.0 - lx) * front) as i64;
+        let np = if reach <= 4 {
+            p + 30
         } else {
-            &[250, 400, 550, 700]
+            (p as i64 * isqrt((want * 10_000 / reach) as u64) as i64 / 100) as i32
         };
-    let mut best: Option<(i32, i32, i32)> = None;
-    for &a0 in angles {
-        let angle = if front > 0 { a0 } else { 1800 - a0 };
-        let (mut lo, mut hi) = (5, 100);
-        let mut local: Option<(i32, i32)> = None;
-        for _ in 0..7 {
-            if *units > budget {
-                break;
-            }
-            let p = (lo + hi) / 2;
-            let a = w.aim_probe(side, hob, shot, angle, p);
-            let (_, end, hit) = w.probe_path(a, 700, false, units);
-            let reach = (end.0 - lx) * front;
-            let want = (tx - lx) * front;
-            let miss = ((end.0 - tx).pow(2) as i64 + (end.1 - ty).pow(2) as i64) as u64;
-            let miss = isqrt(miss) as i32;
-            if local.is_none_or(|l| miss < l.1) {
-                local = Some((p, miss));
-            }
-            let short = match hit {
-                Some(Hit::Block { side: s, .. }) | Some(Hit::Kettle(s)) if s != side => {
-                    reach < want - 4
-                }
-                _ => reach < want,
-            };
-            if short {
-                lo = p + 1;
-            } else {
-                hi = p - 1;
-            }
-            if lo > hi {
-                break;
-            }
-        }
-        if let Some((p, miss)) = local {
-            if best.is_none_or(|b| miss < b.2) {
-                best = Some((angle, p, miss));
-            }
-        }
+        p = np.clamp(5, 100);
     }
     best
+}
+
+/// Flight signature: shots that fly the same share one aim solution.
+fn flight_sig(w: &Battle, shot: usize) -> (i32, i32, i32, i32, i32) {
+    let f = &w.content.shots[shot].flight;
+    let kind = match f.kind {
+        FlightKind::Beam => 1,
+        FlightKind::Roller => 2,
+        FlightKind::Dig => 3,
+        FlightKind::Bounce => 4,
+        _ => 0,
+    };
+    (kind, f.speed_pct, f.gravity_pct, f.wind_pct, f.guide_tenths)
+}
+
+fn angles_for(kind: i32, front: i32, first: bool) -> Vec<i32> {
+    let base: &[i32] = match (kind, first) {
+        (2, true) | (3, true) => &[250],
+        (2, false) | (3, false) => &[150, 400],
+        (_, true) => &[450],
+        (_, false) => &[300, 620],
+    };
+    base.iter()
+        .map(|&a| if front > 0 { a } else { 1800 - a })
+        .collect()
 }
 
 /// Run one candidate through the real sim on a copy of the knowledge view.
@@ -344,8 +372,8 @@ fn sim_candidate(
     if r["ok"] != json!(true) {
         return None;
     }
-    let n = w.run_until_plan(3000);
-    *units += n as i64 * (1 + w.actors.len() as i64) + 50;
+    let n = w.run_until_plan_fast(3000);
+    *units += n as i64 * (1 + w.actors.len() as i64) + 200;
     Some(w)
 }
 
@@ -405,6 +433,30 @@ pub fn draft_choice(b: &Battle, side: u8) -> Option<String> {
 
 /// Plan a whole turn for `side`. Returns the commands, same format as a player.
 pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
+    let budget = tuning(preset).budget;
+    plan_turn_with(b, side, preset, budget, true)
+}
+
+#[derive(Clone, Debug)]
+struct Rough {
+    hob: u8,
+    sig: (i32, i32, i32, i32, i32),
+    shot_ix: usize,
+    key: i32,
+    tx: i32,
+    ty: i32,
+    angle: i32,
+    power: i32,
+    miss: i32,
+}
+
+fn plan_turn_with(
+    b: &mut Battle,
+    side: u8,
+    preset: Preset,
+    budget: i64,
+    allow_walk: bool,
+) -> Vec<Value> {
     let t = tuning(preset);
     let s = side as usize;
     let mut out: Vec<Value> = vec![];
@@ -435,15 +487,23 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
     // world used to solve aims: Cozy only half reads the wind
     let mut solve_world = k.clone();
     solve_world.wind = solve_world.wind * t.wind_use / 100;
+    let front = k.castles[s].front_dir();
 
     let tg = targets(&k, side, &mut units);
-    let mut cands: Vec<Cand> = vec![];
-    let hobs: Vec<u8> = k
+    let mut hobs: Vec<u8> = k
         .hobs
         .iter()
         .filter(|h| h.side == side && k.can_fire_hob(side, h.id))
         .map(|h| h.id)
         .collect();
+    // start from a Hob picked with the AI stream, then go round the crew
+    if hobs.len() > 1 {
+        let start = b.rng.ai[s].range(0, hobs.len() as i32 - 1) as usize;
+        hobs.rotate_left(start);
+    }
+    // the shots each Hob may fire: never a Dud, no Heavy on the first turn
+    let mut shots_of: Vec<(u8, Vec<(String, usize)>)> = vec![];
+    let mut self_cands: Vec<Cand> = vec![];
     for &h in &hobs {
         let hob = &k.hobs[h as usize];
         let mut shots: Vec<String> = vec!["plain".into()];
@@ -457,6 +517,7 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
                 }
             }
         }
+        let mut list = vec![];
         for sh in shots {
             let Some(id) = k.shot_for(h, &sh) else {
                 continue;
@@ -465,11 +526,14 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
                 continue;
             };
             let def = &k.content.shots[ix];
+            if def.dud {
+                continue;
+            }
             if def.weight == Weight::H && k.turns_taken[s] == 0 && side == k.first_side {
                 continue;
             }
             if def.flight.kind == FlightKind::SelfTarget {
-                cands.push(Cand {
+                self_cands.push(Cand {
                     hob: h,
                     shot: sh.clone(),
                     shot_ix: ix,
@@ -482,21 +546,90 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
                 });
                 continue;
             }
-            for &(key, tx, ty) in &tg {
-                if units > t.budget / 2 {
-                    break;
+            list.push((sh, ix));
+        }
+        shots_of.push((h, list));
+    }
+
+    // 1. rough aims, breadth first: every (Hob, flight) gets target 1, then
+    //    target 2, and so on, so the budget never goes to one Hob alone
+    let solve_budget = t.budget * 45 / 100;
+    let mut rough: Vec<Rough> = vec![];
+    let mut pairs: Vec<(u8, (i32, i32, i32, i32, i32), usize)> = vec![];
+    for (h, list) in &shots_of {
+        for (_, ix) in list {
+            let sig = flight_sig(&k, *ix);
+            if !pairs.iter().any(|p| p.0 == *h && p.1 == sig) {
+                pairs.push((*h, sig, *ix));
+            }
+        }
+    }
+    'targets: for &(key, tx, ty) in &tg {
+        for &(h, sig, ix) in &pairs {
+            if units > solve_budget.min(budget / 2) {
+                break 'targets;
+            }
+            let (a, p, miss) = if sig.0 == 1 {
+                beam_aim(&solve_world, h, tx, ty)
+            } else {
+                let a = angles_for(sig.0, front, true)[0];
+                match quick_solve(&solve_world, side, h, ix, a, tx, ty, &mut units, budget) {
+                    Some((p, m)) => (a, p, m),
+                    None => continue,
                 }
-                if let Some((a, p, miss)) =
-                    solve_aim(&solve_world, side, h, ix, tx, ty, &mut units, t.budget / 2)
-                {
+            };
+            rough.push(Rough {
+                hob: h,
+                sig,
+                shot_ix: ix,
+                key,
+                tx,
+                ty,
+                angle: a,
+                power: p,
+                miss,
+            });
+        }
+    }
+    // 2. refine the closest few with more angles
+    rough.sort_by_key(|r| (r.miss, r.hob, r.key));
+    let refine_budget = budget * 60 / 100;
+    for r in rough.iter_mut().take(6) {
+        if r.sig.0 == 1 || r.miss <= 8 {
+            continue;
+        }
+        for a in angles_for(r.sig.0, front, false) {
+            if units > refine_budget {
+                break;
+            }
+            if let Some((p, m)) =
+                quick_solve(&solve_world, side, r.hob, r.shot_ix, a, r.tx, r.ty, &mut units, budget)
+            {
+                if m < r.miss {
+                    r.angle = a;
+                    r.power = p;
+                    r.miss = m;
+                }
+            }
+        }
+    }
+    // every shot of the Hob that flies this way is a candidate
+    let mut cands: Vec<Cand> = self_cands;
+    for r in &rough {
+        for (h, list) in &shots_of {
+            if *h != r.hob {
+                continue;
+            }
+            for (sh, ix) in list {
+                if flight_sig(&k, *ix) == r.sig {
                     cands.push(Cand {
-                        hob: h,
+                        hob: r.hob,
                         shot: sh.clone(),
-                        shot_ix: ix,
-                        target: key,
-                        angle: a,
-                        power: p,
-                        miss,
+                        shot_ix: *ix,
+                        target: r.key,
+                        angle: r.angle,
+                        power: r.power,
+                        miss: r.miss,
                         score: 0,
                         dial: None,
                     });
@@ -504,20 +637,41 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
             }
         }
     }
-    // most likely first: small miss, cheap shells
+    // most likely first: small miss, cheap shells; then the best of each Hob
+    // goes to the front so every Hob gets at least one real sim
     cands.sort_by_key(|c| (c.miss / 16, shell_cost(&k, c), c.hob, c.target));
+    let mut order: Vec<Cand> = vec![];
+    for &h in &hobs {
+        if let Some(p) = cands.iter().position(|c| c.hob == h) {
+            order.push(cands.remove(p));
+        }
+    }
+    order.extend(cands);
+    // 3. run the candidates through the real sim and score them
+    let flaps_before: Vec<bool> = k.castles[1 - s].nooks.iter().map(|n| n.flap).collect();
     let mut scored: Vec<Cand> = vec![];
-    for c in cands.into_iter() {
-        if units > t.budget && !scored.is_empty() {
+    for c in order.into_iter() {
+        if units > budget && !scored.is_empty() {
             break;
         }
         let Some(after) = sim_candidate(&k, side, &c, c.angle, c.power, &mut units) else {
             continue;
         };
+        // canon: Cozy never Threads a Loophole
+        if preset == Preset::Cozy {
+            let flaps: Vec<bool> = after.castles[1 - s].nooks.iter().map(|n| n.flap).collect();
+            if flaps
+                .iter()
+                .zip(flaps_before.iter())
+                .any(|(a, b)| *a && !*b)
+            {
+                continue;
+            }
+        }
         let mut sc = score_result(&k, &after, side, &t) - shell_cost(&k, &c);
         let mut n = 1;
         for j in 0..t.jitter {
-            if units > t.budget {
+            if units > budget {
                 break;
             }
             let da = if j % 2 == 0 {
@@ -544,6 +698,7 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
             .cmp(&a.score)
             .then(a.hob.cmp(&b.hob))
             .then(a.target.cmp(&b.target))
+            .then(a.shot.cmp(&b.shot))
     });
 
     // Doodads: mend when walls are hurt and no shot pays more
@@ -553,15 +708,27 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
         return out;
     }
 
-    // nothing worth firing: walk toward the rival and try once more
-    if best_score <= 0 && k.castles[s].steam >= 20 && k.castles[s].steam_turn == 0 && out.is_empty()
+    // nothing worth firing: walk toward the rival and try once more (with
+    // half the budget, so a walk never doubles the think time)
+    if allow_walk
+        && best_score <= 0
+        && k.castles[s].steam >= 20
+        && k.castles[s].steam_turn == 0
+        && out.is_empty()
     {
         let dx = 40 * k.castles[s].front_dir();
         let cmd = json!({"cmd": "walk", "dx": dx});
         if k.command(&cmd)["ok"] == json!(true) {
             out.push(cmd);
             b.ai_mem[s].own_walked = true;
-            let mut rest = plan_after_walk(b, &k, side, preset);
+            let mut tmp = k.clone();
+            tmp.castles[s].steam = 0;
+            tmp.ai_mem[s] = b.ai_mem[s].clone();
+            tmp.rng.ai[s] = b.rng.ai[s].clone();
+            let mut rest = plan_turn_with(&mut tmp, side, preset, budget / 2, false);
+            b.rng.ai[s] = tmp.rng.ai[s].clone();
+            b.ai_mem[s] = tmp.ai_mem[s].clone();
+            rest.retain(|c| c["cmd"] != json!("walk"));
             out.append(&mut rest);
             return out;
         }
@@ -578,24 +745,11 @@ pub fn plan_turn(b: &mut Battle, side: u8, preset: Preset) -> Vec<Value> {
     }
     out.push(json!({"cmd": "pick_hob", "hob": choice.hob}));
     out.push(json!({"cmd": "pick_shot", "shot": choice.shot}));
-    out.push(json!({"cmd": "aim", "angle": angle, "power": power}));
+    if b.content.shots[choice.shot_ix].flight.kind != FlightKind::SelfTarget {
+        out.push(json!({"cmd": "aim", "angle": angle, "power": power}));
+    }
     out.push(fire);
-    let _ = units;
     out
-}
-
-fn plan_after_walk(b: &mut Battle, k: &Battle, side: u8, preset: Preset) -> Vec<Value> {
-    // replan on the walked view; no further walks
-    let s = side as usize;
-    let mut tmp = k.clone();
-    tmp.castles[s].steam = 0;
-    tmp.ai_mem[s] = b.ai_mem[s].clone();
-    tmp.rng.ai[s] = b.rng.ai[s].clone();
-    let mut cmds = plan_turn(&mut tmp, side, preset);
-    b.rng.ai[s] = tmp.rng.ai[s].clone();
-    b.ai_mem[s] = tmp.ai_mem[s].clone();
-    cmds.retain(|c| c["cmd"] != json!("walk"));
-    cmds
 }
 
 fn pick(scored: &[Cand], t: &Tuning, b: &mut Battle, s: usize) -> Option<Cand> {

@@ -109,6 +109,12 @@ export class RealCore implements CoreApi {
     return this.bundle.levels.filter((l) => /^d\d+$/.test(l.id)).map((l) => [l.id, l.name]);
   }
 
+  resendTerrain(): void {
+    if (!this.game) return;
+    this.game.command(JSON.stringify({ cmd: 'terrain_all' } satisfies PCommand)); // a query: not logged
+    this.pull();
+  }
+
   doodadName(id: string): string { return this.bundle.doodads?.find((d) => d.id === id)?.name ?? id; }
 
   hobs(): HobInfo[] {

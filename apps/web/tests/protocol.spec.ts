@@ -63,3 +63,70 @@ test('lean snapshot keeps the last full one and moves shells', () => {
   expect(s.shells[0].kind).toBe('clodpot');
   expect(s.hobs.length).toBeGreaterThan(0);
 });
+
+// Every key the core sends must be one the adapter knows: drawn, read, or listed here on
+// purpose as not shown yet. A new key in core/fixtures fails this test until the adapter is told.
+const KNOWN: Record<string, string[]> = {
+  '': ['awaiting', 'castles', 'draft', 'events', 'full', 'ghosts', 'hash', 'hobs', 'hud', 'last_ai', 'level', 'map', 'mode', 'phase', 'preview', 'props', 'result', 'shells', 'side', 'terrain', 'tick'],
+  '.castles[]': ['base_y', 'block', 'blocks', 'cols', 'fatigue', 'held', 'kettle', 'rooms', 'rows', 'shimmer', 'side', 'steam', 'steam_turn', 'x'],
+  '.castles[].blocks[]': ['battered', 'c', 'hp', 'mat', 'max', 'peephole', 'r', 'root', 'x', 'y'],
+  '.castles[].kettle': ['box', 'c', 'hp', 'intact', 'lid', 'max', 'r', 'room'],
+  '.castles[].rooms[]': ['box', 'c', 'flap', 'id', 'intact', 'kind', 'lid', 'loophole', 'r'],
+  '.ghosts[]': ['angle', 'hob', 'index', 'pin', 'points', 'power', 'recalled', 'round', 'self_hit', 'shot', 'side'],
+  // not shown yet on purpose: cover, grudge, clatter (passives), dummy, nook
+  '.hobs[]': ['aim', 'buried', 'can_fire', 'class', 'clatter', 'cover', 'def', 'dummy', 'grudge', 'hp', 'id', 'knack', 'knack_uses', 'max', 'name', 'nook', 'plain', 'rest', 'side', 'state', 'x', 'y'],
+  '.hobs[].aim': ['angle', 'power'],
+  // not shown yet on purpose: score, puff_up, front_rounds_left, crew (the pips read hobs[])
+  '.hud': ['control', 'crew', 'doodads', 'forecast', 'front_rounds_left', 'hands', 'kettle_pct', 'names', 'puff_up', 'round', 'round_cap', 'score', 'selected', 'side', 'squall', 'squall_round', 'squall_warning', 'steam', 'steam_turn_left', 'turn', 'wind'],
+  '.hud.crew[][]': ['class', 'hp_pct', 'id', 'rest', 'state'],
+  '.hud.hands[][]': ['card', 'dud', 'id', 'match', 'name', 'weight'],
+  '.hud.selected': ['hob', 'shot'],
+  '.map': ['chunk', 'h', 'w'],
+  '.terrain': ['chunks'],
+  '.terrain.chunks[]': ['cx', 'cy', 'data', 'h', 'w', 'x', 'y'],
+  '.props[]': ['hp', 'id', 'kind', 'max', 'shot', 'side', 'tag', 'x', 'y'],
+  '.result': ['how', 'pennants', 'round', 'winner'],
+  '.draft': ['next', 'picks', 'picks_each', 'pool', 'wish'],
+};
+
+test('the adapter knows every snapshot key in core/fixtures', () => {
+  const unknown: string[] = [];
+  const walk = (v: unknown, path: string) => {
+    if (Array.isArray(v)) { for (const x of v) walk(x, `${path}[]`); return; }
+    if (!v || typeof v !== 'object') return;
+    if (path.startsWith('.events') || path.startsWith('.last_ai')) return; // events are read by type in toView
+    for (const [k, x] of Object.entries(v)) {
+      if (!(KNOWN[path] ?? []).includes(k)) unknown.push(`${path || '<root>'}.${k}`);
+      walk(x, `${path}.${k}`);
+    }
+  };
+  for (const f of ['snapshot_plan.json', 'snapshot_lean.json', 'snapshot_after_shot.json']) walk(fx(f), '');
+  expect([...new Set(unknown)]).toEqual([]);
+});
+
+test('Shot Weight from content maps to Light, Medium, Heavy', async () => {
+  const { weightOf } = await import('../src/core/real');
+  const shots = JSON.parse(readFileSync(resolve(root, 'content/shots.json'), 'utf8')) as { id: string; weight?: string }[];
+  const want: Record<string, number> = { L: 0, M: 1, H: 2 };
+  for (const s of shots) if (s.weight) expect(weightOf(s.weight), s.id).toBe(want[s.weight]);
+  expect(shots.some((s) => weightOf(s.weight) === 2)).toBe(true);
+});
+
+test('rooms, props, root and battered reach the view', () => {
+  const plan = fx('snapshot_plan.json');
+  const s0 = structuredClone(plan);
+  s0.props = [{ id: 1, side: 2, kind: 'cage_bar', tag: 'cage', x: 1182, y: 284, hp: 50, max: 50, shot: null }];
+  s0.castles[1].blocks[0].root = true;
+  s0.castles[0].blocks[0].battered = true;
+  s0.castles[0].fatigue = true;
+  s0.castles[0].rooms[0].flap = true;
+  const { mod } = fake([s0]);
+  const core = new RealCore(mod);
+  core.newBattle({ mode: 'campaign', level: '1-1', seed: 1, difficulty: 'fair', windOff: false, sides: [{ name: 'You', human: true, crew: ['marge'] }, { name: 'R', human: false, crew: [] }] });
+  const s = core.snapshot();
+  expect(s.props[0]).toMatchObject({ kind: 'cage_bar', y: plan.map.h - 284 });
+  expect(s.blocks.some((b) => b.side === 1 && b.root)).toBe(true);
+  expect(s.blocks.some((b) => b.side === 0 && b.battered)).toBe(true);
+  expect(s.fatigue[0]).toBe(true);
+  expect(s.rooms.find((r) => r.side === 0)?.flap).toBe(true);
+});

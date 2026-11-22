@@ -36,13 +36,13 @@ export const POSES = {
   aim: [
     { face: 'grit', toolRot: -12, hf: [23, -32], lean: -2 },
     { face: 'grit', toolRot: -18, hf: [23, -35], lean: -4, hb: [-22, -30] },
-    { face: 'grit', toolRot: -26, hf: [22, -39], lean: -6, hb: [-23, -32], sy: .98 },
+    { face: 'grit', toolRot: -26, hf: [22, -39], lean: -5, hb: [-23, -32], sy: .98 },
   ],
   fire: [
     { face: 'shout', toolRot: -12, hf: [27, -34], dx: -5, lean: -5, sy: .96, puff: true },
     { face: 'shout', toolRot: -18, hf: [24, -33], dx: -2, lean: -2 },
-    { face: 'grit', toolRot: -30, hf: [17, -37], hb: [-24, -34], dx: -3, lean: -9, sy: .94, sx: 1.04 },
-    { face: 'shout', toolRot: 4, hf: [31, -33], hb: [-17, -26], dx: 4, lean: 5, sy: 1.04, sx: .98, hatDy: -5, flash: true },
+    { face: 'grit', toolRot: -30, hf: [17, -37], hb: [-24, -34], dx: -1, lean: -5, sy: .92, sx: 1.05 },
+    { face: 'shout', toolRot: -8, hf: [29, -34], hb: [-17, -26], dx: 3, lean: 4, sy: 1.04, sx: .98, hatDy: -5, flash: true },
   ],
   hit: [
     { face: 'ouch', sy: .86, sx: 1.08, lean: -7, hf: [24, -40], hb: [-25, -40], toolRot: 14, stars: 0 },
@@ -52,32 +52,32 @@ export const POSES = {
   bonked: [
     { face: 'bonk', tool: false, hf: [20, -22], hb: [-21, -22], balloon: 0, dy: -2 },
     { face: 'bonk', tool: false, hf: [21, -21], hb: [-22, -21], balloon: 1, dy: -8, lean: 3 },
-    { face: 'dizzy', tool: false, hf: [24, -25], hb: [-25, -23], lean: -6, sy: .97, hatRot: -7, stars: 3 },
+    { face: 'dizzy', tool: false, hf: [24, -25], hb: [-25, -23], lean: -4, sy: .97, hatRot: -7, stars: 3 },
     { face: 'bonk', tool: false, hf: [21, -19], hb: [-22, -19], lean: 4, sy: .93, sx: 1.03, hatDy: 2, balloon: { sway: 1, str: 18, k: .5, zz: false } },
   ],
   cheer: [
     { face: 'cheer', sy: .93, hf: [26, -40], hb: [-25, -42], toolRot: 4 },
     { face: 'cheer', dy: -10, hatDy: -9, hf: [30, -54], hb: [-26, -56], toolRot: 12, sy: 1.03 },
-    { face: 'cheer', dy: -13, hatDy: -10, hatRot: -9, hf: [29, -58], hb: [-27, -58], toolRot: 18, sy: 1.01 },
+    { face: 'cheer', dy: -12, hatDy: -6, hatRot: -6, hf: [27, -59], hb: [-27, -59], toolRot: -8, sy: 1.01 },
     { face: 'cheer', sy: .9, sx: 1.06, hatDy: -1, hf: [27, -36], hb: [-26, -38], toolRot: 2 },
   ],
   // falling through a broken floor: hang, then flail. The hat stays up a beat
   tumble: [
-    { face: 'wide', hf: [27, -46], hb: [-27, -46], hatDy: -7, toolRot: 16, sy: 1.04, sx: .97, shadow: false, boots: 'dangle' },
-    { face: 'shout', lean: -12, hf: [26, -58], hb: [-26, -55], hatDy: -12, hatRot: -8, toolRot: 28, sy: 1.06, sx: .96, shadow: false, boots: 'dangle', lines: true },
-    { face: 'shout', lean: 11, hf: [28, -55], hb: [-25, -60], hatDy: -14, hatRot: 9, toolRot: -16, sy: 1.06, sx: .96, shadow: false, boots: 'dangle', lines: true },
-    { face: 'wide', lean: -5, hf: [24, -61], hb: [-27, -51], hatDy: -11, hatRot: -4, toolRot: 20, sy: 1.05, sx: .96, shadow: false, boots: 'dangle', lines: true },
+    { face: 'wide', hf: [27, -46], hb: [-27, -46], hatDy: -5, toolRot: 16, sy: 1.04, sx: .97, dy: -4, shadow: false, boots: 'dangle' },
+    { face: 'shout', lean: -12, hf: [26, -58], hb: [-26, -55], hatDy: -9, hatRot: -8, toolRot: 28, sy: 1.06, sx: .96, dy: -4, shadow: false, boots: 'dangle', lines: true },
+    { face: 'shout', lean: 11, hf: [28, -55], hb: [-25, -60], hatDy: -10, hatRot: 9, toolRot: -16, sy: 1.06, sx: .96, dy: -4, shadow: false, boots: 'dangle', lines: true },
+    { face: 'wide', lean: -5, hf: [24, -61], hb: [-27, -51], hatDy: -8, hatRot: -4, toolRot: 20, sy: 1.05, sx: .96, dy: -4, shadow: false, boots: 'dangle', lines: true },
   ],
   // dropped landing: splat, then pop back
   land: [
-    { face: 'ouch', sy: .72, sx: 1.2, hf: [29, -24], hb: [-29, -24], hatDy: 4, toolRot: 18, dust: 1 },
+    { face: 'ouch', sy: .72, sx: 1.16, hf: [27, -24], hb: [-28, -24], hatDy: 4, toolRot: -38, dust: 1 },
     { face: 'blink', sy: 1.07, sx: .95, hf: [22, -34], hb: [-23, -34], hatDy: -6, toolRot: -4, dust: 2 },
   ],
   // Shove Off: push the dirt out of a buried Loophole
   dig: [
-    { face: 'grit', lean: -8, hf: [14, -35], hb: [-24, -36], toolRot: -24, dx: -3, sy: .96, sx: 1.02 },
-    { face: 'shout', lean: 9, hf: [34, -30], hb: [-14, -31], toolRot: 14, dx: 4, sy: 1.02, dirt: 0 },
-    { face: 'grit', lean: 4, hf: [30, -28], hb: [-18, -28], toolRot: 8, dx: 2, dirt: 1 },
+    { face: 'grit', lean: -5, hf: [14, -35], hb: [-24, -36], toolRot: -24, dx: -1, sy: .95, sx: 1.03 },
+    { face: 'shout', lean: 7, hf: [31, -30], hb: [-14, -31], toolRot: -34, dx: 3, sy: 1.02, dirt: 0 },
+    { face: 'grit', lean: 3, hf: [28, -28], hb: [-18, -28], toolRot: -22, dx: 1, dirt: 1 },
   ],
   // next door Passive is live (Broad Back, Ridgepole, Old Grudge, Clatter Call)
   nextdoor: [
@@ -142,7 +142,7 @@ export function posedHob(key, teamKey, p = {}) {
   const s = def.scale || 1;
   let b = '';
   // boots
-  if (boots === 'dangle') b += g(rr(-16, -11, 14, 11, 5, '#4A3328', { stroke: ink, sw: 3 }), 'translate(-2 3) rotate(16 -9 -11)') + g(rr(3, -11, 15, 11, 5, '#4A3328', { stroke: ink, sw: 3 }), 'translate(2 4) rotate(-14 10 -11)');
+  if (boots === 'dangle') b += g(rr(-16, -11, 14, 11, 5, '#4A3328', { stroke: ink, sw: 3 }), 'translate(-2 1) rotate(12 -9 -11)') + g(rr(3, -11, 15, 11, 5, '#4A3328', { stroke: ink, sw: 3 }), 'translate(2 2) rotate(-10 10 -11)');
   else b += rr(-16, -11, 14, 11, 5, '#4A3328', { stroke: ink, sw: 3 }) + rr(3, -11, 15, 11, 5, '#4A3328', { stroke: ink, sw: 3 });
   // back parts and back hand
   b += (o.back || '') + circ(hb[0], hb[1], 6.5, hand, { stroke: ink, sw: 3 });
@@ -195,7 +195,7 @@ export function posedHob(key, teamKey, p = {}) {
   const body = `<g transform="translate(${f(dx)} ${f(dy)}) rotate(${lean}) scale(${(sx * s).toFixed(3)} ${(sy * s).toFixed(3)})">${b}${fx}</g>`;
   let out = '';
   // next door glow: a gold ring at the feet. Gold, never teal or a team colour
-  if (glow) out += ell(0, 0, 30 + glow * 5, 7 + glow * 1.5, C.gold, { op: .3 + glow * .12 }) + ell(0, 0, 37 + glow * 7, 9.5 + glow * 2, 'none', { stroke: C.gold, sw: 2.5, op: .5 + glow * .2, extra: ' stroke-dasharray="5 5"' });
+  if (glow) out += ell(0, -1, 28 + glow * 5, 4 + glow, C.gold, { op: .4 + glow * .15 }) + ell(0, -1, 36 + glow * 6, 5 + glow * .8, 'none', { stroke: C.gold, sw: 2.5, op: .5 + glow * .2, extra: ' stroke-dasharray="5 5"' });
   if (shadow) out += ell(0, 0, 24 * s, 5, ink, { op: dy < -4 ? .12 : .18 });
   out += body;
   // landing dust: soft, no outline, drawn at the floor

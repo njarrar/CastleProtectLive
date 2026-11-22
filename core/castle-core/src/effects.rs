@@ -912,7 +912,7 @@ impl Battle {
     }
 
     /// Damage that is not shot damage (crush, falls, Thump): no clamps.
-    fn hurt_hob_raw(&mut self, h: u8, dmg: i32, why: &str) {
+    pub(crate) fn hurt_hob_raw(&mut self, h: u8, dmg: i32, why: &str) {
         if dmg <= 0 || !self.hobs[h as usize].alive() {
             return;
         }
@@ -1006,7 +1006,7 @@ impl Battle {
         self.apply_block(shooter, side, c, r, d);
     }
 
-    fn apply_block(&mut self, shooter: u8, side: u8, c: i32, r: i32, d: i32) {
+    pub(crate) fn apply_block(&mut self, shooter: u8, side: u8, c: i32, r: i32, d: i32) {
         if d <= 0 {
             return;
         }
@@ -1068,7 +1068,12 @@ impl Battle {
                 -1,
             ),
         };
+        let round = self.round;
+        let enemy = self.cur.as_ref().is_some_and(|c| c.side != victim);
         let st = &mut self.stats[victim as usize];
+        if enemy {
+            st.last_blow = Some((shot.clone(), hob, round));
+        }
         match st.taken.iter_mut().find(|t| t.0 == shot && t.1 == hob) {
             Some(t) => t.2 += d as i64,
             None => st.taken.push((shot, hob, d as i64)),
@@ -1448,6 +1453,7 @@ impl Battle {
                     json!({"t": "collapse", "side": side, "blocks": blocks_json, "falls": falls}),
                 );
                 total += chunk.len() as i32;
+                self.stats[s].blocks_lost += chunk.len() as i32;
                 // crush what lies under each column
                 for (c, land, crush, rb) in landings {
                     if crush <= 0 {

@@ -2,6 +2,8 @@
  "scale": 2,
  "pages": [
   "castle@2x-0.json",
-  "castle@2x-1.json"
+  "castle@2x-1.json",
+  "castle@2x-2.json",
+  "castle@2x-3.json"
  ]
 }

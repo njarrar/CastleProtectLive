@@ -347,6 +347,8 @@ export interface CoreApi {
   fortFor(seats: number): Blueprint | undefined;
   /** Lean Lines query: blocks that would fall if (c, r) of that side broke. Changes nothing. */
   leanLines(side: Side, c: number, r: number): [number, number][];
+  /** Send the whole map again in the next snapshot (a screen takes over a battle another screen built). */
+  resendTerrain?(): void;
   /** Display name of a Doodad id. */
   doodadName?(id: string): string;
   /** Skirmish and duel maps: [level id, name]. */
