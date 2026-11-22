@@ -39,7 +39,15 @@ class Lens(val rect: RectF = RectF(), @Volatile var cx: Float = 0f, @Volatile va
 @SuppressLint("ViewConstructor")
 class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(ctx), SurfaceHolder.Callback {
     private val dp = resources.displayMetrics.density
-    private val renderer = BattleRenderer(session.sprites, dp)
+    private val fieldFx = FieldFx(
+        session.sprites, dp,
+        cue = { anim, event, x, shot -> session.animCue(anim, event, x, shot) },
+        beat = { kind, n, x, y -> session.viewBeat(kind, n, x, y) },
+        reduceMotion = { session.settings.reduceMotion },
+        trailOf = { shot -> session.content.trail(shot) },
+    )
+    private val renderer = BattleRenderer(session.sprites, dp, fieldFx)
+    private val shakeOut = FloatArray(3)
 
     /** Tall layout (stacked lenses) or Wide layout. Set by the HUD from the window shape. */
     @Volatile var tall = false
@@ -126,7 +134,7 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 val now = SystemClock.uptimeMillis()
                 if (session.paused) { if (!sleepQuiet(100)) return; redraw = true; continue }
                 val idleDue = now - lastIdle >= IDLE_MS
-                if (f === lastFrame && !redraw && !draggingFlag && !renderer.animating && !moving && !idleDue) { if (!sleepQuiet(8)) return; continue }
+                if (f === lastFrame && !redraw && !draggingFlag && !renderer.animating && !moving && !idleDue && session.juice.calm && session.fxFrames.isEmpty()) { if (!sleepQuiet(8)) return; continue }
                 if (idleDue) lastIdle = now
                 lastFrame = f; redraw = false
                 val c: Canvas? = try { holder.lockHardwareCanvas() } catch (e: Exception) { try { holder.lockCanvas() } catch (e2: Exception) { null } }
@@ -134,7 +142,9 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 try {
                     val t = System.nanoTime()
                     val dt = ((t - last) / 1e9f).coerceIn(0f, 0.1f); last = t
-                    drawFrame(c, f, dt)
+                    // View time: frozen in a hit stop, slowed in slow motion (docs/design/07 section 6).
+                    val scale = session.juice.scale(SystemClock.uptimeMillis())
+                    drawFrame(c, f, dt, dt * scale)
                 } catch (e: RuntimeException) {
                     // One bad frame must not kill the app (review C2).
                     Log.e("CastleRender", "frame skipped", e)
@@ -157,7 +167,7 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         val s = Camera.clampScale(scale, dp)
         val tx = Camera.clampCenter(cx, f.mapW, 200f); val ty = Camera.clampCenter(cy, f.mapH, 200f)
         if (!l.live || session.settings.reduceMotion) { l.cx = tx; l.cy = ty; l.scale = s; l.live = true; return false }
-        val k = 1f - Math.exp((-dt * 12f).toDouble()).toFloat() // settles in about 250 ms
+        val k = 1f - Math.exp((-dt * 9f).toDouble()).toFloat() // settles in about 400 ms
         l.cx += (tx - l.cx) * k; l.cy += (ty - l.cy) * k; l.scale += (s - l.scale) * k
         return abs(tx - l.cx) * l.scale > 0.5f || abs(ty - l.cy) * l.scale > 0.5f || abs(s - l.scale) > 0.001f
     }
@@ -173,38 +183,54 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     }
 
     private val drag = FloatArray(4)
+
     private var readout: String? = null
     private var readoutA = -1; private var readoutP = -1
 
-    private fun drawFrame(c: Canvas, f: Frame, dt: Float) {
+    // Camera state for the Wide layout (docs/design/07 section 3.5).
+    private var hadShells = false
+    private var lastShellX = 0f; private var lastShellY = 0f
+    private var impactAt = 0L
+    private var impactX = 0f; private var impactY = 0f
+    private val fitOut = FloatArray(3)
+
+    private fun drawFrame(c: Canvas, f: Frame, dt: Float, viewDt: Float) {
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0 || h <= 0) return
         if (f.phase != lastPhase) {
             if (f.phase == Phase.RESOLVE && manualFlag) post { reframe() } // on Fire the camera snaps back to auto-frame
             lastPhase = f.phase
         }
-        if (f.terrain !== lastTerrainFrame?.terrain) renderer.clearBlasts()
+        if (f.terrain !== lastTerrainFrame?.terrain) { fieldFx.clear(); hadShells = false; impactAt = 0L }
         lastTerrainFrame = f
+        fieldFx.anims = session.anims
+        renderer.reduceMotion = session.settings.reduceMotion
         renderer.syncTerrain(f.terrain)
-        while (true) { val e = session.fx.poll() ?: break; renderer.addBlast(e.x.toFloat(), e.y.toFloat(), e.r >= 24) }
+        while (true) { val e = session.fxFrames.poll() ?: break; fieldFx.onFrame(e) }
+        fieldFx.update(f, viewDt * 1000f)
+        session.juice.shake(dt * 1000f, aiming = f.phase == Phase.PLAN, shakeOut)
         val dragNow = if (draggingFlag) drag.also { it[0] = anchorX; it[1] = anchorY; it[2] = fingerX; it[3] = fingerY } else null
         val hob = f.selectedHob
         if (dragNow != null && hob != null && (hob.angle != readoutA || hob.power != readoutP)) {
             readoutA = hob.angle; readoutP = hob.power
             readout = "%.1f° | %d".format(hob.angle / 10f, hob.power)
+            session.audio.loop("aim_band_stretch", true, semis = hob.power * 12f / 100f)
         }
         val shown = if (dragNow != null) readout else null
         val me = if (f.hud.human(f.side)) f.side else if (f.hud.human(0)) 0 else 1
         val flying = f.phase == Phase.RESOLVE || f.phase == Phase.SETTLE
         var mv = false
-        if (f.castles.size < 2) { renderer.drawEmpty(c); renderer.tick(dt); moving = false; return }
+        if (f.castles.size < 2) { renderer.drawEmpty(c); renderer.tick(viewDt); moving = false; return }
+        val now = SystemClock.uptimeMillis()
+        val sh = f.shells.firstOrNull()
+        if (sh != null) { hadShells = true; lastShellX = sh.x.toFloat(); lastShellY = sh.y.toFloat(); impactAt = 0L }
+        else if (hadShells) { hadShells = false; impactAt = now; impactX = lastShellX; impactY = lastShellY }
         if (tall) {
             val stripH = 32f * dp
             if (flying) {
                 // The two lenses join into one tall view that rides with the shell; the Field Strip slides to its foot.
                 main.rect.set(0f, 0f, w, h - stripH); strip.set(0f, h - stripH, w, h)
-                val scale = 0.62f * dp * zoom
-                val sh = f.shells.firstOrNull()
+                val scale = max(Camera.minBlockScale(dp), 0.62f * dp * zoom)
                 if (sh != null && !manualFlag) {
                     val ground = f.groundAt(sh.x).toFloat()
                     val cy = min(sh.y.toFloat(), ground - (main.rect.height() / 2f - 120f * dp) / scale)
@@ -213,7 +239,7 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 else {
                     mv = ease(main, main.cx + panX, main.cy + panY, scale, f, dt); panX = 0f; panY = 0f
                 }
-                renderer.drawLens(c, main, f, me, null, null)
+                renderer.drawLens(c, main, f, me, null, null, shakeOut)
                 top.live = false; bottom.live = false
                 renderer.drawStrip(c, strip, f, main, null)
             } else {
@@ -221,8 +247,8 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 top.rect.set(0f, 0f, w, topH); strip.set(0f, topH, w, topH + stripH); bottom.rect.set(0f, topH + stripH, w, h)
                 mv = frameFort(top, f, 1 - me, 0.75f * dp * topZoom, 36f * dp, topPan, dt)        // target fort, blocks about 12 pt
                 mv = frameFort(bottom, f, me, 1.0f * dp * bottomZoom, 96f * dp, 0f, dt) || mv     // your fort, blocks about 16 pt
-                renderer.drawLens(c, top, f, me, null, null)
-                renderer.drawLens(c, bottom, f, me, dragNow, shown)
+                renderer.drawLens(c, top, f, me, null, null, shakeOut)
+                renderer.drawLens(c, bottom, f, me, dragNow, shown, null) // never shake under the aiming thumb
                 main.live = false
                 renderer.drawStrip(c, strip, f, top, bottom)
             }
@@ -230,23 +256,100 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
             main.rect.set(0f, 0f, w, h)
             val p = hudPad
             val clearW = max(1f, w - p[0] - p[2]); val clearH = max(1f, h - p[1] - p[3])
-            val a = f.castles[0]; val b = f.castles[1]
-            val left = a.x.toFloat(); val right = (b.x + b.cols * b.block).toFloat()
-            val base = max(a.baseY, b.baseY).toFloat()
-            val sh = f.shells.firstOrNull()
-            val scale = Camera.clampScale(Camera.wideScale(clearW, clearH, abs(right - left), sh?.let { base - it.y }, dp) * zoom, dp)
-            // Bias 55/45 toward the rival of whoever is looking.
-            val cx = (left + right) / 2f + (if (me == 0) 1 else -1) * abs(right - left) * 0.02f + ((p[2] - p[0]) / 2f) / scale + panX
-            // The lower footing line sits 40 dp above the bottom HUD.
-            val cy = base - (h / 2f - p[3] - 40f * dp) / scale + panY
+            wideTarget(f, me, clearW, clearH, now)
+            var scale = fitOut[2] * zoom
+            scale = max(Camera.minBlockScale(dp), Camera.clampScale(scale, dp))
+            // The clear rect's centre sits off the screen centre by the HUD pads.
+            val cx = fitOut[0] - ((p[0] - p[2]) / 2f) / scale + panX
+            val cy = fitOut[1] - ((p[1] - p[3]) / 2f) / scale + panY
             mv = ease(main, cx, cy, scale, f, dt)
-            renderer.drawLens(c, main, f, me, dragNow, shown)
+            renderer.drawLens(c, main, f, me, dragNow, shown, shakeOut)
             top.live = false; bottom.live = false
         }
-        moving = mv
+        // Shake at 0%: a 2 pt white rim flash on the blast in its place, unless Reduce flashes is on.
+        val fl = session.juice.flash
+        if (fl > 0f && !session.settings.reduceFlashes) {
+            rim.strokeWidth = 4f * dp; rim.alpha = (fl * 0.3f * 255).toInt().coerceIn(0, 255)
+            c.drawRect(2f * dp, 2f * dp, w - 2f * dp, h - 2f * dp, rim)
+        }
+        moving = mv || !session.juice.calm
         // Copies for input on the UI thread.
         topLive = top.live; bottomLive = bottom.live; topBottomEdge = top.rect.bottom; mainScale = main.scale; topScale = top.scale
-        renderer.tick(dt)
+        renderer.tick(viewDt)
+    }
+
+    private val rim = android.graphics.Paint().apply { style = android.graphics.Paint.Style.STROKE; color = android.graphics.Color.WHITE }
+
+    private fun fortBox(k: games.castleprotect.core.Castle, out: FloatArray) {
+        out[0] = k.x.toFloat(); out[1] = k.topY - 40f; out[2] = (k.x + k.cols * k.block).toFloat(); out[3] = k.baseY + 12f
+    }
+    private val boxA = FloatArray(4); private val boxB = FloatArray(4)
+
+    /**
+     * Where the Wide camera wants to be (fitOut: centre and scale before zoom):
+     * - your turn: your fort plus the preview arc (and the rival's fort when it still fits with 8 dp blocks);
+     * - the Rival's turn: both forts if they fit, else the Rival's fort with room toward yours;
+     * - flight: the shell and the fort it flies at, following the shell with a dead zone when they do not fit;
+     * - impact: hold on the hit for 0.6 s, then widen to the fort that was hit.
+     */
+    private fun wideTarget(f: Frame, me: Int, w: Float, h: Float, now: Long) {
+        val floor = Camera.minBlockScale(dp); val ceil = 1.4f * dp
+        val sh = f.shells.firstOrNull()
+        val active = f.castles.getOrNull(f.side) ?: f.castles[0]
+        val other = f.castles.getOrNull(1 - f.side) ?: f.castles[1]
+        fortBox(active, boxA); fortBox(other, boxB)
+        val margin = 24f
+        when {
+            sh != null && !manualFlag -> {
+                // Shell plus the fort it flies at.
+                val x0 = min(sh.x.toFloat(), boxB[0]); val x1 = max(sh.x.toFloat(), boxB[2])
+                val y0 = min(sh.y.toFloat(), boxB[1]); val y1 = boxB[3]
+                Camera.fit(x0, y0, x1, y1, w, h, margin, floor, ceil, fitOut)
+                if (fitOut[2] <= floor + 1e-4f || session.settings.reduceMotion) {
+                    // Too wide to show both at 8 dp blocks: follow the shell with a 30% dead zone (a wide fixed frame with Reduce motion: it jumps only when the shell leaves).
+                    val zone = if (session.settings.reduceMotion) 0.9f else 0.3f
+                    val halfW = w / 2f / floor; val halfH = h / 2f / floor
+                    fitOut[0] = Camera.follow(if (main.live) main.cx else sh.x.toFloat(), sh.x.toFloat(), halfW, zone)
+                    fitOut[1] = Camera.follow(if (main.live) main.cy else sh.y.toFloat(), sh.y.toFloat(), halfH, zone)
+                    fitOut[2] = floor
+                }
+            }
+            impactAt != 0L && now - impactAt < 600 && (f.phase == Phase.RESOLVE || f.phase == Phase.SETTLE) -> {
+                fitOut[0] = impactX; fitOut[1] = impactY; fitOut[2] = if (main.live) main.scale / max(0.01f, zoom) else floor
+            }
+            f.phase == Phase.RESOLVE || f.phase == Phase.SETTLE -> {
+                // Widen to show the collapse settle on the fort nearest the hit.
+                val hit = if (impactAt != 0L && abs(impactX - (boxA[0] + boxA[2]) / 2f) < abs(impactX - (boxB[0] + boxB[2]) / 2f)) boxA else boxB
+                Camera.fit(hit[0], hit[1], hit[2], hit[3], w, h, margin * 3, floor, ceil, fitOut)
+            }
+            f.phase == Phase.PLAN && f.hud.human(f.side) -> {
+                // Your fort plus the arc; add the rival's fort when it still fits.
+                var x0 = boxA[0]; var y0 = boxA[1]; var x1 = boxA[2]; var y1 = boxA[3]
+                val pv = f.preview
+                var i = 0
+                while (i + 1 < pv.size) { x0 = min(x0, pv[i].toFloat()); x1 = max(x1, pv[i].toFloat()); y0 = min(y0, pv[i + 1].toFloat()); y1 = max(y1, pv[i + 1].toFloat()); i += 2 }
+                val ax0 = min(x0, boxB[0]); val ax1 = max(x1, boxB[2]); val ay0 = min(y0, boxB[1]); val ay1 = max(y1, boxB[3])
+                Camera.fit(ax0, ay0, ax1, ay1, w, h, margin, floor, ceil, fitOut)
+                if (fitOut[2] <= floor + 1e-4f) {
+                    // Both do not fit: your fort and the arc, with a little lean toward the rival.
+                    val lean = if (boxB[0] > boxA[0]) 80f else -80f
+                    Camera.fit(min(x0, x0 + lean), y0, max(x1, x1 + lean), y1, w, h, margin, floor, ceil, fitOut)
+                }
+            }
+            else -> {
+                val x0 = min(boxA[0], boxB[0]); val x1 = max(boxA[2], boxB[2])
+                Camera.fit(x0, min(boxA[1], boxB[1]), x1, max(boxA[3], boxB[3]), w, h, margin, floor, ceil, fitOut)
+                if (fitOut[2] <= floor + 1e-4f) {
+                    // Both forts do not fit: the side on turn, with room toward the other.
+                    val toward = if (boxB[0] > boxA[0]) 1f else -1f
+                    val span = w / floor
+                    fitOut[0] = (boxA[0] + boxA[2]) / 2f + toward * span * 0.2f
+                    fitOut[1] = (boxA[1] + boxA[3]) / 2f
+                    fitOut[2] = floor
+                }
+            }
+        }
+        if (me < 0) return
     }
 
     // ---- input -----------------------------------------------------------
@@ -299,6 +402,8 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                     anchorX = downX; anchorY = downY
                     prevAngle = sel?.angle ?: 0; prevPower = sel?.power ?: 0; sentAngle = -1; sentPower = -1
                     draggingFlag = true; dragging.value = true
+                    session.audio.play("aim_drag_start")
+                    session.buzz(8)
                     updateAim()
                 } else if (!candidate && travel >= 8f * dp) {
                     // Nothing to aim (Top lens, Rival's turn, flight): one finger pans.
@@ -358,8 +463,10 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         dragging.value = false
         candidate = false
         dragEndedAt = SystemClock.uptimeMillis()
+        session.audio.loop("aim_band_stretch", false)
+        session.audio.play("aim_set", semis = if (keep) 0f else -5f)
         if (!keep) session.aim(prevAngle, prevPower)
-        else if (mayFire && session.settings.quickFire) session.send(games.castleprotect.core.Cmd.FIRE)
+        else if (mayFire && session.settings.quickFire) session.fire()
     }
 
     companion object { private const val IDLE_MS = 83L }

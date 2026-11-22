@@ -74,6 +74,24 @@ class Ghost(
 data class CrewPip(val id: Int, val hpPct: Int, val state: String, val cls: String, val rest: Int)
 data class HandShell(val id: String, val name: String, val match: String, val weight: String, val dud: Boolean, val card: String)
 
+/** One chip of `hud.shots`: what `fire` would do with that shot for the selected Hob. */
+data class ShotChip(val shot: String, val id: String, val ready: Boolean, val why: String?)
+
+/** `hud.handicap[side]`, shown openly. */
+data class Handicap(val help: String = "none", val steam: Int = 0, val previewPct: Int = 30, val crew: Int = 0) {
+    /** Gold plus marks: none, one for Some, two for Lots. */
+    val marks: Int get() = when (help) { "some" -> 1; "lots" -> 2; else -> 0 }
+}
+
+/** `hud.volley`: Actions per side and what is left. */
+data class Volley(val actions: Int, val left: List<Int>)
+
+/** `hud.boss` on a Grand Fort with phases. [cut] is the red cut line box, or null. */
+data class Boss(val phase: Int, val roller: Prop?, val rollerDone: Boolean, val shears: Prop?, val cut: IntArray?, val jam: Int)
+
+/** `hud.rules`. */
+data class LevelRules(val objectiveTag: String? = null, val objectiveCount: Int = 0, val capWin: Int? = null)
+
 data class Hud(
     val turn: Int = 0, val round: Int = 1, val roundCap: Int = 15, val side: Int = 0,
     val wind: Int = 0, val forecast: Int = 0, val frontRoundsLeft: Int = 0,
@@ -89,23 +107,88 @@ data class Hud(
     val control: List<String> = listOf("human", "ai"),
     val score: List<Int> = listOf(0, 0),
     val puffUp: List<Boolean> = listOf(false, false),
+    val steamMax: List<Int> = listOf(100, 120),
+    val shoveOffCost: Int = 15,
+    val shots: List<ShotChip> = emptyList(),
+    val handicap: List<Handicap> = listOf(Handicap(), Handicap()),
+    val volley: Volley? = null,
+    val boss: Boss? = null,
+    val rules: LevelRules = LevelRules(),
 ) {
     fun human(side: Int) = control.getOrElse(side) { "ai" } == "human"
+    /** The chip for a shot key (`plain`, `knack` or a shell id), if the core sent one. */
+    fun chip(shot: String): ShotChip? = shots.firstOrNull { it.shot == shot }
 }
 
 data class Draft(val pool: List<String>, val picks: List<List<String>>, val next: Int, val picksEach: Int, val wish: String?)
 
-data class BattleResult(val winner: Int, val how: String, val round: Int, val pennants: List<Boolean>)
+/** `result.stats[side]`. */
+data class SideStats(
+    val shots: Int = 0, val hits: Int = 0, val blocksDropped: Int = 0, val bonks: Int = 0,
+    val blocksLost: Int = 0, val kettleLost: Int = 0, val hobsLost: Int = 0, val bestStreak: Int = 0,
+)
+
+/** One blow in `result.broke`: the shot (or `squall`, `ground`, `prop`, `shears`) and who fired it. */
+data class Blow(val shot: String, val shotName: String, val hob: Int, val hobName: String, val round: Int, val dmg: Int)
+
+/** `result.broke`: "what broke you" for the losing side. */
+data class Broke(
+    val side: Int, val how: String, val last: Blow?, val top: List<Blow>,
+    val kettleLost: Int, val blocksLost: Int, val hobsBonked: Int,
+)
+
+data class BattleResult(
+    val winner: Int, val how: String, val round: Int, val pennants: List<Boolean>,
+    val pennantsNew: List<Boolean> = emptyList(),
+    /** What the player (side 0) earns, from the core. */
+    val buttons: Int = 0,
+    val score: List<Int> = emptyList(),
+    val stats: List<SideStats> = emptyList(),
+    val broke: Broke? = null,
+)
+
+/** The core refused a snapshot or step: the handle panicked (`panic`) or is dead (`dead_handle`), or `null_handle`. */
+class CoreFault(val reason: String, val detail: String) : RuntimeException("$reason: $detail") {
+    /** The handle can not be used again; rebuild with cp_new and resume. */
+    val dead: Boolean get() = reason == "panic" || reason == "dead_handle" || reason == "null_handle"
+}
 
 /** One core event. Only the fields the app uses are kept; see core/API.md for the full list. */
 class GameEvent(
     @JvmField val t: String, @JvmField val tick: Int,
+    /** World position; `r` is a blast radius on `explode`/`carve`/`mound` and a block row on `hit`/`break`. */
     @JvmField val x: Int, @JvmField val y: Int, @JvmField val r: Int,
     @JvmField val side: Int, @JvmField val hob: Int, @JvmField val dmg: Int, @JvmField val n: Int,
     @JvmField val winner: Int, @JvmField val round: Int,
     @JvmField val target: String, @JvmField val how: String, @JvmField val text: String,
     @JvmField val callout: Boolean,
-)
+    /** Block column (`hit`, `break`, `shears_open`). */
+    @JvmField val c: Int = 0,
+    /** `shot` (fire, prop), `type` (explode, hit), `why`, `kind`, `state` (drop), `room` (lid). */
+    @JvmField val shot: String = "", @JvmField val type: String = "", @JvmField val why: String = "",
+    @JvmField val kind: String = "", @JvmField val state: String = "", @JvmField val room: String = "",
+    /** `phase` (boss_phase), `cells` (drop, castle_drop), `nook`, `hp`, `wind`, `steam`. */
+    @JvmField val phase: Int = 0, @JvmField val cells: Int = 0, @JvmField val nook: Int = -1, @JvmField val hp: Int = 0,
+    @JvmField val wind: Int = 0, @JvmField val power: Int = 0, @JvmField val angle: Int = 0,
+    /** `from` and `to`: [x, y] for walk and drop, a single x for roller_move (y then 0). */
+    @JvmField val fromX: Int = 0, @JvmField val fromY: Int = 0, @JvmField val toX: Int = 0, @JvmField val toY: Int = 0,
+    /** `blocks`: a count, or triples c, r, material code ([[c, r, mat]] for collapse; mat -1 when absent). */
+    @JvmField val blockCount: Int = 0, @JvmField val blocks: IntArray = EMPTY_INTS,
+    /** `falls`: pairs column, cells fallen. */
+    @JvmField val falls: IntArray = EMPTY_INTS,
+    /** `cut`: [x0, y0, x1, y1]. */
+    @JvmField val cut: IntArray = EMPTY_INTS,
+    @JvmField val threaded: Boolean = false,
+    @JvmField val buttons: Int = 0,
+) {
+    companion object {
+        @JvmField val EMPTY_INTS = IntArray(0)
+        /** Block material names to the codes used in [blocks]. */
+        val MATS = listOf("wicker", "timber", "cobble", "footing")
+        fun matCode(m: String): Int = MATS.indexOf(m)
+        fun matName(code: Int): String = MATS.getOrElse(code) { "timber" }
+    }
+}
 
 /**
  * One frame as the app sees it: the last full snapshot with a lean one laid on top
@@ -177,6 +260,8 @@ class SnapshotParser {
         var chunks: IntArray? = null
         var nChunks = 0
         var sawPreview = false; var sawGhosts = false; var sawProps = false; var sawDraft = false; var sawResult = false
+        var okFalse = false; var reason = ""; var detail = ""
+        var aimSide = -1; var aimHob = -1; var aimAngle = 0; var aimPower = 0
 
         j.beginObject()
         while (j.hasNext()) {
@@ -223,10 +308,26 @@ class SnapshotParser {
                 "events" -> { val e = readEvents(j); if (keepEvents) events = e }
                 "result" -> { result = if (j.nextNull()) null else readResult(j); sawResult = true }
                 "hash" -> hash = j.nextString()
+                // A refusal in place of a snapshot (core/API.md "Errors and panics").
+                "ok" -> okFalse = !j.nextBoolean()
+                "reason" -> reason = j.nextString()
+                "detail" -> detail = if (j.peek() == '"') j.nextString() else j.nextRaw()
+                // A lean snapshot after `aim`: the selected Hob's new aim.
+                "aim" -> if (!j.nextNull()) {
+                    j.beginObject()
+                    while (j.hasNext()) when (j.nextName()) {
+                        "side" -> aimSide = j.nextInt(); "hob" -> aimHob = j.nextInt()
+                        "angle" -> aimAngle = j.nextInt(); "power" -> aimPower = j.nextInt()
+                        else -> j.skipValue()
+                    }
+                    j.endObject()
+                }
                 else -> j.skipValue()
             }
         }
         j.endObject()
+        if (okFalse) throw CoreFault(reason.ifEmpty { "refused" }, detail)
+        if (aimHob >= 0) hobs = hobs.map { h -> if (h.id == aimHob && (aimSide < 0 || h.side == aimSide)) h.copy(angle = aimAngle, power = aimPower) else h }
 
         if (full) {
             fullSeq++
@@ -374,21 +475,24 @@ class SnapshotParser {
 
     private fun readProps(j: JsonReader): List<Prop> {
         val out = ArrayList<Prop>()
+        if (j.nextNull()) return out
         j.beginArray()
-        while (j.hasNext()) {
-            var id = 0; var side = 2; var kind = ""; var tag = ""; var x = 0; var y = 0; var hp = 0; var max = 0; var shot: String? = null
-            j.beginObject()
-            while (j.hasNext()) when (j.nextName()) {
-                "id" -> id = j.nextInt(); "side" -> side = j.nextInt(); "kind" -> kind = j.nextString(); "tag" -> tag = j.nextString()
-                "x" -> x = j.nextInt(); "y" -> y = j.nextInt(); "hp" -> hp = j.nextInt(); "max" -> max = j.nextInt()
-                "shot" -> shot = if (j.nextNull()) null else j.nextString()
-                else -> j.skipValue()
-            }
-            j.endObject()
-            out.add(Prop(id, side, kind, tag, x, y, hp, max, shot))
-        }
+        while (j.hasNext()) out.add(readProp(j))
         j.endArray()
         return out
+    }
+
+    private fun readProp(j: JsonReader): Prop {
+        var id = 0; var side = 2; var kind = ""; var tag = ""; var x = 0; var y = 0; var hp = 0; var max = 0; var shot: String? = null
+        j.beginObject()
+        while (j.hasNext()) when (j.nextName()) {
+            "id" -> id = j.nextInt(); "side" -> side = j.nextInt(); "kind" -> kind = j.nextString(); "tag" -> tag = if (j.nextNull()) "" else j.nextString()
+            "x" -> x = j.nextInt(); "y" -> y = j.nextInt(); "hp" -> hp = j.nextInt(); "max" -> max = j.nextInt()
+            "shot" -> shot = if (j.nextNull()) null else j.nextString()
+            else -> j.skipValue()
+        }
+        j.endObject()
+        return Prop(id, side, kind, tag, x, y, hp, max, shot)
     }
 
     private fun readGhosts(j: JsonReader): List<Ghost> {
@@ -498,6 +602,83 @@ class SnapshotParser {
                 j.beginArray(); while (j.hasNext()) l.add(j.nextBoolean()); j.endArray()
                 h = h.copy(puffUp = l)
             }
+            "steam_max" -> h = h.copy(steamMax = intList(j))
+            "shove_off_cost" -> h = h.copy(shoveOffCost = j.nextInt())
+            "shots" -> {
+                val l = ArrayList<ShotChip>(4)
+                if (!j.nextNull()) {
+                    j.beginArray()
+                    while (j.hasNext()) {
+                        var shot = ""; var id = ""; var ready = false; var why: String? = null
+                        j.beginObject()
+                        while (j.hasNext()) when (j.nextName()) {
+                            "shot" -> shot = j.nextString(); "id" -> id = j.nextString(); "ready" -> ready = j.nextBoolean()
+                            "why" -> why = if (j.nextNull()) null else j.nextString()
+                            else -> j.skipValue()
+                        }
+                        j.endObject()
+                        l.add(ShotChip(shot, id, ready, why))
+                    }
+                    j.endArray()
+                }
+                h = h.copy(shots = l)
+            }
+            "handicap" -> {
+                val l = ArrayList<Handicap>(2)
+                if (!j.nextNull()) {
+                    j.beginArray()
+                    while (j.hasNext()) {
+                        var help = "none"; var steam = 0; var pv = 30; var crew = 0
+                        if (j.nextNull()) { l.add(Handicap()); continue }
+                        j.beginObject()
+                        while (j.hasNext()) when (j.nextName()) {
+                            "help" -> help = j.nextString(); "steam" -> steam = j.nextInt(); "preview_pct" -> pv = j.nextInt(); "crew" -> crew = j.nextInt()
+                            else -> j.skipValue()
+                        }
+                        j.endObject()
+                        l.add(Handicap(help, steam, pv, crew))
+                    }
+                    j.endArray()
+                }
+                h = h.copy(handicap = l)
+            }
+            "volley" -> h = h.copy(volley = if (j.nextNull()) null else {
+                var actions = 0; var left: List<Int> = emptyList()
+                j.beginObject()
+                while (j.hasNext()) when (j.nextName()) { "actions" -> actions = j.nextInt(); "left" -> left = intList(j); else -> j.skipValue() }
+                j.endObject()
+                Volley(actions, left)
+            })
+            "boss" -> h = h.copy(boss = if (j.nextNull()) null else {
+                var phase = 1; var roller: Prop? = null; var done = false; var shears: Prop? = null; var cut: IntArray? = null; var jam = 0
+                j.beginObject()
+                while (j.hasNext()) when (j.nextName()) {
+                    "phase" -> phase = j.nextInt()
+                    "roller" -> roller = if (j.nextNull()) null else readProp(j)
+                    "roller_done" -> done = j.nextBoolean()
+                    "shears" -> shears = if (j.nextNull()) null else readProp(j)
+                    "cut" -> cut = if (j.nextNull()) null else j.nextIntArray()
+                    "jam" -> jam = j.nextInt()
+                    else -> j.skipValue()
+                }
+                j.endObject()
+                Boss(phase, roller, done, shears, cut, jam)
+            })
+            "rules" -> h = h.copy(rules = if (j.nextNull()) LevelRules() else {
+                var tag: String? = null; var count = 0; var capWin: Int? = null
+                j.beginObject()
+                while (j.hasNext()) when (j.nextName()) {
+                    "objective" -> if (!j.nextNull()) {
+                        j.beginObject()
+                        while (j.hasNext()) when (j.nextName()) { "tag" -> tag = j.nextString(); "count" -> count = j.nextInt(); else -> j.skipValue() }
+                        j.endObject()
+                    }
+                    "cap_win" -> capWin = if (j.nextNull()) null else j.nextInt()
+                    else -> j.skipValue()
+                }
+                j.endObject()
+                LevelRules(tag, count, capWin)
+            })
             else -> j.skipValue()
         }
         j.endObject()
@@ -518,16 +699,72 @@ class SnapshotParser {
         return Draft(pool, picks, next, each, wish)
     }
 
+    private fun bools(j: JsonReader): List<Boolean> {
+        val l = ArrayList<Boolean>(3)
+        if (j.nextNull()) return l
+        j.beginArray(); while (j.hasNext()) l.add(j.nextBoolean()); j.endArray()
+        return l
+    }
+
     private fun readResult(j: JsonReader): BattleResult {
-        var winner = -1; var how = ""; var round = 0; val pennants = ArrayList<Boolean>(3)
+        var winner = -1; var how = ""; var round = 0; var pennants: List<Boolean> = emptyList(); var pNew: List<Boolean> = emptyList()
+        var buttons = 0; var score: List<Int> = emptyList(); val stats = ArrayList<SideStats>(2); var broke: Broke? = null
         j.beginObject()
         while (j.hasNext()) when (j.nextName()) {
-            "winner" -> winner = j.nextInt(); "how" -> how = j.nextString(); "round" -> round = j.nextInt()
-            "pennants" -> { j.beginArray(); while (j.hasNext()) pennants.add(j.nextBoolean()); j.endArray() }
+            "winner" -> winner = if (j.nextNull()) -1 else j.nextInt(); "how" -> how = j.nextString(); "round" -> round = j.nextInt()
+            "pennants" -> pennants = bools(j)
+            "pennants_new" -> pNew = bools(j)
+            "buttons" -> buttons = j.nextInt()
+            "score" -> score = intList(j)
+            "stats" -> if (!j.nextNull()) {
+                j.beginArray()
+                while (j.hasNext()) {
+                    var s = SideStats()
+                    j.beginObject()
+                    while (j.hasNext()) when (j.nextName()) {
+                        "shots" -> s = s.copy(shots = j.nextInt()); "hits" -> s = s.copy(hits = j.nextInt())
+                        "blocks_dropped" -> s = s.copy(blocksDropped = j.nextInt()); "bonks" -> s = s.copy(bonks = j.nextInt())
+                        "blocks_lost" -> s = s.copy(blocksLost = j.nextInt()); "kettle_lost" -> s = s.copy(kettleLost = j.nextInt())
+                        "hobs_lost" -> s = s.copy(hobsLost = j.nextInt()); "best_streak" -> s = s.copy(bestStreak = j.nextInt())
+                        else -> j.skipValue()
+                    }
+                    j.endObject()
+                    stats.add(s)
+                }
+                j.endArray()
+            }
+            "broke" -> broke = if (j.nextNull()) null else readBroke(j)
             else -> j.skipValue()
         }
         j.endObject()
-        return BattleResult(winner, how, round, pennants)
+        return BattleResult(winner, how, round, pennants, pNew, buttons, score, stats, broke)
+    }
+
+    private fun readBlow(j: JsonReader): Blow {
+        var shot = ""; var shotName = ""; var hob = -1; var hobName = ""; var round = 0; var dmg = 0
+        j.beginObject()
+        while (j.hasNext()) when (j.nextName()) {
+            "shot" -> shot = j.nextString(); "shot_name" -> shotName = j.nextString()
+            "hob" -> hob = if (j.nextNull()) -1 else j.nextInt(); "hob_name" -> hobName = if (j.nextNull()) "" else j.nextString()
+            "round" -> round = j.nextInt(); "dmg" -> dmg = j.nextInt()
+            else -> j.skipValue()
+        }
+        j.endObject()
+        return Blow(shot, shotName, hob, hobName, round, dmg)
+    }
+
+    private fun readBroke(j: JsonReader): Broke {
+        var side = 0; var how = ""; var last: Blow? = null; val top = ArrayList<Blow>(3); var kettle = 0; var blocks = 0; var bonked = 0
+        j.beginObject()
+        while (j.hasNext()) when (j.nextName()) {
+            "side" -> side = j.nextInt(); "how" -> how = j.nextString()
+            "last" -> last = if (j.nextNull()) null else readBlow(j)
+            "top" -> if (!j.nextNull()) { j.beginArray(); while (j.hasNext()) top.add(readBlow(j)); j.endArray() }
+            "kettle_lost" -> kettle = j.nextInt(); "blocks_lost" -> blocks = j.nextInt(); "hobs_bonked" -> bonked = j.nextInt()
+            else -> j.skipValue()
+        }
+        j.endObject()
+        return Broke(side, how, last, top, kettle, blocks, bonked)
     }
 
     private fun readEvents(j: JsonReader): List<GameEvent> {
@@ -535,24 +772,85 @@ class SnapshotParser {
         j.beginArray()
         if (!j.hasNext()) { j.endArray(); return emptyList() }
         val out = ArrayList<GameEvent>()
+        val xy = IntArray(2)
         while (j.hasNext()) {
             var t = ""; var tick = 0; var x = 0; var y = 0; var r = 0; var side = -1; var hob = -1; var dmg = 0; var n = 0
             var winner = -1; var round = 0; var target = ""; var how = ""; var text = ""; var callout = false
+            var c = 0; var shot = ""; var type = ""; var why = ""; var kind = ""; var state = ""; var room = ""
+            var phase = 0; var cells = 0; var nook = -1; var hp = 0; var wind = 0; var power = 0; var angle = 0
+            var fx = 0; var fy = 0; var tx = 0; var ty = 0; var count = 0; var blocks = GameEvent.EMPTY_INTS; var falls = GameEvent.EMPTY_INTS
+            var cut = GameEvent.EMPTY_INTS; var threaded = false; var buttons = 0
             j.beginObject()
             while (j.hasNext()) when (j.nextName()) {
                 "t" -> t = j.nextString(); "tick" -> tick = j.nextInt()
-                "x" -> x = j.nextInt(); "y" -> y = j.nextInt(); "r" -> r = j.nextInt()
-                "side" -> side = j.nextInt(); "hob" -> hob = j.nextInt(); "dmg" -> dmg = j.nextInt(); "n" -> n = j.nextInt()
-                "winner" -> winner = j.nextInt(); "round" -> round = j.nextInt()
-                "target" -> target = j.nextString(); "how" -> how = j.nextString(); "text" -> text = j.nextString()
-                "callout" -> callout = j.nextBoolean()
+                "x" -> x = num(j); "y" -> y = num(j); "r" -> r = num(j); "c" -> c = num(j)
+                "side" -> side = num(j, -1); "hob" -> hob = num(j, -1); "dmg" -> dmg = num(j); "n" -> n = num(j)
+                "winner" -> winner = num(j, -1); "round" -> round = num(j)
+                "target" -> target = str(j); "how" -> how = str(j); "text" -> text = str(j)
+                "callout" -> callout = if (j.nextNull()) false else j.nextBoolean()
+                "threaded" -> threaded = if (j.nextNull()) false else j.nextBoolean()
+                "shot" -> shot = str(j); "type" -> type = str(j); "why" -> why = str(j); "kind" -> kind = str(j)
+                "state" -> state = str(j); "doodad" -> kind = str(j); "room" -> room = if (j.peek() == '"') j.nextString() else j.nextRaw()
+                "phase" -> phase = num(j); "cells" -> cells = num(j); "nook" -> nook = num(j, -1); "hp" -> hp = num(j)
+                "wind" -> wind = num(j); "power" -> power = num(j); "angle" -> angle = num(j); "buttons" -> buttons = num(j)
+                "from" -> { point(j, xy); fx = xy[0]; fy = xy[1] }
+                "to" -> { point(j, xy); tx = xy[0]; ty = xy[1] }
+                "blocks" -> if (j.peek() == '[') blocks = triples(j) else count = num(j)
+                "falls" -> falls = j.nextPairs()
+                "cut" -> cut = j.nextIntArray()
                 else -> j.skipValue()
             }
             j.endObject()
-            out.add(GameEvent(t, tick, x, y, r, side, hob, dmg, n, winner, round, target, how, text, callout))
+            if (blocks.isNotEmpty() && count == 0) count = blocks.size / 3
+            out.add(GameEvent(t, tick, x, y, r, side, hob, dmg, n, winner, round, target, how, text, callout,
+                c, shot, type, why, kind, state, room, phase, cells, nook, hp, wind, power, angle, fx, fy, tx, ty, count, blocks, falls, cut, threaded, buttons))
         }
         j.endArray()
         return out
+    }
+
+    /** An int, or [def] for null or any other kind of value. */
+    private fun num(j: JsonReader, def: Int = 0): Int = when (j.peek()) {
+        'n' -> { j.nextNull(); def }
+        '-', in '0'..'9' -> j.nextInt()
+        else -> { j.skipValue(); def }
+    }
+
+    private fun str(j: JsonReader): String = when (j.peek()) {
+        '"' -> j.nextString()
+        'n' -> { j.nextNull(); "" }
+        else -> j.nextRaw()
+    }
+
+    /** `[x, y]` or a single number x. */
+    private fun point(j: JsonReader, out: IntArray) {
+        out[0] = 0; out[1] = 0
+        if (j.peek() == '[') { val a = j.nextIntArray(); if (a.isNotEmpty()) out[0] = a[0]; if (a.size > 1) out[1] = a[1] } else out[0] = num(j)
+    }
+
+    /** `[[c, r, "mat"], ...]` or `[[c, r], ...]` into c, r, material code triples. */
+    private fun triples(j: JsonReader): IntArray {
+        j.beginArray()
+        var out = IntArray(24); var n = 0
+        while (j.hasNext()) {
+            if (n + 3 > out.size) out = out.copyOf(out.size * 2)
+            var k = 0
+            out[n] = 0; out[n + 1] = 0; out[n + 2] = -1
+            if (j.peek() != '[') { j.skipValue(); continue }
+            j.beginArray()
+            while (j.hasNext()) {
+                when {
+                    j.peek() == '"' -> { val m = GameEvent.matCode(j.nextString()); if (k < 3) out[n + 2] = m }
+                    k < 2 -> out[n + k] = num(j)
+                    else -> j.skipValue()
+                }
+                k++
+            }
+            j.endArray()
+            n += 3
+        }
+        j.endArray()
+        return out.copyOf(n)
     }
 }
 

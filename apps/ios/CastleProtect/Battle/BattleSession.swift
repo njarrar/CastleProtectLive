@@ -36,6 +36,18 @@ struct HudState: Equatable {
     var draft: DraftView?
     var handoff: HandoffView?
     var result: BattleResult?
+    var shoveOffCost = 15
+    var helpMarks = ["", ""]
+    /// Volley Points: Actions per side and Actions left per side (empty when off).
+    var volleyActions = 0
+    var volleyLeft: [Int] = []
+    /// 1-10: the boss phase (1 to 3) and the shears jam, or nil.
+    var bossPhase: Int?
+    var bossJam = 0
+    var cutShown = false
+    /// Rescue: what to break, for the round label.
+    var objective: String?
+    var isYard = false
 
     init() {}
 
@@ -70,6 +82,22 @@ struct HudState: Equatable {
         draft = s.draft
         handoff = s.phase == .handoff ? (s.handoff ?? HandoffView(line: "", toSide: s.activeSide)) : nil
         result = s.result
+        shoveOffCost = s.shoveOffCost
+        helpMarks = s.helpMarks
+        volleyActions = s.volleyActions
+        volleyLeft = s.volleyLeft
+        bossPhase = s.boss?.phase
+        bossJam = s.boss?.jam ?? 0
+        cutShown = s.boss?.cut != nil
+        objective = s.objective
+        isYard = s.mode == "test_yard"
+    }
+
+    var isVolley: Bool { volleyActions > 0 }
+    /// "Shots left 7/10" for the side the HUD shows.
+    var volleyText: String {
+        guard isVolley, hudSide < volleyLeft.count else { return "" }
+        return "Shots left \(volleyLeft[hudSide])/\(volleyActions)"
     }
 
     var inFlight: Bool { phase.isResolving }

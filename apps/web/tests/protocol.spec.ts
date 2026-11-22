@@ -67,7 +67,9 @@ test('lean snapshot keeps the last full one and moves shells', () => {
 // Every key the core sends must be one the adapter knows: drawn, read, or listed here on
 // purpose as not shown yet. A new key in core/fixtures fails this test until the adapter is told.
 const KNOWN: Record<string, string[]> = {
-  '': ['awaiting', 'castles', 'draft', 'events', 'full', 'ghosts', 'hash', 'hobs', 'hud', 'last_ai', 'level', 'map', 'mode', 'phase', 'preview', 'props', 'result', 'shells', 'side', 'terrain', 'tick'],
+  '': ['aim', 'awaiting', 'castles', 'draft', 'events', 'full', 'ghosts', 'hash', 'hobs', 'hud', 'last_ai', 'level', 'map', 'mode', 'phase', 'preview', 'props', 'result', 'shells', 'side', 'terrain', 'tick'],
+  // v0.2 lean aim snapshot: the new aim and preview are merged into the last full one
+  '.aim': ['angle', 'hob', 'power', 'side'],
   '.castles[]': ['base_y', 'block', 'blocks', 'cols', 'fatigue', 'held', 'kettle', 'rooms', 'rows', 'shimmer', 'side', 'steam', 'steam_turn', 'x'],
   '.castles[].blocks[]': ['battered', 'c', 'hp', 'mat', 'max', 'peephole', 'r', 'root', 'x', 'y'],
   '.castles[].kettle': ['box', 'c', 'hp', 'intact', 'lid', 'max', 'r', 'room'],
@@ -76,8 +78,16 @@ const KNOWN: Record<string, string[]> = {
   // not shown yet on purpose: cover, grudge, clatter (passives), dummy, nook
   '.hobs[]': ['aim', 'buried', 'can_fire', 'class', 'clatter', 'cover', 'def', 'dummy', 'grudge', 'hp', 'id', 'knack', 'knack_uses', 'max', 'name', 'nook', 'plain', 'rest', 'side', 'state', 'x', 'y'],
   '.hobs[].aim': ['angle', 'power'],
-  // not shown yet on purpose: score, puff_up, front_rounds_left, crew (the pips read hobs[])
-  '.hud': ['control', 'crew', 'doodads', 'forecast', 'front_rounds_left', 'hands', 'kettle_pct', 'names', 'puff_up', 'round', 'round_cap', 'score', 'selected', 'side', 'squall', 'squall_round', 'squall_warning', 'steam', 'steam_turn_left', 'turn', 'wind'],
+  // not shown yet on purpose: score, puff_up, front_rounds_left, crew (the pips read hobs[]),
+  // shove_off_cost (the refusal says not_enough_steam), rules (objective and cap_win)
+  '.hud': ['boss', 'control', 'crew', 'doodads', 'forecast', 'front_rounds_left', 'hands', 'handicap', 'kettle_pct', 'names', 'puff_up', 'round', 'round_cap', 'rules', 'score', 'selected', 'shots', 'shove_off_cost', 'side', 'squall', 'squall_round', 'squall_warning', 'steam', 'steam_max', 'steam_turn_left', 'turn', 'volley', 'wind'],
+  '.hud.shots[]': ['id', 'ready', 'shot', 'why'],
+  '.hud.handicap[]': ['crew', 'help', 'preview_pct', 'steam'],
+  '.hud.volley': ['actions', 'left'],
+  // roller and shears also come as props[]; roller_done shows as a greyed drum
+  '.hud.boss': ['cut', 'jam', 'phase', 'roller', 'roller_done', 'shears'],
+  '.hud.rules': ['cap_win', 'objective'],
+  '.hud.rules.objective': ['count', 'tag'],
   '.hud.crew[][]': ['class', 'hp_pct', 'id', 'rest', 'state'],
   '.hud.hands[][]': ['card', 'dud', 'id', 'match', 'name', 'weight'],
   '.hud.selected': ['hob', 'shot'],
@@ -85,7 +95,13 @@ const KNOWN: Record<string, string[]> = {
   '.terrain': ['chunks'],
   '.terrain.chunks[]': ['cx', 'cy', 'data', 'h', 'w', 'x', 'y'],
   '.props[]': ['hp', 'id', 'kind', 'max', 'shot', 'side', 'tag', 'x', 'y'],
-  '.result': ['how', 'pennants', 'round', 'winner'],
+  '.result': ['broke', 'buttons', 'how', 'pennants', 'pennants_new', 'round', 'score', 'stats', 'winner'],
+  // not shown yet on purpose: best_streak, bonks, blocks_lost, kettle_lost, hobs_lost (duel results show shots, hits, blocks)
+  '.result.stats[]': ['best_streak', 'blocks_dropped', 'blocks_lost', 'bonks', 'hits', 'hobs_lost', 'kettle_lost', 'shots'],
+  // the "what broke you" line reads how, last and the losses; top (the three worst shots) is for the replay card
+  '.result.broke': ['blocks_lost', 'hobs_bonked', 'how', 'kettle_lost', 'last', 'side', 'top'],
+  '.result.broke.last': ['dmg', 'hob', 'hob_name', 'round', 'shot', 'shot_name'],
+  '.result.broke.top[]': ['dmg', 'hob', 'hob_name', 'round', 'shot', 'shot_name'],
   '.draft': ['next', 'picks', 'picks_each', 'pool', 'wish'],
 };
 
@@ -100,7 +116,7 @@ test('the adapter knows every snapshot key in core/fixtures', () => {
       walk(x, `${path}.${k}`);
     }
   };
-  for (const f of ['snapshot_plan.json', 'snapshot_lean.json', 'snapshot_after_shot.json']) walk(fx(f), '');
+  for (const f of ['snapshot_plan.json', 'snapshot_lean.json', 'snapshot_after_shot.json', 'snapshot_aim_lean.json', 'snapshot_boss_1_10.json', 'snapshot_ended.json', 'snapshot_rescue_1_7.json']) walk(fx(f), '');
   expect([...new Set(unknown)]).toEqual([]);
 });
 

@@ -47,6 +47,16 @@ enum HelpLevel: String, Codable, Sendable, CaseIterable, Identifiable {
     case none, some, lots
     var id: String { rawValue }
     var label: String { rawValue.capitalized }
+    /// The core's setup value (`sides[i].help`), nil for None.
+    var core: String? { self == .none ? nil : rawValue }
+    /// Preview arc share for this Help step (UX 4.9: 30%, 60%, full); nil keeps the level's.
+    var previewPct: Int? {
+        switch self {
+        case .none: return nil
+        case .some: return 60
+        case .lots: return 100
+        }
+    }
     /// Gold plus marks shown openly beside a name.
     var marks: String {
         switch self {
@@ -73,6 +83,8 @@ struct BattleSetup: Codable, Equatable, Sendable {
     var help: [HelpLevel] = []
     /// Starter Box fort per side ("box_1"...), duel only.
     var forts: [String] = []
+    /// What the save holds for this level, so the core can work out the Buttons (campaign).
+    var progress: CoreProgress?
 
     static func campaign(_ level: String, preset: Preset, seed: UInt64) -> BattleSetup {
         BattleSetup(mode: .campaign, level: level, preset: preset, seed: seed)
@@ -94,25 +106,35 @@ extension BattleSetup {
     /// Starter Box forts on the Couch Duel setup screen, by core kit id.
     static let kits = ["box_1": "kit_oak", "box_2": "kit_stone", "box_3": "kit_reed"]
 
+    /// Volley Points Actions per side, offered on the setup screens (API: 6, 10 or 14).
+    static let volleyChoices = [6, 10, 14]
+
     /// The core's battle setup (`level_json` for `cp_new`), with only the fields API.md lists.
     func coreSetup() -> CoreSetup {
         let rummage: CoreRummage? = shells == .plain ? CoreRummage(pool: 0, picks: 0, source: nil) : nil
+        let volley: Int? = winBy == .volley ? (Self.volleyChoices.contains(rounds) ? rounds : 10) : nil
+        // Volley Points has no round cap; the core refuses none, but sends no cap with it.
+        let cap: Int? = winBy == .volley ? nil : rounds
+        func help(_ i: Int) -> HelpLevel { i < self.help.count ? self.help[i] : .none }
         switch mode {
         case .campaign:
             return CoreSetup(level: level ?? "1-1", mode: "campaign",
-                             sides: [CoreSideConfig(control: "human"), CoreSideConfig(control: "ai", preset: preset.rawValue)])
+                             sides: [CoreSideConfig(control: "human"), CoreSideConfig(control: "ai", preset: preset.rawValue)],
+                             progress: progress)
         case .skirmish:
             return CoreSetup(level: map ?? "d1", mode: "skirmish",
-                             sides: [CoreSideConfig(control: "human"), CoreSideConfig(control: "ai", preset: preset.rawValue)],
-                             firstTurn: .coin, roundCap: rounds, wind: wind.coreWind, rummage: rummage)
+                             sides: [CoreSideConfig(control: "human", help: help(0).core, previewPct: help(0).previewPct),
+                                     CoreSideConfig(control: "ai", preset: preset.rawValue)],
+                             firstTurn: .coin, roundCap: cap, wind: wind.coreWind, rummage: rummage, volley: volley)
         case .duel:
             let sides = (0..<2).map { i in
                 CoreSideConfig(control: "human",
                                kit: i < forts.count ? Self.kits[forts[i]] : nil,
-                               name: i < names.count ? names[i] : "Player \(i + 1)")
+                               name: i < names.count ? names[i] : "Player \(i + 1)",
+                               help: help(i).core, previewPct: help(i).previewPct)
             }
             return CoreSetup(level: map ?? "d1", mode: "couch", sides: sides, firstTurn: .coin,
-                             roundCap: rounds, wind: wind.coreWind, rummage: rummage)
+                             roundCap: cap, wind: wind.coreWind, rummage: rummage, volley: volley)
         case .yard:
             return CoreSetup(level: map ?? "d1", mode: "test_yard")
         }

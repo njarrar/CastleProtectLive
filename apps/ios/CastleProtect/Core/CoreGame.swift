@@ -45,6 +45,13 @@ final class CoreGame {
     private var ghostCount = [0, 0]
     /// A command was sent, or slow work finished: the next frame must be read.
     private var dirty = true
+    /// The core's command log at the last turn start: what a dead handle is rebuilt from.
+    private var recoveryLog = "[]"
+    /// Dead handle rebuilds this battle (at most `maxRecoveries`, then the fight stops).
+    private(set) var recoveries = 0
+    static let maxRecoveries = 2
+    /// Set after a dead handle was rebuilt; the session shows a short line once and clears it.
+    var recoveredNotice = false
 
     init(bridge: any CoreBridge, catalog: ContentCatalog) {
         let host = CoreHost(bridge: bridge)
@@ -76,6 +83,8 @@ final class CoreGame {
         isRunning = true
         assembler.reset()
         resetClock()
+        recoveryLog = "[]"
+        recoveries = 0
         return nil
     }
 
@@ -110,10 +119,66 @@ final class CoreGame {
         let json = command.jsonString()
         let text = host.sync { $0.command(json) }
         let reply = CoreReply.decode(text)
-        if reply.reason == "panic" { fault = reply.detail ?? "panic" }
-        if reply.ok, case .pickHob = command { recallIndex = 0 }
         dirty = true
+        if reply.isDeadHandle {
+            // The core panicked on this command (or earlier): rebuild the battle from the
+            // last turn start and tell the caller the command did not happen.
+            return recover() ? CoreReply(ok: false, reason: "recovered") : CoreReply(ok: false, reason: reply.reason)
+        }
+        if reply.ok, case .pickHob = command { recallIndex = 0 }
         return reply
+    }
+
+    /// Give up: the other side wins with `how: "give_up"` (any phase but ended).
+    @discardableResult
+    func giveUp(side: Int? = nil) -> CoreReply {
+        holdTurns = false
+        return send(.giveUp(side: side))
+    }
+
+    // MARK: Dead handle (core/API.md, errors and panics)
+
+    /// A panic marks the handle dead: every later call returns `dead_handle`.
+    /// Rebuild the battle with `cp_new` (same setup and seed) plus `resume` with
+    /// the log saved at the last turn start. Returns false (and sets `fault`)
+    /// when that fails or happened too often.
+    @discardableResult
+    func recover() -> Bool {
+        guard let setup, isRunning else { return false }
+        guard recoveries < Self.maxRecoveries else {
+            fault = "The rules core stopped (\(recoveries) restarts)."
+            return false
+        }
+        recoveries += 1
+        let json = setup.coreSetup().jsonString()
+        let resume = CoreCommand.resume(log: recoveryLog).jsonString()
+        let seed = setup.seed
+        let outcome: String? = host.sync { b in
+            if let error = b.start(setup: json, seed: seed) { return error }
+            let reply = CoreReply.decode(b.command(resume))
+            return reply.ok ? nil : (reply.reason ?? "resume")
+        }
+        if let outcome {
+            fault = "The rules core stopped and could not be restarted (\(outcome))."
+            return false
+        }
+        assembler.reset()
+        lastPhase = "none"
+        lastAwaiting = "none"
+        thinkElapsed = 0
+        carryMs = 0
+        dirty = true
+        recoveredNotice = true
+        return true
+    }
+
+    /// Keeps the log the battle can be rebuilt from (called at each turn start).
+    private func noteRecoveryPoint() {
+        let text = host.sync { $0.command(CoreCommand.log.jsonString()) }
+        guard let obj = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any],
+              obj["ok"] as? Bool == true, let log = obj["log"] as? [Any],
+              let data = try? JSONSerialization.data(withJSONObject: log) else { return }
+        recoveryLog = String(decoding: data, as: UTF8.self)
     }
 
     /// Recall steps through the active side's ghosts: last shot, the one before, and round again.
@@ -162,8 +227,11 @@ final class CoreGame {
         let ticks = carryMs * 120 / 1000
         guard ticks > 0 else { return }
         carryMs -= ticks * 1000 / 120
-        _ = host.sync { $0.step(ticks) }
+        let reply = host.sync { $0.step(ticks) }
         dirty = true
+        if reply.contains("\"ok\":false") && CoreReply.decode(reply).isDeadHandle {
+            recover()
+        }
     }
 
     /// The newest frame only when something can have changed: a command was
@@ -181,7 +249,20 @@ final class CoreGame {
         guard isRunning, !isBusy else { return nil }
         dirty = false
         let text = host.sync { $0.snapshot() }
-        guard let raw = CoreSnapshot.decode(text), raw.phase != "none" else {
+        guard var raw = CoreSnapshot.decode(text) else {
+            fault = "The core sent no snapshot."
+            return nil
+        }
+        if raw.ok == false {
+            // A dead handle (a panic in `ai_turn` or a step): rebuild and read again.
+            guard (raw.reason == "dead_handle" || raw.reason == "panic") && recover(),
+                  let again = CoreSnapshot.decode(host.sync { $0.snapshot() }), again.ok != false else {
+                if fault == nil { fault = "The core stopped (\(raw.reason ?? "error"))." }
+                return nil
+            }
+            raw = again
+        }
+        guard raw.phase != "none" else {
             fault = "The core sent no snapshot."
             return nil
         }
@@ -190,6 +271,10 @@ final class CoreGame {
         lastSide = raw.side
         if raw.full, raw.hud.control.count >= 2 { humans = raw.hud.control.map { $0 == "human" } }
         if raw.full { ghostCount = [raw.ghosts.filter { $0.side == 0 }.count, raw.ghosts.filter { $0.side == 1 }.count] }
+        if raw.full, raw.phase == "plan" || raw.phase == "draft",
+           raw.events.contains(where: { $0.t == "turn_start" || $0.t == "battle_start" || $0.t == "draft_start" }) {
+            noteRecoveryPoint()
+        }
         let duelHandoff = setup?.mode == .duel && setup?.seats == .sideBySide
         if duelHandoff, raw.events.contains(where: { $0.t == "turn_start" }),
            !raw.events.contains(where: { $0.t == "battle_start" }), raw.phase == "plan" {
@@ -256,29 +341,25 @@ final class CoreGame {
         guard start(saved.setup) == nil else { return .replayFailed("setup") }
         let log = saved.log
         let expected = saved.hash
-        let outcome = await host.run { bridge in CoreGame.replay(bridge, log: log, expectHash: expected) }
+        let outcome = await host.run { bridge in CoreGame.resume(bridge, log: log, expectHash: expected) }
         if let failure = outcome {
             end()
             return .replayFailed(failure)
         }
         handoffTo = saved.handoffTo
+        recoveryLog = log
         dirty = true
         return .ok
     }
 
-    /// Runs on the core queue. Returns nil on success, else why it failed.
-    nonisolated private static func replay(_ bridge: any CoreBridge, log: String, expectHash: String?) -> String? {
-        guard let commands = (try? JSONSerialization.jsonObject(with: Data(log.utf8))) as? [Any] else { return "log" }
-        for item in commands {
-            guard let obj = item as? [String: Any],
-                  let bytes = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]) else { continue }
-            runUntilInput(bridge)
-            let reply = CoreReply.decode(bridge.command(String(decoding: bytes, as: UTF8.self)))
-            if !reply.ok { return reply.reason ?? "refused" }
-        }
-        runUntilInput(bridge)
+    /// Runs on the core queue: the core's own `resume` replays the log the way a
+    /// live app played it. Returns nil on success, else why it failed.
+    nonisolated private static func resume(_ bridge: any CoreBridge, log: String, expectHash: String?) -> String? {
+        guard (try? JSONSerialization.jsonObject(with: Data(log.utf8))) as? [Any] != nil else { return "log" }
+        let reply = CoreReply.decode(bridge.command(CoreCommand.resume(log: log).jsonString()))
+        if !reply.ok { return reply.reason ?? "refused" }
         if let expectHash, !expectHash.isEmpty {
-            let now = CoreReply.decode(bridge.command(CoreCommand.hash.jsonString())).hash
+            let now = reply.hash ?? CoreReply.decode(bridge.command(CoreCommand.hash.jsonString())).hash
             if now != expectHash { return "hash" }
         }
         // Drop the replay's events (no sounds for the past), then ask for the whole map again.
@@ -287,12 +368,4 @@ final class CoreGame {
         return nil
     }
 
-    /// Steps until the core waits for input (draft, plan) or the battle is over.
-    nonisolated private static func runUntilInput(_ bridge: any CoreBridge) {
-        for _ in 0..<4000 {
-            let reply = bridge.step(120)
-            let phase = ((try? JSONSerialization.jsonObject(with: Data(reply.utf8))) as? [String: Any])?["phase"] as? String
-            if phase == nil || phase == "draft" || phase == "plan" || phase == "ended" { return }
-        }
-    }
 }

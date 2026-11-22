@@ -19,6 +19,7 @@ export function skirmishScreen(app: App): Screen {
     cap: String(last?.roundCap ?? 15) as '10' | '15' | '20',
     wind: last?.wind ?? 'light',
     shells: last?.shells ?? 'quick',
+    winBy: (last?.volley ? String(last.volley) : 'ko') as WinBy,
   };
   const start = () => {
     const crew = app.roster().slice(0, 4);
@@ -26,7 +27,7 @@ export function skirmishScreen(app: App): Screen {
     if (mine && !app.core.checkFort(mine, crew.length).ok) { app.notice('Your fort cannot take this crew, so you get a standard fort.'); mine = undefined; }
     const setup: BattleSetup = {
       mode: 'skirmish', map: st.map, seed: hashSeed(st.map) ^ Date.now(), difficulty: st.difficulty, windOff: st.wind === 'off',
-      roundCap: Number(st.cap), wind: st.wind, shells: st.shells,
+      roundCap: Number(st.cap), wind: st.wind, shells: st.shells, volley: st.winBy === 'ko' ? undefined : Number(st.winBy),
       sides: [
         { name: 'You', human: true, crew, blueprint: mine },
         { name: 'Sir Pudge', human: false, crew: app.core.hobs().slice(0, 4).map((x) => x.id), blueprint: app.core.starterForts()[1] },
@@ -42,11 +43,20 @@ export function skirmishScreen(app: App): Screen {
       field('Rounds', seg([['10', '10'], ['15', '15'], ['20', '20']], st.cap, (v) => (st.cap = v))),
       field('Wind', seg([['off', 'Off'], ['light', 'Light'], ['full', 'Full']], st.wind, (v) => (st.wind = v))),
       field('Shells', seg([['draft', 'Draft'], ['quick', 'Quick Pick'], ['plain', 'Plain only']], st.shells, (v) => (st.shells = v))),
-      h('p', { class: 'small' }, 'Win by Knockout: Clean Sweep or Kettle Pop.'),
+      winByRow(st),
     ),
     h('footer', { class: 'pinned' }, btn('START', start, 'primary big', { 'data-autofocus': true })),
   );
   return { el };
+}
+
+type WinBy = 'ko' | '6' | '10' | '14';
+/** Win by: Knockout (Clean Sweep or Kettle Pop) or Volley Points, a fixed number of shots each (07 §4.7). */
+function winByRow(st: { winBy: WinBy }): HTMLElement {
+  const note = h('p', { class: 'small' });
+  const say = () => { note.textContent = st.winBy === 'ko' ? 'Knockout: Clean Sweep or Kettle Pop.' : `Volley Points: ${st.winBy} shots each, the higher Siege Score wins. No round cap, no Squall.`; };
+  say();
+  return h('div', {}, field('Win by', seg([['ko', 'Knockout'], ['6', 'Volley 6'], ['10', 'Volley 10'], ['14', 'Volley 14']], st.winBy, (v) => { st.winBy = v; say(); }, 'Win by')), note);
 }
 
 function field(label: string, ctl: HTMLElement): HTMLElement {
@@ -65,7 +75,7 @@ export function duelScreen(app: App): Screen {
     { name: last?.sides[0].name ?? app.progress.duelNames[0], fort: 1, crew: last?.sides[0].crew ?? hobs.slice(0, 5).map((x) => x.id), help: last?.sides[0].help ?? 'none' },
     { name: last?.sides[1].name ?? app.progress.duelNames[1], fort: 0, crew: (last?.sides[1].crew ?? hobs.slice(0, 5).map((x) => x.id)).map((c) => c.replace(/^p2_/, '')), help: last?.sides[1].help ?? 'none' },
   ];
-  const rules = { map: pickMap(app, last?.map), cap: String(last?.roundCap ?? 15) as '10' | '15' | '20', wind: last?.wind ?? 'light', shells: last?.shells ?? 'draft', seats: 'side' as 'side' | 'one' };
+  const rules = { map: pickMap(app, last?.map), cap: String(last?.roundCap ?? 15) as '10' | '15' | '20', wind: last?.wind ?? 'light', shells: last?.shells ?? 'draft', seats: 'side' as 'side' | 'one', winBy: (last?.volley ? String(last.volley) : 'ko') as WinBy };
   const cards = h('div', { class: 'duelcards' });
 
   const fortOf = (i: number): Blueprint | undefined => (i < forts.length ? forts[i] : mine);
@@ -116,7 +126,7 @@ export function duelScreen(app: App): Screen {
     const forts2: [Blueprint | undefined, Blueprint | undefined] = [fortFit(0), fortFit(1)];
     const setup: BattleSetup = {
       mode: 'duel', map: rules.map, seed: hashSeed(rules.map) ^ (Date.now() & 0xffff), difficulty: 'fair',
-      windOff: rules.wind === 'off', roundCap: Number(rules.cap), wind: rules.wind, shells: rules.shells,
+      windOff: rules.wind === 'off', roundCap: Number(rules.cap), wind: rules.wind, shells: rules.shells, volley: rules.winBy === 'ko' ? undefined : Number(rules.winBy),
       sides: [
         { name: players[0].name, human: true, crew: players[0].crew, blueprint: forts2[0], help: players[0].help },
         { name: players[1].name, human: true, crew: players[1].crew, blueprint: forts2[1], help: players[1].help },
@@ -141,6 +151,7 @@ export function duelScreen(app: App): Screen {
       field('Wind', seg([['off', 'Off'], ['light', 'Light'], ['full', 'Full']], rules.wind, (v) => (rules.wind = v))),
       field('Shells', seg([['quick', 'Quick Pick'], ['plain', 'Plain only']], rules.shells === 'draft' ? 'quick' : rules.shells, (v) => (rules.shells = v))),
       field('Seats', seg([['side', 'Side by side'], ['one', 'One seat']], rules.seats, (v) => (rules.seats = v))),
+      winByRow(rules),
     ),
     h('footer', { class: 'pinned' },
       btn('Quick start', () => { players[0].crew = hobs.slice(0, 5).map((x) => x.id); players[1].crew = hobs.slice(3, 8).map((x) => x.id); go(); }, 'secondary'),

@@ -9,7 +9,7 @@ import type {
 } from './protocol';
 import type {
   BattleEvent, BattleSetup, Blueprint, BlueprintCheck, BlockView, Command, CommandResult, CoreApi,
-  DraftView, HobClass, HobInfo, HobView, KettleView, LevelInfo, Material, PinView, PropView, ResultView, RoomView,
+  DraftView, HobClass, HobInfo, HobView, HudView, KettleView, LevelInfo, Material, PinView, PropView, ResultView, RoomView,
   ShellView, ShotChip, Side, SideStats, Snapshot,
 } from './types';
 import { SaveError, TICK_HZ } from './types';
@@ -51,7 +51,7 @@ export class RealCore implements CoreApi {
   readonly name = 'wasm';
   readonly version: string;
   readonly rules: number;
-  readonly features = { setWind: false, giveUp: false };
+  readonly features = { setWind: true, giveUp: true };
   private bundle: Bundle;
   private game?: WasmGame;
   private scratch?: WasmGame;
@@ -156,9 +156,14 @@ export class RealCore implements CoreApi {
     const rep = this.validate(rows, seats);
     const cost = new Map(this.bundle.materials.blocks.map((b) => [b.id, b.cost]));
     const blocks = bp.cells.filter((c) => c.kind !== 'nook' && c.kind !== 'kettle');
+    // v0.2: the core sends cost, used and budget; a refusal marks the cells (hanging blocks, open walls).
+    const why = String(rep.detail ?? rep.reason ?? 'Not legal');
+    const cells = Array.isArray(rep.cells) ? (rep.cells as [number, number][]) : [];
     return {
-      ok: rep.ok, blocks: blocks.length, budget: RULES.workshop.budget, cost: blocks.reduce((a, c) => a + (cost.get(c.kind) ?? 0), 0),
-      problems: rep.ok ? [] : [{ col: -1, row: -1, why: String(rep.detail ?? rep.reason ?? 'Not legal') }],
+      ok: rep.ok, blocks: typeof rep.used === 'number' ? rep.used : blocks.length,
+      budget: typeof rep.budget === 'number' ? rep.budget : RULES.workshop.budget,
+      cost: typeof rep.cost === 'number' ? rep.cost : blocks.reduce((a, c) => a + (cost.get(c.kind) ?? 0), 0),
+      problems: rep.ok ? [] : cells.length ? cells.map(([c, r]) => ({ col: c, row: r, why })) : [{ col: -1, row: -1, why }],
     };
   }
 
@@ -248,8 +253,8 @@ export class RealCore implements CoreApi {
         if (c.dir !== 0) return this.walkStep();
         return { ok: true };
       case 'fast': return { ok: true };
-      case 'set_wind': return { ok: false, error: 'unknown_command' };
-      case 'give_up': return { ok: false, error: 'unknown_command' };
+      case 'set_wind': pc = { cmd: 'set_wind', wind: c.wind }; break;
+      case 'give_up': pc = { cmd: 'give_up' }; break;
     }
     const r = this.send(pc!);
     return r.ok ? { ok: true } : { ok: false, error: String(r.reason ?? 'refused') };
@@ -269,8 +274,6 @@ export class RealCore implements CoreApi {
       if (this.think >= THINK_TICKS) { this.think = 0; this.send({ cmd: 'ai_turn' }); }
       return;
     }
-    // The Test Yard dummy side never acts (core request: let the core skip it).
-    if (s.phase === 'plan' && s.mode === 'test_yard' && s.side === 1) { this.send({ cmd: 'pass' }); return; }
     if (s.phase === 'plan' && this.walkDir !== 0) {
       this.walkTicks += ticks;
       while (this.walkTicks >= RULES.walk.ticks && (this.walkDir as number) !== 0) { this.walkTicks -= RULES.walk.ticks; this.walkStep(); }
@@ -288,9 +291,17 @@ export class RealCore implements CoreApi {
       if (this.last) this.lastCastles = this.last.castles;
       this.last = raw;
       this.rev++;
-      for (const i of [0, 1] as const) this.steamMax[i] = Math.max(this.steamMax[i], raw.hud.steam[i] ?? 0);
+      for (const i of [0, 1] as const) this.steamMax[i] = raw.hud.steam_max?.[i] ?? Math.max(this.steamMax[i], raw.hud.steam[i] ?? 0);
     } else {
       this.last = { ...this.last, tick: raw.tick, phase: raw.phase, side: raw.side, awaiting: raw.awaiting, shells: raw.shells, full: false };
+      // v0.2: a lean snapshot after `aim` carries the new aim and preview; replace those two.
+      if (raw.aim) {
+        const a = raw.aim;
+        this.last.hobs = this.last.hobs.map((h) => (h.id === a.hob && h.side === a.side ? { ...h, aim: { angle: a.angle, power: a.power } } : h));
+        if (raw.preview) this.last.preview = raw.preview;
+        this.rev++;
+        this.cache = undefined;
+      }
     }
     const H = this.last.map.h;
     for (const ch of raw.terrain?.chunks ?? []) {
@@ -427,6 +438,14 @@ export class RealCore implements CoreApi {
       case 'grudge': case 'clatter': return [{ t: 'hob', hob: String(n('hob')), act: 'nextdoor' }];
       case 'prop_break': return note(e.kind === 'cage_bar' ? 'A bar broke!' : 'Broke!', [n('x'), H - n('y')], 'break');
       case 'regrow': return note('The hedge grew back', slotAt(n('side'), n('c'), n('r')));
+      // v0.2: the Grand Fort phases on 1-10 and the Volley Points relight.
+      case 'boss_phase': return note(`Grand Fort: phase ${n('phase')}`, undefined, 'squall');
+      case 'roller': return note('Big Smoothie Jr. rolls out!', [n('x'), H - n('y')], 'thud');
+      case 'roller_stop': return note('The roller stopped', undefined, 'thud');
+      case 'shears_open': return note('The shears open: the red line is cut next turn', undefined, 'sheet');
+      case 'shears_snip': return note('Snip!', undefined, 'break');
+      case 'shears_jam': return note(`The shears jam for ${n('turns')} turns`, undefined, 'thud');
+      case 'relight': return note('Kettle relit', fortMid(n('side')), 'pennant');
       default: return [];
     }
   }
@@ -485,11 +504,15 @@ export class RealCore implements CoreApi {
     const shotDef = (id: string) => this.bundle.shots.find((x) => x.id === id);
     const chips: ShotChip[] = [];
     if (sel) {
-      // Per shot readiness is rebuilt from rest and uses until the core sends it (core request).
       const ready = sel.can_fire && s.phase === 'plan';
       chips.push({ id: 'plain', name: shotDef(sel.plain)?.name ?? 'Plain', icon: sel.plain, kind: 'plain', uses: -1, weight: weightOf(shotDef(sel.plain)?.weight), best: sel.class as HobClass, ready });
       if (sel.knack) chips.push({ id: 'knack', name: shotDef(sel.knack)?.name ?? 'Knack', icon: sel.knack, kind: 'knack', uses: sel.knack_uses, weight: weightOf(shotDef(sel.knack)?.weight), best: sel.class as HobClass, ready: ready && sel.knack_uses > 0 && sel.rest === 0, why: sel.rest > 0 ? 'Needs a rest' : undefined });
       for (const t of hud.hands[active] ?? []) chips.push({ id: t.id, name: t.name ?? t.id, icon: t.id, kind: 'shell', uses: 1, weight: weightOf(t.weight ?? shotDef(t.id)?.weight), best: (t.match ?? undefined) as HobClass | undefined, ready: ready && sel.rest === 0 });
+      // v0.2: the core says which shots are ready and why not (what `fire` would refuse with).
+      for (const c of chips) {
+        const q = hud.shots?.find((x) => x.shot === c.id || (c.kind === 'shell' && x.id === c.id));
+        if (q) { c.ready = q.ready; c.why = q.ready ? undefined : WHY[q.why ?? ''] ?? (q.why ?? undefined); }
+      }
     }
     let draft: DraftView | undefined;
     if (s.draft) {
@@ -544,12 +567,16 @@ export class RealCore implements CoreApi {
     if (s.result) {
       this.stats[0].kettle = hud.kettle_pct[0];
       this.stats[1].kettle = hud.kettle_pct[1];
+      // v0.2: the core counts shots and blocks; hits stay a view count.
+      const rs = s.result.stats;
+      const statsOf = (i: 0 | 1): SideStats => (rs ? { shots: rs[i].shots, hits: rs[i].hits, blocks: rs[i].blocks_dropped, kettle: hud.kettle_pct[i] } : { ...this.stats[i] });
       const win = s.result.winner === 0;
       result = {
         winner: s.result.winner, how: HOW[s.result.how] ?? s.result.how, howKey: s.result.how, round: s.result.round, pennants: s.result.pennants,
-        goals: this.levels().find((l) => l.id === level)?.goals ?? [], buttons: win ? RULES.rewards.buttons_win : RULES.rewards.buttons_loss,
-        stats: [{ ...this.stats[0] }, { ...this.stats[1] }], bestShot: this.best,
-        cause: !win ? lossCause(s.result.how) : undefined,
+        goals: this.levels().find((l) => l.id === level)?.goals ?? [], buttons: s.result.buttons ?? 0,
+        stats: [statsOf(0), statsOf(1)], bestShot: this.best,
+        cause: !win ? brokeLine(s.result) : undefined,
+        pennantsNew: s.result.pennants_new, score: s.result.score,
       };
     }
     const out: Snapshot = {
@@ -572,6 +599,9 @@ export class RealCore implements CoreApi {
         thinking: plan && s.awaiting === 'ai',
         doodads: plan && human(active) ? doodads : [],
         canPass: plan && human(active),
+        volley: hud.volley ?? undefined,
+        handicap: hud.handicap ? [0, 1].map((i) => ({ help: hud.handicap![i].help, steam: hud.handicap![i].steam, previewPct: hud.handicap![i].preview_pct, crew: hud.handicap![i].crew })) as HudView['handicap'] : undefined,
+        boss: hud.boss ? { phase: hud.boss.phase, jam: hud.boss.jam, cut: hud.boss.cut ? { x: hud.boss.cut[0], y: H - hud.boss.cut[3] - 1, w: hud.boss.cut[2] - hud.boss.cut[0] + 1, h: hud.boss.cut[3] - hud.boss.cut[1] + 1 } : undefined } : undefined,
       },
       draft: v.draft, result,
     };
@@ -597,9 +627,9 @@ export class RealCore implements CoreApi {
   }
 
   /**
-   * Replay the log: each command applies once the sim is back in a waiting phase. The save must
-   * be this save format and this rules version, every command must be accepted again, and the
-   * state hash at the end must match the one stored at save time.
+   * Replay the log with the core's `resume`. The save must be this save format and this rules
+   * version, the core must accept the whole log, and the state hash at the end must match the
+   * one stored at save time.
    */
   loadBattle(data: string): void {
     let d: { v?: number; rules?: number; hash?: string; setup: string; seed: string; view: BattleSetup; log: PCommand[]; stats?: [SideStats, SideStats]; best?: ResultView['bestShot'] | null };
@@ -614,27 +644,14 @@ export class RealCore implements CoreApi {
     this.start(d.setup, BigInt(d.seed));
     this.viewSetup = d.view;
     const g = this.game!;
-    const settle = () => { for (let i = 0; i < 200; i++) { const st = JSON.parse(g.step(2000)) as { phase: string }; if (st.phase !== 'resolve' && st.phase !== 'settle') break; } };
-    for (const c of d.log) {
-      settle();
-      const rep = JSON.parse(g.command(JSON.stringify(c))) as PReply;
-      if (!rep.ok) throw new SaveError('This saved fight no longer replays.', 'mismatch');
-    }
-    settle();
-    const hash = this.query<string>({ cmd: 'hash' }, 'hash');
-    if (d.hash && hash !== d.hash) throw new SaveError('This saved fight no longer replays the same.', 'mismatch');
-    // The first snapshot after the replay is full (commands ran) and becomes the base; its
-    // events are the replay's and are dropped. Then the whole map is sent again (that snapshot
-    // may be lean: only terrain changed).
-    const after = JSON.parse(g.snapshot()) as PSnapshot;
-    if (after.full) {
-      this.last = after;
-      this.lastCastles = undefined;
-      this.rev++;
-      for (const i of [0, 1] as const) this.steamMax[i] = Math.max(this.steamMax[i], after.hud.steam[i] ?? 0);
-    }
+    // v0.2: the core replays the log itself, stepping between commands as a live app does.
+    const rep = JSON.parse(g.command(JSON.stringify({ cmd: 'resume', log: d.log } satisfies PCommand))) as PReply & { hash?: string };
+    if (!rep.ok) throw new SaveError('This saved fight no longer replays.', 'mismatch');
+    if (d.hash && rep.hash !== d.hash) throw new SaveError('This saved fight no longer replays the same.', 'mismatch');
+    // The next snapshot is full with the whole map; its events are the replay's and are dropped.
     this.cache = undefined;
-    g.command(JSON.stringify({ cmd: 'terrain_all' }));
+    this.lastCastles = undefined;
+    this.last = undefined;
     this.events = [];
     this.chunks = [];
     this.pull();
@@ -644,6 +661,21 @@ export class RealCore implements CoreApi {
   }
 }
 
+/** Refusal keys from hud.shots[].why, as short chip text. */
+const WHY: Record<string, string> = {
+  resting_plain_only: 'Needs a rest: Plain Shot only', resting: 'Needs a rest', no_knack_uses: 'No uses left', no_heavy_first_turn: 'No Heavy shot on the first turn',
+  buried: 'Loophole buried', no_actions_left: 'No shots left', not_planning: 'Not your turn',
+};
+
+/** "What broke you" (result.broke): the last blow and what it cost, in one line. */
+function brokeLine(r: PSnapshot['result']): string {
+  const b = r?.broke;
+  if (!b) return lossCause(r?.how ?? '');
+  const by = b.last ? (b.last.shot === 'squall' ? 'the Squall' : b.last.shot === 'ground' ? 'a fall' : `${b.last.hob_name.split(' ')[0]}'s ${b.last.shot_name}`) : '';
+  const lost = [b.blocks_lost ? `${b.blocks_lost} blocks` : '', b.hobs_bonked ? `${b.hobs_bonked} ${b.hobs_bonked === 1 ? 'Hob' : 'Hobs'} Bonked` : ''].filter(Boolean).join(', ');
+  return `${lossCause(b.how)}${by ? ` The last blow: ${by}${b.last?.round ? ` in round ${b.last.round}` : ''}.` : ''}${lost ? ` Lost ${lost}.` : ''}`;
+}
+
 function lossCause(how: string): string {
   switch (how) {
     case 'kettle_pop': return 'Your kettle popped.';
@@ -651,6 +683,9 @@ function lossCause(how: string): string {
     case 'squall': case 'double_pop': return 'The Squall finished your kettle.';
     case 'total_hp': case 'round_cap': return 'Out of rounds, and they had more left.';
     case 'rescue': return 'They got there first.';
+    case 'captive_bonked': return 'The captive was Bonked.';
+    case 'give_up': return 'You gave up.';
+    case 'volley_points': return 'Out of shots, and they scored more.';
     default: return 'A close one.';
   }
 }
@@ -693,8 +728,10 @@ export function toProtocolSetup(s: BattleSetup, glyphs: Record<string, Material>
       else if (bp.cells.length) cfg.rows = blueprintToRows(bp, glyphs);
     }
     if (v.doodads?.length) cfg.doodads = v.doodads.slice(0, 2);
-    const steam = RULES.help_steam[v.help ?? 'none'];
-    if (steam) cfg.steam = steam;
+    // Help, preview share and crew size are handicaps the core applies (Steam from content/app.json).
+    if (v.help && v.help !== 'none') cfg.help = v.help;
+    if (v.previewPct !== undefined && v.previewPct < 100) cfg.preview_pct = v.previewPct;
+    if (v.crewSize) cfg.crew_size = v.crewSize;
     return cfg;
   };
   const p: PSetup = {
@@ -704,9 +741,11 @@ export function toProtocolSetup(s: BattleSetup, glyphs: Record<string, Material>
   };
   if (s.mode === 'campaign') p.sides = [{ ...side(0), control: 'human' }, { control: 'ai', preset: s.difficulty }];
   if (s.first !== undefined) p.first_turn = s.first;
-  if (s.roundCap) p.round_cap = s.roundCap;
+  if (s.roundCap && !s.volley) p.round_cap = s.roundCap;
+  if (s.progress) p.progress = { cleared: s.progress.cleared, pennants: s.progress.pennants.slice(0, 3), daily_paid: false };
   const wind = s.windOff ? RULES.wind_presets.off : s.wind ? RULES.wind_presets[s.wind] : undefined;
   if (wind) p.wind = { min: wind.min, max: wind.max };
   if (s.mode !== 'campaign' && s.shells && RULES.rummage_presets[s.shells]) p.rummage = { ...RULES.rummage_presets[s.shells] };
+  if (s.volley && (s.mode === 'skirmish' || s.mode === 'duel')) p.volley = s.volley;
   return p;
 }

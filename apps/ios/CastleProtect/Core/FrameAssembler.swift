@@ -59,13 +59,28 @@ final class FrameAssembler {
             case "draft": v.phase = .draft
             default: v.phase = .none
             }
-            v.canFire = false
-            v.preview = []
+            if raw.phase == "plan" {
+                // A lean frame after `aim` (v0.2): the new aim and preview replace the old ones.
+                if let aim = raw.aim, v.aim.set, String(aim.hob) == v.selectedHob {
+                    v.aim = AimView(angle: aim.angle, power: aim.power, set: true)
+                    var flat: [Double] = []
+                    flat.reserveCapacity(raw.preview.count * 2)
+                    for p in raw.preview where p.count >= 2 {
+                        flat.append(Double(p[0]))
+                        flat.append(H - Double(p[1]))
+                    }
+                    v.preview = flat
+                }
+            } else {
+                v.canFire = false
+                v.preview = []
+            }
             v.shells = raw.shells.map { ShellView(x: Double($0.x), y: H - Double($0.y), kind: $0.shot, rot: $0.rot) }
             v.speed = speed
             if !raw.terrain.chunks.isEmpty { v.terrain = groundHeights(fallback: last) }
             v.ground = grid
             v.events = raw.events.compactMap { Self.event($0, mapHeight: H) }
+            lastView = v
             return v
         }
         lastFull = raw
@@ -186,14 +201,46 @@ final class FrameAssembler {
             let k = cs.kettle.box
             let kx = k.count >= 4 ? Double(k[0] + k[2]) / 2 : Double(cs.x + cs.cols * cs.block / 2)
             let ky = k.count >= 4 ? H - Double(k[3] + 1) : H - Double(cs.baseY)
-            return FortView(side: cs.side, x: Double(cs.x + cs.cols * cs.block / 2), kettleX: kx, kettleY: ky,
-                            kettleHp: cs.kettle.hp, kettleMax: cs.kettle.max, blocks: blocks, hobs: hobs)
+            var fort = FortView(side: cs.side, x: Double(cs.x + cs.cols * cs.block / 2), kettleX: kx, kettleY: ky,
+                                kettleHp: cs.kettle.hp, kettleMax: cs.kettle.max, blocks: blocks, hobs: hobs)
+            fort.originX = Double(cs.x)
+            fort.baseY = H - Double(cs.baseY)
+            fort.block = Double(max(1, cs.block))
+            fort.cols = cs.cols
+            fort.fatigue = cs.fatigue
+            fort.kettleRoom = CGRectLike(core: cs.kettle.room, mapHeight: H)
+            fort.kettleLid = cs.kettle.lid
+            fort.rooms = cs.rooms.compactMap { r in
+                guard let box = CGRectLike(core: r.box, mapHeight: H) else { return nil }
+                return RoomView(id: r.id, box: box, loophole: CGRectLike(core: r.loophole, mapHeight: H),
+                                intact: r.intact, flap: r.flap, lid: r.lid)
+            }
+            return fort
         }
 
-        // Steam: the bar shows what is left of the most seen.
+        // Steam: the bar's 100% is the core's `steam_max` (v0.2), else the most seen.
         if hud.steam.count >= 2 {
-            for i in 0..<2 { steamMax[i] = max(steamMax[i], hud.steam[i]) }
+            for i in 0..<2 {
+                steamMax[i] = i < hud.steamMax.count && hud.steamMax[i] > 0 ? hud.steamMax[i] : max(steamMax[i], hud.steam[i])
+            }
         }
+        v.shoveOffCost = hud.shoveOffCost
+        v.helpMarks = (0..<2).map { i in
+            guard i < hud.handicap.count else { return "" }
+            return (HelpLevel(rawValue: hud.handicap[i].help) ?? .none).marks
+        }
+        if let volley = hud.volley {
+            v.volleyActions = volley.actions
+            v.volleyLeft = volley.left
+        }
+        if let boss = hud.boss {
+            v.boss = BossView(phase: boss.phase, cut: boss.cut.flatMap { CGRectLike(core: $0, mapHeight: H) },
+                              jam: boss.jam, rollerDone: boss.rollerDone)
+        }
+        v.objective = hud.rules.objectiveTag
+        v.objectiveCount = hud.rules.objectiveCount
+        v.score = hud.score
+        v.squall = hud.squall
         let side = min(max(0, s.side), 1)
         v.steam = side < hud.steam.count ? hud.steam[side] : 0
         v.steamMax = max(1, steamMax[side])
@@ -223,6 +270,15 @@ final class FrameAssembler {
             for shell in hand {
                 shots.append(ShotChip(id: shell.id, name: shell.dud ? "Dud" : shell.name, kind: "shell", art: shell.id,
                                       uses: 1, weight: CoreHandShell.cogs(shell.weight), best: shell.match == h.cls))
+            }
+            // v0.2: the core says which chips `fire` would take, and why not.
+            if !hud.shots.isEmpty {
+                for i in shots.indices {
+                    if let state = hud.shots.first(where: { $0.shot == shots[i].id }) {
+                        shots[i].ready = state.ready
+                        shots[i].why = state.why
+                    }
+                }
             }
             v.shots = shots
         }
@@ -263,7 +319,8 @@ final class FrameAssembler {
                 GoalView(label: i < labels.count ? labels[i] : "Pennant \(i + 1)", done: done)
             }
             v.result = BattleResult(winner: r.winner, reason: r.how, pennants: r.pennants.filter { $0 }.count,
-                                    buttons: r.buttons, round: r.round, goals: goals)
+                                    buttons: r.buttons, round: r.round, goals: goals, pennantFlags: r.pennants,
+                                    pennantsNew: r.pennantsNew, score: r.score, stats: r.stats, broke: r.broke)
         }
         if let to = handoffTo {
             v.handoff = HandoffView(line: lastShotLine, toSide: to)
@@ -274,6 +331,16 @@ final class FrameAssembler {
 
     /// The core's event in the app's words.
     static func event(_ e: CoreEvent, mapHeight H: Double) -> BattleEvent? {
+        guard var out = plainEvent(e, mapHeight: H) else { return nil }
+        out.raw = e
+        if e.x != nil {
+            out.x = Double(e.x ?? 0)
+            out.y = H - Double(e.y ?? 0)
+        }
+        return out
+    }
+
+    private static func plainEvent(_ e: CoreEvent, mapHeight H: Double) -> BattleEvent? {
         let x = Double(e.x ?? 0)
         let y = H - Double(e.y ?? 0)
         switch e.t {

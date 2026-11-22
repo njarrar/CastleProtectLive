@@ -33,6 +33,8 @@ export interface SideSetup {
   blueprint?: Blueprint; // omitted: level or starter fort
   help?: Help;
   doodads?: string[]; // up to 2 Doodad ids
+  previewPct?: number; // Couch Duel handicap: 30, 45, 60, 100
+  crewSize?: number; // Couch Duel handicap: seat only the first n Hobs
 }
 
 export interface BattleSetup {
@@ -48,6 +50,9 @@ export interface BattleSetup {
   sides: [SideSetup, SideSetup];
   first?: Side; // who fires first (default 0)
   seats?: 'side' | 'one'; // Couch Duel: hand-off card between turns, or none
+  /** What the save holds for this level (the core works out result.buttons from it). */
+  progress?: { cleared: boolean; pennants: boolean[] };
+  volley?: number; // Volley Points: Actions per side (6, 10, 14); Skirmish and Couch Duel only
 }
 
 export type Command =
@@ -247,6 +252,8 @@ export interface ResultView {
   stats: [SideStats, SideStats];
   bestShot?: { side: Side; hob: string; round: number; dmg: number; angle: number; power: number };
   cause?: string; // 'what broke you' line on a loss
+  pennantsNew?: boolean[];
+  score?: [number, number];
 }
 export interface SideStats {
   shots: number;
@@ -272,6 +279,12 @@ export interface HudView {
   thinking?: boolean; // Rival think pose
   doodads: { id: string; name: string; card: string }[]; // the active side's Doodads left
   canPass: boolean;
+  /** Volley Points: Actions per side and left per side. */
+  volley?: { actions: number; left: [number, number] };
+  /** Handicaps per side, shown openly (Couch Duel house rule 6). */
+  handicap?: [{ help: string; steam: number; previewPct: number; crew: number }, { help: string; steam: number; previewPct: number; crew: number }];
+  /** Grand Fort phases (1-10): phase, and the red cut line one boss turn before the snip. */
+  boss?: { phase: number; cut?: { x: number; y: number; w: number; h: number }; jam: number };
 }
 
 export interface Snapshot {

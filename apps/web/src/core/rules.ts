@@ -1,14 +1,14 @@
-// App rule numbers that are not in the core snapshot yet. They live in content/app.json
-// (schema: content/schema/app.schema.json), never in TypeScript. See the "Core requests"
-// section of docs/review/code/web-review-1.md for the ones the core should send instead.
+// App numbers the core does not send. They live in content/app.json (schema:
+// content/schema/app.schema.json), never in TypeScript. Since core v0.2 the core sends the
+// Buttons earned (result.buttons), applies Help Steam (setup `help`), the Steam bar's full
+// value (hud.steam_max), the Shove Off cost and the Workshop budget, so the web no longer
+// reads those from app.json (the core still does).
 import data from '../../../../content/app.json' with { type: 'json' };
 
 export interface AppRules {
   version: number;
-  rewards: { buttons_win: number; buttons_loss: number };
   joins: Record<string, string>;
   campaign: { walk_from: string; doodads_from: string; doodads: string[]; modes_after: string };
-  help_steam: { none: number; some: number; lots: number };
   wind_presets: Record<string, { min: number; max: number }>;
   rummage_presets: Record<string, { pool: number; picks: number }>;
   workshop: { budget: number; cols: number; rows: number; max_nooks: number };

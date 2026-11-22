@@ -206,7 +206,7 @@ export class Feel {
         this.col.start(e);
         break;
       case 'fall':
-        this.fx.word('Drop!', e.x, e.y + 40, 20, '#FFF4DE', true, 1400);
+        this.fx.word('Drop!', e.x, e.y - 14, 20, '#FFF4DE', true, 1400); // at the base of the fall, under the numbers
         break;
       case 'bonk': {
         this.fx.word('Bonk!', e.x, e.y + 44, 22, '#FFF4DE', true, 1400);

@@ -155,8 +155,18 @@ export function battleScreen(app: App, route: Route): Screen {
 
   // ---------- canvas sizing ----------
   let W = 0, H = 0, dpr = 1;
+  // Adaptive resolution: if frames run long (a slow phone, a software canvas), the field draws
+  // at fewer pixels per point, down to 1; it steps back up when there is room again.
+  let dprCap = 2;
+  let slowFrames = 0, fastFrames = 0;
+  function adaptRes(dtMs: number): void {
+    if (dtMs > 22) { slowFrames++; fastFrames = 0; } else if (dtMs < 17.5) { fastFrames++; slowFrames = Math.max(0, slowFrames - 1); }
+    const full = Math.min(2, window.devicePixelRatio || 1);
+    if (slowFrames > 20 && dprCap > 1) { dprCap = Math.max(1, dprCap - 0.5); slowFrames = 0; resize(); }
+    else if (fastFrames > 240 && dprCap < full) { dprCap = Math.min(full, dprCap + 0.5); fastFrames = 0; resize(); }
+  }
   function resize(): void {
-    dpr = Math.min(2, window.devicePixelRatio || 1);
+    dpr = Math.min(2, dprCap, window.devicePixelRatio || 1);
     W = window.innerWidth;
     H = window.innerHeight;
     canvas.width = Math.round(W * dpr);
@@ -434,6 +444,7 @@ export function battleScreen(app: App, route: Route): Screen {
   }
   function tick(now: number): void {
     const dt = Math.min(0.1, (now - last) / 1000);
+    if (!paused && !handoffOpen && document.visibilityState === 'visible') adaptRes(now - last);
     last = now;
     readRects();
     flushAim();
@@ -711,7 +722,13 @@ export function battleScreen(app: App, route: Route): Screen {
     }
     const sq = s.squall;
     const fat = s.fatigue?.[0] || s.fatigue?.[1];
-    setText(roundEl, sq.on ? `Squall ${sq.on} of 3` : `Round ${s.round}/${s.roundCap}${sq.warn ? `  Squall in ${sq.warn}` : ''}${fat ? ', Fatigue' : ''}`);
+    const vo = s.hud.volley;
+    const bo = s.hud.boss;
+    const rk = vo ? `v${vo.left[0]}:${vo.left[1]}:${vo.actions}` : `${sq.on}:${s.round}:${s.roundCap}:${sq.warn}:${fat}:${bo?.phase ?? 0}`;
+    if (changed(roundEl, 'k', rk)) {
+      roundEl.textContent = vo ? `Shots left ${vo.left[0]} : ${vo.left[1]} of ${vo.actions}`
+        : sq.on ? `Squall ${sq.on} of 3` : `Round ${s.round}/${s.roundCap}${sq.warn ? `  Squall in ${sq.warn}` : ''}${fat ? ', Fatigue' : ''}${bo ? `, Phase ${bo.phase}` : ''}`;
+    }
     setClass(roundEl, 'squall', !!sq.on);
     const arrow = (w: number) => (w === 0 ? '• 0' : `${w > 0 ? '→' : '←'} ${Math.abs(w)}`);
     setText(windEl, `${arrow(s.wind)}   ⇢ ${Math.abs(s.forecast)}`);
@@ -1158,7 +1175,7 @@ export function battleScreen(app: App, route: Route): Screen {
     const lvl = setup.level ? app.levels().find((l) => l.id === setup.level) : undefined;
     const goals = lvl ? h('ul', { class: 'goals' }, ...lvl.goals.map((g) => h('li', {}, g))) : '';
     // Give up only where the core has the command (the real core does not yet).
-    const giveUp = setup.mode === 'duel' && core.features.giveUp ? btn('Give up', () => { closePause(); send({ cmd: 'give_up' }); }, 'secondary') : '';
+    const giveUp = setup.mode !== 'yard' && core.features.giveUp ? btn('Give up', () => { closePause(); send({ cmd: 'give_up' }); }, 'secondary', { 'data-testid': 'give-up' }) : '';
     // Pass is always on offer on your turn, so no turn can lock.
     const pass = snap.hud.canPass ? btn('Pass turn', () => { closePause(); flushAim(); if (send({ cmd: 'pass' })) afterAction(); }, 'secondary', { 'data-testid': 'pass' }) : '';
     card('pause-card', 'pause-h',

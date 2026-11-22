@@ -13,7 +13,10 @@ class ContentInfo(
     private val shotNames: Map<String, String>,
     private val shotCards: Map<String, String>,
     private val hobNames: Map<String, String>,
+    /** Trail look per shot id: blast, pierce, dig, fire or mend (from the shot's flight and damage type). */
+    private val trails: Map<String, String> = emptyMap(),
 ) {
+    fun trail(id: String): String = trails[id] ?: "blast"
     fun level(id: String): LevelInfo? = levels.firstOrNull { it.id == id }
     fun shotName(id: String): String = shotNames[id] ?: id.split('_').joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
     fun shotCard(id: String): String = shotCards[id] ?: ""
@@ -25,15 +28,29 @@ class ContentInfo(
     companion object {
         val EMPTY = ContentInfo(emptyList(), emptyMap(), emptyMap(), emptyMap())
 
+        /** The trail group of one shot from content/shots.json. */
+        fun trailOf(o: JSONObject): String {
+            val id = o.optString("id")
+            val flight = o.optJSONObject("flight")?.optString("kind") ?: "arc"
+            val text = o.toString()
+            return when {
+                flight == "dig" -> "dig"
+                flight == "beam" || text.contains("\"dtype\":\"pierce\"") -> "pierce"
+                id.startsWith("mend") || flight == "self" || text.contains("\"op\":\"mend") -> "mend"
+                text.contains("\"dtype\":\"fire\"") -> "fire"
+                else -> "blast"
+            }
+        }
+
         /** [read] returns a file's text by path under content/, or null. [list] lists content/levels. */
         fun load(read: (String) -> String?, list: () -> List<String>): ContentInfo = try {
             val levels = list().filter { it.endsWith(".json") }.mapNotNull { f -> read("levels/$f")?.let { LevelInfo.parse(JSONObject(it)) } }
-            val names = HashMap<String, String>(); val cards = HashMap<String, String>()
-            read("shots.json")?.let { t -> val a = JSONArray(t); for (i in 0 until a.length()) a.optJSONObject(i)?.let { names[it.optString("id")] = it.optString("name"); cards[it.optString("id")] = it.optString("card") } }
+            val names = HashMap<String, String>(); val cards = HashMap<String, String>(); val trails = HashMap<String, String>()
+            read("shots.json")?.let { t -> val a = JSONArray(t); for (i in 0 until a.length()) a.optJSONObject(i)?.let { names[it.optString("id")] = it.optString("name"); cards[it.optString("id")] = it.optString("card"); trails[it.optString("id")] = trailOf(it) } }
             read("doodads.json")?.let { t -> runCatching { val a = JSONArray(t); for (i in 0 until a.length()) a.optJSONObject(i)?.let { names[it.optString("id")] = it.optString("name") } } }
             val hobs = HashMap<String, String>()
             read("hobs.json")?.let { t -> val a = JSONArray(t); for (i in 0 until a.length()) a.optJSONObject(i)?.let { hobs[it.optString("id")] = it.optString("name") } }
-            ContentInfo(levels, names, cards, hobs)
+            ContentInfo(levels, names, cards, hobs, trails)
         } catch (e: Exception) { EMPTY }
 
         fun fromAssets(assets: android.content.res.AssetManager): ContentInfo = load(

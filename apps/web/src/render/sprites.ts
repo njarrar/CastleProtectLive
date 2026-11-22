@@ -54,7 +54,7 @@ class SpriteBank {
    * so a game in progress never waits on them. Safe to call more than once.
    */
   upgrade(): void {
-    if (this.upgrading || !this.ready || (window.devicePixelRatio || 1) < 1.5) return;
+    if (this.upgrading || !this.ready || (window.devicePixelRatio || 1) < 1.5 || /[?&]art=1x/.test(location.search)) return;
     this.upgrading = true;
     const idle = (f: () => void) => ((window as unknown as { requestIdleCallback?: (f: () => void, o?: object) => void }).requestIdleCallback ?? ((g: () => void) => setTimeout(g, 200)))(f, { timeout: 2000 });
     idle(() => {

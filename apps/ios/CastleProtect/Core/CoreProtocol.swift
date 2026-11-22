@@ -51,6 +51,43 @@ struct CoreSideConfig: Codable, Equatable, Sendable {
     var name: String?
     var steam: Int?
     var aim: Int?
+    /// Help handicap: "none", "some", "lots" (Steam from content/app.json).
+    var help: String?
+    /// Preview share 0 to 100 (Couch Duel handicap).
+    var previewPct: Int?
+    /// Seat only the first n Hobs (1 to 5).
+    var crewSize: Int?
+
+    init(control: String? = nil, preset: String? = nil, crew: [String]? = nil, blueprint: String? = nil,
+         rows: [String]? = nil, doodads: [String]? = nil, kit: String? = nil, name: String? = nil,
+         steam: Int? = nil, aim: Int? = nil, help: String? = nil, previewPct: Int? = nil, crewSize: Int? = nil) {
+        self.control = control; self.preset = preset; self.crew = crew; self.blueprint = blueprint
+        self.rows = rows; self.doodads = doodads; self.kit = kit; self.name = name
+        self.steam = steam; self.aim = aim; self.help = help; self.previewPct = previewPct; self.crewSize = crewSize
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case control, preset, crew, blueprint, rows, doodads, kit, name, steam, aim, help
+        case previewPct = "preview_pct", crewSize = "crew_size"
+    }
+}
+
+/// What the save holds for this level, so the core can work out `result.buttons`.
+struct CoreProgress: Codable, Equatable, Sendable {
+    var cleared = false
+    var pennants: [Bool] = [false, false, false]
+    var dailyPaid = false
+
+    init(cleared: Bool = false, pennants: [Bool] = [false, false, false], dailyPaid: Bool = false) {
+        self.cleared = cleared
+        self.pennants = pennants
+        self.dailyPaid = dailyPaid
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case cleared, pennants
+        case dailyPaid = "daily_paid"
+    }
 }
 
 /// `first_turn`: 0, 1 or "coin".
@@ -75,7 +112,7 @@ enum CoreFirstTurn: Codable, Equatable, Sendable {
 /// The battle setup, `level_json` for `cp_new`. Nil fields are left out, so the level rules apply.
 struct CoreSetup: Codable, Equatable, Sendable {
     var level: String
-    /// "campaign", "skirmish", "couch", "test_yard".
+    /// "campaign", "skirmish", "couch", "test_yard", "daily".
     var mode: String?
     var sides: [CoreSideConfig]?
     var firstTurn: CoreFirstTurn?
@@ -84,9 +121,21 @@ struct CoreSetup: Codable, Equatable, Sendable {
     var wind: CoreWind?
     var rummage: CoreRummage?
     var puffUp: Bool?
+    /// Volley Points: Actions per side (skirmish, daily, couch only).
+    var volley: Int?
+    /// The save's record of this level, for `result.buttons`.
+    var progress: CoreProgress?
+
+    init(level: String, mode: String? = nil, sides: [CoreSideConfig]? = nil, firstTurn: CoreFirstTurn? = nil,
+         roundCap: Int? = nil, squall: Bool? = nil, wind: CoreWind? = nil, rummage: CoreRummage? = nil,
+         puffUp: Bool? = nil, volley: Int? = nil, progress: CoreProgress? = nil) {
+        self.level = level; self.mode = mode; self.sides = sides; self.firstTurn = firstTurn
+        self.roundCap = roundCap; self.squall = squall; self.wind = wind; self.rummage = rummage
+        self.puffUp = puffUp; self.volley = volley; self.progress = progress
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case level, mode, sides, squall, wind, rummage
+        case level, mode, sides, squall, wind, rummage, volley, progress
         case firstTurn = "first_turn", roundCap = "round_cap", puffUp = "puff_up"
     }
 
@@ -121,6 +170,12 @@ enum CoreCommand: Equatable, Sendable {
     case doodad(doodad: String, targets: [[Int]]? = nil, room: String? = nil)
     case pass
     case aiTurn(preset: String? = nil)
+    /// End the battle now; the other side wins (`how: "give_up"`). Any phase but ended.
+    case giveUp(side: Int? = nil)
+    /// Test Yard only: the wind now and for every later front.
+    case setWind(wind: Int)
+    /// Only on a new battle: replays a saved log (the `log` reply's array, as JSON text).
+    case resume(log: String)
     // Queries (change nothing)
     case leanLines(side: Int, c: Int, r: Int)
     case shimmer(side: Int)
@@ -144,6 +199,9 @@ enum CoreCommand: Equatable, Sendable {
         case .doodad: return "doodad"
         case .pass: return "pass"
         case .aiTurn: return "ai_turn"
+        case .giveUp: return "give_up"
+        case .setWind: return "set_wind"
+        case .resume: return "resume"
         case .leanLines: return "lean_lines"
         case .shimmer: return "shimmer"
         case .validateBlueprint: return "validate_blueprint"
@@ -182,6 +240,12 @@ enum CoreCommand: Equatable, Sendable {
             if let room { o["room"] = room }
         case .aiTurn(let preset):
             if let preset { o["preset"] = preset }
+        case .giveUp(let side):
+            if let side { o["side"] = side }
+        case .setWind(let wind):
+            o["wind"] = min(10, max(-10, wind))
+        case .resume(let log):
+            o["log"] = (try? JSONSerialization.jsonObject(with: Data(log.utf8))) as? [Any] ?? []
         case .leanLines(let side, let c, let r):
             o["side"] = side
             o["c"] = c
@@ -198,6 +262,11 @@ enum CoreCommand: Equatable, Sendable {
     }
 
     func jsonString() -> String {
+        if case .resume(let log) = self {
+            // The log goes back byte for byte as the core wrote it.
+            let body = log.trimmingCharacters(in: .whitespacesAndNewlines)
+            return #"{"cmd":"resume","log":"# + (body.hasPrefix("[") ? body : "[]") + "}"
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: jsonObject(), options: [.sortedKeys]) else {
             return #"{"cmd":"\#(name)"}"#
         }
@@ -217,6 +286,12 @@ struct CoreReply: Decodable, Equatable, Sendable {
     var moved: Int?
     var steam: Int?
     var hash: String?
+    /// `resume`: commands replayed; `bad_log`: the entry that failed.
+    var applied: Int?
+    var index: Int?
+
+    /// The handle is dead (a panic, or every call after one): rebuild with cp_new and resume.
+    var isDeadHandle: Bool { reason == "panic" || reason == "dead_handle" }
 
     init(ok: Bool, reason: String? = nil) {
         self.ok = ok
@@ -234,6 +309,8 @@ struct CoreReply: Decodable, Equatable, Sendable {
         moved = c.value(.moved, nil)
         steam = c.value(.steam, nil)
         hash = c.value(.hash, nil)
+        applied = c.value(.applied, nil)
+        index = c.value(.index, nil)
     }
 
     static func decode(_ json: String) -> CoreReply {
@@ -241,7 +318,7 @@ struct CoreReply: Decodable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case ok, reason, detail, angle, power, moved, steam, hash
+        case ok, reason, detail, angle, power, moved, steam, hash, applied, index
         case canFire = "can_fire"
     }
 }
@@ -251,7 +328,7 @@ struct CoreReply: Decodable, Equatable, Sendable {
 struct CoreMap: Decodable, Equatable, Sendable {
     var w = 2400
     var h = 720
-    var chunk = 256
+    var chunk = 64
 
     init() {}
 
@@ -259,7 +336,7 @@ struct CoreMap: Decodable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         w = max(1, c.value(.w, 2400))
         h = max(1, c.value(.h, 720))
-        chunk = max(1, c.value(.chunk, 256))
+        chunk = max(1, c.value(.chunk, 64))
     }
 
     private enum CodingKeys: String, CodingKey { case w, h, chunk }
@@ -548,6 +625,100 @@ struct CoreSelected: Decodable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey { case hob, shot }
 }
 
+/// `hud.shots[]`: a shot chip for the selected Hob, with whether `fire` would take it.
+struct CoreShotState: Decodable, Equatable, Sendable {
+    /// "plain", "knack" or a shell id: what `pick_shot` takes.
+    var shot = ""
+    /// The shot id (sprite and name).
+    var id = ""
+    var ready = true
+    /// What `fire` would refuse with, or nil.
+    var why: String?
+
+    init(from decoder: Decoder) throws {
+        let k = try decoder.container(keyedBy: CodingKeys.self)
+        shot = k.value(.shot, ""); id = k.value(.id, ""); ready = k.value(.ready, true); why = k.value(.why, nil)
+    }
+
+    private enum CodingKeys: String, CodingKey { case shot, id, ready, why }
+}
+
+/// `hud.handicap[side]`: shown openly (Couch Duel house rule 6).
+struct CoreHandicap: Decodable, Equatable, Sendable {
+    var help = "none"
+    var steam = 100
+    var previewPct = 30
+    var crew = 0
+
+    init(from decoder: Decoder) throws {
+        let k = try decoder.container(keyedBy: CodingKeys.self)
+        help = k.value(.help, "none"); steam = k.value(.steam, 100)
+        previewPct = k.value(.previewPct, 30); crew = k.value(.crew, 0)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case help, steam, crew
+        case previewPct = "preview_pct"
+    }
+}
+
+/// `hud.volley`: "Shots left 7/10".
+struct CoreVolley: Decodable, Equatable, Sendable {
+    var actions = 0
+    var left: [Int] = [0, 0]
+
+    init(from decoder: Decoder) throws {
+        let k = try decoder.container(keyedBy: CodingKeys.self)
+        actions = k.value(.actions, 0); left = k.value(.left, [0, 0])
+    }
+
+    private enum CodingKeys: String, CodingKey { case actions, left }
+}
+
+/// `hud.boss`: the 1-10 phases, the roller and the shears.
+struct CoreBoss: Decodable, Equatable, Sendable {
+    var phase = 1
+    var roller: CoreProp?
+    var rollerDone = false
+    var shears: CoreProp?
+    /// The red cut line `[x0, y0, x1, y1]`, one boss turn before the snip.
+    var cut: [Int]?
+    var jam = 0
+
+    init(from decoder: Decoder) throws {
+        let k = try decoder.container(keyedBy: CodingKeys.self)
+        phase = k.value(.phase, 1); roller = k.value(.roller, nil); rollerDone = k.value(.rollerDone, false)
+        shears = k.value(.shears, nil); cut = k.value(.cut, nil); jam = k.value(.jam, 0)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case phase, roller, shears, cut, jam
+        case rollerDone = "roller_done"
+    }
+}
+
+/// `hud.rules`: the level's objective (Rescue) and cap rule.
+struct CoreRules: Decodable, Equatable, Sendable {
+    var objectiveTag: String?
+    var objectiveCount = 0
+    var capWin: Int?
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let k = try decoder.container(keyedBy: CodingKeys.self)
+        struct Objective: Decodable { var tag: String?; var count: Int? }
+        let o: Objective? = k.value(.objective, nil)
+        objectiveTag = o?.tag; objectiveCount = o?.count ?? 0
+        capWin = k.value(.capWin, nil)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case objective
+        case capWin = "cap_win"
+    }
+}
+
 struct CoreHud: Decodable, Equatable, Sendable {
     var turn = 0, round = 1, roundCap = 15, side = 0
     var wind = 0, forecast = 0, frontRoundsLeft = 0
@@ -565,11 +736,22 @@ struct CoreHud: Decodable, Equatable, Sendable {
     var control: [String] = ["human", "ai"]
     var score: [Int] = [0, 0]
     var puffUp: [Bool] = [false, false]
+    /// Steam at the start per side (the bar's 100%).
+    var steamMax: [Int] = []
+    var shoveOffCost = 15
+    var shots: [CoreShotState] = []
+    var handicap: [CoreHandicap] = []
+    var volley: CoreVolley?
+    var boss: CoreBoss?
+    var rules = CoreRules()
 
     init() {}
 
     init(from decoder: Decoder) throws {
         let k = try decoder.container(keyedBy: CodingKeys.self)
+        steamMax = k.value(.steamMax, []); shoveOffCost = k.value(.shoveOffCost, 15)
+        shots = k.value(.shots, []); handicap = k.value(.handicap, [])
+        volley = k.value(.volley, nil); boss = k.value(.boss, nil); rules = k.value(.rules, CoreRules())
         turn = k.value(.turn, 0); round = k.value(.round, 1); roundCap = k.value(.roundCap, 15); side = k.value(.side, 0)
         wind = k.value(.wind, 0); forecast = k.value(.forecast, 0); frontRoundsLeft = k.value(.frontRoundsLeft, 0)
         steam = k.value(.steam, [0, 0]); steamTurnLeft = k.value(.steamTurnLeft, 40)
@@ -583,6 +765,8 @@ struct CoreHud: Decodable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case turn, round, side, wind, forecast, steam, crew, squall, hands, doodads, selected, names, control, score
+        case shots, handicap, volley, boss, rules
+        case steamMax = "steam_max", shoveOffCost = "shove_off_cost"
         case roundCap = "round_cap", frontRoundsLeft = "front_rounds_left", steamTurnLeft = "steam_turn_left"
         case kettlePct = "kettle_pct", squallWarning = "squall_warning", squallRound = "squall_round", puffUp = "puff_up"
     }
@@ -607,22 +791,105 @@ struct CoreDraft: Decodable, Equatable, Sendable {
     }
 }
 
+/// Per side battle stats in the result.
+struct CoreStats: Decodable, Equatable, Sendable {
+    var shots = 0, hits = 0, blocksDropped = 0, bonks = 0, blocksLost = 0, kettleLost = 0, hobsLost = 0, bestStreak = 0
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let k = try decoder.container(keyedBy: CodingKeys.self)
+        shots = k.value(.shots, 0); hits = k.value(.hits, 0); blocksDropped = k.value(.blocksDropped, 0)
+        bonks = k.value(.bonks, 0); blocksLost = k.value(.blocksLost, 0); kettleLost = k.value(.kettleLost, 0)
+        hobsLost = k.value(.hobsLost, 0); bestStreak = k.value(.bestStreak, 0)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case shots, hits, bonks
+        case blocksDropped = "blocks_dropped", blocksLost = "blocks_lost", kettleLost = "kettle_lost"
+        case hobsLost = "hobs_lost", bestStreak = "best_streak"
+    }
+}
+
+/// One blow in "what broke you".
+struct CoreBlow: Decodable, Equatable, Sendable {
+    var shot = "", shotName = "", hobName = ""
+    var hob: Int?
+    var round = 0, dmg = 0
+
+    init(from decoder: Decoder) throws {
+        let k = try decoder.container(keyedBy: CodingKeys.self)
+        shot = k.value(.shot, ""); shotName = k.value(.shotName, ""); hobName = k.value(.hobName, "")
+        hob = k.value(.hob, nil); round = k.value(.round, 0); dmg = k.value(.dmg, 0)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case shot, hob, round, dmg
+        case shotName = "shot_name", hobName = "hob_name"
+    }
+}
+
+/// `result.broke`: what broke the losing side.
+struct CoreBroke: Decodable, Equatable, Sendable {
+    var side = 0
+    var how = ""
+    var last: CoreBlow?
+    var top: [CoreBlow] = []
+    var kettleLost = 0, blocksLost = 0, hobsBonked = 0
+
+    init(from decoder: Decoder) throws {
+        let k = try decoder.container(keyedBy: CodingKeys.self)
+        side = k.value(.side, 0); how = k.value(.how, ""); last = k.value(.last, nil); top = k.value(.top, [])
+        kettleLost = k.value(.kettleLost, 0); blocksLost = k.value(.blocksLost, 0); hobsBonked = k.value(.hobsBonked, 0)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case side, how, last, top
+        case kettleLost = "kettle_lost", blocksLost = "blocks_lost", hobsBonked = "hobs_bonked"
+    }
+}
+
 struct CoreResult: Decodable, Equatable, Sendable {
     var winner = 0
-    /// clean_sweep, kettle_pop, squall, double_pop, rescue, round_cap, total_hp.
+    /// clean_sweep, kettle_pop, squall, double_pop, rescue, round_cap, total_hp, give_up, volley_points, captive_bonked.
     var how = ""
     var round = 0
     var pennants: [Bool] = []
-    /// Buttons earned by this result, when the core sends them (else 0).
+    /// Pennants earned now that the save did not hold.
+    var pennantsNew: [Bool] = []
+    /// Buttons the player (side 0) earns, worked out by the core.
     var buttons = 0
+    var score: [Int] = []
+    var stats: [CoreStats] = []
+    var broke: CoreBroke?
 
     init(from decoder: Decoder) throws {
         let k = try decoder.container(keyedBy: CodingKeys.self)
         winner = k.value(.winner, 0); how = k.value(.how, ""); round = k.value(.round, 0); pennants = k.value(.pennants, [])
-        buttons = k.value(.buttons, 0)
+        pennantsNew = k.value(.pennantsNew, []); buttons = k.value(.buttons, 0)
+        score = k.value(.score, []); stats = k.value(.stats, []); broke = k.value(.broke, nil)
     }
 
-    private enum CodingKeys: String, CodingKey { case winner, how, round, pennants, buttons }
+    private enum CodingKeys: String, CodingKey {
+        case winner, how, round, pennants, buttons, score, stats, broke
+        case pennantsNew = "pennants_new"
+    }
+}
+
+/// A `[c, r]` or `[c, r, mat]` entry of an event list (collapse blocks, mends).
+struct CoreCell: Decodable, Equatable, Sendable {
+    var c = 0
+    var r = 0
+    var mat: String?
+
+    init(c: Int, r: Int, mat: String? = nil) { self.c = c; self.r = r; self.mat = mat }
+
+    init(from decoder: Decoder) throws {
+        var u = try decoder.unkeyedContainer()
+        c = (try? u.decode(Int.self)) ?? 0
+        r = (try? u.decode(Int.self)) ?? 0
+        mat = u.isAtEnd ? nil : (try? u.decode(String.self))
+    }
 }
 
 /// One event. Every event has `t` and `tick`; the other fields depend on `t` (API.md, events).
@@ -645,6 +912,29 @@ struct CoreEvent: Decodable, Equatable, Sendable {
     var shot: String?
     var callout: Bool?
     var threaded: Bool?
+    /// Block grid cell (`hit` on a block, `break`, `regrow`).
+    var c: Int?
+    var type: String?
+    var why: String?
+    var kind: String?
+    var state: String?
+    var room: String?
+    var nook: Int?
+    var phase: Int?
+    var cells: Int?
+    var hp: Int?
+    var turns: Int?
+    var wind: Int?
+    /// `collapse` and `mend`: the cells; `big_drop` sends a count instead (`blockCount`).
+    var blocks: [CoreCell]?
+    var blockCount: Int?
+    /// `collapse`: cells each column fell, `[[c, cells]]`.
+    var falls: [[Int]]?
+    /// `walk` and `drop`: points; `roller_move`: x values.
+    var from: [Int]?
+    var to: [Int]?
+    var fromX: Int?
+    var toX: Int?
 
     init(t: String) { self.t = t }
 
@@ -657,11 +947,38 @@ struct CoreEvent: Decodable, Equatable, Sendable {
         target = k.value(.target, nil); winner = k.value(.winner, nil); how = k.value(.how, nil)
         text = k.value(.text, nil); shell = k.value(.shell, nil); shot = k.value(.shot, nil)
         callout = k.value(.callout, nil); threaded = k.value(.threaded, nil)
+        c = k.value(.c, nil); type = k.value(.type, nil); why = k.value(.why, nil); kind = k.value(.kind, nil)
+        state = k.value(.state, nil); nook = k.value(.nook, nil); phase = k.value(.phase, nil)
+        cells = k.value(.cells, nil); hp = k.value(.hp, nil); turns = k.value(.turns, nil); wind = k.value(.wind, nil)
+        // `room` is "kettle" or "nook:N" on a lid, a number elsewhere.
+        let roomText: String? = k.value(.room, nil)
+        let roomNumber: Int? = k.value(.room, nil)
+        room = roomText ?? roomNumber.map { "nook:\($0)" }
+        blocks = k.value(.blocks, nil)
+        blockCount = k.value(.blocks, nil)
+        falls = k.value(.falls, nil)
+        from = k.value(.from, nil); to = k.value(.to, nil)
+        let fx: Int? = k.value(.from, nil)
+        let tx: Int? = k.value(.to, nil)
+        fromX = fx; toX = tx
     }
 
     private enum CodingKeys: String, CodingKey {
         case t, tick, side, hob, x, y, r, dmg, n, round, target, winner, how, text, shell, shot, callout, threaded
+        case c, type, why, kind, state, room, nook, phase, cells, hp, turns, wind, blocks, falls, from, to
     }
+}
+
+/// `aim` on a lean snapshot after an `aim` command.
+struct CoreLeanAim: Decodable, Equatable, Sendable {
+    var side = 0, hob = 0, angle = 450, power = 60
+
+    init(from decoder: Decoder) throws {
+        let k = try decoder.container(keyedBy: CodingKeys.self)
+        side = k.value(.side, 0); hob = k.value(.hob, 0); angle = k.value(.angle, 450); power = k.value(.power, 60)
+    }
+
+    private enum CodingKeys: String, CodingKey { case side, hob, angle, power }
 }
 
 /// The frame snapshot. A lean snapshot (`full == false`) carries only tick,
@@ -689,6 +1006,11 @@ struct CoreSnapshot: Decodable, Equatable, Sendable {
     var events: [CoreEvent] = []
     var result: CoreResult?
     var hash = ""
+    /// Lean snapshots after `aim`: the new aim (preview comes in `preview`).
+    var aim: CoreLeanAim?
+    /// A snapshot or step reply with `"ok": false` is an error (dead handle, panic).
+    var ok: Bool?
+    var reason: String?
 
     init() {}
 
@@ -703,6 +1025,8 @@ struct CoreSnapshot: Decodable, Equatable, Sendable {
         preview = k.value(.preview, []); ghosts = k.value(.ghosts, []); hud = k.value(.hud, CoreHud())
         draft = k.value(.draft, nil); events = k.value(.events, []); result = k.value(.result, nil)
         hash = k.value(.hash, "")
+        aim = k.value(.aim, nil)
+        ok = k.value(.ok, nil); reason = k.value(.reason, nil)
     }
 
     static func decode(_ json: String) -> CoreSnapshot? {
@@ -711,6 +1035,6 @@ struct CoreSnapshot: Decodable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case tick, phase, side, awaiting, full, level, mode, map, terrain, castles, hobs, shells, props
-        case preview, ghosts, hud, draft, events, result, hash
+        case preview, ghosts, hud, draft, events, result, hash, aim, ok, reason
     }
 }

@@ -220,6 +220,7 @@ export class App {
       seed: hashSeed(levelId),
       difficulty: this.settings.difficulty,
       windOff: this.settings.windOff,
+      progress: { cleared: (this.progress.levels[levelId]?.wins ?? 0) > 0, pennants: [...(this.progress.levels[levelId]?.pennants ?? [false, false, false])] },
       sides: [
         { name: 'You', human: true, crew: seats, blueprint, doodads: levelAtLeast(levelId, RULES.campaign.doodads_from) ? lvl.doodads : undefined },
         { name: lvl.rival, human: false, crew: [] },

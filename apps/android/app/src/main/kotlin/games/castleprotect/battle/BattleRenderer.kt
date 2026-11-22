@@ -31,7 +31,7 @@ import kotlin.math.sin
  * resolved once per full snapshot and kept on the block and Hob objects, sprite
  * name tables are built at start, and text is formatted only when it changes.
  */
-class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
+class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx: FieldFx) {
     private val ink = 0xFF2B1E2E.toInt()
     private val blue = 0xFF2F6FDE.toInt(); private val orange = 0xFFE8730C.toInt()
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -44,8 +44,6 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
     private val mtx = Matrix()
     private var sky: LinearGradient? = null; private var skyH = 0f
     private var time = 0f
-    private class Blast(var x: Float, var y: Float, var age: Float, var big: Boolean)
-    private val blasts = ArrayList<Blast>()
     private val ghostDash = DashPathEffect(floatArrayOf(8 * dp, 6 * dp), 0f)
 
     // Sprite tables built once.
@@ -53,7 +51,6 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
     private class HobLook(val gen: Int, val idle: Array<Sprites.Sprite?>, val aim: Array<Sprites.Sprite?>, val fire: Sprites.Sprite?, val bonked: Array<Sprites.Sprite?>, val cheer: Array<Sprites.Sprite?>, val k: Float)
     private val shellSprites = HashMap<String, Sprites.Sprite?>()
     private var tableGen = -1
-    private var boomLarge = arrayOfNulls<Sprites.Sprite>(4); private var boomMedium = arrayOfNulls<Sprites.Sprite>(4)
     private var dotP1: Sprites.Sprite? = null; private var dotP2: Sprites.Sprite? = null
     private var pinP1: Sprites.Sprite? = null; private var pinP2: Sprites.Sprite? = null
     private var kettleFull: Sprites.Sprite? = null; private var kettleHurt: Sprites.Sprite? = null; private var kettleCrit: Sprites.Sprite? = null; private var kettlePopped: Sprites.Sprite? = null; private var kettleHalo: Sprites.Sprite? = null
@@ -67,26 +64,22 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
         if (g == tableGen) return
         tableGen = g
         shellSprites.clear()
-        for (i in 0..3) { boomLarge[i] = sprites.get("fx_boom_large_$i"); boomMedium[i] = sprites.get("fx_boom_medium_$i") }
         dotP1 = sprites.get("fx_ghost_dot_p1"); dotP2 = sprites.get("fx_ghost_dot_p2")
         pinP1 = sprites.get("fx_pin_p1"); pinP2 = sprites.get("fx_pin_p2")
         kettleFull = sprites.get("kettle_full"); kettleHurt = sprites.get("kettle_hurt"); kettleCrit = sprites.get("kettle_critical"); kettlePopped = sprites.get("kettle_popped"); kettleHalo = sprites.get("kettle_halo")
         nookSp = sprites.get("nook"); kettleRoomSp = sprites.get("kettle_room")
         flagBlue = sprites.get("flag_blue"); flagOrange = sprites.get("flag_orange")
         skySp = sprites.get("bg_downs_sky"); farSp = sprites.get("bg_downs_hills_far"); nearSp = sprites.get("bg_downs_hills_near")
+        for (i in 0..2) { dotPulse[i] = sprites.get("fx_ghost_dot_p1_pulse_$i"); dotPulse[3 + i] = sprites.get("fx_ghost_dot_p2_pulse_$i") }
+        stomperBlue = sprites.get("stomper_blue_0"); stomperOrange = sprites.get("stomper_orange_0")
     }
+    private var stomperBlue: Sprites.Sprite? = null; private var stomperOrange: Sprites.Sprite? = null
 
-    fun addBlast(x: Float, y: Float, big: Boolean) {
-        if (blasts.size >= 16) blasts.removeAt(0)
-        blasts.add(Blast(x, y, 0f, big))
-    }
-    val animating: Boolean get() = blasts.isNotEmpty()
-    fun clearBlasts() = blasts.clear()
-    fun tick(dt: Float) {
-        time += dt
-        var i = blasts.size - 1
-        while (i >= 0) { val b = blasts[i]; b.age += dt; if (b.age > 0.5f) blasts.removeAt(i); i-- }
-    }
+    val animating: Boolean get() = fx.busy
+    /** [dt] in seconds of view time. */
+    fun tick(dt: Float) { time += dt }
+    private val shift = FloatArray(3)
+    private val dotPulse = arrayOfNulls<Sprites.Sprite>(6)
 
     // ---- terrain bitmap ----------------------------------------------------
 
@@ -163,10 +156,15 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
 
     fun drawEmpty(c: Canvas) { c.drawColor(0xFFA5D8EC.toInt()) }
 
-    fun drawLens(c: Canvas, l: Lens, f: Frame, me: Int, drag: FloatArray?, readout: String?) {
+    fun drawLens(c: Canvas, l: Lens, f: Frame, me: Int, drag: FloatArray?, readout: String?, shake: FloatArray? = null) {
         tables()
         val rc = l.rect
         c.save(); c.clipRect(rc)
+        // Screen shake moves the field only (the HUD is Compose, above): offset and roll, capped.
+        if (shake != null && (shake[0] != 0f || shake[1] != 0f || shake[2] != 0f)) {
+            c.translate(shake[0] * games.castleprotect.game.Juice.CAP_DP * dp, shake[1] * games.castleprotect.game.Juice.CAP_DP * dp)
+            c.rotate(shake[2] * games.castleprotect.game.Juice.ROLL_DEG, rc.centerX(), rc.centerY())
+        }
         val sk = skySp
         if (sk != null) { r.set(rc); c.drawBitmap(sk.bmp, null, r, bmp) }
         else {
@@ -194,7 +192,11 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
         }
         line.pathEffect = null; line.alpha = 255
         val wl = l.wx(rc.left) - 20; val wr = l.wx(rc.right) + 20
-        for (g in f.ghosts) if (g.hasPin && g.pinX >= wl && g.pinX <= wr) drawPin(c, l.sx(g.pinX.toFloat()), l.sy(g.pinY.toFloat()), g.side, g.round, g.recalled)
+        for (g in f.ghosts) if (g.hasPin && g.pinX >= wl && g.pinX <= wr) {
+            val drop = fx.pinSprite("${g.side}:${g.pinX}:${g.pinY}:${g.round}")?.let { sprites.get(it) }
+            if (drop != null) { val hPx = 28f * dp; val u = hPx / 30f; r.set(l.sx(g.pinX.toFloat()) - 6f * u, l.sy(g.pinY.toFloat()) - 29.5f * u, l.sx(g.pinX.toFloat()) + 6f * u, l.sy(g.pinY.toFloat()) + 0.5f * u); c.drawBitmap(drop.bmp, null, r, bmp) }
+            else drawPin(c, l.sx(g.pinX.toFloat()), l.sy(g.pinY.toFloat()), g.side, g.round, g.recalled)
+        }
 
         // Preview dots for the side in Plan.
         val dot = if (f.side == 0) dotP1 else dotP2
@@ -202,15 +204,27 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
         val pv = f.preview
         while (i + 1 < pv.size) {
             val px = l.sx(pv[i].toFloat()); val py = l.sy(pv[i + 1].toFloat())
-            if (dot != null) spriteAt(c, dot, px, py, 8f * dp)
+            // The pulse runs down the path: each dot 60 ms behind the one before (420 ms cycle).
+            val pt = ((time * 1000f - i / 2 * 60f) % 420f + 420f) % 420f
+            val pulse = if (reduceMotion) null else dotPulse[(if (f.side == 0) 0 else 3) + if (pt < 140f) 0 else if (pt < 260f) 1 else 2]
+            if (pulse != null) spriteAt(c, pulse, px, py, 8f * dp)
+            else if (dot != null) spriteAt(c, dot, px, py, 8f * dp)
             else { fill.color = Color.WHITE; c.drawCircle(px, py, 3.2f * dp, fill); line.color = ink; line.strokeWidth = 1.2f * dp; c.drawCircle(px, py, 3.2f * dp, line) }
             i += 2
         }
 
-        // Props: crocks, turnips, cage bars, the captive. Simple shapes until they have art.
-        for (p in f.props) {
-            fill.color = if (p.side == 0) blue else if (p.side == 1) orange else 0xFF8A6A4A.toInt()
-            c.drawCircle(l.sx(p.x.toFloat()), l.sy(p.y.toFloat()), max(4f * dp, 6f * l.scale), fill)
+        // Props: crocks, turnips, cage bars, the captive, the 1-10 roller and shears hinge.
+        for (p in f.props) drawProp(c, l, p)
+        f.hud.boss?.let { b ->
+            if (b.roller != null && f.props.none { it.id == b.roller.id }) drawProp(c, l, b.roller)
+            if (b.shears != null && f.props.none { it.id == b.shears.id }) drawProp(c, l, b.shears)
+            // The red cut line, shown one boss turn before the snip.
+            val cut = b.cut
+            if (cut != null && cut.size >= 4) {
+                line.pathEffect = ghostDash; line.color = 0xFFE0392B.toInt(); line.strokeWidth = 3f * dp
+                c.drawRect(l.sx(cut[0].toFloat()), l.sy(cut[1].toFloat()), l.sx(cut[2] + 1f), l.sy(cut[3] + 1f), line)
+                line.pathEffect = null
+            }
         }
 
         // Shells in flight.
@@ -223,14 +237,9 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
             } else { fill.color = ink; c.drawCircle(px, py, rad, fill); fill.color = 0xFFFFC23D.toInt(); c.drawCircle(px + rad * 0.6f, py - rad * 0.7f, rad * 0.35f, fill) }
         }
 
-        // Blasts: warm white with a gold rim.
-        for (b in blasts) {
-            val t = b.age / 0.5f; val rad = (if (b.big) 40f else 26f) * l.scale * (0.3f + 0.7f * t)
-            val boom = (if (b.big) boomLarge else boomMedium)[min(3, (t * 4).toInt())]
-            if (boom != null) { spriteAt(c, boom, l.sx(b.x), l.sy(b.y), (if (b.big) 96f else 64f) * l.scale); continue }
-            fill.color = 0xFFFFF6E0.toInt(); fill.alpha = ((1 - t) * 230).toInt(); c.drawCircle(l.sx(b.x), l.sy(b.y), rad, fill); fill.alpha = 255
-            line.color = 0xFFFFC23D.toInt(); line.alpha = ((1 - t) * 255).toInt(); line.strokeWidth = 3 * dp; c.drawCircle(l.sx(b.x), l.sy(b.y), rad, line); line.alpha = 255
-        }
+        // Trails, impacts, booms, collapse pieces, rubble, dust, leaves.
+        fx.draw(c, l, f)
+        if (f.hud.squallRound > 0) fx.drawSquall(c, l)
 
         // Aim Drag: stretchy band from anchor to finger.
         if (drag != null && f.phase == Phase.PLAN) {
@@ -264,6 +273,37 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
             }
         }
         c.restore()
+    }
+
+    @Volatile var reduceMotion = false
+
+    private fun drawProp(c: Canvas, l: Lens, p: games.castleprotect.core.Prop) {
+        val name = when (p.kind) {
+            "shell" -> "shell_${p.shot ?: "old_turnip"}"
+            "roller" -> "shell_rolypoly"
+            "shears" -> "icon_pan_parade"
+            "cage_bar" -> "block_timber_fresh"
+            else -> ""
+        }
+        val sp = if (name.isEmpty()) null else sprites.get(name)
+        val px = l.sx(p.x.toFloat()); val py = l.sy(p.y.toFloat())
+        val size = when (p.kind) { "roller" -> 40f; "shears" -> 20f; "cage_bar" -> 8f; "captive" -> 24f; else -> 14f } * l.scale
+        if (sp != null) {
+            if (p.kind == "cage_bar") { r.set(px - size / 2, py - size * 2, px + size / 2, py + size * 2); c.drawBitmap(sp.bmp, null, r, bmp) }
+            else spriteAt(c, sp, px, py, max(10f * dp, size))
+        } else if (p.kind == "captive") {
+            fill.color = 0xFFF2C9A0.toInt(); c.drawCircle(px, py - size / 2, max(5f * dp, size / 2), fill)
+            line.color = ink; line.strokeWidth = 1.5f * dp; c.drawCircle(px, py - size / 2, max(5f * dp, size / 2), line)
+        } else {
+            fill.color = if (p.side == 0) blue else if (p.side == 1) orange else 0xFF8A6A4A.toInt()
+            c.drawCircle(px, py, max(4f * dp, size / 2), fill)
+        }
+        // A small HP bar for props that can break.
+        if (p.max > 0 && p.hp < p.max) {
+            val w = max(16f * dp, size)
+            fill.color = ink; c.drawRect(px - w / 2, py + 3 * dp, px + w / 2, py + 6 * dp, fill)
+            fill.color = 0xFFE0392B.toInt(); c.drawRect(px - w / 2, py + 3 * dp, px - w / 2 + w * p.hp / max(1, p.max), py + 6 * dp, fill)
+        }
     }
 
     private fun shellSprite(shot: String): Sprites.Sprite? {
@@ -334,58 +374,102 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
         val col = if (k.side == 0) blue else orange
         val team = if (k.side == 0) "blue" else "orange"
         line.pathEffect = null
+        val bs = k.block.toFloat()
+        // A walking fort: it slides from the old place and bobs on its Stomper legs.
+        fx.fortShift(k.side, shift)
+        val walking = shift[0] != 0f || shift[1] != 0f || shift[2] != 0f
+        if (walking) {
+            c.save()
+            c.translate(shift[0] * l.scale, shift[1] * l.scale)
+            c.rotate(shift[2], l.sx(k.x + k.cols * bs / 2f), l.sy(k.baseY.toFloat()))
+            for (leg in 0..1) {
+                val name = fx.legSprite(k.side, leg) ?: continue
+                val sp = sprites.get(name) ?: (if (k.side == 0) stomperBlue else stomperOrange) ?: continue
+                val lx = k.x + k.cols * bs * (if (leg == 0) 0.25f else 0.75f)
+                val u = l.scale * 1.2f
+                r.set(l.sx(lx) - 14.5f * u, l.sy(k.baseY.toFloat()) - 4.6f * u, l.sx(lx) + 17.5f * u, l.sy(k.baseY.toFloat()) + 25.4f * u)
+                c.drawBitmap(sp.bmp, null, r, bmp)
+            }
+        }
         // Rooms sit behind the blocks.
         val ks = k.kettle
         if (ks != null) kettleRoomSp?.let { spriteBox(c, it, l, ks.room) }
         nookSp?.let { n -> for (room in k.rooms) if (room.kind == "nook") spriteBox(c, n, l, room.box) }
         val left = l.rect.left; val right = l.rect.right
-        val bs = k.block.toFloat()
         for (b in k.blocks) {
             r.set(l.sx(b.x.toFloat()), l.sy(b.y.toFloat()), l.sx(b.x + bs), l.sy(b.y + bs))
             if (r.right < left || r.left > right) continue
             val sp = blockSprite(b)
-            if (sp != null) { c.drawBitmap(sp.bmp, null, r, bmp); continue }
-            fill.color = matColor(b.mat); c.drawRect(r, fill)
-            line.color = ink; line.strokeWidth = max(1f, 1.2f * dp * min(1f, l.scale / dp + 0.3f)); c.drawRect(r, line)
-            if (b.hp < b.max) { fill.color = ink; fill.alpha = 70; c.drawRect(r, fill); fill.alpha = 255 }
+            if (sp != null) c.drawBitmap(sp.bmp, null, r, bmp)
+            else {
+                fill.color = matColor(b.mat); c.drawRect(r, fill)
+                line.color = ink; line.strokeWidth = max(1f, 1.2f * dp * min(1f, l.scale / dp + 0.3f)); c.drawRect(r, line)
+                if (b.hp < b.max) { fill.color = ink; fill.alpha = 70; c.drawRect(r, fill); fill.alpha = 255 }
+            }
+            if (b.root) { line.color = 0xFF5CC35A.toInt(); line.strokeWidth = 2f * dp; c.drawRect(r, line) }
         }
-        // Heartkettle. The look follows the core's kettle_pct for this side.
+        fx.drawShimmer(c, l, k, ghostDash)
+        // Loophole Flaps and Pot Lids over the rooms.
+        for (room in k.rooms) {
+            val lh = room.loophole
+            val flap = fx.flapSprite(k.side, room.id) ?: if (room.flap) "loophole_flap_$team" else null
+            if (flap != null && lh.size >= 4) sprites.get(flap)?.let { sp -> r.set(l.sx(lh[0].toFloat()), l.sy(lh[1] - 5f), l.sx(lh[2] + 1f), l.sy(lh[3] + 6f)); c.drawBitmap(sp.bmp, null, r, bmp) }
+            val lid = fx.lidSprite(k.side, room.id.toString()) ?: if (room.lid) "pot_lid_raise_2" else null
+            if (lid != null && room.box.size >= 4) sprites.get(lid)?.let { sp -> spriteBox(c, sp, l, room.box) }
+        }
+        if (ks != null && ks.room.size >= 4) {
+            val lid = fx.lidSprite(k.side, "k") ?: if (ks.lid) "pot_lid_raise_2" else null
+            if (lid != null) sprites.get(lid)?.let { sp -> spriteBox(c, sp, l, ks.room) }
+        }
+        // Heartkettle. The look follows the core's kettle_pct for this side; a pop plays kettle_pop.
         if (ks != null && ks.box.size >= 4) {
             val kx = l.sx((ks.box[0] + ks.box[2]) / 2f); val ky = l.sy((ks.box[1] + ks.box[3]) / 2f)
             val pct = f.hud.kettlePct.getOrElse(k.side) { 100 }
-            val sp = if (!ks.intact || pct <= 0) kettlePopped else if (pct <= 25) kettleCrit else if (pct <= 50) kettleHurt else kettleFull
+            val popName = fx.kettleSprite(k.side)
+            val sp = popName?.let { sprites.get(it) } ?: if (!ks.intact || pct <= 0) kettlePopped else if (pct <= 25) kettleCrit else if (pct <= 50) kettleHurt else kettleFull
             if (sp != null) {
-                if (ks.intact) kettleHalo?.let { spriteAt(c, it, kx, ky, 34f * l.scale * (1f + 0.06f * sin(time * 4f))) }
-                spriteAt(c, sp, kx, ky, 24f * l.scale)
+                if (ks.intact && popName == null) kettleHalo?.let { spriteAt(c, it, kx, ky, 34f * l.scale * (1f + (if (reduceMotion) 0f else 0.06f * sin(time * 4f)))) }
+                spriteAt(c, sp, kx, ky, (if (popName != null) 40f else 24f) * l.scale)
             } else if (ks.intact) {
                 val kr = 9f * l.scale
                 fill.color = 0xFFE8873A.toInt(); c.drawCircle(kx, ky, kr, fill); line.color = ink; line.strokeWidth = 1.5f * dp; c.drawCircle(kx, ky, kr, line)
                 fill.color = 0xFF4FE3C1.toInt(); c.drawCircle(kx, ky, kr * (0.3f + 0.08f * sin(time * 4f)), fill)
             }
+            // At 25% or less steam puffs from the kettle.
+            if (ks.intact && pct in 1..25 && !reduceMotion) sprites.get("fx_kettle_steam_${(time * 1000f / 180f).toInt() % 4}")?.let { st ->
+                r.set(kx - 8f * l.scale, ky - 36f * l.scale, kx + 8f * l.scale, ky - 12f * l.scale); c.drawBitmap(st.bmp, null, r, bmp)
+            }
         }
         // Hobs; (x, y) is the feet. Art faces right, so the right-hand fort is flipped.
-        val firing = (f.phase == Phase.RESOLVE) && f.side == k.side
         val frame2 = (time * 2f).toInt()
         for (h in f.hobs) {
             if (h.side != k.side) continue
-            val hx = l.sx(h.x.toFloat()); val hy = l.sy(h.y.toFloat())
+            val dy = fx.hobDy(h)
+            val hx = l.sx(h.x.toFloat()); val hy = l.sy(h.y.toFloat() - dy)
             val selected = h.id == f.hud.selectedHob && f.side == k.side
-            val look = hobLook(h, team)
-            val sp = when {
-                h.bonked -> look.bonked[frame2 % 2]
-                selected && firing -> look.fire
-                selected && f.phase == Phase.PLAN -> look.aim[frame2 % 2]
-                f.phase == Phase.ENDED && h.hp > 0 && f.result?.winner == k.side -> look.cheer[(time * 3f).toInt() % 2]
-                else -> look.idle[(frame2 + h.id) % 3]
-            } ?: look.idle[0]
             val hr = 9f * l.scale
-            if (sp != null) sprite(c, sp, l, h.x.toFloat(), h.y.toFloat(), look.k, flip = k.side == 1)
-            else if (h.bonked) { fill.color = 0xFF9A9198.toInt(); fill.alpha = 150; c.drawCircle(hx, hy - hr, hr * 0.8f, fill); fill.alpha = 255 }
-            else {
-                val cy = hy - hr * 1.2f
-                fill.color = 0xFFF2C9A0.toInt(); c.drawCircle(hx, cy, hr, fill)
-                fill.color = col; c.drawRect(hx - hr * 0.8f, cy + hr * 0.55f, hx + hr * 0.8f, cy + hr * 0.95f, fill) // team scarf
-                line.color = ink; line.strokeWidth = 1.3f * dp; c.drawCircle(hx, cy, hr, line)
+            val anim = fx.hobFrame(h)
+            val asp = anim?.let { sprites.get(it.first) }
+            if (anim != null && asp != null) {
+                // Every frame of one animation shares its size and anchor (animations.json); a Hob is 80 px tall at @1x, about 28 cells.
+                val d = anim.second; val u = HOB_K * l.scale
+                r.set(hx - d.ax * u, hy - d.ay * u, hx + (d.w - d.ax) * u, hy + (d.h - d.ay) * u)
+                if (k.side == 1) { c.save(); c.scale(-1f, 1f, hx, hy); c.drawBitmap(asp.bmp, null, r, bmp); c.restore() } else c.drawBitmap(asp.bmp, null, r, bmp)
+            } else {
+                val look = hobLook(h, team)
+                val sp = when {
+                    h.bonked -> look.bonked[frame2 % 2]
+                    selected && f.phase == Phase.PLAN -> look.aim[frame2 % 2]
+                    else -> look.idle[(frame2 + h.id) % 3]
+                } ?: look.idle[0]
+                if (sp != null) sprite(c, sp, l, h.x.toFloat(), h.y.toFloat() - dy, look.k, flip = k.side == 1)
+                else if (h.bonked) { fill.color = 0xFF9A9198.toInt(); fill.alpha = 150; c.drawCircle(hx, hy - hr, hr * 0.8f, fill); fill.alpha = 255 }
+                else {
+                    val cy = hy - hr * 1.2f
+                    fill.color = 0xFFF2C9A0.toInt(); c.drawCircle(hx, cy, hr, fill)
+                    fill.color = col; c.drawRect(hx - hr * 0.8f, cy + hr * 0.55f, hx + hr * 0.8f, cy + hr * 0.95f, fill) // team scarf
+                    line.color = ink; line.strokeWidth = 1.3f * dp; c.drawCircle(hx, cy, hr, line)
+                }
             }
             if (h.bonked) continue
             if (selected && f.phase == Phase.PLAN) {
@@ -400,13 +484,16 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
         }
         // Flag on the top of the fort: yours points left with round shapes, the Rival's right with diamonds.
         val topY = k.topY.toFloat()
-        val fx = k.x + if (k.side == 0) 4f else k.cols * bs - 4f
+        val fx0 = k.x + if (k.side == 0) 4f else k.cols * bs - 4f
         val flag = if (k.side == 0) flagBlue else flagOrange
-        if (flag != null) { sprite(c, flag, l, fx, topY, 1.4f, flip = k.side == 0); return }
-        val sx = l.sx(fx); val sy = l.sy(topY); val fh = 22f * l.scale; val dir = if (k.side == 0) -1f else 1f
-        line.color = ink; line.strokeWidth = 2 * dp; c.drawLine(sx, sy, sx, sy - fh, line)
-        path.rewind(); path.moveTo(sx, sy - fh); path.lineTo(sx + dir * fh * 0.6f, sy - fh * 0.8f); path.lineTo(sx, sy - fh * 0.6f); path.close()
-        fill.color = col; c.drawPath(path, fill); line.strokeWidth = 1.3f * dp; c.drawPath(path, line)
+        if (flag != null) sprite(c, flag, l, fx0, topY, 1.4f, flip = k.side == 0)
+        else {
+            val sx = l.sx(fx0); val sy = l.sy(topY); val fh = 22f * l.scale; val dir = if (k.side == 0) -1f else 1f
+            line.color = ink; line.strokeWidth = 2 * dp; c.drawLine(sx, sy, sx, sy - fh, line)
+            path.rewind(); path.moveTo(sx, sy - fh); path.lineTo(sx + dir * fh * 0.6f, sy - fh * 0.8f); path.lineTo(sx, sy - fh * 0.6f); path.close()
+            fill.color = col; c.drawPath(path, fill); line.strokeWidth = 1.3f * dp; c.drawPath(path, line)
+        }
+        if (walking) c.restore()
     }
 
     private fun drawPin(c: Canvas, x: Float, y: Float, side: Int, round: Int, spent: Boolean) {
@@ -477,6 +564,8 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float) {
     }
 
     companion object {
+        /** Hob art scale: 28 cells for an 80 px (@1x) frame. */
+        const val HOB_K = 28f / 80f
         /** Cells per terrain bitmap pixel on each axis. */
         const val DS = 2
         /** Terrain material code to colour (content/materials.json order). */

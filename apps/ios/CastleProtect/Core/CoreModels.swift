@@ -197,6 +197,53 @@ struct HobView: Equatable, Sendable, Identifiable {
     var hpFraction: Double { Double(max(0, hp)) / Double(max(1, hpMax)) }
 }
 
+/// A Nook (or the Kettle Room) as the renderer needs it: world boxes, y up.
+struct RoomView: Equatable, Sendable {
+    var id: Int
+    /// Room box: min x, min y (bottom), max x, max y (top).
+    var box: CGRectLike
+    /// The Loophole slot, or nil.
+    var loophole: CGRectLike?
+    var intact = true
+    /// Loophole Flap down (after a Thread, until the front changes).
+    var flap = false
+    /// Pot Lid on this room.
+    var lid = false
+}
+
+/// A plain rectangle that is Sendable and Equatable without CoreGraphics.
+struct CGRectLike: Equatable, Sendable {
+    var x0: Double
+    var y0: Double
+    var x1: Double
+    var y1: Double
+
+    var midX: Double { (x0 + x1) / 2 }
+    var midY: Double { (y0 + y1) / 2 }
+    var width: Double { x1 - x0 }
+    var height: Double { y1 - y0 }
+
+    /// A core box `[x0, y0, x1, y1]` (inclusive, y down) in view space (y up).
+    init?(core b: [Int], mapHeight H: Double) {
+        guard b.count >= 4 else { return nil }
+        x0 = Double(min(b[0], b[2])); x1 = Double(max(b[0], b[2]) + 1)
+        y0 = H - Double(max(b[1], b[3]) + 1); y1 = H - Double(min(b[1], b[3]))
+    }
+
+    init(x0: Double, y0: Double, x1: Double, y1: Double) {
+        self.x0 = x0; self.y0 = y0; self.x1 = x1; self.y1 = y1
+    }
+}
+
+/// The 1-10 boss state from `hud.boss`, in view space.
+struct BossView: Equatable, Sendable {
+    var phase = 1
+    /// The red cut line box, shown one boss turn before the snip.
+    var cut: CGRectLike?
+    var jam = 0
+    var rollerDone = false
+}
+
 struct FortView: Equatable, Sendable {
     var side: Int
     /// Centre of the fort.
@@ -208,6 +255,21 @@ struct FortView: Equatable, Sendable {
     var kettleMax: Int
     var blocks: [BlockView]
     var hobs: [HobView]
+    /// Left edge of the fort and the bottom of the Footing (y up), and the block size.
+    var originX: Double = 0
+    var baseY: Double = 0
+    var block: Double = 16
+    var cols: Int = 0
+    var rooms: [RoomView] = []
+    /// The Kettle Room box and whether the Pot Lid is on it.
+    var kettleRoom: CGRectLike?
+    var kettleLid = false
+    var fatigue = false
+
+    /// World position (lower left) of block (c, r) of this fort.
+    func blockOrigin(c: Int, r: Int) -> (x: Double, y: Double) {
+        (originX + block * Double(c), baseY + block * Double(r))
+    }
 
     /// Kettle HP as a whole percent, rounded up so 1 HP never reads 0%.
     var kettlePercent: Int {
@@ -229,6 +291,8 @@ struct ShotChip: Equatable, Sendable, Identifiable {
     var weight: Int = 0
     var best: Bool = false
     var ready: Bool = true
+    /// Why `fire` would refuse it (from `hud.shots`), or nil.
+    var why: String?
 }
 
 struct AimView: Equatable, Sendable {
@@ -286,12 +350,21 @@ struct GoalView: Equatable, Sendable {
 struct BattleResult: Equatable, Sendable {
     /// Winning side, or -1 for none.
     var winner: Int
-    /// The core's `how`: clean_sweep, kettle_pop, squall, double_pop, rescue, round_cap, total_hp.
+    /// The core's `how`: clean_sweep, kettle_pop, squall, double_pop, rescue, round_cap, total_hp,
+    /// give_up, volley_points, captive_bonked.
     var reason: String
     var pennants: Int = 0
     var buttons: Int = 0
     var round: Int = 0
     var goals: [GoalView] = []
+    /// Which Pennants were earned this time (core `pennants` as flags) and which are new.
+    var pennantFlags: [Bool] = []
+    var pennantsNew: [Bool] = []
+    /// Siege Score per side.
+    var score: [Int] = []
+    var stats: [CoreStats] = []
+    /// What broke the losing side.
+    var broke: CoreBroke?
 }
 
 struct HandoffView: Equatable, Sendable {
@@ -309,6 +382,8 @@ struct BattleEvent: Equatable, Sendable {
     var y: Double = 0
     var amount: Int = 0
     var text: String = ""
+    /// The core's event as sent (cells, falls, hob ids), for the renderer's choreography.
+    var raw: CoreEvent?
 }
 
 /// One frame of the battle, ready to draw.
@@ -364,6 +439,20 @@ struct BattleSnapshot: Equatable, Sendable {
     var result: BattleResult?
     var handoff: HandoffView?
     var events: [BattleEvent] = []
+    /// Steam a Shove Off costs (`hud.shove_off_cost`).
+    var shoveOffCost = 15
+    /// Help marks per side ("", "+", "++"), shown openly.
+    var helpMarks = ["", ""]
+    /// Volley Points: Actions per side and what is left, or nil.
+    var volleyActions = 0
+    var volleyLeft: [Int] = []
+    var boss: BossView?
+    /// Rescue objective ("cage", 2) or nil.
+    var objective: String?
+    var objectiveCount = 0
+    var score: [Int] = [0, 0]
+    /// Shimmer cells per side, for the shimmer effect.
+    var squall = false
 
     func fort(_ side: Int) -> FortView? { forts.first { $0.side == side } }
     func name(_ side: Int) -> String { side >= 0 && side < names.count ? names[side] : (side == 0 ? "You" : "Rival") }

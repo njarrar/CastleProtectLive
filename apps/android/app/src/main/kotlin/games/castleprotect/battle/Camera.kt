@@ -42,6 +42,36 @@ object Camera {
         return clampScale(s, dp)
     }
 
+    /** A castle block is 16 cells. In the Wide (landscape) layout a block is never drawn under 8 dp. */
+    fun minBlockScale(dp: Float) = 8f * dp / 16f
+
+    /**
+     * The scale and centre that fit a world box [x0, y0, x1, y1] (plus [margin] cells on
+     * each side) into a clear rect of [w] x [h] px, never below [floor] px per cell and
+     * never above [ceil]. Writes cx, cy, scale into [out].
+     */
+    fun fit(x0: Float, y0: Float, x1: Float, y1: Float, w: Float, h: Float, margin: Float, floor: Float, ceil: Float, out: FloatArray) {
+        val bw = max(1f, x1 - x0 + 2 * margin); val bh = max(1f, y1 - y0 + 2 * margin)
+        var s = min(max(1f, w) / bw, max(1f, h) / bh)
+        if (s.isNaN()) s = floor
+        s = s.coerceIn(floor, max(floor, ceil))
+        out[0] = (x0 + x1) / 2f; out[1] = (y0 + y1) / 2f; out[2] = s
+    }
+
+    /**
+     * Shell follow with a dead zone: the centre moves only when the point leaves the
+     * middle [zone] share of the view ([halfW], [halfH] are half the view in cells).
+     * Returns the new centre on one axis.
+     */
+    fun follow(center: Float, point: Float, half: Float, zone: Float = 0.3f): Float {
+        val dz = half * zone
+        return when {
+            point > center + dz -> point - dz
+            point < center - dz -> point + dz
+            else -> center
+        }
+    }
+
     /** Index range [i0, i1] of samples inside a visible world range, clamped to 0..n-1. Empty when i0 > i1. */
     fun visibleRange(worldLeft: Float, worldRight: Float, step: Float, n: Int): IntArray {
         if (n <= 0 || step <= 0f || worldLeft.isNaN() || worldRight.isNaN()) return intArrayOf(0, -1)

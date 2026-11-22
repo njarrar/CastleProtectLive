@@ -15,6 +15,10 @@ export interface PSideCfg {
   name?: string;
   steam?: number;
   aim?: number;
+  /** v0.2 handicaps: Help (Steam from content/app.json, read by the core), preview share, crew size. */
+  help?: 'none' | 'some' | 'lots';
+  preview_pct?: number;
+  crew_size?: number;
 }
 
 export interface PWind { min: number; max: number; fronts?: number[]; front_rounds?: number }
@@ -22,7 +26,7 @@ export interface PRummage { pool: number; picks: number; source?: string[] }
 
 export interface PSetup {
   level: string;
-  mode?: 'campaign' | 'skirmish' | 'couch' | 'test_yard';
+  mode?: 'campaign' | 'skirmish' | 'couch' | 'test_yard' | 'daily';
   sides?: PSideCfg[];
   first_turn?: 0 | 1 | 'coin';
   round_cap?: number;
@@ -30,6 +34,9 @@ export interface PSetup {
   wind?: PWind;
   rummage?: PRummage;
   puff_up?: boolean;
+  /** Volley Points: Actions per side (skirmish, daily, couch). */
+  volley?: number;
+  progress?: { cleared: boolean; pennants: boolean[]; daily_paid: boolean };
 }
 
 export type PCommand =
@@ -51,7 +58,10 @@ export type PCommand =
   | { cmd: 'validate_blueprint'; rows: string[]; seats: number }
   | { cmd: 'hash' }
   | { cmd: 'log' }
-  | { cmd: 'terrain_all' };
+  | { cmd: 'terrain_all' }
+  | { cmd: 'give_up'; side?: PSide }
+  | { cmd: 'set_wind'; wind: number }
+  | { cmd: 'resume'; log: PCommand[] };
 
 export type PReason =
   | 'bad_json' | 'unknown_command' | 'not_drafting' | 'not_your_pick' | 'not_in_pool' | 'not_planning'
@@ -59,7 +69,9 @@ export type PReason =
   | 'unknown_shot' | 'no_knack_uses' | 'not_in_hand' | 'no_heavy_first_turn' | 'bad_dial'
   | 'puff_up_not_allowed' | 'cannot_walk_now' | 'cannot_walk_there' | 'cannot_shove_now' | 'not_buried'
   | 'not_enough_steam' | 'no_hob' | 'cannot_use_now' | 'no_doodad' | 'unknown_doodad' | 'bad_room'
-  | 'no_ghost' | 'pin_faded' | 'invalid_blueprint';
+  | 'no_ghost' | 'pin_faded' | 'invalid_blueprint'
+  | 'bad_value' | 'nothing_to_mend' | 'no_one_to_puff_up' | 'bad_target' | 'no_actions_left' | 'battle_over'
+  | 'test_yard_only' | 'cannot_resume' | 'bad_log' | 'buried' | 'resting';
 
 export interface PReply {
   ok: boolean;
@@ -105,9 +117,26 @@ export interface PHud {
   selected: { hob: number; shot: string };
   names: [string, string]; control: ['human' | 'ai', 'human' | 'ai'];
   score: [number, number]; puff_up: [boolean, boolean];
+  // v0.2
+  steam_max?: [number, number];
+  shove_off_cost?: number;
+  shots?: { shot: string; id: string; ready: boolean; why: string | null }[];
+  handicap?: [PHandicap, PHandicap];
+  volley?: { actions: number; left: [number, number] } | null;
+  boss?: PBoss | null;
+  rules?: { objective: { tag: string; count: number } | null; cap_win: 0 | 1 | null };
 }
+export interface PHandicap { help: string; steam: number; preview_pct: number; crew: number }
+export interface PBoss { phase: number; roller: PProp | null; roller_done: boolean; shears: PProp | null; cut: [number, number, number, number] | null; jam: number }
 export interface PDraft { pool: string[]; picks: [string[], string[]]; next: PSide; picks_each: number; wish: string | null }
-export interface PResult { winner: PSide; how: string; round: number; pennants: boolean[] }
+export interface PResultStats { shots: number; hits: number; blocks_dropped: number; bonks: number; blocks_lost: number; kettle_lost: number; hobs_lost: number; best_streak: number }
+export interface PBlow { shot: string; shot_name: string; hob: number; hob_name: string; round?: number; dmg?: number }
+export interface PResult {
+  winner: PSide; how: string; round: number; pennants: boolean[];
+  // v0.2
+  pennants_new?: boolean[]; buttons?: number; score?: [number, number]; stats?: [PResultStats, PResultStats];
+  broke?: { side: PSide; how: string; last: PBlow | null; top: PBlow[]; kettle_lost: number; blocks_lost: number; hobs_bonked: number } | null;
+}
 
 export type PEvent = { t: string; tick?: number; [k: string]: unknown };
 
@@ -123,6 +152,8 @@ export interface PSnapshot {
   preview: [number, number][]; ghosts: PGhost[];
   hud: PHud; draft: PDraft | null; events: PEvent[];
   result: PResult | null; hash: string; last_ai?: unknown[];
+  /** Lean snapshot after an `aim` (v0.2): the new aim and preview. */
+  aim?: { side: PSide; hob: number; angle: number; power: number };
 }
 
 /** What castle-wasm (wasm-bindgen, target web) exports. */
@@ -132,7 +163,7 @@ export interface WasmGame {
   snapshot(): string;
   free(): void;
 }
-/** cp_version(): {"sim":"0.1.0","rules":1,"tick_hz":120} */
+/** cp_version(): {"sim":"0.2.0","rules":2,"tick_hz":120} */
 export interface PVersion { sim: string; rules: number; tick_hz: number }
 
 export interface WasmModule {

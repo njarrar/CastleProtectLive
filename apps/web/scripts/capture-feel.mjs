@@ -104,7 +104,7 @@ async function profile(aim) {
   const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: Number(process.env.DPR ?? 2) });
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page);
-  await page.goto(`${url}?debug=1#map`);
+  await page.goto(`${url}?debug=1${process.env.ART ? `&art=${process.env.ART}` : ''}#map`);
   await page.waitForSelector('html[data-ready=true]');
   await page.evaluate((setup) => window.castleApp.go({ to: 'battle', setup }), SETUP);
   await page.waitForFunction(() => window.__castle?.snap().phase === 'plan');

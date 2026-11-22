@@ -195,6 +195,16 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     if (moved) ctx.restore();
   }
   for (const p of snap.props ?? []) prop(ctx, r, cam, p);
+  // Grand Fort 1-10: the red cut line, shown one boss turn before the shears snip.
+  const cut = snap.hud.boss?.cut;
+  if (cut) {
+    ctx.save();
+    ctx.strokeStyle = '#E5484D';
+    ctx.lineWidth = Math.max(2, 3 * cam.s);
+    ctx.setLineDash(DASH_CUT);
+    ctx.strokeRect(sx(r, cam, cut.x), sy(r, cam, cut.y + cut.h), cut.w * cam.s, cut.h * cam.s);
+    ctx.restore();
+  }
   feel.col.draw(ctx, r, cam);
   for (const p of snap.pins) pin(ctx, r, cam, p, feel);
 
@@ -347,6 +357,7 @@ function terrainLayer(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, terr: Te
 
 }
 
+const DASH_CUT = [8, 5];
 const DASH_NEW = [10, 6], DASH_OLD = [4, 6], DASH_RIVAL = [2, 4, 8, 4], NO_DASH: number[] = [], DOT_DASH = [2, 3];
 
 /** Sudden Squall: slanted rain at the wind's angle, 30% opacity, behind the forts [06 §7.1]. */
@@ -557,6 +568,23 @@ function prop(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, p: PropView) {
     ctx.strokeRect(x - w / 2, y - hh, w, hh);
     ctx.fillStyle = '#E0AE3E';
     ctx.fillRect(x - w, y - hh - 2 * cam.s, w * 2, 3 * cam.s);
+  } else if (p.kind === 'roller') {
+    // Big Smoothie Jr.: a drum with a boiler; it greys out once its boiler is beaten.
+    const rad = Math.max(6, 22 * cam.s);
+    ctx.fillStyle = p.hp > 0 ? '#77716B' : '#A9A39A';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = Math.max(1.5, cam.s * 2);
+    ctx.beginPath(); ctx.arc(x, y - rad, rad, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = p.hp > 0 ? '#B9733A' : '#7A6A60';
+    ctx.fillRect(x - rad * 0.5, y - rad * 2.6, rad, rad * 0.9); ctx.strokeRect(x - rad * 0.5, y - rad * 2.6, rad, rad * 0.9);
+  } else if (p.kind === 'shears') {
+    // The shears' hinge on the roof: two blades about a pin.
+    const len = Math.max(8, 26 * cam.s);
+    ctx.strokeStyle = p.hp > 0 ? '#47525C' : '#A9A39A';
+    ctx.lineWidth = Math.max(2, 4 * cam.s);
+    ctx.beginPath(); ctx.moveTo(x - len, y - len * 0.6); ctx.lineTo(x + len, y + len * 0.2); ctx.moveTo(x - len, y + len * 0.2); ctx.lineTo(x + len, y - len * 0.6); ctx.stroke();
+    ctx.fillStyle = '#E0AE3E';
+    ctx.beginPath(); ctx.arc(x, y - len * 0.2, Math.max(2, 4 * cam.s), 0, Math.PI * 2); ctx.fill();
   } else if (p.kind === 'captive') {
     if (!sprites.draw(ctx, 'hob_hetty_blue_idle_0', x, y, cam.s * HOB_SCALE)) {
       ctx.fillStyle = '#2FB7A6';

@@ -61,3 +61,29 @@ test('map, pre-battle, Couch Duel setup and settings open', async ({ page }) => 
   await page.goto('./?debug=2#settings');
   await expect(page.getByText('Reduce motion')).toBeVisible();
 });
+
+test('Give up ends a Couch Duel at once, with the result from the core', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('./?debug=1#duel');
+  await page.getByTestId('duel-fight').click();
+  await expect(page.locator('.battle')).toBeVisible();
+  await expect.poll(async () => (await snap(page)).phase).toBe('plan');
+  await page.keyboard.press('Escape');
+  await page.getByTestId('give-up').click();
+  await expect(page.locator('.screen.results')).toBeVisible({ timeout: 15_000 });
+});
+
+test('a shot plays the feel layer: effects run and nothing throws', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto('./?debug=1#map');
+  await expect(page.locator('html[data-ready=true]')).toBeAttached();
+  await page.evaluate(() => (window as unknown as { castleApp: { go: (r: unknown) => void } }).castleApp.go({ to: 'battle', setup: { mode: 'campaign', level: '1-1', seed: 1, difficulty: 'fair', windOff: false, sides: [{ name: 'You', human: true, crew: ['marge'] }, { name: 'Sir Pudge', human: false, crew: [] }] } }));
+  await expect.poll(async () => (await snap(page)).phase).toBe('plan');
+  await page.evaluate(() => (window as unknown as { castleApp: { core: { command: (c: unknown) => unknown } } }).castleApp.core.command({ cmd: 'aim', angle: 300, power: 60 }));
+  await page.getByTestId('fire').click({ force: true });
+  const feel = () => page.evaluate(() => (window as unknown as { __castle: { feel: () => { fx: number; collapse: boolean } } }).__castle.feel());
+  await expect.poll(async () => (await feel()).fx, { timeout: 10_000 }).toBeGreaterThan(0);
+  await expect.poll(async () => (await feel()).collapse, { timeout: 10_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});

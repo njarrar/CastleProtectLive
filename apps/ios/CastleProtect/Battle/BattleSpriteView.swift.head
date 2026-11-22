@@ -1,0 +1,127 @@
+import SpriteKit
+import UIKit
+
+/// The battle field: an SKView whose scene is updated from the latest core
+/// snapshot when it changes (and four times a second for idle poses). It also
+/// reads touches for the Aim Drag. The battle clock itself runs in the session.
+/// Drawing only: nothing here decides an outcome.
+final class BattleSKView: SKView {
+    var session: BattleSession
+    private let battleScene: BattleScene
+    private var link: CADisplayLink?
+    private var lastBoundsSize: CGSize = .zero
+    private var aimTouch: UITouch?
+    private var drawnVersion = -1
+    private var drawnLayout = BattleLayout.empty
+    private var drawnColours = ColourSet.brickabrac
+    private var drawnPose: UInt64 = 0
+
+    init(session: BattleSession) {
+        self.session = session
+        battleScene = BattleScene(sheet: SpriteSheet.shared())
+        super.init(frame: .zero)
+        ignoresSiblingOrder = true
+        isMultipleTouchEnabled = true
+        preferredFramesPerSecond = 60
+        backgroundColor = Palette.hex(0xA6DCEF)
+        battleScene.scaleMode = .resizeFill
+        presentScene(battleScene)
+        isAccessibilityElement = true
+        accessibilityLabel = "Battlefield"
+        updateHint()
+        NotificationCenter.default.addObserver(self, selector: #selector(voiceOverChanged),
+                                               name: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil)
+    }
+
+    @objc private func voiceOverChanged() { updateHint() }
+
+    private func updateHint() {
+        // A VoiceOver user cannot drag on the fort: point them at Fine Tune (M5).
+        accessibilityHint = UIAccessibility.isVoiceOverRunning
+            ? "Use the aim readout to open Fine Tune, then Fire."
+            : "Drag on your fort to aim."
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not used")
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        link?.invalidate()
+        link = nil
+        guard window != nil else { return }
+        let l = CADisplayLink(target: self, selector: #selector(frameTick))
+        l.add(to: .main, forMode: .common)
+        link = l
+    }
+
+    @objc private func frameTick() {
+        let now = DispatchTime.now().uptimeNanoseconds
+        // Idle poses step at 15 a second; effects, flight and the camera draw every frame.
+        let pose = now / 66_000_000
+        let colours = session.settings.colourSet
+        let busy = session.fx.isActive || session.snapshot.phase.isResolving || battleScene.cameraMoving
+        // Draw only when something changed (H8, M1).
+        guard busy || session.frameVersion != drawnVersion || session.layout != drawnLayout || colours != drawnColours
+                || pose != drawnPose else { return }
+        drawnVersion = session.frameVersion
+        drawnLayout = session.layout
+        drawnColours = colours
+        drawnPose = pose
+        battleScene.render(snapshot: session.snapshot, layout: session.layout, fx: session.fx, colours: colours,
+                           dragging: session.dragging, reduceMotion: session.settings.reduceMotion)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if bounds.size != lastBoundsSize {
+            if lastBoundsSize != .zero, aimTouch != nil {
+                // A device turn mid-drag ends the drag as if the finger lifted; nothing fires.
+                aimTouch = nil
+                session.endDragKeepingAim()
+            }
+            lastBoundsSize = bounds.size
+            battleScene.size = bounds.size
+        }
+    }
+
+    // MARK: Touches (UX 3.1, 3.9)
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        let active = event?.allTouches?.filter { $0.phase != .ended && $0.phase != .cancelled } ?? touches
+        if active.count >= 2 {
+            // A second finger cancels the drag; lifting back to one does not start a new one.
+            if aimTouch != nil {
+                session.touchCancelled()
+                aimTouch = nil
+            }
+            return
+        }
+        guard aimTouch == nil, let t = touches.first else { return }
+        let p = t.location(in: self)
+        // Touches that start inside the safe-area insets are palm and edge touches.
+        guard bounds.inset(by: safeAreaInsets).contains(p) else { return }
+        aimTouch = t
+        session.touchBegan(at: p)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let t = aimTouch, touches.contains(t) else { return }
+        session.touchMoved(to: t.location(in: self))
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let t = aimTouch, touches.contains(t) else { return }
+        aimTouch = nil
+        session.touchEnded(at: t.location(in: self))
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let t = aimTouch, touches.contains(t) else { return }
+        aimTouch = nil
+        session.touchCancelled()
+    }
+}
+
