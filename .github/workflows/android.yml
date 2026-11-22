@@ -60,7 +60,6 @@ jobs:
           cache-dependency-path: |
             apps/android/**/*.gradle*
             apps/android/**/gradle-wrapper.properties
-            apps/android/gradle/libs.versions.toml
 
       - uses: android-actions/setup-android@v4
         if: steps.check.outputs.app == 'true'
@@ -85,12 +84,75 @@ jobs:
         if: steps.check.outputs.core == 'true'
         run: scripts/build-android-libs.sh
 
-      - name: Gradle assembleDebug
+      # The real JNI shim against the real core, built for the CI host, so the
+      # bridge unit tests (NativeHostTest) run against cp_* and not only the fixtures.
+      - name: Build host core and JNI shim for unit tests
+        if: steps.check.outputs.core == 'true'
+        id: hostjni
+        run: |
+          cargo build --manifest-path core/Cargo.toml -p castle-ffi --release
+          out="$RUNNER_TEMP/hostjni"
+          mkdir -p "$out"
+          cp core/target/release/libcastle_ffi.so "$out/"
+          gcc -shared -fPIC -Wall -Wextra -Werror -O2 \
+            -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" -Icore/castle-ffi/include \
+            apps/android/app/src/main/cpp/castle_jni.c -L"$out" -lcastle_ffi -Wl,-rpath,'$ORIGIN' \
+            -o "$out/libcastle_jni.so"
+          echo "dir=$out" >> "$GITHUB_OUTPUT"
+
+      # Unit tests, lint and the APK. When CI built the core, a missing or stale
+      # native core fails the build (castle.requireNative) instead of shipping the stand-in.
+      - name: Gradle test, lint and assembleDebug
         if: steps.check.outputs.app == 'true'
         working-directory: apps/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          args=()
+          if [ "${{ steps.check.outputs.core }}" = "true" ]; then
+            args+=("-Pcastle.requireNative=true" "-Pcastle.hostJni=${{ steps.hostjni.outputs.dir }}")
+          fi
+          ./gradlew testDebugUnitTest lintDebug assembleDebug --stacktrace "${args[@]}"
+
+      - name: Check the native core is in the APK
+        if: steps.check.outputs.core == 'true'
+        working-directory: apps/android
+        run: |
+          apk=$(ls app/build/outputs/apk/debug/*.apk | head -n1)
+          for so in lib/arm64-v8a/libcastle_jni.so lib/arm64-v8a/libcastle_ffi.so; do
+            unzip -l "$apk" | grep -q "$so" || { echo "::error::$so is missing from the APK"; exit 1; }
+          done
+          tmp="$RUNNER_TEMP/apk"; rm -rf "$tmp"; mkdir -p "$tmp"; unzip -q "$apk" 'lib/*' -d "$tmp"
+          readelf_bin="$(find "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt" -name llvm-readelf -type f | head -n1)"
+          # The shim must need the core by bare name, never a CI build path.
+          "$readelf_bin" -d "$tmp/lib/arm64-v8a/libcastle_jni.so" | grep NEEDED
+          if "$readelf_bin" -d "$tmp/lib/arm64-v8a/libcastle_jni.so" | grep NEEDED | grep -q '/'; then
+            echo "::error::libcastle_jni.so records a path for a needed library"; exit 1
+          fi
+          # 16 KB pages: the castle libraries on 64-bit ABIs, and the APK's zip alignment.
+          bad=0
+          for so in "$tmp"/lib/arm64-v8a/libcastle_*.so "$tmp"/lib/x86_64/libcastle_*.so; do
+            [ -f "$so" ] || continue
+            if "$readelf_bin" -lW "$so" | awk '$1=="LOAD" {print $NF}' | grep -qv '^0x4000$\|^0x10000$'; then
+              echo "::error::not 16 KB aligned: $so"; bad=1
+            fi
+          done
+          zipalign_bin="$(ls -d "${ANDROID_SDK_ROOT:-$ANDROID_HOME}"/build-tools/*/zipalign 2>/dev/null | sort -V | tail -n1 || true)"
+          if [ -n "$zipalign_bin" ]; then
+            "$zipalign_bin" -c -P 16 -v 4 "$apk" > /dev/null || { echo "::error::APK is not 16 KB zip aligned"; bad=1; }
+          else
+            echo "::notice::zipalign not found, APK alignment not checked"
+          fi
+          exit $bad
+
+      - name: Upload test and lint reports
+        if: always() && steps.check.outputs.app == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: castle-protect-android-reports
+          path: |
+            apps/android/app/build/reports/
+            apps/android/app/build/test-results/
+          if-no-files-found: ignore
 
       - name: Upload debug APK
         if: steps.check.outputs.app == 'true'

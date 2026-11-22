@@ -21,6 +21,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -50,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /** Palette from docs/design/06-art-direction.md. */
@@ -137,12 +140,20 @@ fun Modifier.blockInput(on: Boolean): Modifier = if (!on) this else pointerInput
 /**
  * Tap: one step on release. Hold: first repeat after 350 ms, then 8 steps a second
  * rising to 20 a second after 1 s. Every hold has this tap twin, and tap-only turns
- * the hold off. If the pointer is lost the repeat stops at once, so nothing sticks.
+ * the hold off.
+ *
+ * The repeat can never outlive its gesture (review H5): it stops when the finger
+ * lifts or the pointer is lost, when the gesture is cancelled because [enabled]
+ * changed, when the key leaves the screen, and when [onStep] reports that nothing
+ * changed (a limit was reached).
  */
 @Composable
-fun Modifier.tapOrHold(enabled: Boolean, tapOnly: Boolean, label: String, onStep: () -> Unit): Modifier {
+fun Modifier.tapOrHold(enabled: Boolean, tapOnly: Boolean, label: String, onStep: () -> Boolean): Modifier {
     val step by rememberUpdatedState(onStep)
+    val on by rememberUpdatedState(enabled)
     val scope = rememberCoroutineScope()
+    val holder = remember { arrayOfNulls<Job>(1) }
+    DisposableEffect(Unit) { onDispose { holder[0]?.cancel(); holder[0] = null } }
     return this
         .semantics { role = Role.Button; contentDescription = label; if (!enabled) disabled(); onClick { if (enabled) step(); true } }
         .pointerInput(enabled, tapOnly) {
@@ -150,14 +161,25 @@ fun Modifier.tapOrHold(enabled: Boolean, tapOnly: Boolean, label: String, onStep
             awaitEachGesture {
                 awaitFirstDown()
                 var repeats = 0
+                holder[0]?.cancel()
                 val job: Job? = if (tapOnly) null else scope.launch {
                     delay(350)
                     val t0 = System.nanoTime()
-                    while (true) { step(); repeats++; delay(if (System.nanoTime() - t0 > 1_000_000_000L) 50 else 125) }
+                    while (isActive && on) {
+                        if (!step()) break
+                        repeats++
+                        delay(if (System.nanoTime() - t0 > 1_000_000_000L) 50 else 125)
+                    }
                 }
-                val up = waitForUpOrCancellation()
-                job?.cancel()
-                if (up != null && repeats == 0) step()
+                holder[0] = job
+                try {
+                    val up = waitForUpOrCancellation()
+                    job?.cancel()
+                    if (up != null && repeats == 0) step()
+                } finally {
+                    job?.cancel()
+                    if (holder[0] === job) holder[0] = null
+                }
             }
         }
 }
@@ -180,7 +202,7 @@ fun Modifier.onReleaseInside(enabled: Boolean, label: String, onRelease: () -> U
 /** Draws a sprite from the shared assets if it is in this build. Returns false when it is not, so the caller can show text instead. */
 @Composable
 fun SpriteImage(sprites: games.castleprotect.battle.Sprites, name: String, modifier: Modifier = Modifier): Boolean {
-    val img = androidx.compose.runtime.remember(name) { sprites.get(name)?.bmp?.asImageBitmap() } ?: return false
+    val img = remember(name, sprites.generation) { sprites.get(name)?.bmp?.asImageBitmap() } ?: return false
     androidx.compose.foundation.Image(img, contentDescription = null, modifier = modifier)
     return true
 }

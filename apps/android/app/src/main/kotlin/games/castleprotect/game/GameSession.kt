@@ -8,6 +8,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -114,14 +115,18 @@ class GameSession(app: Application) : AndroidViewModel(app) {
     /** Short texts for TalkBack: turn starts, shot results, the winner. */
     val announcements: SharedFlow<String> = _announce
 
-    var screen by mutableStateOf(Screen.TITLE)
-        private set
+    private val screenState = mutableStateOf(Screen.TITLE)
+    /** The sim only steps a battle that is on screen, so nothing plays out behind the map. */
+    @Volatile private var battleOnScreen = false
+    var screen: Screen
+        get() = screenState.value
+        private set(v) { screenState.value = v; battleOnScreen = v == Screen.BATTLE; jobs.offer {} }
     private val back = ArrayDeque<Screen>()
     private val pausedState = mutableStateOf(false)
     @Volatile private var pausedFlag = false
     var paused: Boolean
         get() = pausedState.value
-        set(v) { pausedState.value = v; pausedFlag = v }
+        set(v) { pausedState.value = v; pausedFlag = v; jobs.offer {} } // wake the sim at once
     /** A battle is in play (live in the core, or saved and ready to replay). */
     var canResume by mutableStateOf(false)
         private set
@@ -136,7 +141,7 @@ class GameSession(app: Application) : AndroidViewModel(app) {
     var preSpec by mutableStateOf<BattleSpec?>(null)
         private set
     /** Couch Duel, side by side: the side to hand the device to, or -1. */
-    var handoffTo by mutableStateOf(-1)
+    var handoffTo by mutableIntStateOf(-1)
         private set
     var handoffLine by mutableStateOf("")
         private set
@@ -168,6 +173,7 @@ class GameSession(app: Application) : AndroidViewModel(app) {
     private var shotBreaks = 0
     private var shotHits = 0
     private var shotFired = false
+    private var lastSummary = ""
     private val sim = Thread({ loop() }, "castle-sim").also { it.priority = Thread.NORM_PRIORITY + 1; it.start() }
 
     init {
@@ -221,7 +227,7 @@ class GameSession(app: Application) : AndroidViewModel(app) {
     private fun loop() {
         while (running) {
             val f = frame
-            val busy = game != null && foreground && !pausedFlag &&
+            val busy = game != null && foreground && !pausedFlag && battleOnScreen &&
                 (f.phase == Phase.RESOLVE || f.phase == Phase.SETTLE || (f.phase == Phase.PLAN && f.awaiting == Awaiting.AI))
             val job = try { jobs.poll(if (busy) FRAME_MS else 1000L, TimeUnit.MILLISECONDS) } catch (e: InterruptedException) { if (!running) return else null }
             try {
@@ -241,7 +247,7 @@ class GameSession(app: Application) : AndroidViewModel(app) {
         val g = game ?: return
         val f = frame
         val now = SystemClock.uptimeMillis()
-        if (!foreground || pausedFlag) { lastStepAt = 0L; return }
+        if (!foreground || pausedFlag || !battleOnScreen) { lastStepAt = 0L; aiAt = 0L; return }
         if (f.phase == Phase.RESOLVE || f.phase == Phase.SETTLE) {
             if (lastStepAt == 0L) lastStepAt = now
             val speed = if (fast || (settings.rival2x && !f.hud.human(f.side))) 2 else 1
@@ -284,7 +290,9 @@ class GameSession(app: Application) : AndroidViewModel(app) {
                 "miss" -> if (shotFired) say("Missed. The shell left the field.")
                 "turn_start" -> {
                     if (shotFired) {
-                        say(if (shotHits == 0) "No hits." else "Hit ${plural(shotHits, "time")}, ${plural(shotBreaks, "block")} broke.")
+                        val who = f.hud.names.getOrElse(if (e.side >= 0) 1 - e.side else 0) { "" }
+                        lastSummary = if (shotHits == 0) "$who: no hits." else "$who: hit ${plural(shotHits, "time")}, ${plural(shotBreaks, "block")} broke."
+                        say(lastSummary)
                         shotFired = false
                     }
                     sfx.play("turn")
@@ -302,7 +310,8 @@ class GameSession(app: Application) : AndroidViewModel(app) {
             if (!first && f.phase == Phase.PLAN) {
                 if (spec?.seats == "side_by_side" && f.hud.human(0) && f.hud.human(1)) {
                     val to = f.side
-                    ui { handoffTo = to; handoffLine = "" }
+                    val line = lastSummary
+                    ui { handoffTo = to; handoffLine = line }
                 }
                 saveNow() // autosave at every turn start
             }

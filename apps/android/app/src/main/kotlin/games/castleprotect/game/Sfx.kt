@@ -21,6 +21,7 @@ class Sfx(private val ctx: Context, private val settings: Settings) {
         .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
         .build()
     private val ids = HashMap<String, Int>()
+    @Volatile private var released = false
 
     private class Tone(val f0: Float, val f1: Float, val ms: Int, val noise: Float, val decay: Float)
     private val tones = mapOf(
@@ -42,29 +43,35 @@ class Sfx(private val ctx: Context, private val settings: Settings) {
         Thread({
             val bundled = try { ctx.assets.list("audio")?.toSet() ?: emptySet() } catch (e: Exception) { emptySet() }
             for ((cue, tone) in tones) {
+                if (released) return@Thread
                 val hit = listOf("$cue.ogg", "$cue.wav").firstOrNull { it in bundled }
-                val id = try {
-                    if (hit != null) ctx.assets.openFd("audio/$hit").use { pool.load(it, 1) }
-                    else pool.load(synth(cue, tone).absolutePath, 1)
-                } catch (e: Exception) { 0 }
-                synchronized(ids) { ids[cue] = id }
+                synchronized(ids) {
+                    // Loading and release() never overlap (review L10).
+                    if (released) return@Thread
+                    val id = try {
+                        if (hit != null) ctx.assets.openFd("audio/$hit").use { pool.load(it, 1) }
+                        else pool.load(synth(cue, tone).absolutePath, 1)
+                    } catch (e: Exception) { 0 }
+                    ids[cue] = id
+                }
             }
         }, "sfx-load").start()
     }
 
     /** pan: -1 left to 1 right. */
     fun play(cue: String, pan: Float = 0f, gain: Float = 1f) {
-        if (settings.muteAll || settings.sound == 0) return
+        if (released || settings.muteAll || settings.sound == 0) return
         val id = synchronized(ids) { ids[cue] } ?: return
         if (id == 0) return
         val v = settings.sound / 100f * gain
         pool.play(id, v * (1f - pan.coerceIn(0f, 1f) * 0.6f), v * (1f + pan.coerceIn(-1f, 0f) * 0.6f), 1, 0, 1f)
     }
 
-    fun release() = pool.release()
+    fun release() { synchronized(ids) { released = true; pool.release() } }
 
     private fun synth(cue: String, t: Tone): File {
-        val f = File(ctx.cacheDir, "sfx_$cue.wav")
+        // The file name carries the tone's values, so a changed tone table makes a new file.
+        val f = File(ctx.cacheDir, "sfx_${cue}_${(t.f0 + 7 * t.f1 + 13 * t.ms + 17 * t.noise + 19 * t.decay).toBits().toString(16)}.wav")
         if (f.exists() && f.length() > 44) return f
         val rate = 22050
         val n = rate * t.ms / 1000

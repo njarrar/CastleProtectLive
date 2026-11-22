@@ -8,6 +8,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import games.castleprotect.game.GameSession
 import games.castleprotect.game.Screen
@@ -32,7 +35,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
         setContent {
             // Rotation: Follow device (and the system lock), Stay wide, Stay tall.
@@ -42,6 +44,12 @@ class MainActivity : ComponentActivity() {
                     2 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                     else -> ActivityInfo.SCREEN_ORIENTATION_USER
                 }
+            }
+            // Keep the screen on only while a battle is on screen and running (review L6).
+            val awake = session.screen == Screen.BATTLE && !session.paused
+            LaunchedEffect(awake) {
+                if (awake) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
             CastleTheme(session.settings.textScale) {
                 BackHandler(enabled = session.screen != Screen.TITLE) { session.goBack() }
@@ -55,9 +63,20 @@ class MainActivity : ComponentActivity() {
                     Screen.DUEL_SETUP -> DuelSetupScreen(session)
                     Screen.SETTINGS -> SettingsScreen(session)
                 }
+                session.confirm?.let { c ->
+                    AlertDialog(
+                        onDismissRequest = { session.confirm = null },
+                        title = { Text(c.title) },
+                        text = { Text(c.text) },
+                        confirmButton = { TextButton({ session.confirm = null; c.action() }) { Text(c.yes) } },
+                        dismissButton = { TextButton({ session.confirm = null }) { Text("Cancel") } },
+                    )
+                }
             }
         }
     }
+
+    override fun onTrimMemory(level: Int) { super.onTrimMemory(level); session.onTrimMemory(level) }
 
     override fun onStart() { super.onStart(); session.onStart() }
 
