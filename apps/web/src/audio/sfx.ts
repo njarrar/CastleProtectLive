@@ -46,12 +46,23 @@ const FIRST = [
   'col_chunk_fall', 'col_chunk_land', 'aim_pin_drop', 'wx_wind_loop', 'fly_whistle_loop',
 ];
 let warmed = false;
+let firstDone: () => void = () => undefined;
+/** Resolves once the first-shot sounds are in: music waits for them (first load budget, QA playtest 1). */
+const firstReady = new Promise<void>((r) => { firstDone = r; });
+/** The other effects and stings wait this long after the first ones: the first load stays small. */
+const REST_DELAY_MS = 20_000;
 async function warmUp(): Promise<void> {
   if (warmed || !ctx || !man) return;
   warmed = true;
   const rest = [...byId.values()].filter((s) => s.kind === 'sfx' || s.kind === 'sting').map((s) => s.id).filter((id) => !FIRST.includes(id));
   // One decode at a time, with a breath between, so the first frames of a fight never wait on them.
-  for (const id of [...FIRST, ...rest]) {
+  for (const id of FIRST) {
+    await buffer(id);
+    await new Promise((r) => setTimeout(r, 16));
+  }
+  firstDone();
+  await new Promise((r) => setTimeout(r, REST_DELAY_MS));
+  for (const id of rest) {
     await buffer(id);
     await new Promise((r) => setTimeout(r, 16));
   }
@@ -177,7 +188,9 @@ function buffer(id: string): Promise<AudioBuffer | null> {
       }
     }
     // A failed load is not kept: the next request tries again (a network blip, an offline start).
-    if (b) buffers.set(id, b);
+    // A bark that lands after its fight let the barks go is not kept either.
+    const stale = id.startsWith('bark_') && !barkHobs.some((h) => id.startsWith(`bark_${h}_`));
+    if (b && !stale) buffers.set(id, b);
     pending.delete(id);
     return b;
   })();
@@ -496,6 +509,8 @@ export function setMusic(key: 'battle' | 'map' | ''): void {
   if (key === musicKey) return;
   musicKey = key;
   layerState = 0;
+  layersAsked = false;
+  clearTimeout(layersT);
   const old = music;
   music = [];
   if (ctx) for (const m of old) { m.g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); m.src.stop(ctx.currentTime + 1.5); }
@@ -503,31 +518,68 @@ export function setMusic(key: 'battle' | 'map' | ''): void {
   for (const k of ['battle', 'map'] as const) if (k !== key) release(THEME[k]);
   if (!key || !ctx || !musicBus) return;
   const ids = THEME[key];
-  void Promise.all(ids.map(buffer)).then((bs) => {
+  // The base layer starts once the first-shot sounds are in. Stir and Peril (1 MB) load later,
+  // when the fight first needs them or after a while, and join in step on a bar line.
+  void firstReady.then(() => (musicKey === key ? buffer(ids[0]) : null)).then((b) => {
     if (musicKey !== key || !ctx || !musicBus) return;
     // A layer that failed to load: forget the key so the next call tries again.
-    if (bs.some((b) => !b)) { musicKey = ''; return; }
+    if (!b) { musicKey = ''; return; }
+    baseAt = performance.now();
     const t0 = ctx.currentTime + 0.1;
     musicT0 = t0;
     barS = key === 'battle' ? 1.111111 : 1.304348;
-    music = ids.map((id, i) => {
-      const s = byId.get(id)!;
-      const src = ctx!.createBufferSource();
-      src.buffer = bs[i];
-      src.loop = true;
-      if (s.samples && s.sample_rate) src.loopEnd = s.samples / s.sample_rate;
-      const g = ctx!.createGain();
-      g.gain.value = i === 0 ? (s.volume ?? 1) : 0;
-      src.connect(g).connect(musicBus!);
-      src.start(t0);
-      return { id, src, g };
-    });
+    music = [track(ids[0], b, t0, 0, true)];
+    if (ids.length > 1) layersT = window.setTimeout(() => addLayers(key), LAYER_DELAY_MS);
   });
 }
+const LAYER_DELAY_MS = 45_000;
+const LAYER_MIN_MS = 15_000;
+let baseAt = 0;
+let layersT = 0;
+let layersAsked = false;
+function track(id: string, b: AudioBuffer, when: number, offset: number, on: boolean): Track {
+  const s = byId.get(id)!;
+  const src = ctx!.createBufferSource();
+  src.buffer = b;
+  src.loop = true;
+  if (s.samples && s.sample_rate) src.loopEnd = s.samples / s.sample_rate;
+  const g = ctx!.createGain();
+  g.gain.value = on ? (s.volume ?? 1) : 0;
+  src.connect(g).connect(musicBus!);
+  src.start(when, offset);
+  return { id, src, g };
+}
+/** Load Stir and Peril and start them silent, in step with the base layer from the next bar. */
+function addLayers(key: 'battle' | 'map'): void {
+  if (layersAsked) return;
+  // Not in the first seconds of the theme, even when the fight is tense at once (1-1 has one
+  // Hob): the first load stays small. Stir and Peril join a little later, on a bar line.
+  const wait = LAYER_MIN_MS - (performance.now() - baseAt);
+  if (wait > 0) { clearTimeout(layersT); layersT = window.setTimeout(() => addLayers(key), wait); return; }
+  layersAsked = true;
+  clearTimeout(layersT);
+  const ids = THEME[key].slice(1);
+  void Promise.all(ids.map(buffer)).then((bs) => {
+    if (musicKey !== key || !ctx || !musicBus || music.length !== 1) return;
+    if (bs.some((b) => !b)) { layersAsked = false; return; }
+    const base = music[0].src;
+    const len = base.loopEnd > 0 ? base.loopEnd : base.buffer?.duration ?? 0;
+    const t = ctx.currentTime + 0.05;
+    const when = musicT0 + Math.ceil((t - musicT0) / barS) * barS;
+    const offset = len > 0 ? (when - musicT0) % len : 0;
+    for (let i = 0; i < ids.length; i++) music.push(track(ids[i], bs[i]!, when, offset, false));
+    const st = pendingLayers;
+    layerState = 0;
+    if (st) musicLayers((st & 1) !== 0, (st & 2) !== 0);
+  });
+}
+let pendingLayers = 0;
 let layerState = 0;
 /** Stir and Peril fade in or out on the next bar line, over one bar. */
 export function musicLayers(stir: boolean, peril: boolean): void {
   const st = (stir ? 1 : 0) | (peril ? 2 : 0);
+  pendingLayers = st;
+  if (st && music.length === 1 && musicKey) addLayers(musicKey as 'battle' | 'map');
   if (st === layerState || !ctx || music.length < 3) return;
   layerState = st;
   const t = ctx.currentTime;

@@ -383,3 +383,67 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .clip { display: inline-block; vertical-align: middle; pointer-events: none; }
 .score .clip.coin { margin-right: 6px; }
 .handoff .clip.flip { justify-self: center; }
+
+/* QA playtest 1 fixes */
+/* M1: Fire is grey and says why while the picked shot cannot go. */
+.firewhy { position: absolute; width: max-content; max-width: 190px; background: var(--ink); color: #fff; border-radius: 10px; padding: 4px 10px; font: 700 13px var(--title); text-align: center; z-index: 6; pointer-events: none; }
+.firewhy[hidden] { display: none; }
+.btn.fire[data-state=locked] { animation: none; }
+/* M7: Fine Tune never covers the active fort, and folds away while a finger aims. */
+.hud.aiming .finetune { visibility: hidden; }
+.hud.flight .finetune { opacity: 0; pointer-events: none; }
+.hud.wide > .finetune { position: absolute; right: calc(var(--sar) + 112px); bottom: calc(var(--sab) + 62px); }
+/* Short Wide (a phone on its side): under the top strip on the right, clear of the tray, Fire and the forts on the ground. */
+@media (max-height: 500px) {
+  .hud.wide > .finetune { top: calc(var(--sat) + 52px); bottom: auto; right: calc(var(--sar) + 64px); }
+  .hud.wide.yard > .finetune { top: calc(var(--sat) + 112px); }
+}
+/* Tall: a two-column pad docked in the bottom lens on the side away from your fort. */
+.hud.tall .finetune { position: absolute; bottom: 60px; right: calc(var(--sar) + 8px); grid-template-columns: repeat(2, auto); grid-template-rows: repeat(3, auto); grid-auto-flow: column; z-index: 3; }
+.hud.tall[data-you="1"] .finetune { right: auto; left: calc(var(--sal) + 8px); bottom: 96px; }
+.hud.tall.joined .finetune { display: none; }
+
+/* M3: edge markers in the Wide layout. */
+.edgemark { position: absolute; z-index: 5; pointer-events: none; }
+.edgemark[hidden] { display: none; }
+.fortmark { transform: translateY(-50%); background: var(--orange); color: #fff; border: 2px solid var(--ink); border-radius: 999px; padding: 3px 10px; font: 700 14px var(--title); white-space: nowrap; box-shadow: 0 2px 0 rgba(43,30,46,0.35); }
+.hud[data-active="1"] .fortmark { background: var(--blue); }
+.arcmark { width: 30px; height: 30px; margin: -15px 0 0 -15px; display: grid; place-items: center; background: var(--paper); border: 2px solid var(--ink); border-radius: 50%; font-size: 16px; color: var(--ink); }
+.arcmark i { display: block; font-style: normal; transform: rotate(var(--a, 0deg)); }
+
+/* M5: the Workshop grid fits the space it has, with cells of 24 px or more; the screen scrolls if it must. */
+.grid { --cell: max(24px, min(40px, 8.5vw, calc((100dvh - 330px) / 11))); }
+@media (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  .workshop { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto 1fr auto; column-gap: 16px; align-items: start; }
+  .workshop .topbar { grid-column: 1 / -1; }
+  .workshop .ws-body { grid-column: 1; grid-row: 2 / span 3; }
+  .workshop .palette { grid-column: 2; grid-row: 2; justify-content: flex-start; }
+  .workshop .pinned { grid-column: 2; grid-row: 4; justify-content: flex-start; }
+  .workshop .gridwrap { padding: 6px; }
+  .grid { --cell: max(24px, min(40px, calc((100dvh - 160px) / 11))); }
+}
+
+/* M8, m5: Couch Duel setup and the hand-off card fit a phone; they reflow and scroll, never cut. */
+.duelcards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+[data-layout=tall] .duelcards { grid-template-columns: minmax(0, 1fr); }
+.pcard, .pcard .field-row, .pcard .seg, .pcard .crew { min-width: 0; }
+.pcard .field-row { flex-wrap: wrap; }
+.phead { flex-wrap: nowrap; min-width: 0; }
+.phead b { white-space: nowrap; }
+.phead input { width: 0; }
+.setup .pinned { background: linear-gradient(rgba(255,241,208,0), #FFF1D0 40%); padding-top: 18px; }
+.cls.round, .cls.diamond { background: var(--c); padding: 0; font-size: 14px; }
+.scrim { overflow-y: auto; }
+.scrim > .card { max-height: none; }
+@media (max-height: 500px) {
+  .scrim { place-items: start center; padding: 8px; }
+  .handoff { padding: 10px 14px; gap: 4px; border-width: 6px; }
+  .handoff .crest { width: 36px; height: 36px; font-size: 18px; }
+  .handoff .who { font-size: 30px; }
+  .handoff .btn.big { min-height: 52px; }
+  .handoff .lastshot { padding: 3px 6px; }
+  .duelcards { gap: 8px; }
+  .pcard { padding: 8px; }
+}
+@media (max-height: 500px) { .handoff .clip.flip { height: 44px; width: auto; } }
+.crest.round { background: var(--blue); padding: 0; font-size: inherit; }

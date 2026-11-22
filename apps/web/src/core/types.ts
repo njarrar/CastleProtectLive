@@ -275,6 +275,8 @@ export interface HudView {
   preview: [number, number][]; // arc points, already cut to the preview share
   previewEndsFlap?: boolean;
   fire: 'locked' | 'ready' | 'dug' | 'pass' | 'flight' | 'use' | 'fast';
+  /** Why Fire is locked on a Plan step: the picked shot's reason from the core (hud.shots why). */
+  fireWhy?: string;
   canWalk: boolean;
   thinking?: boolean; // Rival think pose
   doodads: { id: string; name: string; card: string }[]; // the active side's Doodads left
@@ -306,6 +308,8 @@ export interface Snapshot {
   rooms: RoomView[];
   props: PropView[];
   fatigue: [boolean, boolean];
+  /** Rounds until Fatigue starts (core v0.3 hud.fatigue_in), when the core sends it. */
+  fatigueIn?: number;
   forts: [{ x: number; y: number; w: number; h: number }, { x: number; y: number; w: number; h: number }];
   events: BattleEvent[]; // since the last snapshot
   hud: HudView;

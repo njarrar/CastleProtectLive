@@ -63,9 +63,20 @@ async function boot(): Promise<void> {
         app.pendingUpdate = () => { void updateSW(true); };
         app.showUpdateChip();
       },
-      // An installed app can stay open for days: look for a new version every hour.
+      // Look for a new version at once on load (a returning player sees "Update ready" within a
+      // second or two, before tapping Play), when the app comes back to the front, and every
+      // hour for an installed app left open for days.
       onRegisteredSW(_url, reg) {
-        if (reg) setInterval(() => { if (navigator.onLine) void reg.update().catch(() => undefined); }, 60 * 60 * 1000);
+        if (!reg) return;
+        let lastCheck = 0;
+        const check = () => {
+          if (!navigator.onLine || Date.now() - lastCheck < 10_000) return;
+          lastCheck = Date.now();
+          void reg.update().catch(() => undefined);
+        };
+        check();
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+        setInterval(check, 60 * 60 * 1000);
       },
     });
     // The first visit: once the worker takes control (clientsClaim), the sounds fetched before it

@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
-import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 // @ts-expect-error plain .mjs build script, no types
 import { buildArt } from './scripts/build-art.mjs';
@@ -43,7 +44,26 @@ function copyFirst(cands: string[], dest: string, label: string, keep: (rel: str
   return true;
 }
 
+/**
+ * The core goes to public/core/<hash>/ (the first 10 hex digits of the wasm and glue bytes), so
+ * its URL changes only when the core does. The service worker then precaches it without a
+ * cache-busting revision and its install reuses the copy the page just fetched (no second
+ * 1 MB download on the first visit). The app reads the folder from __CASTLE_CORE_DIR__.
+ */
+function hashCore(dir: string): string {
+  if (!existsSync(dir)) return '';
+  const files = readdirSync(dir).filter((f) => !f.startsWith('.')).sort();
+  if (!files.length) return '';
+  const h = createHash('sha256');
+  for (const f of files) h.update(f).update(readFileSync(resolve(dir, f)));
+  const key = h.digest('hex').slice(0, 10);
+  mkdirSync(resolve(dir, key));
+  for (const f of files) renameSync(resolve(dir, f), resolve(dir, key, f));
+  return `core/${key}/`;
+}
+
 function castleCopy(): Plugin {
+  let coreDir = 'core/';
   let done = false;
   const run = async (command: string) => {
     if (done) return;
@@ -53,11 +73,19 @@ function castleCopy(): Plugin {
     if (!haveCore && command === 'build' && !process.env.CASTLE_ALLOW_NO_CORE) {
       throw new Error('[castle] no wasm core pkg found. Run scripts/build-wasm.sh first (or set CASTLE_ALLOW_NO_CORE=1).');
     }
+    if (haveCore) coreDir = hashCore(resolve(here, 'public/core')) || coreDir;
     // Only what the web build draws, with the atlas pages as WebP (scripts/build-art.mjs).
     await buildArt(artCandidates.find((p) => existsSync(p)), resolve(here, 'public/art'));
   };
   // `vite preview` serves dist as built: it must not wipe and rebuild public/core and public/art.
-  return { name: 'castle-copy', config: (_c, env) => (env.isPreview ? undefined : run(env.command)) };
+  return {
+    name: 'castle-copy',
+    config: async (_c, env) => {
+      if (env.isPreview) return undefined;
+      await run(env.command);
+      return { define: { __CASTLE_CORE_DIR__: JSON.stringify(coreDir) } };
+    },
+  };
 }
 
 export default defineConfig({
@@ -69,6 +97,9 @@ export default defineConfig({
       registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icon.svg'],
+      // The install icons (145 KB of PNG) are fetched by the browser when it installs the app;
+      // they are not part of the first load or of offline play.
+      includeManifestIcons: false,
       manifest: {
         name: 'Castle Protect',
         short_name: 'Castle Protect',
@@ -94,7 +125,13 @@ export default defineConfig({
         // The JSON that names those files (page JSON, bg.json, audio.json, barks.json) IS
         // precached with a revision, and the files have a content hash in their names
         // (scripts/build-art.mjs), so CacheFirst never serves a stale image or sound.
-        globIgnores: ['**/art/atlas/castle@2x-*.{webp,png}', '**/art/sprites/bg_*@2x.*', '**/art/audio/**/*.{ogg,opus,mp3,m4a,aac,webm,wav}'],
+        // The app icons are fetched by the browser when it installs the app, not by the game.
+        globIgnores: ['**/art/atlas/castle@2x-*.{webp,png}', '**/art/sprites/bg_*@2x.*', '**/art/audio/**/*.{ogg,opus,mp3,m4a,aac,webm,wav}', '**/art/sprites/app_icon-*.png'],
+        // Files whose URL carries a content hash (Vite assets, art with .<hash10>., the core
+        // folder) are precached with no revision: the install fetch is a plain GET that the
+        // browser answers from the copy the page has just loaded, so the first visit downloads
+        // the 1 MB core and the 0.8 MB atlas once, not twice, and an update installs at once.
+        dontCacheBustURLsMatching: /(^assets\/)|(\.[0-9a-f]{10}\.[a-z0-9]+$)|(^core\/[0-9a-f]{10}\/)/,
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         // Take control on the first visit (no old worker to wait for), so the sounds and @2x art
         // of the first session are cached. An update still waits for the Update tap (prompt mode).

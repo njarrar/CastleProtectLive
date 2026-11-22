@@ -120,7 +120,10 @@ export interface PHud {
   // v0.2
   steam_max?: [number, number];
   shove_off_cost?: number;
-  shots?: { shot: string; id: string; ready: boolean; why: string | null }[];
+  shots?: { shot: string; id: string; ready: boolean; why: string | null; text?: string | null }[];
+  // v0.3 (QA playtest 1): whether Fire may be lit for the picked shot, and Fatigue ahead
+  fire?: { ready: boolean; why: string | null; text: string | null };
+  fatigue?: boolean; fatigue_in?: number | null; fatigue_round?: number | null;
   handicap?: [PHandicap, PHandicap];
   volley?: { actions: number; left: [number, number] } | null;
   boss?: PBoss | null;
@@ -129,12 +132,15 @@ export interface PHud {
 export interface PHandicap { help: string; steam: number; preview_pct: number; crew: number }
 export interface PBoss { phase: number; roller: PProp | null; roller_done: boolean; shears: PProp | null; cut: [number, number, number, number] | null; jam: number }
 export interface PDraft { pool: string[]; picks: [string[], string[]]; next: PSide; picks_each: number; wish: string | null }
-export interface PResultStats { shots: number; hits: number; blocks_dropped: number; bonks: number; blocks_lost: number; kettle_lost: number; hobs_lost: number; best_streak: number }
+export interface PResultStats { shots: number; hits: number; blocks_dropped: number; bonks: number; blocks_lost: number; kettle_lost: number; hobs_lost: number; best_streak: number; best_shot?: PBestShot | null }
+export interface PBestShot { side: PSide; hob: number; hob_name: string; shot: string; shot_name: string; angle: number; power: number; round: number; dmg: number }
 export interface PBlow { shot: string; shot_name: string; hob: number; hob_name: string; round?: number; dmg?: number }
 export interface PResult {
   winner: PSide; how: string; round: number; pennants: boolean[];
   // v0.2
   pennants_new?: boolean[]; buttons?: number; score?: [number, number]; stats?: [PResultStats, PResultStats];
+  // v0.3: the winner's best shot (stats[winner].best_shot)
+  best_shot?: PBestShot | null;
   broke?: { side: PSide; how: string; last: PBlow | null; top: PBlow[]; kettle_lost: number; blocks_lost: number; hobs_bonked: number } | null;
 }
 

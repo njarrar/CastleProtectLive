@@ -5,7 +5,7 @@
 import { blueprintToRows, rowsToBlueprint } from './bp';
 import { RULES, levelAtLeast } from './rules';
 import type {
-  PCastle, PCommand, PEvent, PHob, PReply, PSetup, PSideCfg, PSnapshot, PVersion, WasmGame, WasmModule,
+  PBestShot, PCastle, PCommand, PEvent, PHob, PReply, PSetup, PSideCfg, PSnapshot, PVersion, WasmGame, WasmModule,
 } from './protocol';
 import type {
   BattleEvent, BattleSetup, Blueprint, BlueprintCheck, BlockView, Command, CommandResult, CoreApi,
@@ -72,7 +72,8 @@ export class RealCore implements CoreApi {
   private stats = newStats();
   private shotDmg = 0;
   private shotBy?: { side: Side; hob: string; round: number; angle: number; power: number };
-  private best?: ResultView['bestShot'];
+  // Best shot per side: the results name the winner's own best shot, never the other side's.
+  private best: [ResultView['bestShot'], ResultView['bestShot']] = [undefined, undefined];
   private levelsCache?: LevelInfo[];
   battleGen = 0;
 
@@ -219,7 +220,7 @@ export class RealCore implements CoreApi {
     this.think = 0;
     this.walkDir = 0;
     this.stats = newStats();
-    this.best = undefined;
+    this.best = [undefined, undefined];
     this.shotBy = undefined;
     this.pull();
   }
@@ -354,8 +355,12 @@ export class RealCore implements CoreApi {
       case 'miss': return [{ t: 'hit', x: n('x'), y: H - n('y'), dmg: 0, what: 'ground' }];
       case 'hit': {
         const dmg = n('dmg');
-        this.shotDmg += dmg;
-        if (this.shotBy && (!this.best || this.shotDmg > this.best.dmg)) this.best = { ...this.shotBy, dmg: this.shotDmg };
+        // Only damage to the other side counts toward a side's best shot.
+        if (this.shotBy && n('side') !== this.shotBy.side) {
+          this.shotDmg += dmg;
+          const b = this.best[this.shotBy.side];
+          if (!b || this.shotDmg > b.dmg) this.best[this.shotBy.side] = { ...this.shotBy, dmg: this.shotDmg };
+        }
         const tgt = String(e.target);
         // A view count for the live hand-off card; the result uses the core's own stats.
         if (this.shotBy && e.why !== 'crush' && e.why !== 'fall' && n('side') !== this.shotBy.side) this.stats[this.shotBy.side].hits++;
@@ -524,7 +529,7 @@ export class RealCore implements CoreApi {
       // v0.2: the core says which shots are ready and why not (what `fire` would refuse with).
       for (const c of chips) {
         const q = hud.shots?.find((x) => x.shot === c.id || (c.kind === 'shell' && x.id === c.id));
-        if (q) { c.ready = q.ready; c.why = q.ready ? undefined : WHY[q.why ?? ''] ?? (q.why ?? undefined); }
+        if (q) { c.ready = q.ready; c.why = q.ready ? undefined : q.text ?? WHY[q.why ?? ''] ?? (q.why ?? undefined); }
       }
     }
     let draft: DraftView | undefined;
@@ -552,7 +557,8 @@ export class RealCore implements CoreApi {
     const H = s.map.h;
     const hud = s.hud;
     const active = hud.side;
-    const human = (side: number) => hud.control[side] === 'human' || s.mode === 'test_yard';
+    // The Test Yard dummy side is 'human' in the protocol only so it never runs the AI; it passes itself.
+    const human = (side: number) => hud.control[side] === 'human' && !(s.mode === 'test_yard' && side === 1);
     const you: Side = this.viewSetup?.mode === 'duel' ? active : 0;
     const v = this.view();
     const shells = s.shells.map(([id, x, y, rot, shot]) => {
@@ -567,11 +573,19 @@ export class RealCore implements CoreApi {
       const d = this.bundle.doodads?.find((x) => x.id === id);
       return { id, name: d?.name ?? id, card: d?.card ?? '' };
     });
+    // Fire is ready only when the picked shot is ready too (core hud.shots): a Knack on a rest
+    // turn or with no uses left must never leave Fire lit and dead.
+    const picked = v.chips.find((c) => c.id === hud.selected.shot);
+    // A core that sends hud.fire (v0.3) says it outright; else the picked chip's readiness decides.
+    const hf = hud.fire;
+    const fireWhy = !(plan && human(active)) ? undefined
+      : hf ? (hf.ready ? undefined : hf.text ?? WHY[hf.why ?? ''] ?? hf.why ?? 'That shot is not ready')
+      : picked && !picked.ready ? picked.why ?? 'That shot is not ready' : undefined;
     let fire: Snapshot['hud']['fire'];
     if (s.phase === 'resolve' || s.phase === 'settle') fire = s.shells.length ? 'flight' : 'fast';
     else if (!(plan && human(active))) fire = 'flight';
     else if (sel?.buried) fire = 'dug';
-    else if (sel?.can_fire && (aim?.power ?? 0) > 0) fire = 'ready';
+    else if (sel?.can_fire && (aim?.power ?? 0) > 0 && !fireWhy) fire = 'ready';
     // Nobody can fire, nobody can be shoved off and no Doodad: offer Pass so the turn never locks.
     else if (!mine.some((h) => h.can_fire || h.buried) && !doodads.length) fire = 'pass';
     else fire = 'locked';
@@ -587,7 +601,7 @@ export class RealCore implements CoreApi {
       result = {
         winner: s.result.winner, how: HOW[s.result.how] ?? s.result.how, howKey: s.result.how, round: s.result.round, pennants: s.result.pennants,
         goals: this.levels().find((l) => l.id === level)?.goals ?? [], buttons: s.result.buttons ?? 0,
-        stats: [statsOf(0), statsOf(1)], bestShot: this.best,
+        stats: [statsOf(0), statsOf(1)], bestShot: s.result.best_shot !== undefined ? fromBlow(s.result.best_shot) : bestOf(this.best, s.result.winner),
         cause: !win ? brokeLine(s.result) : undefined,
         pennantsNew: s.result.pennants_new, score: s.result.score,
       };
@@ -603,12 +617,13 @@ export class RealCore implements CoreApi {
       terrain: { width: s.map.w, height: H, chunk: s.map.chunk, chunks: this.chunks },
       blocks: v.blocks, kettles: v.kettles, hobs: v.hobs, shells, pins: v.pins, forts: v.forts, rooms: v.rooms, props: v.props,
       fatigue: [!!s.castles[0]?.fatigue, !!s.castles[1]?.fatigue],
+      fatigueIn: hud.fatigue_in ?? undefined,
       events: this.events,
       hud: {
         active, you, steam: hud.steam[active], steamMax: Math.max(1, this.steamMax[active], hud.steam[active]), steamTurn: hud.steam_turn_left,
         hob: sel ? String(sel.id) : undefined, shot: hud.selected.shot, aim,
         shots: v.chips, preview: plan ? v.preview : [],
-        fire, canWalk: plan && human(active) && hud.steam_turn_left > 0 && (this.viewSetup?.mode !== 'campaign' || levelAtLeast(level, RULES.campaign.walk_from)),
+        fire, fireWhy, canWalk: plan && human(active) && hud.steam_turn_left > 0 && (this.viewSetup?.mode !== 'campaign' || levelAtLeast(level, RULES.campaign.walk_from)),
         thinking: plan && s.awaiting === 'ai',
         doodads: plan && human(active) ? doodads : [],
         canPass: plan && human(active),
@@ -641,7 +656,7 @@ export class RealCore implements CoreApi {
     return JSON.stringify({
       v: SAVE_VERSION, core: 'wasm', rules: this.rules, sim: this.version, hash,
       setup: this.setupJson, seed: String(this.seed), view: this.viewSetup, log,
-      stats: this.stats, best: this.best ?? null,
+      stats: this.stats, bestBy: this.best,
     });
   }
 
@@ -664,7 +679,7 @@ export class RealCore implements CoreApi {
    * against the stored one; a miss is reported as a note, never a reason to throw a good log away.
    */
   loadBattle(data: string): string | void {
-    let d: { v?: number; rules?: number; hash?: string; setup: string; seed: string; view: BattleSetup; log: PCommand[]; stats?: [SideStats, SideStats]; best?: ResultView['bestShot'] | null };
+    let d: { v?: number; rules?: number; hash?: string; setup: string; seed: string; view: BattleSetup; log: PCommand[]; stats?: [SideStats, SideStats]; best?: ResultView['bestShot'] | null; bestBy?: (ResultView['bestShot'] | null)[] };
     try {
       d = JSON.parse(data);
       if (!d || typeof d !== 'object' || typeof d.setup !== 'string' || !Array.isArray(d.log) || !d.view) throw new Error('shape');
@@ -690,12 +705,28 @@ export class RealCore implements CoreApi {
     this.pull();
     this.events = [];
     if (Array.isArray(d.stats) && d.stats.length === 2) this.stats = [{ ...newStats()[0], ...d.stats[0] }, { ...newStats()[1], ...d.stats[1] }];
-    this.best = d.best ?? undefined;
+    // bestBy: one per side. An older save has one best shot for the whole fight: keep it on its side.
+    this.best = [undefined, undefined];
+    if (Array.isArray(d.bestBy)) this.best = [d.bestBy[0] ?? undefined, d.bestBy[1] ?? undefined];
+    else if (d.best && (d.best.side === 0 || d.best.side === 1)) this.best[d.best.side] = d.best;
     return note;
   }
 }
 
 /** Refusal keys from hud.shots[].why, as short chip text. */
+/** The core's best shot (v0.3 result.best_shot) in view form; null stays undefined. */
+function fromBlow(b: PBestShot | null): ResultView['bestShot'] {
+  if (!b) return undefined;
+  return { side: b.side as Side, hob: b.hob_name.split(' ')[0], round: b.round, dmg: b.dmg, angle: b.angle, power: b.power };
+}
+
+/** The winner's best shot (kept by the view for a core without result.best_shot); on a draw the better of the two. */
+export function bestOf(best: [ResultView['bestShot'], ResultView['bestShot']], winner: number): ResultView['bestShot'] {
+  if (winner === 0 || winner === 1) return best[winner];
+  const [a, b] = best;
+  return a && b ? (b.dmg > a.dmg ? b : a) : a ?? b;
+}
+
 const WHY: Record<string, string> = {
   resting_plain_only: 'Needs a rest: Plain Shot only', resting: 'Needs a rest', no_knack_uses: 'No uses left', no_heavy_first_turn: 'No Heavy shot on the first turn',
   buried: 'Loophole buried', no_actions_left: 'No shots left', not_planning: 'Not your turn',
@@ -748,10 +779,14 @@ function b64(s: string): Uint8Array {
 export function toProtocolSetup(s: BattleSetup, glyphs: Record<string, Material>): PSetup {
   const side = (i: 0 | 1): PSideCfg => {
     const v = s.sides[i];
-    const cfg: PSideCfg = { control: v.human || (s.mode === 'yard' && i === 1) ? 'human' : 'ai' };
+    // Test Yard: the far side is a lone Straw Stuffer, and a side of dummies passes itself
+    // (core/API.md test_yard), so only the human side ever gets a turn.
+    const dummy = s.mode === 'yard' && i === 1;
+    const cfg: PSideCfg = { control: v.human || dummy ? 'human' : 'ai' };
+    if (dummy) cfg.crew = ['straw_stuffer'];
     if (!v.human) cfg.preset = s.difficulty;
     if (v.name && s.mode !== 'campaign') cfg.name = v.name;
-    if (v.crew.length && !(s.mode === 'campaign' && i === 1)) cfg.crew = v.crew.map((c) => c.replace(/^p2_/, '').replace(/^thumper$/, 'old_thumper'));
+    if (!dummy && v.crew.length && !(s.mode === 'campaign' && i === 1)) cfg.crew = v.crew.map((c) => c.replace(/^p2_/, '').replace(/^thumper$/, 'old_thumper'));
     const bp = v.blueprint;
     if (bp && bp.id !== 'default') {
       if (bp.kit && !cfg.crew) cfg.kit = bp.kit;

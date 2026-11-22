@@ -14,7 +14,7 @@ export class CoreLoadError extends Error {
 
 /**
  * Loads the real core (castle-wasm, built by scripts/build-wasm.sh and copied to
- * `<base>/core/` by vite.config.ts). It is a plain GET import, so the service worker's
+ * `<base>/core/<hash>/` by vite.config.ts). It is a plain GET import, so the service worker's
  * precache answers it offline. There is no fallback in a production build.
  * Dev only: `?core=mock` loads the TypeScript stand-in by dynamic import.
  */
@@ -24,7 +24,7 @@ export async function loadCore(): Promise<CoreApi> {
     return new MockCore();
   }
   try {
-    const url = `${import.meta.env.BASE_URL}core/castle_wasm.js`;
+    const url = `${import.meta.env.BASE_URL}${typeof __CASTLE_CORE_DIR__ === 'string' ? __CASTLE_CORE_DIR__ : 'core/'}castle_wasm.js`;
     const mod = (await import(/* @vite-ignore */ url)) as WasmModule;
     await mod.default();
     return new RealCore(mod);

@@ -20,7 +20,7 @@ export type Route =
   | { to: 'title' }
   | { to: 'map'; focus?: string }
   | { to: 'prebattle'; level: string; again?: boolean }
-  | { to: 'battle'; setup: BattleSetup; resume?: string; prepared?: boolean; handoff?: boolean; live?: number }
+  | { to: 'battle'; setup: BattleSetup; resume?: string; prepared?: boolean; handoff?: boolean; live?: number; paused?: boolean }
   | { to: 'results'; setup: BattleSetup }
   | { to: 'skirmish' }
   | { to: 'duel' }
@@ -138,11 +138,12 @@ export class App {
     setTimeout(() => el.remove(), 5000);
   }
 
-  /** "Update ready" chip: only on the title and the map, never mid fight. */
+  /** "Update ready" chip: on the title, the map and Modes, never mid fight. */
   showUpdateChip(): void {
     this.updateChip?.remove();
     this.updateChip = undefined;
-    if (!this.pendingUpdate || (this.route.to !== 'title' && this.route.to !== 'map')) return;
+    const calm: Route['to'][] = ['title', 'map', 'modes'];
+    if (!this.pendingUpdate || !calm.includes(this.route.to)) return;
     const apply = this.pendingUpdate;
     this.updateChip = h('div', { class: 'update-chip', role: 'status' }, h('span', {}, 'Update ready'), btn('Update', () => apply(), 'primary small'));
     this.root.append(this.updateChip);

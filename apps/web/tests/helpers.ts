@@ -3,7 +3,7 @@ import { expect, type Page } from '@playwright/test';
 
 export type Snap = {
   tick: number; phase: string; round: number;
-  hud: { aim?: { angle: number; power: number }; fire: string; active: number; canPass: boolean };
+  hud: { aim?: { angle: number; power: number }; fire: string; active: number; canPass: boolean; shot?: string };
   shells: unknown[]; pins: unknown[];
   kettles: { side: number; room?: { x: number; y: number; w: number; h: number } }[];
   hobs: { id: string; side: number; x: number; y: number }[];

@@ -8,10 +8,10 @@ import { defineConfig, devices } from '@playwright/test';
 //  - iphone: iPhone 15 portrait in WebKit (touch, 3x), the phone specs.
 //  - pixel-landscape: Pixel 7 landscape in Chromium (touch), the phone specs.
 // The phone projects run the specs that do not need a service worker or a keyboard: the
-// fixes and mobile specs. PW_PROJECTS narrows the run (CI runs all three).
+// fixes, mobile and qa1 (QA playtest 1) specs. PW_PROJECTS narrows the run (CI runs all three).
 const base = process.env.VITE_BASE ?? '/';
 const port = 4173;
-const phoneSpecs = /(fixes|mobile)\.spec\.ts/;
+const phoneSpecs = /(fixes|mobile|qa1)\.spec\.ts/;
 
 export default defineConfig({
   testDir: './tests',

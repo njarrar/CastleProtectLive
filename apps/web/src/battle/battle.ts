@@ -25,6 +25,8 @@ interface Gesture {
   x: number;
   y: number;
   prevAim?: { angle: number; power: number };
+  /** The pull direction while the finger was clear of the screen edge (unit vector, world y up). */
+  lockDir?: [number, number];
   t0: number;
 }
 
@@ -110,8 +112,16 @@ export function battleScreen(app: App, route: Route): Screen {
     repeatKey('Pow +', () => nudge(0, 1), 'k-pow-up', { 'aria-label': 'Power up' }),
     repeatKey('Pow \u2212', () => nudge(0, -1), 'k-pow-down', { 'aria-label': 'Power down' }),
   );
-  const aimCluster = h('div', { class: 'aimcluster' }, pad, readout);
+  // Fine Tune sits on its own, never on the active fort: in Tall it docks on the side of the bottom
+  // lens away from your fort, in a short Wide view it sits under the top strip, off the tray. It
+  // also hides while a finger aims (QA playtest 1, M7).
+  const aimCluster = h('div', { class: 'aimcluster' }, readout);
+  // Edge markers (wide layout): the Rival fort when it is off screen, and where the aim arc leaves it.
+  const fortMark = h('div', { class: 'edgemark fortmark', 'data-testid': 'fort-mark', 'aria-hidden': 'true' });
+  const arcMark = h('div', { class: 'edgemark arcmark', 'data-testid': 'arc-mark', 'aria-hidden': 'true' }, h('i', {}, '\u27A4'));
   const fire = h('button', { class: 'btn fire', type: 'button', 'aria-label': 'Fire', 'data-testid': 'fire' }, 'FIRE');
+  // Why Fire is grey (the picked shot is not ready): the core's reason, next to the button.
+  const fireWhyEl = h('div', { class: 'firewhy', 'data-testid': 'fire-why', role: 'status' });
   const reframe = btn('⌖', () => { manual = false; topManual = false; }, 'reframe round-btn', { 'aria-label': 'Re-frame' });
   const banner = h('div', { class: 'banner', role: 'status' });
   const prompt = h('div', { class: 'prompt' });
@@ -141,7 +151,7 @@ export function battleScreen(app: App, route: Route): Screen {
   let layout: 'wide' | 'tall' = app.layout;
   function relayout(): void {
     layout = app.layout;
-    hud.className = `hud ${layout}`;
+    hud.className = `hud ${layout}${setup.mode === 'yard' ? ' yard' : ''}`;
     // Turning the device ends a drag as if the finger lifted: the aim so far is kept (07 §2.6).
     if (drag?.mode === 'aim') endDrag('keep');
     top.replaceChildren(
@@ -149,15 +159,15 @@ export function battleScreen(app: App, route: Route): Screen {
       kettleEl[0], pipsEl[0], roundEl, windEl, pipsEl[1], kettleEl[1], saveTick,
     );
     if (layout === 'wide') {
-      hud.replaceChildren(top, hobsEl, walkEl, trayEl, aimCluster, fire, reframe, banner, prompt, hand, overlay);
+      hud.replaceChildren(top, hobsEl, walkEl, trayEl, pad, aimCluster, fire, fireWhyEl, fortMark, arcMark, reframe, banner, prompt, hand, overlay);
       if (yardBar) hud.append(yardBar);
     } else {
       floatsL.replaceChildren(pause, walkEl);
       floatsR.replaceChildren(aimCluster);
-      lensBottom.replaceChildren(floatsL, floatsR, banner);
+      lensBottom.replaceChildren(floatsL, floatsR, pad, banner);
       crewRow.replaceChildren(hobsEl, fire);
       dock.replaceChildren(trayEl, crewRow);
-      hud.replaceChildren(top, lensTop, strip, lensBottom, dock, reframe, prompt, hand, overlay);
+      hud.replaceChildren(top, lensTop, strip, lensBottom, dock, fireWhyEl, reframe, prompt, hand, overlay);
       if (yardBar) lensTop.replaceChildren(yardBar);
     }
     resize();
@@ -192,7 +202,7 @@ export function battleScreen(app: App, route: Route): Screen {
   // Layout is read once after it changes (relayout, a new crew or tray), never every frame.
   let rectsDirty = true;
   const z = (): Rect => ({ x: 0, y: 0, w: 0, h: 0 });
-  const rc: Record<'top' | 'bottom' | 'strip' | 'clear' | 'fire', Rect> = { top: z(), bottom: z(), strip: z(), clear: z(), fire: z() };
+  const rc: Record<'top' | 'bottom' | 'strip' | 'clear' | 'fire' | 'tray', Rect> = { top: z(), bottom: z(), strip: z(), clear: z(), fire: z(), tray: z() };
   function readRects(): void {
     if (!rectsDirty) return;
     rectsDirty = false;
@@ -203,6 +213,7 @@ export function battleScreen(app: App, route: Route): Screen {
     const left = hobsEl.getBoundingClientRect().right + 4;
     rc.clear = { x: left, y: t, w: Math.max(100, W - left - 8), h: Math.max(80, bottom - t) };
     rc.fire = { x: fr.left, y: fr.top, w: fr.width, h: fr.height };
+    rc.tray = { x: tr.left, y: tr.top, w: tr.width, h: tr.height };
   }
   const rectOf = (el: HTMLElement): Rect => (el === lensTop ? rc.top : el === lensBottom ? rc.bottom : el === strip ? rc.strip : el === fire ? rc.fire : readRect(el));
   function clearRect(): Rect { return rc.clear; }
@@ -227,6 +238,8 @@ export function battleScreen(app: App, route: Route): Screen {
     return 0;
   };
   const other = (s: Side): Side => (s === 0 ? 1 : 0);
+  // Only a human side acts. In the Test Yard that is side 0: the Dummy's turn passes itself.
+  const isHuman = (side: Side): boolean => snap.sides[side].human && !(setup.mode === 'yard' && side === 1);
 
   function frameBox(rc: Rect, x0: number, x1: number, y0: number, y1: number, minS: number, maxS: number): Cam {
     const s = clamp(Math.min(rc.w / (x1 - x0), rc.h / (y1 - y0)), minS, maxS);
@@ -261,15 +274,18 @@ export function battleScreen(app: App, route: Route): Screen {
   function planFrame(cr: Rect, side: Side, out: Cam): Cam {
     const f = snap.forts;
     const fa = f[side], fo = f[other(side)];
-    const x0 = Math.min(fa.x, fo.x) - 60, x1 = Math.max(fa.x + fa.w, fo.x + fo.w) + 60;
-    const y0 = Math.min(fa.y, fo.y) - 30, y1 = Math.max(fa.y + fa.h, fo.y + fo.h) + 170;
+    const x0 = Math.min(fa.x, fo.x) - 32, x1 = Math.max(fa.x + fa.w, fo.x + fo.w) + 32;
+    const y0 = Math.min(fa.y, fo.y) - 30, y1 = Math.max(fa.y + fa.h, fo.y + fo.h) + 150;
     const both = Math.min(cr.w / (x1 - x0), cr.h / (y1 - y0));
     const dir = fo.x > fa.x ? 1 : -1;
-    // Both forts only when they still draw big (blocks 12 px or more); else this fort and its arc.
-    if (both >= 0.75) {
+    // Both forts whenever their blocks still draw at 8 px or more (the zoom floor); else this fort
+    // and the way to the other, with the Rival fort's edge marker (QA playtest 1, M3).
+    if (both >= FLOOR) {
       out.s = Math.min(both, ZMAX);
       // 55/45 toward the rival (07 §3.5); a Couch Duel stays centred.
-      out.cx = (x0 + x1) / 2 + (setup.mode === 'duel' ? 0 : dir * (x1 - x0) * 0.05);
+      // The 55/45 lean only when there is room to spare: it must never push a fort off the frame.
+      const spare = Math.max(0, cr.w / out.s - (x1 - x0)) / 2;
+      out.cx = (x0 + x1) / 2 + (setup.mode === 'duel' ? 0 : dir * Math.min(spare, (x1 - x0) * 0.05));
     } else {
       out.s = clamp(Math.min(cr.h / (fa.h + 190), (cr.w * 0.4) / (fa.w + 60)), FLOOR, 1);
       const half = cr.w / 2 / out.s;
@@ -476,7 +492,7 @@ export function battleScreen(app: App, route: Route): Screen {
     sounds();
     if (running) {
       // "Rival turns at 2x" speeds up the whole Rival turn: think pose and flight.
-      const rivalTurn = !snap.sides[snap.hud.active].human && setup.mode !== 'yard';
+      const rivalTurn = !isHuman(snap.hud.active) && setup.mode !== 'yard';
       acc += dt * vs * TICK_HZ * (fast ? 2 : 1) * (rivalTurn && app.settings.rivalFast ? 2 : 1);
       const n = Math.floor(acc);
       acc -= n;
@@ -571,7 +587,7 @@ export function battleScreen(app: App, route: Route): Screen {
     // The wide lens covers the whole canvas; only the tall layout has gaps between lenses.
     if (layout === 'tall') { ctx.fillStyle = '#9ED8EC'; ctx.fillRect(0, 0, W, H); }
     const me = youSide();
-    const human = snap.sides[snap.hud.active].human || setup.mode === 'yard';
+    const human = isHuman(snap.hud.active);
     const plan = snap.phase === 'plan' && human;
     const lenses = lensRects();
     opts.you = me; opts.seeThrough = plan ? snap.hud.active : -1; opts.pickedHob = plan ? snap.hud.hob : undefined;
@@ -638,7 +654,7 @@ export function battleScreen(app: App, route: Route): Screen {
     turnCount++;
     fast = false;
     padOpen = false;
-    const human = snap.sides[side].human || setup.mode === 'yard';
+    const human = isHuman(side);
     if (setup.mode === 'duel') {
       showTurnBanner(`${snap.sides[side].name}'s turn`, side === 0 ? 'blue' : 'orange');
       play(side === 0 ? 'turn' : 'turn2');
@@ -716,7 +732,7 @@ export function battleScreen(app: App, route: Route): Screen {
     const s = snap;
     const hd = s.hud;
     const me = youSide();
-    const human = s.sides[hd.active].human || setup.mode === 'yard';
+    const human = isHuman(hd.active);
     const plan = s.phase === 'plan' && human;
     setClass(hud, 'aiming', drag?.mode === 'aim');
     // The tall lenses joined for a flight: the strip borders go and the floats move up off the drawn strip.
@@ -724,6 +740,7 @@ export function battleScreen(app: App, route: Route): Screen {
     setClass(hud, 'flight', s.phase === 'flight' || s.phase === 'resolve' || s.phase === 'rival' || !human);
     setData(hud, 'phase', s.phase);
     setData(hud, 'active', String(hd.active));
+    setData(hud, 'you', String(me));
     // top strip
     for (const side of [0, 1] as Side[]) {
       const k = s.kettles.find((x) => x.side === side);
@@ -745,10 +762,12 @@ export function battleScreen(app: App, route: Route): Screen {
     const fat = s.fatigue?.[0] || s.fatigue?.[1];
     const vo = s.hud.volley;
     const bo = s.hud.boss;
-    const rk = vo ? `v${vo.left[0]}:${vo.left[1]}:${vo.actions}` : `${sq.on}:${s.round}:${s.roundCap}:${sq.warn}:${fat}:${bo?.phase ?? 0}`;
+    // Fatigue warned a few rounds ahead when the core says when it comes (QA playtest 1, M2).
+    const fatIn = !fat && s.fatigueIn !== undefined && s.fatigueIn > 0 && s.fatigueIn <= 3 ? s.fatigueIn : 0;
+    const rk = vo ? `v${vo.left[0]}:${vo.left[1]}:${vo.actions}` : `${sq.on}:${s.round}:${s.roundCap}:${sq.warn}:${fat}:${fatIn}:${bo?.phase ?? 0}`;
     if (changed(roundEl, 'k', rk)) {
-      roundEl.textContent = vo ? `Shots left ${vo.left[0]} : ${vo.left[1]} of ${vo.actions}`
-        : sq.on ? `Squall ${sq.on} of 3` : `Round ${s.round}/${s.roundCap}${sq.warn ? `  Squall in ${sq.warn}` : ''}${fat ? ', Fatigue' : ''}${bo ? `, Phase ${bo.phase}` : ''}`;
+      roundEl.textContent = setup.mode === 'yard' ? 'Test Yard' : vo ? `Shots left ${vo.left[0]} : ${vo.left[1]} of ${vo.actions}`
+        : sq.on ? `Squall ${sq.on} of 3` : `Round ${s.round}/${s.roundCap}${sq.warn ? `  Squall in ${sq.warn}` : ''}${fat ? ', Fatigue' : fatIn ? `  Fatigue in ${fatIn}` : ''}${bo ? `, Phase ${bo.phase}` : ''}`;
     }
     setClass(roundEl, 'squall', !!sq.on);
     const arrow = (w: number) => (w === 0 ? '• 0' : `${w > 0 ? '→' : '←'} ${Math.abs(w)}`);
@@ -816,9 +835,81 @@ export function battleScreen(app: App, route: Route): Screen {
     setText(fire, fs === 'fast' ? (fast ? '1x' : '2x') : fs === 'dug' ? 'SHOVE OFF' : fs === 'pass' ? 'PASS' : 'FIRE');
     if (changed(fire, 'aria', fs + fast)) fire.setAttribute('aria-label', fs === 'fast' ? (fast ? 'Normal speed' : 'Double speed') : fs === 'dug' ? 'Shove Off: clear the buried Loophole' : fs === 'pass' ? 'Pass the turn' : 'Fire');
     setHidden(fire, fs === 'flight' || (!human && fs !== 'fast'));
+    // Fire is never lit while the picked shot cannot go: it is grey (locked) and says why.
+    const why = plan && fs === 'locked' ? hd.fireWhy ?? '' : '';
+    setData(fire, 'why', why);
+    if (changed(fire, 'title', why)) fire.title = why;
+    if (why && changed(fire, 'aria-why', why)) fire.setAttribute('aria-label', `Fire, not ready: ${why}`);
+    setText(fireWhyEl, why);
+    setHidden(fireWhyEl, !why);
+    if (why) {
+      // Wide: over the shot tray (the valley between the forts, the dimmed chip just below).
+      // Tall: in the free space of the crew row, left of Fire.
+      const fr = rc.fire, tr = rc.tray;
+      if (layout === 'wide') {
+        setStyle(fireWhyEl, 'left', `${Math.round(clamp(tr.x + tr.w / 2, 110, W - 110))}px`);
+        setStyle(fireWhyEl, 'top', `${Math.round(tr.y - 8)}px`);
+        setStyle(fireWhyEl, 'transform', 'translate(-50%, -100%)');
+      } else {
+        setStyle(fireWhyEl, 'left', `${Math.round(Math.max(8, fr.x - 10 - 190))}px`);
+        setStyle(fireWhyEl, 'top', `${Math.round(fr.y + fr.h / 2)}px`);
+        setStyle(fireWhyEl, 'transform', 'translateY(-50%)');
+      }
+    }
+    if (plan) autoPickReady();
     setHidden(reframe, !(manual || topManual || wideLook));
+    edgeMarks(plan, me);
     // onboarding prompts (1-1)
     updatePrompt(now, plan);
+  }
+
+  /** Wide layout, your Plan step: a marker on the screen edge for a Rival fort that is off screen
+   *  (or cut), and an arrow where the aim arc runs off screen. Tall shows the target in the top lens. */
+  function edgeMarks(plan: boolean, me: Side): void {
+    const on = layout === 'wide' && plan && !paused && !handoffOpen;
+    const l = LW[0];
+    const cr = clearRect();
+    let fortOff = false;
+    if (on) {
+      const fo = snap.forts[other(me)];
+      const [ax, ay] = toScreen(l.rect, camWide, fo.x, fo.y);
+      const [bx, by] = toScreen(l.rect, camWide, fo.x + fo.w, fo.y + fo.h);
+      const left = Math.min(ax, bx), right = Math.max(ax, bx);
+      // Off screen or cut by more than a quarter of its width.
+      const seen = Math.max(0, Math.min(right, W) - Math.max(left, 0));
+      fortOff = seen < 0.75 * (right - left);
+      if (fortOff) {
+        const toRight = (left + right) / 2 > W / 2;
+        const y = clamp((ay + by) / 2, cr.y + 24, cr.y + cr.h - 24);
+        const name = setup.mode === 'duel' ? snap.sides[other(me)].name : setup.mode === 'yard' ? 'Dummy' : 'Rival';
+        setText(fortMark, toRight ? `${name} fort \u25B6` : `\u25C0 ${name} fort`);
+        setData(fortMark, 'side', toRight ? 'right' : 'left');
+        setStyle(fortMark, 'top', `${Math.round(y)}px`);
+        setStyle(fortMark, 'left', toRight ? 'auto' : `${Math.round(cr.x + 4)}px`);
+        setStyle(fortMark, 'right', toRight ? `${Math.round(W - (cr.x + cr.w) + 4)}px` : 'auto');
+      }
+    }
+    setHidden(fortMark, !fortOff);
+    // The arc: the first preview point past the screen edge (the top strip counts as the edge).
+    let exit: [number, number, number] | null = null;
+    const pv = on ? snap.hud.preview : [];
+    const top = cr.y;
+    let px = 0, py = 0;
+    for (let i = 0; i < pv.length; i++) {
+      const [x, y] = toScreen(l.rect, camWide, pv[i][0], pv[i][1]);
+      if (i > 0 && (x < 0 || x > W || y < top)) {
+        const ang = (Math.atan2(y - py, x - px) * 180) / Math.PI;
+        exit = [clamp(x, 18, W - 18), clamp(y, top + 18, H - 18), ang];
+        break;
+      }
+      px = x; py = y;
+    }
+    setHidden(arcMark, !exit);
+    if (exit) {
+      setStyle(arcMark, 'left', `${Math.round(exit[0])}px`);
+      setStyle(arcMark, 'top', `${Math.round(exit[1])}px`);
+      setStyle(arcMark, '--a', `${Math.round(exit[2])}deg`);
+    }
   }
 
   function hint(id: string, text: string, target: HTMLElement | null, showHand = false): void {
@@ -902,7 +993,7 @@ export function battleScreen(app: App, route: Route): Screen {
     const ls = lensRects();
     return ls.find((l) => x >= l.rect.x && x < l.rect.x + l.rect.w && y >= l.rect.y && y < l.rect.y + l.rect.h);
   }
-  const canAim = () => snap.phase === 'plan' && (snap.sides[snap.hud.active].human || setup.mode === 'yard') && !paused && !handoffOpen;
+  const canAim = () => snap.phase === 'plan' && isHuman(snap.hud.active) && !paused && !handoffOpen;
 
   /** Aiming starts only from your own fort (owner rule): a press on the fort, or within about two
    *  blocks of it, or within 48 px of the picked Hob. A press anywhere else pans the camera. */
@@ -976,20 +1067,36 @@ export function battleScreen(app: App, route: Route): Screen {
     } else if (drag.mode === 'strip') stripLook(e.clientX);
   });
 
+  /** How far a finger can pull from the anchor along (ux, uy) before it meets the screen edge. */
+  function room(x0: number, y0: number, ux: number, uy: number, m: number): number {
+    let t = Infinity;
+    if (ux < 0) t = Math.min(t, (x0 - m) / -ux); else if (ux > 0) t = Math.min(t, (W - m - x0) / ux);
+    if (uy < 0) t = Math.min(t, (y0 - m) / -uy); else if (uy > 0) t = Math.min(t, (H - m - y0) / uy);
+    return Math.max(0, t);
+  }
   function aimFromDrag(g: Gesture): void {
     let dx = g.x0 - g.x, dy = g.y - g.y0; // pull-back: shot goes opposite the pull, world y up
     if (app.settings.dragMode === 'point') { dx = -dx; dy = -dy; }
-    let deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) return;
+    // A finger pinned on the screen edge can only slide along it, which would bend the angle
+    // (asked 45, got 40). Once the pull meets the edge, the angle keeps the direction it had
+    // and only the power follows the finger (QA playtest 1, m3).
+    const m = 6;
+    const atEdge = g.x <= m || g.x >= W - m || g.y <= m || g.y >= H - m;
+    let ux = dx / len, uy = dy / len;
+    if (atEdge && g.lockDir) { ux = g.lockDir[0]; uy = g.lockDir[1]; }
+    else if (!atEdge) g.lockDir = [ux, uy];
+    let deg = (Math.atan2(uy, ux) * 180) / Math.PI;
     if (deg < 0) deg = deg < -90 ? 180 : 0;
     const angle = Math.round(deg * 2) * 5;
-    const power = clamp(Math.round((Math.hypot(dx, dy) / (0.4 * Math.min(W, H))) * 100), 0, 100);
+    // Full power is reached before the finger meets the edge: the pull for 100 is the usual
+    // 40% of the short side, or less when the anchor is near the edge (never under 64 px).
+    const sgn = app.settings.dragMode === 'point' ? -1 : 1;
+    const full = clamp(room(g.x0, g.y0, -ux * sgn, uy * sgn, m + 2), 64, 0.4 * Math.min(W, H));
+    const along = Math.max(0, dx * ux + dy * uy);
+    const power = clamp(Math.round((along / full) * 100), 0, 100);
     pendingAim = { angle, power }; // sent once per frame by flushAim
-    // edge help: slide the anchor away from a near edge while power is under 100
-    if (power < 100) {
-      const m = 12;
-      if (g.x < m) g.x0 += m - g.x; else if (g.x > W - m) g.x0 -= g.x - (W - m);
-      if (g.y < m) g.y0 += m - g.y; else if (g.y > H - m) g.y0 -= g.y - (H - m);
-    }
   }
 
   /** cancel true: put the old aim back. false: a lift (Quick Fire may fire). 'keep': keep the aim, never fire. */
@@ -1093,6 +1200,22 @@ export function battleScreen(app: App, route: Route): Screen {
     padNudge();
   }
 
+  // A picked shot that cannot go this turn (a Knack on a rest turn, a Knack with no uses left) is
+  // swapped for a ready one (the Plain Shot first) once per turn and Hob. A player who then picks
+  // the Knack by hand keeps it, and Fire stays grey with the core's reason.
+  let autoKey = '';
+  function autoPickReady(): void {
+    const hd = snap.hud;
+    const key = `${turnCount}:${hd.active}:${hd.hob}`;
+    if (key === autoKey) return;
+    const cur = hd.shots.find((c) => c.id === hd.shot);
+    if (!hd.shots.length) return;
+    autoKey = key;
+    if (!cur || cur.ready) return;
+    const pick = hd.shots.find((c) => c.ready && c.kind === 'plain') ?? hd.shots.find((c) => c.ready);
+    if (pick && send({ cmd: 'pick_shot', id: pick.id })) snap = merge(snap, core.snapshot());
+  }
+
   // ---------- fire, walk, keys ----------
   const afterAction = () => { padOpen = false; recallIdx = 0; manual = false; topManual = false; wideLook = false; };
   function doFire(fromDrag = false): void {
@@ -1108,6 +1231,7 @@ export function battleScreen(app: App, route: Route): Screen {
       return;
     }
     if (snap.hud.fire === 'pass') { if (send({ cmd: 'pass' })) afterAction(); return; }
+    if (snap.hud.fire === 'locked' && snap.hud.fireWhy) { showBanner(snap.hud.fireWhy, 'paper'); say(snap.hud.fireWhy); play('tap'); return; }
     if (send({ cmd: 'fire' })) { doneHint('fire'); afterAction(); firePress(fire); play('fire_press'); }
   }
   fire.addEventListener('click', (e) => { e.preventDefault(); doFire(); });
@@ -1230,7 +1354,7 @@ export function battleScreen(app: App, route: Route): Screen {
       btn('Settings', () => {
         // Back from Settings takes over this live battle (core.battleGen); the save is the fallback.
         const data = core.saveBattle();
-        app.go({ to: 'settings', back: { to: 'battle', setup, resume: data, live: core.battleGen, handoff: false } });
+        app.go({ to: 'settings', back: { to: 'battle', setup, resume: data, live: core.battleGen, handoff: false, paused: true } });
       }, 'secondary', { 'data-testid': 'pause-settings' }),
       btn('Map', () => { void autosave(snap.hud.active, snap.round).then(() => app.go({ to: 'map' })); }, 'secondary', { 'data-testid': 'pause-map' }),
       giveUp,
@@ -1323,17 +1447,35 @@ export function battleScreen(app: App, route: Route): Screen {
   for (const e of snap.events) if (e.t === 'turn') turnCount++;
   if (turnCount === 0 && snap.phase !== 'over') turnCount = 1;
   snap.events = snap.events.filter((e) => e.t !== 'turn');
-  if (snap.phase === 'plan' && setup.mode !== 'yard') showTurnBanner(setup.mode === 'duel' ? `${snap.sides[snap.hud.active].name}'s turn` : 'Your turn', snap.hud.active === 0 ? 'blue' : 'orange');
+  if (snap.phase === 'plan' && setup.mode !== 'yard' && !r.paused) showTurnBanner(setup.mode === 'duel' ? `${snap.sides[snap.hud.active].name}'s turn` : 'Your turn', snap.hud.active === 0 ? 'blue' : 'orange');
   hud.append(liveEl);
   raf = requestAnimationFrame(frame);
-  sprites.upgrade();
+  // The @2x art (1.9 MB) waits a minute in the very first fight, so the first load stays small;
+  // from the second fight on it loads in idle time at once.
+  const firstFight = !Object.keys(app.progress.levels).length && !r.resume;
+  const upT = window.setTimeout(() => { if (alive) sprites.upgrade(); }, firstFight ? 60_000 : 0);
   root.dataset.core = core.name;
   root.dataset.testid = 'battle';
   // A resumed Couch Duel shows the hand-off card first, as the saved turn did.
   if (r.resume && r.handoff && setup.mode === 'duel' && setup.seats !== 'one' && snap.phase === 'plan') openHandoff(snap.hud.active, snap.round);
+  // Back from Settings (opened from Pause) lands on the Pause card again, never straight in the fight.
+  else if (r.paused && snap.phase !== 'over') openPause();
 
   // For tests and debugging only (dev, or ?debug in the URL): a read-only view of the latest snapshot.
-  if (DEBUG) (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, layout: () => layout, core: core.name, cam: () => ({ ...camWide }), dpr: () => dpr, joined: () => joined, fx: feel.fx, wordBoxes: () => feel.fx.lastWords, feel: () => ({ terr: terr.rev, fx: feel.fx.live, collapse: feel.col.busy || feel.col.started > 0, slow: feel.juice.slowing, trauma: feel.juice.trauma }) };
+  if (DEBUG) (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, layout: () => layout, core: core.name, cam: () => ({ ...camWide }), dpr: () => dpr, joined: () => joined, fx: feel.fx, wordBoxes: () => feel.fx.lastWords, feel: () => ({ terr: terr.rev, fx: feel.fx.live, collapse: feel.col.busy || feel.col.started > 0, slow: feel.juice.slowing, trauma: feel.juice.trauma }),
+    // World point to screen px in the lens that aims ('aim': wide or bottom) or shows the target ('target': wide or top).
+    toScreen: (x: number, y: number, which: 'aim' | 'target' = 'aim') => {
+      const l = lensRects().find((q) => q.id === 'wide' || q.id === (which === 'aim' ? 'bottom' : 'top')) ?? lensRects()[0];
+      return toScreen(l.rect, l.cam, x, y);
+    },
+    /** Screen boxes [x0, y0, x1, y1] of both forts: your fort in the aiming lens, the other in the target lens. */
+    fortBoxes: () => [0, 1].map((side) => {
+      const f = snap.forts[side as Side];
+      const l = lensRects().find((q) => q.id === 'wide' || q.id === (side === youSide() ? 'bottom' : 'top')) ?? lensRects()[0];
+      const [ax, ay] = toScreen(l.rect, l.cam, f.x, f.y);
+      const [bx, by] = toScreen(l.rect, l.cam, f.x + f.w, f.y + f.h);
+      return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)];
+    }) };
   if (loadNote) app.notice(loadNote);
 
   return {
@@ -1365,6 +1507,7 @@ export function battleScreen(app: App, route: Route): Screen {
       window.removeEventListener('blur', lose);
       clearTimeout(bannerT);
       clearTimeout(padT);
+      clearTimeout(upT);
     },
   };
 }

@@ -80,8 +80,11 @@ const KNOWN: Record<string, string[]> = {
   '.hobs[].aim': ['angle', 'power'],
   // not shown yet on purpose: score, puff_up, front_rounds_left, crew (the pips read hobs[]),
   // shove_off_cost (the refusal says not_enough_steam), rules (objective and cap_win)
-  '.hud': ['boss', 'control', 'crew', 'doodads', 'forecast', 'front_rounds_left', 'hands', 'handicap', 'kettle_pct', 'names', 'puff_up', 'round', 'round_cap', 'rules', 'score', 'selected', 'shots', 'shove_off_cost', 'side', 'squall', 'squall_round', 'squall_warning', 'steam', 'steam_max', 'steam_turn_left', 'turn', 'volley', 'wind'],
-  '.hud.shots[]': ['id', 'ready', 'shot', 'why'],
+  // v0.3: fire (Fire lit or grey, and why), fatigue_in (the round label warns); fatigue and
+  // fatigue_round are read from castles[].fatigue and fatigue_in instead
+  '.hud': ['boss', 'control', 'crew', 'doodads', 'fatigue', 'fatigue_in', 'fatigue_round', 'fire', 'forecast', 'front_rounds_left', 'hands', 'handicap', 'kettle_pct', 'names', 'puff_up', 'round', 'round_cap', 'rules', 'score', 'selected', 'shots', 'shove_off_cost', 'side', 'squall', 'squall_round', 'squall_warning', 'steam', 'steam_max', 'steam_turn_left', 'turn', 'volley', 'wind'],
+  '.hud.fire': ['ready', 'text', 'why'],
+  '.hud.shots[]': ['id', 'ready', 'shot', 'text', 'why'],
   '.hud.handicap[]': ['crew', 'help', 'preview_pct', 'steam'],
   '.hud.volley': ['actions', 'left'],
   // roller and shears also come as props[]; roller_done shows as a greyed drum
@@ -95,9 +98,12 @@ const KNOWN: Record<string, string[]> = {
   '.terrain': ['chunks'],
   '.terrain.chunks[]': ['cx', 'cy', 'data', 'h', 'w', 'x', 'y'],
   '.props[]': ['hp', 'id', 'kind', 'max', 'shot', 'side', 'tag', 'x', 'y'],
-  '.result': ['broke', 'buttons', 'how', 'pennants', 'pennants_new', 'round', 'score', 'stats', 'winner'],
+  // best_shot: the winner's, for "Best shot" on the results (v0.3)
+  '.result': ['best_shot', 'broke', 'buttons', 'how', 'pennants', 'pennants_new', 'round', 'score', 'stats', 'winner'],
+  '.result.best_shot': ['angle', 'dmg', 'hob', 'hob_name', 'power', 'round', 'shot', 'shot_name', 'side'],
+  '.result.stats[].best_shot': ['angle', 'dmg', 'hob', 'hob_name', 'power', 'round', 'shot', 'shot_name', 'side'],
   // not shown yet on purpose: best_streak, bonks, blocks_lost, kettle_lost, hobs_lost (duel results show shots, hits, blocks)
-  '.result.stats[]': ['best_streak', 'blocks_dropped', 'blocks_lost', 'bonks', 'hits', 'hobs_lost', 'kettle_lost', 'shots'],
+  '.result.stats[]': ['best_shot', 'best_streak', 'blocks_dropped', 'blocks_lost', 'bonks', 'hits', 'hobs_lost', 'kettle_lost', 'shots'],
   // the "what broke you" line reads how, last and the losses; top (the three worst shots) is for the replay card
   '.result.broke': ['blocks_lost', 'hobs_bonked', 'how', 'kettle_lost', 'last', 'side', 'top'],
   '.result.broke.last': ['dmg', 'hob', 'hob_name', 'round', 'shot', 'shot_name'],

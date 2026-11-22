@@ -246,3 +246,73 @@ None on the live build. The 1-1 stuck fight is fixed.
 | Aim feel | Pass with fixes | The drag, single arc, Fine Tune and Pins are sound. Fix M1, m3 and m4 before a real phone test, since Build 3 changed where an aim starts |
 | Collapse feel | Not proven | Collapses happen and read in stills and video, but numbers pile up and the Fatigue collapse is never seen. Needs a hand on a real phone, with sound |
 | Portrait stacked lenses | Pass | Top lens, Field Strip, bottom lens and the joined flight view all work and survive rotation, reload and offline. Move the pad (M7) |
+
+## 6. Web fixes
+
+Scope: `apps/web/` only. The rule and balance findings (M2 Fatigue at round 10, M6 the Fair curve and the Retry seed, the Test Yard rest rule) are with the core work. Every fix below has a Playwright test in `apps/web/tests/qa1.spec.ts`, run on desktop Chromium, iPhone 15 portrait (WebKit) and Pixel 7 landscape (Chromium); the layout tests also set 390 x 844 and 844 x 390 on every project. The whole suite passes at the root base and with `VITE_BASE=/CastleProtectLive/`. After screenshots, 390 x 844 and 844 x 390 each, are in `docs/qa/playtest-1/fixes/`.
+
+| # | Finding | What changed | Test | After |
+|---|---|---|---|---|
+| 1 | M1 Fire lit and dead on a rest turn | Fire is `ready` only when the picked shot is ready (core `hud.shots`). At each turn start, and when the Hob changes, a picked shot that cannot go is swapped for the Plain Shot. A Knack picked by hand on a rest turn greys Fire, stops the pulse and shows the core's reason ("Needs a rest: Plain Shot only") by the tray in landscape and by Fire in portrait; a tap on grey Fire says the reason and fires nothing | `M1` | `F01a`, `F01b` |
+| 2 | M3 Rival fort off screen in phone landscape | The plan frame holds both forts whenever blocks still draw at 8 px or more (was 12 px), and the 55/45 lean never pushes a fort out. 1-1 at 844 x 390 now shows both forts at 11 px blocks. When they cannot fit (1-9), your fort and the arc are framed and a "Rival fort" marker sits on the screen edge at the fort's height. An aim arc that leaves the screen gets an arrow where it leaves | `M3` (3 tests) | `F02a`, `F02b`, `F02c` |
+| 3 | M7 Fine Tune pad on the fort | Portrait: a two-column pad docked in the bottom lens on the side away from your fort (right for side 0, left for side 1), above the readout. Phone landscape: under the top strip on the right, clear of the tray, Fire and both forts. Everywhere it hides while a finger aims and while the lenses are joined | `M7` at both sizes | `F03` |
+| 4 | m3 Pull into the screen edge bends the angle | Full power is reached before the finger meets the edge (the pull for 100 is 40% of the short side, or the room left toward the edge, never under 64 px). Once the finger is on the edge, the angle keeps the direction it had and only power follows. The anchor no longer slides. Asked 45, got 45.0 at 100 on all three projects | `m3` | `F04` |
+| 5 | M5 Workshop cells 5 px in landscape | Cells are never under 24 px. A short landscape screen puts the grid on the left and the palette and buttons on the right; the screen scrolls when it must | `M5` at both sizes | `F05` |
+| 6 | M8, m5 Couch Duel setup and hand-off cut off | The player cards shrink to the width they have (rows wrap, the name box shrinks, the dice stay). Player 1's crew badges and crest are coloured again (a `.round` rule painted them white). The pinned buttons get a fade so rows under them read as scrolled. Cards and sheets scroll inside the scrim; the hand-off card is compact on a short screen, so READY is fully on screen at 844 x 390 | `M8`, `m5` at both sizes | `F06a`, `F06b` |
+| 7 | M4 Test Yard hands you the Dummy's turn | The far side is a lone Straw Stuffer, so the core's "a side of dummies passes itself" applies; the view treats only side 0 as human there. The round label reads "Test Yard". The rest rule in the Yard is core work | `M4` | `F07` |
+| 8 | m1 "Best shot" names the Rival's shot | The core result has no per-side best shot, so the adapter keeps one per side (damage to the other side only) and the results show the winner's (the better one on a draw). Older saves keep their one best shot on its side | `m1` (duel and unit) | `F08` |
+| 9 | m2 Back from Settings drops into the fight | Confirmed on the current build: Back went straight into the live fight. Back from Settings, by the arrow or the browser Back, now lands on the Pause card, still paused | `m2`, `H1`, `H2` | `F09` |
+| 10 | m12, m14 First load 3.6 MB and a slow "Update ready" | See below | `m12`, `m14` | `F10` |
+
+First load. The playtest's 3.6 MB was mostly two downloads of the same files: the page fetched the core (1.07 MB) and the atlas (0.84 MB), and the service worker fetched both again with a cache-busting revision. Now the core sits in a content-hashed folder (`core/<hash>/`), every file with a hash in its URL is precached with no revision, so the worker's install reuses the copy the page just loaded. The install icons (145 KB) left the precache (the browser fetches them itself). Sound waits: only the first-shot effects load at the Play tap, the other effects 20 s later, the battle music base after the first-shot effects, and its Stir and Peril layers at least 15 s later (they join on a bar line). The @2x atlas (1.9 MB) waits 60 s in the very first fight. Map and Workshop art live in the one @1x atlas page the first fight needs, so there is nothing separate to lazy load there. Measured on a phone profile (390 x 844, 3x, gzip as the host serves it), fresh install:
+
+| Point | Before | After |
+|---|---|---|
+| Title ready | 1.4 MB | 1.4 MB |
+| 1-1 ready to aim | 5.0 MB, 57 requests | 1.5 MB, 46 requests |
+| 10 s into 1-1 | 7.5 MB | 2.3 MB (incl. music base and install icons) |
+
+"Update ready". The app now asks for a new version as soon as it registers the worker, and again when it comes back to the front. With the small, hash-keyed precache a new build installs almost at once: the chip showed 0.2 to 0.4 s after the title in the after screenshots, and the test requires under 2 s. It shows on the title, the map and Modes, never in a fight.
+
+Core fields. The adapter also reads the fields the core work adds for these findings, when the core sends them: `hud.fire` (Fire lit or grey, with its `text`), `hud.shots[].text`, `result.best_shot` (the winner's) and `hud.fatigue_in` (the round label then says "Fatigue in 3", "2", "1" before round 10, for M2). Against a core without them, the web-side fallbacks in the table apply. The suite passed with the core built at the start of this work and again with one built from the core work in progress, which sends those fields.
+
+Not changed here: m4 (where to press to aim), m6, m7, m8 to m11, m13, m15 and the polish list.
+
+## 7. Core fixes
+
+Scope: `core/` and `content/` only. Rules version 3 (`cp_version().rules`), so saves from rules version 2 do not resume. Every change is in `core/API.md` ("Changes for QA playtest 1"). Regression tests are in `core/castle-core/tests/qa_playtest_1.rs`. `cargo fmt`, `clippy -D warnings`, `cargo test --workspace`, `scripts/build-wasm.sh` and `scripts/run-golden.sh` pass; fixtures and golden hashes were regenerated, and native and Wasm goldens match.
+
+| # | Finding | What changed in the core | Test |
+|---|---|---|---|
+| 1 | M2 Round 10 ends the fight with no warning, as "Double Pop, the Squall finished your kettle" | Fatigue still starts at round 10 and still drops blocks that no longer stand, but those falls and their crush stop at 1 HP: Fatigue alone never pops a kettle, never Bonks a Hob and never ends a fight. The collapse plays as normal `collapse` (with `why: "fatigue"`), `break`, `hit` and `drop` events at the round 10 start, so apps can animate it. New `fatigue_warning` event at round 9 and `hud.fatigue`, `hud.fatigue_round`, `hud.fatigue_in` for a "Fatigue next round" banner. A fight where both sides fall to one blow outside the Squall is no longer called `double_pop`; `double_pop` now only means a Squall hit popped both kettles | `qa_m2_the_round_10_fatigue_collapse_never_ends_the_fight` (the QA case on 1-4: round 9 of 15, both forts hurt, Marge on 54 HP, the Rival's last Hob on 45 HP; it ended the fight before the fix), `qa_m2_fatigue_is_announced_a_round_ahead`, `qa_m2_a_double_knockout_outside_the_squall_is_not_called_a_squall`, review test `m1_a_fatigue_collapse_stops_short_of_popping_a_kettle` |
+| 2 | M1 Fire lit and dead on a rest turn | At each turn start, and on `pick_hob`, a picked shot that cannot fire (Rest, Knack used up, shell spent) switches to the Plain Shot, with a `shot_switch` event. `hud.fire` (`ready`, `why`, `text`) says whether Fire may be lit. Every chip in `hud.shots` with `ready: false` has a `why` key and a `text` line. A refused `fire` spends nothing and replies `reason`, `detail` ("Marge Dumpling needs a rest: Plain Shot only"), `shot`, `hob` and `ready_shot` (`"plain"` when that would fire). `pick_shot` and `pick_hob` replies carry `ready` and `why` | `qa_m1_a_rest_turn_switches_the_picked_knack_to_the_plain_shot` |
+| 3 | M4 Test Yard hands you the Dummy's turn | In `test_yard` side 1 is always the Dummy side: its crew is Straw Stuffers whatever the setup sends (the web setup sent a human side with the level's Rival crew), and its turn passes itself. The player always fires first. Endless uses: Knacks and Trick Shells are not spent and no Hob rests. No round cap, no Squall, no Fatigue, no win | `qa_m4_the_test_yard_never_hands_the_player_the_dummy_turn` (20 shots, the turn is always side 0's) |
+| 4 | m1 "Best shot" names the Rival's shot | `result.stats[i].best_shot` per side and `result.best_shot` (the winner's): side, Hob, shot, names, angle, power, round, damage to the other side. The blow that ends a fight now counts in the shot stats (it was dropped, so `hits` and the best shot missed the winning shot) | `qa_m1_best_shot_belongs_to_its_side` |
+| 5 | M6 Retry replays the identical fight | Setup `attempt` (0 for the first try, 1 for the first Retry, …) is mixed into the seed: same rules, new fronts, Squall side, draft and AI rolls. Ignored in `daily`, so the Daily Dust-up stays one fight per date. The apps need to send it: the web app now sends the same seed (`hashSeed(level)`) on every try | `qa_m6_a_retry_is_a_new_fight_but_the_daily_is_fixed` |
+| 6 | M6 The Fair curve in Region 1 | See below | `cargo run --release -p castle-core --example winrate -- 40 fair` |
+
+Balance. Measured with a new bot, `core/castle-core/examples/winrate.rs`, that plays like the QA script: it fires a Hob that can fire, its Knack when ready (else a Trick Shell, else the Plain Shot), aims at the weakest Rival Hob (the cage on 1-7, Plain Shots only once Hetty is hurt), solves the arc with probes and adds aim error that shrinks as it corrects from its last Pin. It does not read Lean Lines, Walk or use Doodads. Its shots hurt the Rival fort 70 to 90% of the time, as the QA script's did. 40 battles per level, Rival on Fair, a new seed each battle. The player crew is the one the web app seats (for 1-9 and 1-10 that is Marge, Quill, Jax and Grub; the level files now list the crew in that order). "Before" is the core and content of the playtest build, with the same bot.
+
+| Level | Diff (05) | Before: win % | After: win % | After: median round |
+|---|---|---|---|---|
+| 1-1 First Lump | 1 | 95 | 100 | 6 |
+| 1-2 Two Hats | 1 | 42 | 85 | 10 |
+| 1-3 Kettle on the Knoll | 1 | 77 | 97 | 10 |
+| 1-4 Breezy Tops | 2 | 67 | 90 | 11 |
+| 1-5 The Big One | 2 | 55 | 82 | 11 |
+| 1-6 Roof Trouble | 2 | 42 | 80 | 12 |
+| 1-7 Hetty in a Jam (Rescue) | 2 | 97 (5 rounds) | 80 (8 rounds) | 8 |
+| 1-8 Rummage Sale | 3 | 42 | 77 | 15 |
+| 1-9 Over Loaf Hill | 3 | 35 | 65 | 15 |
+| 1-10 The Topiary Keep (boss) | 4 | 47 | 55 | 15 |
+
+What changed:
+
+- Rival aim grade now means something. Grades 1 and 2 (Region 1) aim wider (220% and 160% of the preset's error, was 140% and 120%) and correct from their Pins more slowly (45% and 70%). Before, grade 1 and 2 played almost the same as 3: the Rival found its range in two shots. Skirmish and later regions (grade 3 and up) are unchanged.
+- New level fields `rival.knack_uses` (0 to 2) and `rival.hp_pct` (50 to 200), also allowed on `player`. Region 1 uses them so green Rivals hold back: 1-2 no Rival Knacks and Rival Hobs at 55% HP (the Rival's Lobber did most of the harm); 1-5 Rival Hobs 85%; 1-6 one Knack each, 85%; 1-8 and 1-9 one Knack each, 70%. 1-1, 1-3, 1-4 and the boss keep their crews; they moved with the aim grade change alone.
+- 1-7: the three cage bars have 80 HP (was 50), so one Grand Dumpling and one Sunspear no longer free Hetty. A careful player needs about 6 to 8 rounds, the Rival gets turns, and "Free her by Round 6" is a real goal. Big blasts on the cage can now Bonk Hetty, as the level card says.
+- 1-9 and 1-10 list the player crew in roster order, so the core's default crew is the one the app seats.
+
+Notes. The bot's losses on the QA's single seed per level (the web app's `hashSeed(level)`, the same on every Retry) differ from its average over many seeds: on that seed it now wins 1-10 in 83% of its runs and 1-2 in 73%. That is why the playtest lost 1-10 four times in a row, and why the Retry seed matters. The bot found 1-6 hard (42%), not a walk: the playtest's 1-6 Rival missed six shots on one seed; across 40 seeds its two Lobbers on the high slope Bonk the player's crew more often than not. Rounds run long for this bot (median 10 to 15), because it does not plan collapses; a player who reads Lean Lines ends fights sooner.
+
+For the apps: send `attempt` on Retry; light Fire from `hud.fire`; show `fire` refusals (`detail`); show "Best shot" from `result.best_shot`; play the round 10 `collapse` events (`why: "fatigue"`) and the `fatigue_warning` banner; the Test Yard no longer needs a lone Straw Stuffer from the app.

@@ -27,6 +27,9 @@ test('H1: Settings from Pause while a shot flies, then Back, carries on with the
   expect(after.round).toBe(before.round);
   expect(after.tick).toBeGreaterThanOrEqual(before.tick);
   expect(after.tick).toBeLessThan(before.tick + 240);
+  // Back lands on the Pause card (QA playtest 1, m2); Resume lets the shot fly on.
+  await expect(page.locator('.pause-card')).toBeVisible();
+  await page.getByRole('button', { name: 'Resume' }).click();
   await expect.poll(async () => (await snap(page)).pins.length, { timeout: 20_000 }).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
@@ -62,11 +65,15 @@ test('H2: browser Back from Settings (opened from Pause) returns to the paused f
   await expect(page.locator('.screen.settings')).toBeVisible();
   await page.goBack();
   await expect(page.locator('.battle')).toBeVisible();
+  // Back from Settings lands on the Pause card it was opened from (QA playtest 1, m2).
+  await expect(page.locator('.pause-card')).toBeVisible();
   const after = await snap(page);
   expect(after.round).toBe(before.round);
   expect(after.pins.length).toBe(before.pins.length);
   expect(after.tick).toBe(before.tick);
-  // And Back again in the fight opens Pause, never leaves it.
+  // Back again closes Pause, and once more opens it: it never leaves the fight.
+  await page.goBack();
+  await expect(page.locator('.pause-card')).toHaveCount(0);
   await page.goBack();
   await expect(page.locator('.pause-card')).toBeVisible();
   await expect(page.locator('.battle')).toBeVisible();
