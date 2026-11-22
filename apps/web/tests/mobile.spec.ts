@@ -69,3 +69,17 @@ test('landscape: aim previews do not pile up on the field (the lens is cleared u
   // Six different arcs piled up would be several times one arc.
   expect(six).toBeLessThan(one * 1.8 + 400);
 });
+
+test('aim starts only from your own fort: a drag in open sky pans, it never aims', async ({ page }) => {
+  // Owner rule: pressing anywhere on the field used to start an aim.
+  await startLevel1(page);
+  const before = (await snap(page)).hud.aim;
+  const box = (await page.locator('canvas').first().boundingBox())!;
+  const x = box.x + box.width * 0.55, y = box.y + box.height * 0.2; // open sky between the forts
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let k = 1; k <= 20; k++) await page.mouse.move(x - k * 5, y + k * 3);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  expect((await snap(page)).hud.aim).toEqual(before);
+});

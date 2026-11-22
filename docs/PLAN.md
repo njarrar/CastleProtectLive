@@ -42,7 +42,7 @@ Art style: "patchwork storybook". Round chunky shapes, warm plum outlines, flat 
 | Part | Rule |
 |---|---|
 | Turns | Strict alternating turns. Each turn: an optional **Walk** (costs Steam), then one **Action**. No turn timer by default |
-| Aim | Drag anywhere on the field to set angle and power. Lifting your finger does not fire; a big Fire button does. A Fine Tune pad and exact numbers are always on screen |
+| Aim | Press on your own fort and drag to set angle and power (a press elsewhere pans the camera). Lifting your finger does not fire; a big Fire button does. A Fine Tune pad and exact numbers are always on screen |
 | Aim help | The preview shows the first 30% of the arc (45% and 60% with upgrades). Your last two shots stay on screen as a **Ghost** with impact **Pins**. **Recall** restores an old aim once |
 | Wind | Holds for 3 rounds (a **Weather Front**). The next front is shown in advance, free |
 | Your fort | Blocks of 5 materials on a grid, crew rooms (**Nooks**) with gun slots (**Loopholes**), a protected **Kettle Room**, and a bottom row (**Footing**) that cannot be dug, which blocks the "dig out the base" trick |

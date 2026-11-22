@@ -904,6 +904,21 @@ export function battleScreen(app: App, route: Route): Screen {
   }
   const canAim = () => snap.phase === 'plan' && (snap.sides[snap.hud.active].human || setup.mode === 'yard') && !paused && !handoffOpen;
 
+  /** Aiming starts only from your own fort (owner rule): a press on the fort, or within about two
+   *  blocks of it, or within 48 px of the picked Hob. A press anywhere else pans the camera. */
+  function onOwnFort(l: { rect: Rect; cam: Cam }, px: number, py: number): boolean {
+    const f = snap.forts?.[snap.hud.active];
+    if (!f) return true;
+    const [wx, wy] = toWorld(l.rect, l.cam, px, py);
+    const m = 32;
+    const inX = wx >= f.x - m && wx <= f.x + f.w + m;
+    const inY = wy >= Math.min(f.y, f.y - f.h) - m && wy <= Math.max(f.y, f.y + f.h) + m;
+    if (inX && inY) return true;
+    const hb = snap.hobs.find((x) => x.id === snap.hud.hob);
+    if (hb) { const [hx, hy] = toScreen(l.rect, l.cam, hb.x, hb.y); if (Math.hypot(px - hx, py - hy) <= 48) return true; }
+    return false;
+  }
+
   canvas.addEventListener('pointerdown', (e) => {
     unlockAudio();
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -922,7 +937,7 @@ export function battleScreen(app: App, route: Route): Screen {
     const base: Gesture = { id: e.pointerId, lens: l.id, mode: 'maybe-pan', x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: performance.now() };
     if (e.button === 1 || e.button === 2) { drag = { ...base, mode: 'pan' }; return; }
     if (l.id === 'strip') { drag = { ...base, mode: 'strip' }; return; }
-    if ((l.id === 'wide' || l.id === 'bottom') && canAim()) drag = { ...base, mode: 'maybe-aim', prevAim: snap.hud.aim ? { ...snap.hud.aim } : undefined };
+    if ((l.id === 'wide' || l.id === 'bottom') && canAim() && onOwnFort(l, e.clientX, e.clientY)) drag = { ...base, mode: 'maybe-aim', prevAim: snap.hud.aim ? { ...snap.hud.aim } : undefined };
     else drag = base;
     const g = drag;
     clearTimeout(leanT);

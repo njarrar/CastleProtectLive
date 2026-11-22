@@ -285,7 +285,7 @@ Three inputs at the core: angle, power, fire [02c §5.1]. Numbers always visible
 
 **Touch (default)**
 
-- **Aim Drag.** Put a finger anywhere on the field that is not HUD and drag. Default is pull-back (drag away from the target, like a sling). A setting flips it to point mode. Drag direction sets angle; drag length sets power. Full power is a drag of 40% of screen height, whatever the zoom, so the gesture feels the same zoomed in or out.
+- **Aim Drag.** Put a finger on your own fort (or within about two blocks of it, or on the picked Hob) and drag; a press anywhere else pans the camera (owner rule after playtest). Default is pull-back (drag away from the target, like a sling). A setting flips it to point mode. Drag direction sets angle; drag length sets power. Full power is a drag of 40% of screen height, whatever the zoom, so the gesture feels the same zoomed in or out.
 - **Release does not fire.** Lifting the finger only sets the aim. This kills the "slipped finger shot into the ground" complaint [02 §2.3, 02 §2.10, 02c §5.10].
 - **Fine Tune.** After a drag, a small pad shows next to the readouts: angle -/+ (0.1 per tap, hold to repeat with ramp), power -/+ (1 per tap). Or drag on the readout strip itself at 1/5 gain [02 §5.8, 02d §1.4 "dial for angle and power"].
 - **Fire button.** Large (at least 72 x 72 pt), bottom right by default, away from the drag zone. Movable in settings; mirrors for left-hand mode [02 §5.12, 02 §6.17]. Greyed when the picked Hob cannot fire (resting or a buried Loophole).
