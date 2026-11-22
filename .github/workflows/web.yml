@@ -46,7 +46,8 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, which Playwright 1.52 cannot install browsers on.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     # Pages serves the site under /<repo name>/. Set for the whole job so the build, vite
     # preview and the Playwright baseURL all use the same base.
