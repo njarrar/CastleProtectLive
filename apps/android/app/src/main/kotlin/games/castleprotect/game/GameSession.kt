@@ -213,6 +213,7 @@ class GameSession(app: Application) : AndroidViewModel(app) {
                 SaveStore.Loaded.Missing -> {}
             }
             val s = save
+            if (audio.unlocked) audio.menuMusic()
             ui {
                 content = c; progress = s.pennants; buttons = s.buttons; canResume = s.battle != null; notice = msg
                 lastSpec = s.last?.let { BattleSpec(it.setup, it.seed, it.kind, it.level, it.seats) }
@@ -222,7 +223,7 @@ class GameSession(app: Application) : AndroidViewModel(app) {
 
     // ---- lifecycle -------------------------------------------------------
 
-    fun onStart() { foreground = true; lastStepAt = 0L; audio.onStart(); post { } }
+    fun onStart() { foreground = true; lastStepAt = 0L; audio.onStart(); post { resetLoops(); dirty = game != null } }
 
     /** The process may die any time after this returns, so the final save is written here, synchronously. */
     fun onStop() {
@@ -805,7 +806,11 @@ class GameSession(app: Application) : AndroidViewModel(app) {
             else -> audio.menuMusic(quiet = lastResult?.let { r -> r.winner >= 0 && !frame.hud.human(r.winner) } == true)
         }
         if (to != Screen.BATTLE) audio.stopLoops()
+        post { resetLoops() }
     }
+
+    /** Sim thread: the loops start again from the next frame (after a screen change or a return to the app). */
+    private fun resetLoops() { windOn = -1; squallOn = -1; whistleSemis = Float.NaN }
 
     /** The first Play tap: sound may start (no sound before it on a first launch). */
     fun firstTap() { audio.unlock() }
