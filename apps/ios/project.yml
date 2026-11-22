@@ -1,0 +1,134 @@
+# XcodeGen spec for the Castle Protect iOS app. Generate with `xcodegen generate`.
+# The .xcodeproj is not checked in.
+name: CastleProtect
+options:
+  bundleIdPrefix: games.castleprotect
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    CODE_SIGN_STYLE: Automatic
+    # The CastleCoreFFI module map and libcastle_ffi.a, written by scripts/core-module.sh.
+    SWIFT_INCLUDE_PATHS: $(inherited) $(BUILT_PRODUCTS_DIR)/CastleCoreFFI
+    LIBRARY_SEARCH_PATHS: $(inherited) $(BUILT_PRODUCTS_DIR)/CastleCoreFFI
+
+targets:
+  CastleProtect:
+    type: application
+    platform: iOS
+    sources:
+      - path: CastleProtect
+      # Game art, menu data and the core's fixtures, copied as folders into the bundle.
+      - path: ../../assets/atlas
+        type: folder
+        buildPhase: resources
+        optional: true
+      - path: ../../assets/sprites
+        type: folder
+        buildPhase: resources
+        optional: true
+      - path: ../../assets/manifest.json
+        buildPhase: resources
+        optional: true
+      - path: ../../assets/sounds
+        type: folder
+        buildPhase: resources
+        optional: true
+      - path: ../../content
+        type: folder
+        buildPhase: resources
+        optional: true
+      - path: ../../core/fixtures
+        type: folder
+        buildPhase: resources
+        optional: true
+    preBuildScripts:
+      - name: Core module map
+        path: scripts/core-module.sh
+        basedOnDependencyAnalysis: false
+    info:
+      path: Config/Info.plist
+      properties:
+        CFBundleDisplayName: Castle Protect
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchLogo
+          UIImageRespectsSafeAreaInsets: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIRequiresFullScreen: false
+        UIStatusBarStyle: UIStatusBarStyleDarkContent
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: games.castleprotect.app
+        PRODUCT_NAME: CastleProtect
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+
+  CastleProtectTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/CastleProtectTests
+      - path: ../../core/fixtures
+        type: folder
+        buildPhase: resources
+        optional: true
+    dependencies:
+      - target: CastleProtect
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: games.castleprotect.tests
+
+  CastleProtectUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/CastleProtectUITests
+    dependencies:
+      - target: CastleProtect
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: games.castleprotect.uitests
+
+schemes:
+  CastleProtect:
+    build:
+      targets:
+        CastleProtect: all
+        CastleProtectTests: [test]
+        CastleProtectUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - CastleProtectTests
+        - CastleProtectUITests

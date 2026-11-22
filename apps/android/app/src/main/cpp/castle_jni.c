@@ -1,103 +1,109 @@
 /*
- * JNI shim: Kotlin NativeCore <-> the Rust core's C ABI (core/castle-ffi/include/castle_core.h).
- * No game logic lives here. Strings cross as UTF-8 JSON.
+ * JNI shim: Kotlin games.castleprotect.core.CoreJni <-> the Rust core's C ABI
+ * (core/castle-ffi/include/castle_core.h, documented in core/API.md).
+ * No game logic lives here.
  *
- * Expected C ABI (checked by app/build.gradle.kts before this file is compiled):
- *   CastleCore* castle_new(void);
- *   void        castle_free(CastleCore*);
- *   char*       castle_command(CastleCore*, const char* json);   // reply JSON, free with castle_string_free
- *   void        castle_advance(CastleCore*, uint32_t ms);
- *   char*       castle_snapshot(CastleCore*);
- *   char*       castle_query(CastleCore*, const char* json);
- *   char*       castle_save(CastleCore*);
- *   int/bool    castle_load(CastleCore*, const char* data);
- *   void        castle_string_free(char*);
+ * Text crosses as byte arrays of standard UTF-8 in both directions. Kotlin sends
+ * NUL terminated UTF-8 (String.toByteArray plus one 0 byte); the shim returns the
+ * bytes the core wrote. jstring and GetStringUTFChars are never used, because they
+ * carry modified UTF-8, which breaks characters outside the BMP.
+ *
+ * Every char* the core returns goes back through cp_free_string on every path.
+ * Every JNI call that can fail is checked; on failure a Java exception is left
+ * pending (OutOfMemoryError from the VM) and NULL or 0 is returned.
  */
 #include <jni.h>
 #include <stdint.h>
-#include <stddef.h>
+#include <string.h>
 #include "castle_core.h"
 
-#define CORE(h) ((CastleCore *)(intptr_t)(h))
-#define FN(name) Java_games_castleprotect_core_NativeCore_##name
-#define FNC(name) Java_games_castleprotect_core_NativeCore_00024Companion_##name
+#define GAME(h) ((CpGame *)(intptr_t)(h))
+#define FN(name) Java_games_castleprotect_core_CoreJni_##name
 
-/* Rust hands back standard UTF-8; NewStringUTF wants modified UTF-8, so build the String from bytes. */
-static jstring take_string(JNIEnv *env, char *s) {
+/* Copies a core string into a new byte[] and frees it. NULL in gives NULL out. */
+static jbyteArray take_bytes(JNIEnv *env, char *s) {
     if (s == NULL) return NULL;
-    size_t n = 0;
-    while (s[n] != 0) n++;
-    jstring out = NULL;
-    jbyteArray bytes = (*env)->NewByteArray(env, (jsize)n);
-    if (bytes != NULL) {
-        (*env)->SetByteArrayRegion(env, bytes, 0, (jsize)n, (const jbyte *)s);
-        jclass cls = (*env)->FindClass(env, "java/lang/String");
-        jmethodID ctor = (*env)->GetMethodID(env, cls, "<init>", "([BLjava/lang/String;)V");
-        jstring utf8 = (*env)->NewStringUTF(env, "UTF-8");
-        out = (jstring)(*env)->NewObject(env, cls, ctor, bytes, utf8);
-        (*env)->DeleteLocalRef(env, utf8);
-        (*env)->DeleteLocalRef(env, cls);
-        (*env)->DeleteLocalRef(env, bytes);
+    size_t n = strlen(s);
+    jbyteArray out = NULL;
+    if (n <= 0x7fffffff) {
+        out = (*env)->NewByteArray(env, (jsize)n);
+        if (out != NULL) {
+            (*env)->SetByteArrayRegion(env, out, 0, (jsize)n, (const jbyte *)s);
+            if ((*env)->ExceptionCheck(env)) {
+                (*env)->DeleteLocalRef(env, out);
+                out = NULL;
+            }
+        }
     }
-    castle_string_free(s);
+    cp_free_string(s);
     return out;
 }
 
-/* Kotlin strings here are JSON or save text without embedded NULs or supplementary-plane
- * characters outside string escapes, so modified UTF-8 equals UTF-8 for them. */
-#define WITH_UTF(jstr, cvar, body) \
-    do { const char *cvar = (*env)->GetStringUTFChars(env, jstr, NULL); \
-         if (cvar != NULL) { body; (*env)->ReleaseStringUTFChars(env, jstr, cvar); } } while (0)
+/*
+ * Gives a pointer to the NUL terminated UTF-8 in a Kotlin byte[]. The array always
+ * ends in a 0 byte (NativeCore adds it); a missing one is treated as a refusal.
+ * Release with release_bytes.
+ */
+static const char *borrow_bytes(JNIEnv *env, jbyteArray arr) {
+    if (arr == NULL) return NULL;
+    jsize n = (*env)->GetArrayLength(env, arr);
+    if (n <= 0) return NULL;
+    jbyte *p = (*env)->GetByteArrayElements(env, arr, NULL);
+    if (p == NULL) return NULL;
+    if (p[n - 1] != 0) {
+        (*env)->ReleaseByteArrayElements(env, arr, p, JNI_ABORT);
+        return NULL;
+    }
+    return (const char *)p;
+}
 
-JNIEXPORT jlong JNICALL FN(nativeNew)(JNIEnv *env, jclass cls) {
+static void release_bytes(JNIEnv *env, jbyteArray arr, const char *p) {
+    if (p != NULL) (*env)->ReleaseByteArrayElements(env, arr, (jbyte *)p, JNI_ABORT);
+}
+
+JNIEXPORT jlong JNICALL FN(nativeNew)(JNIEnv *env, jclass cls, jbyteArray setup, jlong seed) {
+    (void)cls;
+    const char *s = borrow_bytes(env, setup);
+    if (s == NULL) return 0;
+    /* NULL content: the content built into the core. */
+    CpGame *g = cp_new(NULL, s, (uint64_t)seed);
+    release_bytes(env, setup, s);
+    return (jlong)(intptr_t)g;
+}
+
+JNIEXPORT jbyteArray JNICALL FN(nativeVersion)(JNIEnv *env, jclass cls) {
+    (void)cls;
+    return take_bytes(env, cp_version());
+}
+
+JNIEXPORT jbyteArray JNICALL FN(nativeLastError)(JNIEnv *env, jclass cls, jlong h) {
+    (void)cls;
+    return take_bytes(env, cp_last_error(GAME(h)));
+}
+
+JNIEXPORT jbyteArray JNICALL FN(nativeCommand)(JNIEnv *env, jclass cls, jlong h, jbyteArray json) {
+    (void)cls;
+    if (h == 0) return NULL;
+    const char *s = borrow_bytes(env, json);
+    if (s == NULL) return NULL;
+    char *r = cp_command(GAME(h), s);
+    release_bytes(env, json, s);
+    return take_bytes(env, r);
+}
+
+JNIEXPORT jbyteArray JNICALL FN(nativeStep)(JNIEnv *env, jclass cls, jlong h, jint ticks) {
+    (void)cls;
+    if (h == 0) return NULL;
+    return take_bytes(env, cp_step(GAME(h), ticks < 0 ? 0 : (int32_t)ticks));
+}
+
+JNIEXPORT jbyteArray JNICALL FN(nativeSnapshot)(JNIEnv *env, jclass cls, jlong h) {
+    (void)cls;
+    if (h == 0) return NULL;
+    return take_bytes(env, cp_snapshot(GAME(h)));
+}
+
+JNIEXPORT void JNICALL FN(nativeFree)(JNIEnv *env, jclass cls, jlong h) {
     (void)env; (void)cls;
-    return (jlong)(intptr_t)castle_new();
-}
-JNIEXPORT jlong JNICALL FNC(nativeNew)(JNIEnv *env, jobject self) { return FN(nativeNew)(env, (jclass)self); }
-
-JNIEXPORT jstring JNICALL FN(nativeVersion)(JNIEnv *env, jclass cls) {
-    (void)env; (void)cls;
-    return NULL;
-}
-JNIEXPORT jstring JNICALL FNC(nativeVersion)(JNIEnv *env, jobject self) { return FN(nativeVersion)(env, (jclass)self); }
-
-JNIEXPORT void JNICALL FN(nativeFree)(JNIEnv *env, jobject self, jlong h) {
-    (void)env; (void)self;
-    if (h != 0) castle_free(CORE(h));
-}
-
-JNIEXPORT jstring JNICALL FN(nativeCommand)(JNIEnv *env, jobject self, jlong h, jstring json) {
-    (void)self;
-    char *r = NULL;
-    WITH_UTF(json, c, r = (char *)castle_command(CORE(h), c));
-    return take_string(env, r);
-}
-
-JNIEXPORT void JNICALL FN(nativeAdvance)(JNIEnv *env, jobject self, jlong h, jint ms) {
-    (void)env; (void)self;
-    castle_advance(CORE(h), (uint32_t)(ms < 0 ? 0 : ms));
-}
-
-JNIEXPORT jstring JNICALL FN(nativeSnapshot)(JNIEnv *env, jobject self, jlong h) {
-    (void)self;
-    return take_string(env, (char *)castle_snapshot(CORE(h)));
-}
-
-JNIEXPORT jstring JNICALL FN(nativeQuery)(JNIEnv *env, jobject self, jlong h, jstring json) {
-    (void)self;
-    char *r = NULL;
-    WITH_UTF(json, c, r = (char *)castle_query(CORE(h), c));
-    return take_string(env, r);
-}
-
-JNIEXPORT jstring JNICALL FN(nativeSave)(JNIEnv *env, jobject self, jlong h) {
-    (void)self;
-    return take_string(env, (char *)castle_save(CORE(h)));
-}
-
-JNIEXPORT jboolean JNICALL FN(nativeLoad)(JNIEnv *env, jobject self, jlong h, jstring data) {
-    (void)self;
-    jboolean ok = JNI_FALSE;
-    WITH_UTF(data, c, ok = castle_load(CORE(h), c) ? JNI_TRUE : JNI_FALSE);
-    return ok;
+    if (h != 0) cp_free(GAME(h));
 }

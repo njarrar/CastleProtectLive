@@ -1,30 +1,149 @@
 package games.castleprotect.game
 
-import android.content.Context
-import android.util.AtomicFile
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 
 /**
- * Local save. The core owns the format; the app only writes the bytes atomically
- * (temp file, then rename, through AtomicFile) so a kill mid-write cannot corrupt it.
+ * The local save: campaign progress plus the battle in play.
+ *
+ * The core keeps no save of its own (core/API.md has no save call), so a battle in
+ * play is stored the way the core's golden replays are: the setup, the seed and the
+ * core's own command log (`{"cmd":"log"}`). Loading starts the battle again and replays
+ * the log, so the core rebuilds the exact state. The app adds no rules to it.
+ *
+ * Safety rules (review H1, H2, H3):
+ *  - Writes go to a temp file, are synced, then renamed over the save. The previous
+ *    good save is kept as `<name>.prev`.
+ *  - A save that cannot be read is never written over. It is moved aside as
+ *    `<name>.bad-<time>` and the backup is tried; nothing is written until a load has
+ *    worked or the bad file has been set aside.
+ *  - The debug fixture player uses its own file name, so it never touches a real save.
+ *
+ * Plain java.io so the same code runs in JVM unit tests.
  */
-class SaveStore(ctx: Context) {
-    private val file = AtomicFile(File(ctx.filesDir, "save/castle.sav").also { it.parentFile?.mkdirs() })
+class SaveStore(dir: File, name: String) {
+    private val main = File(dir, name)
+    private val prev = File(dir, "$name.prev")
+    private val tmp = File(dir, "$name.tmp")
+    private val dir0 = dir
 
-    fun read(): String? = try { String(file.readFully(), Charsets.UTF_8) } catch (e: Exception) { null }
+    sealed class Loaded {
+        object Missing : Loaded()
+        class Ok(val data: SaveData, val fromBackup: Boolean) : Loaded()
+        /** Neither the save nor its backup could be read. They were moved aside. */
+        class Unreadable(val movedTo: List<File>, val why: String) : Loaded()
+    }
 
+    @Volatile var readOnly = true
+        private set
+
+    /** Reads the save. Must be called once before [write] is allowed. */
     @Synchronized
-    fun write(data: String) {
-        if (data.isEmpty()) return
-        var out: java.io.FileOutputStream? = null
-        try {
-            out = file.startWrite()
-            out.write(data.toByteArray(Charsets.UTF_8))
-            file.finishWrite(out)
+    fun load(): Loaded {
+        tmp.delete()
+        if (!main.exists() && !prev.exists()) { readOnly = false; return Loaded.Missing }
+        val first = tryRead(main)
+        if (first.first != null) { readOnly = false; return Loaded.Ok(first.first!!, false) }
+        val moved = ArrayList<File>()
+        val why = first.second
+        if (main.exists()) moveAside(main)?.let { moved.add(it) }
+        val second = tryRead(prev)
+        if (second.first != null) {
+            // Restore the backup as the main save, so the next write keeps a good .prev.
+            try { prev.copyTo(main, overwrite = true) } catch (e: IOException) { }
+            readOnly = false
+            return Loaded.Ok(second.first!!, true)
+        }
+        if (prev.exists()) moveAside(prev)?.let { moved.add(it) }
+        readOnly = false
+        return Loaded.Unreadable(moved, why ?: second.second ?: "unknown")
+    }
+
+    private fun tryRead(f: File): Pair<SaveData?, String?> {
+        if (!f.exists()) return null to "missing"
+        return try {
+            val text = f.readBytes().toString(Charsets.UTF_8)
+            SaveData.parse(text) to null
         } catch (e: Exception) {
-            if (out != null) file.failWrite(out)
+            null to (e.message ?: e.javaClass.simpleName)
         }
     }
 
-    fun clear() = file.delete()
+    private fun moveAside(f: File): File? {
+        val to = File(dir0, "${f.name}.bad-${System.currentTimeMillis()}")
+        return if (f.renameTo(to)) to else null
+    }
+
+    /** Writes the save atomically, keeping the last good one as `.prev`. Returns false on failure. */
+    @Synchronized
+    fun write(data: SaveData): Boolean {
+        if (readOnly) return false
+        val bytes = data.toJson().toByteArray(Charsets.UTF_8)
+        try {
+            dir0.mkdirs()
+            FileOutputStream(tmp).use { out -> out.write(bytes); out.fd.sync() }
+            if (main.exists()) {
+                prev.delete()
+                if (!main.renameTo(prev)) main.copyTo(prev, overwrite = true)
+            }
+            if (!tmp.renameTo(main)) { tmp.copyTo(main, overwrite = true); tmp.delete() }
+            return true
+        } catch (e: IOException) {
+            tmp.delete()
+            return false
+        }
+    }
+}
+
+/** A battle in play, as the core can rebuild it. */
+data class SavedBattle(
+    val setup: String, val seed: Long, val kind: String, val level: String, val seats: String,
+    /** The core's command log, as raw JSON array text. */
+    val log: String,
+    /** The core version that wrote it, from cp_version. */
+    val core: String,
+)
+
+/**
+ * Everything the app saves. [pennants]: per campaign level, a bit per Pennant earned
+ * (bit 0 is the first Pennant, which is the win).
+ */
+data class SaveData(
+    val pennants: Map<String, Int> = emptyMap(),
+    val battle: SavedBattle? = null,
+    /** The last battle started, for Rematch after a cold start. */
+    val last: SavedBattle? = null,
+) {
+    fun toJson(): String {
+        val o = JSONObject().put("v", VERSION)
+        val p = JSONObject(); for ((k, v) in pennants) p.put(k, v); o.put("pennants", p)
+        battle?.let { o.put("battle", it.toJson()) }
+        last?.let { o.put("last", it.toJson()) }
+        return o.toString()
+    }
+
+    companion object {
+        const val VERSION = 1
+
+        /** Throws on anything that is not a save this app can read. */
+        fun parse(text: String): SaveData {
+            val o = JSONObject(text)
+            val v = o.getInt("v")
+            if (v > VERSION) throw IOException("save version $v is newer than this app ($VERSION)")
+            val pen = HashMap<String, Int>()
+            o.optJSONObject("pennants")?.let { p -> for (k in p.keys()) pen[k] = p.getInt(k) }
+            return SaveData(pen, o.optJSONObject("battle")?.let { battle(it) }, o.optJSONObject("last")?.let { battle(it) })
+        }
+
+        private fun battle(b: JSONObject) = SavedBattle(
+            b.getString("setup"), b.getLong("seed"), b.getString("kind"), b.getString("level"), b.optString("seats", "one_seat"),
+            b.optJSONArray("log")?.toString() ?: "[]", b.optString("core"),
+        )
+
+        private fun SavedBattle.toJson(): JSONObject = JSONObject().put("setup", setup).put("seed", seed).put("kind", kind).put("level", level)
+            .put("seats", seats).put("log", JSONArray(log)).put("core", core)
+    }
 }
