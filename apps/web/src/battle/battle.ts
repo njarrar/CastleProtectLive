@@ -819,8 +819,10 @@ export function battleScreen(app: App, route: Route): Screen {
       const r0 = layout === 'tall' ? rectOf(lensBottom) : clearRect();
       const [hx, hy] = (() => {
         const hb = snap.hobs.find((x) => x.id === snap.hud.hob);
-        const l = lensRects().find((x) => x.id === 'bottom' || x.id === 'wide')!;
-        return hb ? toScreen(l.rect, l.cam, hb.x, hb.y) : [r0.x + r0.w * 0.3, r0.y + r0.h * 0.6];
+        // While the lenses are joined (just after a shot) there is no bottom lens; fall back to the joined one.
+        const ls = lensRects();
+        const l = ls.find((x) => x.id === 'bottom' || x.id === 'wide') ?? ls[0];
+        return hb && l ? toScreen(l.rect, l.cam, hb.x, hb.y) : [r0.x + r0.w * 0.3, r0.y + r0.h * 0.6];
       })();
       setStyle(hand, 'left', `${hx}px`);
       setStyle(hand, 'top', `${hy}px`);
