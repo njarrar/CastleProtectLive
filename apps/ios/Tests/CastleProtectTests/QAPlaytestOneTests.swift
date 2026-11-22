@@ -408,6 +408,11 @@ final class TestYardTests: XCTestCase {
 
 // MARK: QA layout lessons (M3, M7, m3, M8)
 
+/// The fort's whole width is inside the frame (the frame sits a little above the footing by design).
+private func spans(_ frame: CGRect, _ fort: CGRect) -> Bool {
+    frame.minX <= fort.minX && frame.maxX >= fort.maxX
+}
+
 final class PlanFrameTests: XCTestCase {
     @MainActor
     private func planFrame() throws -> BattleSnapshot {
@@ -425,8 +430,8 @@ final class PlanFrameTests: XCTestCase {
         let rect = Camera.worldRect(for: .both, snap: snap, frame: frame.size)
         XCTAssertEqual(rect, Camera.bothRect(snap))
         XCTAssertGreaterThanOrEqual(Camera.blockPoints(rect, in: frame.size), Camera.minBlockPoints)
-        XCTAssertTrue(rect.contains(Camera.fortRect(0, snap: snap)))
-        XCTAssertTrue(rect.contains(Camera.fortRect(1, snap: snap)), "the 55/45 lean never pushes a fort out")
+        XCTAssertTrue(spans(rect, Camera.fortRect(0, snap: snap)))
+        XCTAssertTrue(spans(rect, Camera.fortRect(1, snap: snap)), "the 55/45 lean never pushes a fort out")
         XCTAssertNil(Camera.rivalEdge(worldRect: rect, snap: snap))
     }
 
@@ -439,11 +444,11 @@ final class PlanFrameTests: XCTestCase {
         XCTAssertLessThan(Camera.blockPoints(Camera.bothRect(snap), in: small), Camera.minBlockPoints)
         let rect = Camera.planRect(snap, frame: small)
         XCTAssertEqual(rect, Camera.ownPlanRect(snap))
-        XCTAssertTrue(rect.contains(Camera.fortRect(0, snap: snap)))
+        XCTAssertTrue(spans(rect, Camera.fortRect(0, snap: snap)))
         XCTAssertEqual(Camera.rivalEdge(worldRect: rect, snap: snap), 1, "the Rival fort is off the right edge")
         snap.activeSide = 1
         let theirs = Camera.planRect(snap, frame: small)
-        XCTAssertTrue(theirs.contains(Camera.fortRect(1, snap: snap)))
+        XCTAssertTrue(spans(theirs, Camera.fortRect(1, snap: snap)))
         XCTAssertEqual(Camera.rivalEdge(worldRect: theirs, snap: snap), -1)
     }
 

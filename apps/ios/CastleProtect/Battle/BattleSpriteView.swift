@@ -969,10 +969,10 @@ enum Camera {
     /// the field (with a little margin).
     static func panned(_ rect: CGRect, by pan: Double, worldW: Double) -> CGRect {
         guard pan != 0 else { return rect }
-        let margin = 120.0
-        let lo = min(rect.minX, -margin)
-        let hi = max(rect.minX, worldW + margin - rect.width)
-        let x = min(max(rect.minX + pan, lo), hi)
+        let margin: CGFloat = 120
+        let lo: CGFloat = min(rect.minX, -margin)
+        let hi: CGFloat = max(rect.minX, CGFloat(worldW) + margin - rect.width)
+        let x: CGFloat = min(max(rect.minX + CGFloat(pan), lo), hi)
         return CGRect(x: x, y: rect.minY, width: rect.width, height: rect.height)
     }
 
