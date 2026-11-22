@@ -48,7 +48,7 @@ class FixtureCore private constructor(private val f: Files) : CoreGame {
             "hash" -> """{"ok":true,"hash":"${current().hash}"}"""
             "terrain_all" -> { first = true; dirty = true; """{"ok":true}""" }
             "pick_hob", "pick_shot", "aim", "recall", "walk", "shove_off", "doodad", "pass",
-            "pick_shell", "quick_pick", "end_draft" -> { log.add(json); dirty = true; """{"ok":true}""" }
+            "pick_shell", "quick_pick", "end_draft", "give_up", "set_wind" -> { log.add(json); dirty = true; """{"ok":true}""" }
             "lean_lines", "shimmer", "validate_blueprint" -> """{"ok":true}"""
             else -> no("unknown_command")
         }

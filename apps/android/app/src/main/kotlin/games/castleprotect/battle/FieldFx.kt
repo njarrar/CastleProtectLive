@@ -329,14 +329,16 @@ class FieldFx(
         for (s in 0..1) {
             val w = walks[s] ?: continue
             w.t += dt
-            legs[s * 2]?.advance(dt) { e -> cue("stomper_${team(s)}_walk", e, 0f, null) }
+            val wx = f.castles.getOrNull(s)?.let { it.x + it.cols * 8f } ?: 0f
+            legs[s * 2]?.advance(dt) { e -> cue("stomper_${team(s)}_walk", e, wx, null) }
             legs[s * 2 + 1]?.advance(dt)
             if (w.t >= w.ms + 120f) { walks[s] = null; legs[s * 2] = null; legs[s * 2 + 1] = null }
         }
         for (s in 0..1) kettle[s]?.advance(dt) { e -> cue("kettle_pop", e, f.castles.getOrNull(s)?.x?.toFloat() ?: 0f, null) }
         for (a in flaps.values) a.advance(dt)
-        for (a in lids.values) a.advance(dt) { e -> cue("pot_lid_raise", e, 0f, null) }
-        for (a in pins.values) a.advance(dt) { e -> cue("fx_pin_p1_drop", e, 0f, null) }
+        val mid = f.mapW / 2f
+        for (a in lids.values) a.advance(dt) { e -> cue("pot_lid_raise", e, mid, null) }
+        for (a in pins.values) a.advance(dt) { e -> cue("fx_pin_p1_drop", e, mid, null) }
         pins.values.removeAll { it.done }
         // Shimmer once every 3 s.
         shimmerT += dt

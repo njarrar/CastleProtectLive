@@ -121,7 +121,7 @@ struct DuelSetupView: View {
             }
             row(options.winBy == .volley ? "Shots" : "Rounds") {
                 Picker("Rounds", selection: $options.rounds) {
-                    ForEach(options.winBy == .volley ? [5, 10, 15] : [12, 15, 18], id: \.self) { r in Text("\(r)").tag(r) }
+                    ForEach(options.winBy == .volley ? BattleSetup.volleyChoices : [12, 15, 18], id: \.self) { r in Text("\(r)").tag(r) }
                 }.pickerStyle(.segmented)
             }
             row("Wind") {
@@ -170,7 +170,7 @@ struct DuelSetupView: View {
             o.names[i] = "Player \(i + 1)"
         }
         if o.winBy == .knockout && ![12, 15, 18].contains(o.rounds) { o.rounds = 15 }
-        if o.winBy == .volley && ![5, 10, 15].contains(o.rounds) { o.rounds = 10 }
+        if o.winBy == .volley && !BattleSetup.volleyChoices.contains(o.rounds) { o.rounds = 10 }
         return o
     }
 }

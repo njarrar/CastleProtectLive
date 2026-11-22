@@ -44,7 +44,7 @@ android {
         minSdk = 26          // Android 8
         targetSdk = 36
         versionCode = providers.gradleProperty("castle.versionCode").map { it.toInt() }.getOrElse(1)
-        versionName = "0.1.0"
+        versionName = "0.2.0"
         // The launcher icon comes from the shared art when it is there, else from the vector in res/.
         manifestPlaceholders["appIcon"] = if (appIconSrc.isFile) "@mipmap/ic_launcher_art" else "@mipmap/ic_launcher"
         if (nativeCore) {
@@ -88,6 +88,8 @@ android {
     sourceSets["test"].kotlin.srcDir("src/test/kotlin")
     testOptions { unitTests.all { it.systemProperty("castle.repoRoot", repoRoot.absolutePath); providers.gradleProperty("castle.hostJni").orNull?.let { d -> it.systemProperty("castle.hostJni", d); it.systemProperty("java.library.path", d) } } }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    // SoundPool and MediaPlayer read audio straight from the APK: keep it stored, not deflated.
+    androidResources { noCompress += listOf("ogg", "m4a") }
     lint { abortOnError = true; checkReleaseBuilds = false; warningsAsErrors = false }
 }
 
@@ -103,7 +105,9 @@ tasks.matching { it.name == "preReleaseBuild" }.configureEach {
 // plus the manifest and any audio. A missing folder is fine: the renderer falls back to shapes.
 val copyCastleAssets by tasks.registering(Sync::class) {
     from(repoRoot.resolve("assets")) {
-        include("manifest.json", "sprites/*@2x.png", "audio/**")
+        // Sprites at @2x, the animation list, and the audio: Opus (.ogg) for Android 10 and up,
+        // AAC (.m4a) for older phones that can not play Opus in Ogg.
+        include("manifest.json", "animations.json", "sprites/*@2x.png", "audio/audio.json", "audio/barks.json", "audio/**/*.ogg", "audio/**/*.m4a")
         exclude("sprites/app_icon*")
     }
     // Menu texts (level names, rivals, shot names) from the shared content folder.

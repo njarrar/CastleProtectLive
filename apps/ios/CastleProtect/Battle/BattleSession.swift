@@ -154,13 +154,6 @@ final class FrameClock: NSObject {
     @objc private func fire() { onFrame() }
 }
 
-/// A short blast flash drawn by the renderer after a `hit` event. View only.
-struct BlastEffect: Equatable {
-    var x: Double
-    var y: Double
-    var big: Bool
-    var start: UInt64
-}
 
 /// One battle on screen: drives the core clock from the display, turns
 /// touches into commands, and hands the latest snapshot to the renderer and
@@ -190,11 +183,15 @@ final class BattleSession: ObservableObject {
 
     /// The newest frame, read by the renderer each draw.
     private(set) var snapshot = BattleSnapshot()
-    /// Bumps whenever `snapshot` or `effects` change, so the renderer skips idle frames.
+    /// Bumps whenever `snapshot` changes, so the renderer skips idle frames.
     private(set) var frameVersion = 0
-    /// Blast flashes still on screen, read by the renderer.
-    private(set) var effects: [BlastEffect] = []
-    var settings = GameSettings()
+    /// View time, hit stop, slow motion, shake and every effect on the field.
+    let fx = FieldFX()
+    var settings = GameSettings() {
+        didSet { applyFxSettings() }
+    }
+    /// A bark subtitle on screen, and its side.
+    @Published private(set) var subtitle: (text: String, side: Int)?
     var isPad = false
     private(set) var stopped = false
 
@@ -209,6 +206,8 @@ final class BattleSession: ObservableObject {
     var onFault: ((BattleSession, String) -> Void)?
     /// Spoken lines (shot results) for VoiceOver.
     var onAnnounce: ((String) -> Void)?
+    /// Each new frame, for loops and music layers.
+    var onFrame: ((BattleSnapshot) -> Void)?
 
     private var clock: FrameClock?
     private var bannerTask: Task<Void, Never>?
@@ -229,6 +228,9 @@ final class BattleSession: ObservableObject {
     /// The newest drag aim not yet sent, and when one was last sent (H8).
     private var pendingAim: (angle: Int, power: Int)?
     private var lastAimSentAt: UInt64 = 0
+    /// Sim time owed after hit stop and slow motion scale the clock (ms).
+    private var simCarry = 0.0
+    private var subtitleTask: Task<Void, Never>?
     /// Aim commands during a drag go out at most this often.
     static let aimInterval: UInt64 = 66_000_000
 
@@ -236,10 +238,31 @@ final class BattleSession: ObservableObject {
         self.game = game
         self.setup = setup
         self.title = title
+        let catalog = game.catalog
+        fx.trailKind = { catalog.trailKind($0) }
         if let s = game.frame() {
             snapshot = s
             hud = HudState(s)
             lastTurnSeq = s.phase == .draft ? -1 : s.turnSeq
+            fx.noteState(s)
+        }
+    }
+
+    private func applyFxSettings() {
+        fx.reduceMotion = settings.reduceMotion
+        fx.shakeAmount = settings.reduceMotion ? min(0.5, Double(settings.shake) / 100) : Double(settings.shake) / 100
+    }
+
+    /// Shows a bark's subtitle for 1.5 s plus a little per letter (at least 2 s).
+    func showSubtitle(_ text: String, side: Int) {
+        guard settings.subtitles else { return }
+        subtitle = (text, side)
+        subtitleTask?.cancel()
+        let seconds = max(2, 1.5 + 0.06 * Double(text.count))
+        subtitleTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.subtitle = nil
         }
     }
 
@@ -274,6 +297,7 @@ final class BattleSession: ObservableObject {
         bannerTask?.cancel()
         foldTask?.cancel()
         endTask?.cancel()
+        subtitleTask?.cancel()
         endTask = nil
         gesture = nil
         pendingAim = nil
@@ -289,7 +313,17 @@ final class BattleSession: ObservableObject {
         } else if now > lastNanos {
             let ms = Int((now - lastNanos) / 1_000_000)
             if ms > 0 {
-                game.advance(milliseconds: min(ms, 250))
+                let real = min(ms, 250)
+                // View time first: hit stop and slow motion hold the sim clock too (the sim
+                // is fixed step, so this changes when it is drawn, never what happens).
+                let view = fx.advance(realMs: Double(real), nowNanos: now)
+                fx.runTimers()
+                simCarry = min(500, simCarry + view)
+                let simMs = Int(simCarry)
+                if simMs > 0 {
+                    simCarry -= Double(simMs)
+                    game.advance(milliseconds: simMs)
+                }
                 lastNanos += UInt64(ms) * 1_000_000
             }
         }
@@ -300,24 +334,28 @@ final class BattleSession: ObservableObject {
             faultReported = true
             stop()
             onFault?(self, fault)
-        } else if !effects.isEmpty {
-            // Blast flashes still playing: keep drawing until they are gone.
-            effects.removeAll { now &- $0.start > 600_000_000 }
-            frameVersion &+= 1
+        }
+        if game.recoveredNotice {
+            game.recoveredNotice = false
+            showBanner("Hiccup! Back to the start of the turn")
         }
     }
 
     private func apply(_ snap: BattleSnapshot) {
         let wasInFlight = snapshot.phase.isResolving
         let oldPhase = snapshot.phase
+        let now = DispatchTime.now().uptimeNanoseconds
+        let old = snapshot
+        if !snap.events.isEmpty {
+            fx.ingest(snap.events, old: old, new: snap, nowNanos: now)
+        } else if !snap.lean {
+            fx.noteState(snap)
+        }
+        if !snap.shells.isEmpty || !old.shells.isEmpty { fx.trail(snap.shells, ids: Array(0..<snap.shells.count)) }
         snapshot = snap
         frameVersion &+= 1
-        let now = DispatchTime.now().uptimeNanoseconds
-        effects.removeAll { now &- $0.start > 600_000_000 }
-        for e in snap.events where e.type == "hit" {
-            effects.append(BlastEffect(x: e.x, y: e.y, big: e.amount > 40, start: now))
-        }
         if !snap.events.isEmpty { onEvents?(snap.events, snap) }
+        onFrame?(snap)
         if snap.phase != .draft && snap.phase != .none && snap.turnSeq != lastTurnSeq {
             lastTurnSeq = snap.turnSeq
             turnStarted(snap)
@@ -395,6 +433,16 @@ final class BattleSession: ObservableObject {
         case "pin_faded": return "That Pin has faded"
         case "no_ghost": return "No shot to recall yet"
         case "no_doodad", "cannot_use_now": return "Cannot use that now"
+        case "nothing_to_mend": return "Nothing to mend"
+        case "no_one_to_puff_up": return "No one to Puff Up"
+        case "bad_target": return "Pick one of your own blocks"
+        case "no_actions_left": return "No shots left"
+        case "battle_over": return "The battle is over"
+        case "buried": return "Dug in: Shove Off first"
+        case "resting": return "Resting this turn"
+        case "bad_value": return "That aim is out of range"
+        case "recovered": return "Hiccup! Back to the start of the turn"
+        case "dead_handle", "panic": return "The rules core stopped"
         default: return reason.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
@@ -658,7 +706,33 @@ final class BattleSession: ObservableObject {
     func speedUp() {
         guard !stopped else { return }
         game.speed = game.speed >= 2 ? 1 : 2
+        fx.fast = game.speed >= 2
+        if game.speed >= 2 { fx.cancelSlowMotion() }
         game.markDirty()
+        tick()
+    }
+
+    /// Give up: the other side wins (`how: "give_up"`); a campaign loss still pays its Buttons.
+    /// Works in any phase but ended, even while the Rival thinks.
+    @discardableResult
+    func giveUp() -> Bool {
+        guard !stopped, game.isRunning, snapshot.phase != .ended else { return false }
+        game.waitUntilIdle()
+        let side: Int? = snapshot.isDuel ? snapshot.activeSide : nil
+        let reply = game.giveUp(side: side)
+        paused = false
+        showPauseCard = false
+        if !reply.ok { refused(reply) }
+        game.markDirty()
+        tick()
+        return reply.ok
+    }
+
+    /// Test Yard: set the wind now and for every later front.
+    func setWind(_ wind: Int) {
+        guard !stopped, game.isRunning, hud.isYard else { return }
+        let reply = game.send(.setWind(wind: wind))
+        if !reply.ok { refused(reply) }
         tick()
     }
 

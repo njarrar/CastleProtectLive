@@ -80,7 +80,9 @@ struct RoundLabel: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            if hud.squallRound > 0 {
+            if hud.isVolley {
+                Text(hud.volleyText)
+            } else if hud.squallRound > 0 {
                 SpriteIcon(name: "ui_squall", fallback: "cloud.bolt.fill", size: 20)
                 Text("Squall \(hud.squallRound) of 3")
             } else {
@@ -90,6 +92,13 @@ struct RoundLabel: View {
                     Text("Squall in \(hud.squallIn)")
                         .foregroundStyle(Theme.slate)
                 }
+            }
+            if let phase = hud.bossPhase, phase > 1 {
+                Text("Phase \(phase)")
+                    .foregroundStyle(Theme.goldDark)
+            }
+            if hud.bossJam > 0 {
+                Text("Jammed \(hud.bossJam)").foregroundStyle(Theme.slate)
             }
         }
         .font(Theme.label(15))
@@ -371,7 +380,7 @@ struct FireButton: View {
                     case "shove":
                         Image(systemName: "mountain.2.fill").font(.system(size: size * 0.2))
                         Text("SHOVE").font(.system(size: size * 0.2, weight: .heavy, design: .rounded))
-                        Text("OFF 15").font(.system(size: size * 0.15, weight: .heavy, design: .rounded))
+                        Text("OFF \(hud.shoveOffCost)").font(.system(size: size * 0.15, weight: .heavy, design: .rounded))
                     case "use":
                         Image(systemName: "bag.fill").font(.system(size: size * 0.2))
                         Text("USE").font(.system(size: size * 0.27, weight: .heavy, design: .rounded))
@@ -386,7 +395,7 @@ struct FireButton: View {
         }
         .buttonStyle(.plain)
         .disabled(!hud.humanTurn)
-        .accessibilityLabel(mode == "shove" ? "Shove Off, 15 Steam" : (mode == "use" ? "Use \(DoodadNames.name(armedDoodad ?? ""))" : "Fire"))
+        .accessibilityLabel(mode == "shove" ? "Shove Off, \(hud.shoveOffCost) Steam" : (mode == "use" ? "Use \(DoodadNames.name(armedDoodad ?? ""))" : "Fire"))
         .accessibilityValue(live ? "ready" : (hud.humanTurn ? "locked: pick a Hob, a shot and an aim" : "not your turn"))
         .accessibilityIdentifier("fire")
     }
@@ -442,5 +451,47 @@ struct TurnBanner: View {
             .overlay(Capsule().stroke(Theme.ink, lineWidth: 3))
             .allowsHitTesting(false)
             .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// Plays a UI animation from animations.json (coin spin, Pennant stamp, hand-off flip,
+/// Fire press) with SwiftUI. Reduce motion shows the held or first frame.
+struct AnimSprite: View {
+    let clip: String
+    var size: CGFloat = 32
+    /// When the clip started; nil shows the hold frame.
+    var start: Date?
+    var reduceMotion = false
+    var fallback = "circle.fill"
+
+    var body: some View {
+        if let anim = AnimationLibrary.shared.clip(clip) {
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: start == nil || reduceMotion)) { context in
+                let t = start.map { context.date.timeIntervalSince($0) * 1000 } ?? anim.total + 1
+                let name = reduceMotion ? (anim.hold ?? anim.frames[0]) : anim.frame(at: t)
+                SpriteIcon(name: name, fallback: fallback, size: size)
+            }
+        } else {
+            SpriteIcon(name: clip, fallback: fallback, size: size)
+        }
+    }
+}
+
+/// The bark's subtitle line, in the Hob's side colour.
+struct SubtitleView: View {
+    let text: String
+    let side: Int
+    var colours: ColourSet = .brickabrac
+
+    var body: some View {
+        Text(text)
+            .font(Theme.label(15))
+            .foregroundStyle(Theme.ink)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Theme.paper.opacity(0.92)))
+            .overlay(Capsule().stroke(Theme.side(side, colours), lineWidth: 2))
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }

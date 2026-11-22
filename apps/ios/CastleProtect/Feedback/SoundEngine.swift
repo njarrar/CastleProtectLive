@@ -579,7 +579,8 @@ final class SoundEngine {
 
     private func fadeStep() {
         let bar = manifest.sounds["mus_r1_base"]?.barSeconds ?? 1.111111
-        let elapsed = musicStartHost == 0 ? 0 : AVAudioTime.seconds(forHostTime: mach_absolute_time() &- musicStartHost)
+        let hostNow = mach_absolute_time()
+        let elapsed = musicStartHost == 0 || hostNow < musicStartHost ? 0 : AVAudioTime.seconds(forHostTime: hostNow - musicStartHost)
         let intoBar = bar > 0 ? elapsed.truncatingRemainder(dividingBy: bar) : 0
         var busy = false
         for (layer, target) in layerTarget {

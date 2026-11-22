@@ -5,6 +5,8 @@ import SwiftUI
 struct ResultsView: View {
     @EnvironmentObject private var model: AppModel
     @State private var stamped = 0
+    @State private var stampTimes: [Date?] = [nil, nil, nil]
+    @State private var coinStart: Date?
 
     var body: some View {
         if let info = model.lastResult {
@@ -29,6 +31,7 @@ struct ResultsView: View {
             }
             .background(Theme.paper.ignoresSafeArea())
             .task(id: info.title) { await stampPennants(info) }
+            .onAppear { model.resultsShown() }
         } else {
             MapView()
         }
@@ -43,9 +46,18 @@ struct ResultsView: View {
             HStack(spacing: 16) {
                 ForEach(Array(goals.prefix(3).enumerated()), id: \.offset) { i, goal in
                     VStack(spacing: 6) {
-                        SpriteIcon(name: goal.done && i < stamped ? "ui_pennant" : "ui_pennant_empty",
-                                   fallback: goal.done && i < stamped ? "flag.fill" : "flag", size: 48)
-                            .scaleEffect(goal.done && i < stamped ? 1 : 0.85)
+                        Group {
+                            if goal.done && i < stamped {
+                                AnimSprite(clip: "ui_pennant_earn", size: 48, start: stampTimes[i],
+                                           reduceMotion: model.save.settings.reduceMotion, fallback: "flag.fill")
+                            } else {
+                                SpriteIcon(name: "ui_pennant_empty", fallback: "flag", size: 48)
+                                    .scaleEffect(0.85)
+                            }
+                        }
+                        if i < info.result.pennantsNew.count && info.result.pennantsNew[i] && i < stamped {
+                            Text("New!").font(Theme.label(12)).foregroundStyle(Theme.goldDark)
+                        }
                         Text(goal.label).font(Theme.label(13)).foregroundStyle(Theme.ink)
                             .multilineTextAlignment(.center).frame(width: 100)
                     }
@@ -57,10 +69,25 @@ struct ResultsView: View {
             .panel()
         }
         if info.result.buttons > 0 {
-            Text("Buttons +\(info.result.buttons)").font(Theme.title(20)).foregroundStyle(Theme.ink)
+            HStack(spacing: 8) {
+                AnimSprite(clip: "ui_button_coin_spin", size: 28, start: coinStart,
+                           reduceMotion: model.save.settings.reduceMotion, fallback: "circle.circle.fill")
+                Text("Buttons +\(info.result.buttons)").font(Theme.title(20)).foregroundStyle(Theme.ink)
+            }
+            .accessibilityElement(children: .combine)
+        }
+        if info.result.score.count >= 2 {
+            Text("Siege Score \(info.result.score[0]) to \(info.result.score[1])")
+                .font(Theme.label(15)).foregroundStyle(Theme.inkSoft)
         }
         if !info.won {
+            if let broke = info.result.broke, broke.side == 0 {
+                BrokeView(broke: broke)
+            }
             Text("Wobbly, but standing. Try again?").font(Theme.label(16)).foregroundStyle(Theme.inkSoft)
+        }
+        if let mine = info.result.stats.first {
+            StatsRow(stats: mine)
         }
         HStack(spacing: 12) {
             Button("Map") { model.screen = .map }.buttonStyle(PaperButtonStyle())
@@ -90,6 +117,9 @@ struct ResultsView: View {
         }
         .padding(16)
         .panel()
+        if let broke = info.result.broke, broke.side >= 0, broke.side < info.names.count {
+            BrokeView(broke: broke, who: info.names[broke.side])
+        }
         Text("Good game, both of you.").font(Theme.label(16)).foregroundStyle(Theme.inkSoft)
         VStack(spacing: 10) {
             Button("Rematch") { model.rematch(swapSides: false) }
@@ -113,14 +143,19 @@ struct ResultsView: View {
 
     private func stampPennants(_ info: ResultInfo) async {
         stamped = 0
+        stampTimes = [nil, nil, nil]
+        coinStart = info.result.buttons > 0 ? Date() : nil
         guard !info.isDuel else { return }
         let earned = info.result.goals.isEmpty ? info.result.pennants : info.result.goals.prefix(3).count
         for i in 0..<earned {
             try? await Task.sleep(nanoseconds: i == 0 ? 400_000_000 : 500_000_000)
             if Task.isCancelled { return }
+            if i < stampTimes.count { stampTimes[i] = Date() }
             stamped = i + 1
             if info.result.goals.isEmpty || info.result.goals[i].done {
-                model.sound.play("pennant_stamp")
+                // The stamp lands on the animation's ding frame.
+                try? await Task.sleep(nanoseconds: 110_000_000)
+                model.sound.play("meta_pennant_stamp")
                 model.haptics.play(.pennant)
             }
         }
@@ -151,8 +186,12 @@ struct SkirmishSetupView: View {
                     Picker("Win by", selection: $options.winBy) {
                         ForEach(WinBy.allCases) { w in Text(w.label).tag(w) }
                     }
-                    Picker("Round cap", selection: $options.rounds) {
-                        ForEach([12, 15, 18], id: \.self) { r in Text("\(r)").tag(r) }
+                    Picker(options.winBy == .volley ? "Shots each" : "Round cap", selection: $options.rounds) {
+                        ForEach(options.winBy == .volley ? BattleSetup.volleyChoices : [12, 15, 18], id: \.self) { r in Text("\(r)").tag(r) }
+                    }
+                    .pickerStyle(.segmented)
+                    Picker("Help", selection: $options.help) {
+                        ForEach(HelpLevel.allCases) { h in Text(h.label).tag(h) }
                     }
                     .pickerStyle(.segmented)
                     Picker("Wind", selection: $options.wind) {
@@ -165,7 +204,12 @@ struct SkirmishSetupView: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            Button("Start") { model.startSkirmish(options) }
+            Button("Start") {
+                var o = options
+                let allowed = o.winBy == .volley ? BattleSetup.volleyChoices : [12, 15, 18]
+                if !allowed.contains(o.rounds) { o.rounds = o.winBy == .volley ? 10 : 15 }
+                model.startSkirmish(o)
+            }
                 .buttonStyle(GoldButtonStyle())
                 .accessibilityIdentifier("startSkirmish")
                 .padding(16)
@@ -197,5 +241,50 @@ struct ScreenHeader: View {
         }
         .padding(.horizontal, 8)
         .background(Theme.cream)
+    }
+}
+
+/// "What broke you": the last blow, the three that hurt most, and what was lost (core `result.broke`).
+struct BrokeView: View {
+    let broke: CoreBroke
+    var who: String = "You"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(who == "You" ? "What broke you" : "What broke \(who)")
+                .font(Theme.title(18)).foregroundStyle(Theme.ink)
+                .accessibilityAddTraits(.isHeader)
+            if let last = broke.last, !last.shotName.isEmpty {
+                Text("Last blow: \(last.shotName)\(last.hobName.isEmpty ? "" : " from \(last.hobName)"), round \(last.round)")
+                    .font(Theme.label(14)).foregroundStyle(Theme.inkSoft)
+            }
+            ForEach(Array(broke.top.prefix(3).enumerated()), id: \.offset) { _, blow in
+                HStack {
+                    Text(blow.shotName.isEmpty ? blow.shot.replacingOccurrences(of: "_", with: " ").capitalized : blow.shotName)
+                    if !blow.hobName.isEmpty { Text(blow.hobName).foregroundStyle(Theme.inkSoft) }
+                    Spacer()
+                    Text("\(blow.dmg)").font(Theme.number(15))
+                }
+                .font(Theme.label(14)).foregroundStyle(Theme.ink)
+            }
+            Text("Lost: \(broke.blocksLost) blocks, \(broke.kettleLost) kettle HP, \(broke.hobsBonked) Hobs Bonked")
+                .font(Theme.label(13)).foregroundStyle(Theme.inkSoft)
+        }
+        .padding(14)
+        .frame(maxWidth: 420, alignment: .leading)
+        .panel()
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The player's battle stats in one line.
+struct StatsRow: View {
+    let stats: CoreStats
+
+    var body: some View {
+        Text("Shots \(stats.shots)  Hits \(stats.hits)  Bonks \(stats.bonks)  Blocks dropped \(stats.blocksDropped)  Best streak \(stats.bestStreak)")
+            .font(Theme.label(13))
+            .foregroundStyle(Theme.inkSoft)
+            .multilineTextAlignment(.center)
     }
 }

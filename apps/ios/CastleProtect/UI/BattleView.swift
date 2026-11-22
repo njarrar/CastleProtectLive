@@ -43,10 +43,18 @@ struct BattleView: View {
                 }
                 DragBandLayer(model: session.dragModel, side: session.hud.activeSide, colours: session.settings.colourSet)
                 if let banner = session.banner {
-                    TurnBanner(text: banner, side: session.hud.activeSide, colours: session.settings.colourSet)
+                    MovingBanner(text: banner, side: session.hud.activeSide, colours: session.settings.colourSet,
+                                 reduceMotion: session.settings.reduceMotion)
+                        .id(banner)
                         .frame(maxWidth: .infinity)
                         .padding(.top, insets.top + (session.layout.mode == .tall ? 120 : 56))
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .transition(.opacity)
+                }
+                if let line = session.subtitle {
+                    SubtitleView(text: line.text, side: line.side, colours: session.settings.colourSet)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, insets.top + (session.layout.mode == .tall ? 170 : 104))
+                        .transition(.opacity)
                 }
                 if let handoff = session.hud.handoff, session.setup.seats == .sideBySide, !session.showPauseCard {
                     HandOffCard(session: session, handoff: handoff)
@@ -426,9 +434,16 @@ struct SpeedButton: View {
 struct PauseCard: View {
     @EnvironmentObject private var model: AppModel
     @ObservedObject var session: BattleSession
+    @State private var confirmGiveUp = false
 
     init(session: BattleSession) {
         self.session = session
+    }
+
+    private var capLine: String {
+        let hud = session.hud
+        if hud.isVolley { return hud.volleyText }
+        return "Round cap \(hud.roundCap), then the Squall"
     }
 
     var body: some View {
@@ -437,8 +452,26 @@ struct PauseCard: View {
             VStack(spacing: 14) {
                 Text("Paused").font(Theme.title(30)).foregroundStyle(Theme.ink)
                 Text(session.title).font(Theme.label(16)).foregroundStyle(Theme.inkSoft)
-                Text("Round cap \(session.hud.roundCap), then the Squall")
+                Text(capLine)
                     .font(Theme.label(14)).foregroundStyle(Theme.inkSoft)
+                if session.hud.isYard {
+                    // Test Yard: set the wind for this shot and every later front.
+                    HStack(spacing: 10) {
+                        Text("Wind").font(Theme.label(15)).foregroundStyle(Theme.ink)
+                        Button { session.setWind(session.hud.wind - 1) } label: {
+                            Image(systemName: "minus").frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Wind left")
+                        Text("\(session.hud.wind)").font(Theme.number(18)).frame(minWidth: 32)
+                        Button { session.setWind(session.hud.wind + 1) } label: {
+                            Image(systemName: "plus").frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Wind right")
+                    }
+                    .foregroundStyle(Theme.ink)
+                }
                 Button("Resume") { session.resume() }
                     .buttonStyle(GoldButtonStyle())
                     .accessibilityIdentifier("resume")
@@ -447,6 +480,18 @@ struct PauseCard: View {
                     Button("Settings") { model.showSettings = true }.buttonStyle(PaperButtonStyle())
                     Button("Map") { model.leaveToMap() }.buttonStyle(PaperButtonStyle())
                 }
+                Button("Give up") { confirmGiveUp = true }
+                    .buttonStyle(PaperButtonStyle(height: 44))
+                    .accessibilityIdentifier("giveUp")
+                    .confirmationDialog("Give up this fight?", isPresented: $confirmGiveUp, titleVisibility: .visible) {
+                        Button(session.hud.isDuel ? "\(session.hud.activeName) gives up" : "Give up", role: .destructive) {
+                            model.giveUp()
+                        }
+                        .accessibilityIdentifier("confirmGiveUp")
+                        Button("Keep fighting", role: .cancel) {}
+                    } message: {
+                        Text(session.setup.mode == .campaign ? "It counts as a loss. You still get the Buttons for trying." : "The other side wins.")
+                    }
             }
             .padding(24)
             .frame(maxWidth: 420)
@@ -464,6 +509,7 @@ struct HandOffCard: View {
     @ObservedObject var session: BattleSession
     let handoff: HandoffView
     @State private var shownAt = Date()
+    @EnvironmentObject private var model: AppModel
 
     init(session: BattleSession, handoff: HandoffView) {
         self.session = session
@@ -482,13 +528,17 @@ struct HandOffCard: View {
                 if !handoff.line.isEmpty {
                     Text(handoff.line).font(Theme.label(17)).foregroundStyle(Theme.inkSoft)
                 }
+                AnimSprite(clip: "ui_handoff_flip", size: 48, start: shownAt,
+                           reduceMotion: session.settings.reduceMotion, fallback: "arrow.left.arrow.right")
+                    .accessibilityHidden(true)
                 Group {
                     if side == 0 { Circle().fill(Theme.side(0, colours)) } else { Diamond().fill(Theme.side(1, colours)) }
                 }
                 .frame(width: 56, height: 56)
                 .overlay(Group { if side == 0 { Circle().stroke(Theme.ink, lineWidth: 3) } else { Diamond().stroke(Theme.ink, lineWidth: 3) } })
                 Text("Pass the device to").font(Theme.label(18)).foregroundStyle(Theme.ink)
-                Text(name.uppercased()).font(Theme.title(34)).foregroundStyle(Theme.side(side, colours))
+                Text(name.uppercased() + (side < hud.helpMarks.count && !hud.helpMarks[side].isEmpty ? " \(hud.helpMarks[side])" : ""))
+                    .font(Theme.title(34)).foregroundStyle(Theme.side(side, colours))
                 if help != .none {
                     Text("Help: \(help.label) \(help.marks)").font(Theme.label(15)).foregroundStyle(Theme.goldDark)
                 }
@@ -514,10 +564,55 @@ struct HandOffCard: View {
                     .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Theme.side(side, colours), lineWidth: 10))
             )
             .padding(24)
+            .modifier(KeyframeIn(scale: AnimationLibrary.shared.motion.handoffScale,
+                                 opacity: AnimationLibrary.shared.motion.handoffOpacity,
+                                 start: shownAt, reduceMotion: session.settings.reduceMotion))
         }
-        .onAppear { shownAt = Date() }
+        .onAppear {
+            shownAt = Date()
+            model.sound.play("ui_handoff_flip")
+        }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
         .accessibilityLabel("Pass the device to \(name)")
+    }
+}
+
+/// Scale and fade keyframes (animations.json `hand_off_card`) from `start`.
+struct KeyframeIn: ViewModifier {
+    let scale: Track
+    let opacity: Track
+    let start: Date
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: reduceMotion)) { context in
+            let t = context.date.timeIntervalSince(start) * 1000
+            content
+                .scaleEffect(reduceMotion ? 1 : CGFloat(scale.value(at: t)))
+                .opacity(reduceMotion ? 1 : opacity.value(at: t))
+        }
+    }
+}
+
+/// The turn banner, sliding in and settling by the `turn_banner` keyframes
+/// (a fade with Reduce motion). It never blocks taps.
+struct MovingBanner: View {
+    let text: String
+    let side: Int
+    var colours: ColourSet = .brickabrac
+    var reduceMotion = false
+    @State private var start = Date()
+
+    var body: some View {
+        let m = AnimationLibrary.shared.motion
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: false)) { context in
+            let t = context.date.timeIntervalSince(start) * 1000
+            TurnBanner(text: text, side: side, colours: colours)
+                .offset(y: reduceMotion ? 0 : CGFloat(m.bannerInY.value(at: t)))
+                .opacity(reduceMotion ? min(1, t / m.bannerFadeMs) : m.bannerInOpacity.value(at: t))
+        }
+        .onAppear { start = Date() }
+        .allowsHitTesting(false)
     }
 }

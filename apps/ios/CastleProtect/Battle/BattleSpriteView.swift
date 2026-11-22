@@ -59,17 +59,19 @@ final class BattleSKView: SKView {
 
     @objc private func frameTick() {
         let now = DispatchTime.now().uptimeNanoseconds
-        let pose = now / 250_000_000
+        // Idle poses step at 15 a second; effects, flight and the camera draw every frame.
+        let pose = now / 66_000_000
         let colours = session.settings.colourSet
-        // Draw only when something changed: a new frame, a resize, a colour set, or the idle pose step (H8, M1).
-        guard session.frameVersion != drawnVersion || session.layout != drawnLayout || colours != drawnColours
+        let busy = session.fx.isActive || session.snapshot.phase.isResolving || battleScene.cameraMoving
+        // Draw only when something changed (H8, M1).
+        guard busy || session.frameVersion != drawnVersion || session.layout != drawnLayout || colours != drawnColours
                 || pose != drawnPose else { return }
         drawnVersion = session.frameVersion
         drawnLayout = session.layout
         drawnColours = colours
         drawnPose = pose
-        battleScene.render(snapshot: session.snapshot, layout: session.layout, effects: session.effects,
-                           colours: colours, now: now)
+        battleScene.render(snapshot: session.snapshot, layout: session.layout, fx: session.fx, colours: colours,
+                           dragging: session.dragging, reduceMotion: session.settings.reduceMotion)
     }
 
     override func layoutSubviews() {
@@ -129,6 +131,7 @@ final class BattleScene: SKScene {
     private var layers: [LensLayer] = []
     private let textures = TerrainTextures()
     private var palettes: [ColourSet: Palette] = [:]
+    private var lastNanos: UInt64 = 0
 
     init(sheet: SpriteSheet) {
         self.sheet = sheet
@@ -142,7 +145,13 @@ final class BattleScene: SKScene {
         fatalError("init(coder:) is not used")
     }
 
-    func render(snapshot: BattleSnapshot, layout: BattleLayout, effects: [BlastEffect], colours: ColourSet, now: UInt64) {
+    /// True while any lens camera is still easing toward its target.
+    var cameraMoving: Bool { layers.contains { $0.rig.moving } }
+
+    func render(snapshot: BattleSnapshot, layout: BattleLayout, fx: FieldFX, colours: ColourSet, dragging: Bool, reduceMotion: Bool) {
+        let nanos = DispatchTime.now().uptimeNanoseconds
+        let dt = lastNanos == 0 ? 16.0 : min(100, Double(nanos &- lastNanos) / 1_000_000)
+        lastNanos = nanos
         let lenses = snapshot.phase == .none ? [] : layout.lenses
         while layers.count < lenses.count {
             let layer = LensLayer(sheet: sheet)
@@ -154,12 +163,52 @@ final class BattleScene: SKScene {
                 layer.crop.isHidden = false
                 let palette = palettes[colours] ?? Palette(set: colours)
                 palettes[colours] = palette
-                layer.update(lens: lenses[i], snap: snapshot, effects: effects, palette: palette,
-                             sceneHeight: size.height, now: now, textures: textures)
+                layer.update(lens: lenses[i], snap: snapshot, fx: fx, palette: palette, sceneHeight: size.height,
+                             textures: textures, dt: dt, dragging: dragging, reduceMotion: reduceMotion)
             } else {
                 layer.crop.isHidden = true
             }
         }
+    }
+}
+
+/// One lens camera: eases toward its target frame (UX 3.5, 2.6.3), holds still
+/// during an Aim Drag, follows a shell with a dead zone, and cuts instead of
+/// sweeping with Reduce motion.
+@MainActor
+final class CameraRig {
+    private(set) var rect: CGRect?
+    private(set) var moving = false
+
+    func update(target: CGRect, dt: Double, cut: Bool, hold: Bool, follow: CGPoint?) -> CGRect {
+        guard var current = rect, !cut else {
+            rect = target
+            moving = false
+            return target
+        }
+        if hold {
+            moving = false
+            return current
+        }
+        var goal = target
+        if let shell = follow {
+            // Dead zone: the middle 30% of the frame. Inside it, the centre stays.
+            let dx = shell.x - current.midX, dy = shell.y - current.midY
+            var cx = goal.midX, cy = goal.midY
+            if abs(dx) < current.width * 0.15 { cx = current.midX }
+            if abs(dy) < current.height * 0.15 { cy = current.midY }
+            goal = CGRect(x: cx - goal.width / 2, y: cy - goal.height / 2, width: goal.width, height: goal.height)
+        }
+        let tau = follow != nil ? 120.0 : 140.0
+        let k = CGFloat(1 - exp(-dt / tau))
+        current = CGRect(x: current.minX + (goal.minX - current.minX) * k,
+                         y: current.minY + (goal.minY - current.minY) * k,
+                         width: current.width + (goal.width - current.width) * k,
+                         height: current.height + (goal.height - current.height) * k)
+        moving = abs(current.midX - goal.midX) > 0.5 || abs(current.midY - goal.midY) > 0.5 || abs(current.width - goal.width) > 0.5
+        if !moving { current = goal }
+        rect = current
+        return current
     }
 }
 
@@ -168,25 +217,28 @@ final class BattleScene: SKScene {
 @MainActor
 final class LensLayer {
     let crop = SKCropNode()
+    let rig = CameraRig()
     private let mask = SKSpriteNode(color: .white, size: CGSize(width: 1, height: 1))
     private let backdrop = SKSpriteNode(color: .clear, size: CGSize(width: 1, height: 1))
     private let world = SKNode()
     private let ground = SKShapeNode()
+    private let cutLine = SKShapeNode()
     private let sheet: SpriteSheet
     private var lastTerrain: [Double] = []
     private var lastWorldW = 0.0
-    private var blocks: [SKSpriteNode] = []
-    private var kettles: [SKSpriteNode] = []
-    private var hobs: [SKSpriteNode] = []
-    private var marks: [SKSpriteNode] = []
-    private var shells: [SKSpriteNode] = []
-    private var effects: [SKSpriteNode] = []
-    private var props: [SKSpriteNode] = []
+    /// One body node per fort, so a walk moves and bobs everything on it.
+    private var fortNodes: [SKNode] = []
+    private var pools: [String: [SKSpriteNode]] = [:]
+    private var used: [String: Int] = [:]
     private let terrainLayer = SKNode()
     private var terrainNodes: [Int: SKSpriteNode] = [:]
     private var terrainDrawn: [Int: Int] = [:]
     private var terrainGrid: TerrainGrid?
     private var terrainVersion = -1
+
+    /// World cells per @1x pixel for Hob frames (72 x 80 px at @1x), so a Hob
+    /// stands about two blocks tall in its Nook. Blocks are 1 cell a pixel.
+    static let hobCellsPerPixel: CGFloat = 0.5
 
     init(sheet: SpriteSheet) {
         self.sheet = sheet
@@ -198,10 +250,58 @@ final class LensLayer {
         world.addChild(ground)
         terrainLayer.zPosition = 0.5
         world.addChild(terrainLayer)
+        cutLine.zPosition = 8
+        cutLine.strokeColor = Palette.hex(0xE5484D)
+        cutLine.lineWidth = 2
+        cutLine.isHidden = true
+        world.addChild(cutLine)
+        for _ in 0..<2 {
+            let n = SKNode()
+            n.zPosition = 1
+            world.addChild(n)
+            fortNodes.append(n)
+        }
     }
 
-    func update(lens: Lens, snap: BattleSnapshot, effects fx: [BlastEffect], palette: Palette, sceneHeight: CGFloat, now: UInt64,
-                textures: TerrainTextures) {
+    // MARK: Pools
+
+    private func take(_ pool: String, parent: SKNode, z: CGFloat) -> SKSpriteNode {
+        let i = used[pool] ?? 0
+        used[pool] = i + 1
+        var list = pools[pool] ?? []
+        if i < list.count {
+            let node = list[i]
+            if node.parent !== parent {
+                node.removeFromParent()
+                parent.addChild(node)
+            }
+            node.isHidden = false
+            node.zPosition = z
+            node.zRotation = 0
+            node.alpha = 1
+            node.yScale = 1
+            return node
+        }
+        let node = SKSpriteNode(color: .clear, size: CGSize(width: 1, height: 1))
+        node.zPosition = z
+        parent.addChild(node)
+        list.append(node)
+        pools[pool] = list
+        return node
+    }
+
+    private func hideUnused() {
+        for (name, list) in pools {
+            let n = used[name] ?? 0
+            if n < list.count { for i in n..<list.count { list[i].isHidden = true } }
+        }
+        used = [:]
+    }
+
+    // MARK: Frame
+
+    func update(lens: Lens, snap: BattleSnapshot, fx: FieldFX, palette: Palette, sceneHeight: CGFloat,
+                textures: TerrainTextures, dt: Double, dragging: Bool, reduceMotion: Bool) {
         let small = lens.focus == .whole
         let vp = lens.viewport
         let centre = CGPoint(x: vp.midX, y: sceneHeight - vp.midY)
@@ -211,14 +311,21 @@ final class LensLayer {
         backdrop.position = centre
         backdrop.color = small ? palette.paper : palette.sky
 
-        // Camera: fit the lens's world rect into its frame (the Clear Rect).
-        let worldRect = Camera.worldRect(for: lens.focus, snap: snap)
+        // Camera: ease toward the lens's target, then fit it into the Clear Rect.
+        let target = Camera.worldRect(for: lens.focus, snap: snap, fx: fx, current: rig.rect)
+        let follow: CGPoint? = lens.focus == .follow && !snap.shells.isEmpty && !reduceMotion
+            ? CGPoint(x: snap.shells[0].x, y: snap.shells[0].y) : nil
+        let worldRect = rig.update(target: target, dt: dt, cut: reduceMotion || small, hold: dragging && !small, follow: follow)
         let scale = min(lens.frame.width / max(1, worldRect.width), lens.frame.height / max(1, worldRect.height))
         world.setScale(scale)
         let frameCentre = CGPoint(x: lens.frame.midX, y: sceneHeight - lens.frame.midY)
-        world.position = CGPoint(x: frameCentre.x - worldRect.midX * scale, y: frameCentre.y - worldRect.midY * scale)
+        // Shake moves the field only, never the HUD, and never while aiming.
+        let shake = small ? .zero : fx.shakeOffset(planning: snap.phase == .plan || snap.phase == .handoff)
+        world.position = CGPoint(x: frameCentre.x - worldRect.midX * scale + shake.x,
+                                 y: frameCentre.y - worldRect.midY * scale + shake.y)
         let cellsPerPoint = Double(1 / max(0.0001, scale))
         let useArt = !small && !sheet.isEmpty
+        let now = fx.now
 
         if let grid = snap.ground, grid.hasData {
             ground.isHidden = true
@@ -229,83 +336,54 @@ final class LensLayer {
             updateGround(snap: snap, palette: palette)
         }
 
-        var bi = 0, ki = 0, hi = 0, mi = 0, si = 0, ei = 0, pi = 0
-        let frameIndex = Int((now / 250_000_000) % 6)
-
         for fort in snap.forts {
-            for b in fort.blocks {
-                let node = Self.take(&blocks, bi, parent: world, z: 1)
-                bi += 1
-                let ratio = Double(max(0, b.hp)) / Double(max(1, b.hpMax))
-                let wear = ratio > 0.66 ? "fresh" : (ratio > 0.33 ? "scuffed" : "battered")
-                let f = useArt ? (sheet.frame("block_\(b.material)_\(wear)") ?? sheet.frame("block_\(b.material)_fresh")) : nil
-                node.texture = f?.texture
-                // Battered blocks (Fatigue) get a slate tint; the boss weak spot a gold one; shimmer a pale one (M9).
-                if f == nil {
-                    node.color = b.root ? palette.gold : (b.battered ? palette.flattened : palette.material(b.material))
-                    node.colorBlendFactor = 1
-                } else if b.root || b.battered || b.shimmer {
-                    node.color = b.root ? palette.gold : (b.battered ? palette.flattened : palette.paper)
-                    node.colorBlendFactor = b.root ? 0.45 : (b.battered ? 0.35 : 0.25)
-                } else {
-                    node.color = .white
-                    node.colorBlendFactor = 0
-                }
-                node.anchorPoint = .zero
-                node.size = CGSize(width: b.w, height: b.h)
-                node.position = CGPoint(x: b.x, y: b.y)
-                node.xScale = 1
-                node.alpha = 1
-            }
+            drawFort(fort, snap: snap, fx: fx, palette: palette, useArt: useArt, small: small, reduceMotion: reduceMotion)
+        }
+        for i in snap.forts.count..<fortNodes.count { fortNodes[i].isHidden = true }
 
-            let pct = fort.kettlePercent
-            let state = fort.kettleHp <= 0 ? "popped" : (pct <= 25 ? "critical" : (pct <= 50 ? "hurt" : "full"))
-            let kettle = Self.take(&kettles, ki, parent: world, z: 2)
-            ki += 1
-            place(kettle, frame: useArt ? sheet.frame("kettle_\(state)") : nil, at: CGPoint(x: fort.kettleX, y: fort.kettleY),
-                  scale: 0.75, flip: fort.side == 1, fallback: fort.kettleHp > 0 ? palette.kettle : palette.flattened,
-                  fallbackSize: CGSize(width: 20, height: 18))
-
-            let team = SpriteImages.team(fort.side)
-            for (i, h) in fort.hobs.enumerated() {
-                let node = Self.take(&hobs, hi, parent: world, z: 3)
-                hi += 1
-                let bonked = h.bonked || h.hp <= 0
-                let selected = h.id == snap.selectedHob && fort.side == snap.activeSide
-                var frame: SpriteSheet.Frame?
-                if useArt, let art = SpriteImages.hobArtName(id: h.def, name: h.name) {
-                    let pose: String
-                    let n: Int
-                    if bonked {
-                        pose = "bonked"; n = frameIndex % 2
-                    } else if selected && snap.phase == .plan {
-                        pose = "aim"; n = frameIndex % 2
-                    } else if selected && snap.phase == .flight {
-                        pose = "fire"; n = 1
-                    } else {
-                        pose = "idle"; n = (frameIndex + i) % 3
-                    }
-                    frame = sheet.frame("hob_\(art)_\(team)_\(pose)_\(n)") ?? sheet.frame("hob_\(art)_\(team)_idle_0")
+        // Collapse ghosts: creak, lean, drop row by row, land, break (view only).
+        if useArt {
+            for p in fx.pieces {
+                let t = fx.pieceTransform(p)
+                let node = take("piece", parent: world, z: 2.2)
+                place(node, frame: sheet.frame("block_\(p.mat)_battered") ?? sheet.frame("block_\(p.mat)_fresh"),
+                      at: CGPoint(x: p.x + p.size / 2 + t.dx, y: p.y + t.dy), scale: 1, flip: false,
+                      fallback: palette.material(p.mat), fallbackSize: CGSize(width: p.size, height: p.size))
+                node.anchorPoint = CGPoint(x: 0.5, y: 0)
+                node.size = CGSize(width: p.size, height: p.size)
+                node.zRotation = CGFloat(-t.deg * .pi / 180)
+                node.yScale = CGFloat(t.squash)
+                if now - p.start < fx.motion.creakMs + fx.motion.leanMs, let crack = fx.library.clip("fx_crack_\(p.mat)") {
+                    let c = take("crack", parent: world, z: 2.3)
+                    placeClip(c, crack.frame(at: now - p.start), crack, at: CGPoint(x: p.x + t.dx, y: p.y + p.size + t.dy),
+                              cellsPerPx: 1, flip: false)
+                    c.zRotation = node.zRotation
                 }
-                place(node, frame: frame, at: CGPoint(x: h.x, y: h.y), scale: Self.hobCellsPerPixel, flip: fort.side == 1,
-                      fallback: bonked ? palette.flattened : palette.side(fort.side),
-                      fallbackSize: CGSize(width: small ? 18 : 14, height: small ? 18 : 16))
-                node.alpha = selected || bonked ? 1 : 0.95
             }
         }
 
-        // Props: cage bars, the captive, a Crock or a turnip (C2). A broken prop is not drawn.
+        // Props: cage bars, the captive, a Crock or a turnip, the 1-10 roller and shears hinge.
         for p in snap.props where !p.broken {
-            let node = Self.take(&props, pi, parent: world, z: 2.5)
-            pi += 1
+            let node = take("prop", parent: world, z: 2.5)
             switch p.kind {
             case "cage_bar":
                 place(node, frame: nil, at: CGPoint(x: p.x, y: p.y), scale: 1, flip: false,
                       fallback: palette.cage, fallbackSize: CGSize(width: 4, height: 44))
             case "captive":
-                let frame = useArt ? (sheet.frame("hob_hetty_blue_idle_0") ?? sheet.frame("hob_hetty_blue_bonked_0")) : nil
-                place(node, frame: frame, at: CGPoint(x: p.x, y: p.y), scale: Self.hobCellsPerPixel, flip: false,
-                      fallback: palette.you, fallbackSize: CGSize(width: 14, height: 18))
+                let art = useArt ? fx.library.clip("hob_hetty_blue_idle") : nil
+                if let art {
+                    placeClip(node, art.frame(at: now), art, at: CGPoint(x: p.x, y: p.y), cellsPerPx: Self.hobCellsPerPixel, flip: false)
+                } else {
+                    place(node, frame: nil, at: CGPoint(x: p.x, y: p.y), scale: 1, flip: false,
+                          fallback: palette.you, fallbackSize: CGSize(width: 14, height: 18))
+                }
+            case "roller":
+                place(node, frame: nil, at: CGPoint(x: p.x, y: p.y), scale: 1, flip: false,
+                      fallback: palette.flattened, fallbackSize: CGSize(width: 44, height: 26))
+            case "shears":
+                place(node, frame: nil, at: CGPoint(x: p.x, y: p.y), scale: 1, flip: false,
+                      fallback: palette.ink, fallbackSize: CGSize(width: 14, height: 14))
+                node.zRotation = .pi / 4
             default:
                 let name = p.shot.isEmpty ? "shell_clodpot" : "shell_\(p.shot)"
                 let frame = useArt ? (sheet.frame(name) ?? sheet.frame("shell_clodpot")) : nil
@@ -315,67 +393,280 @@ final class LensLayer {
             node.alpha = CGFloat(0.55 + 0.45 * p.hpFraction)
         }
 
-        // The 30% preview dots, in the active side's shape.
+        // The 1-10 cut line: shown one boss turn before the snip.
+        if let cut = snap.boss?.cut, !small {
+            cutLine.isHidden = false
+            let rect = CGRect(x: cut.x0, y: cut.y0, width: cut.width, height: cut.height)
+            cutLine.path = CGPath(rect: rect, transform: nil).copy(dashingWithPhase: CGFloat(now / 40), lengths: [6, 4])
+            cutLine.lineWidth = CGFloat(max(1.5, 2 * cellsPerPoint))
+        } else {
+            cutLine.isHidden = true
+        }
+
+        // The preview dots, pulsing, in the active side's shape.
         if !small {
+            let pulse = fx.library.clip(snap.activeSide == 0 ? "fx_ghost_dot_p1_pulse" : "fx_ghost_dot_p2_pulse")
             let dotName = snap.activeSide == 0 ? "fx_ghost_dot_p1" : "fx_ghost_dot_p2"
             var i = 0
+            var n = 0
             while i + 1 < snap.preview.count {
-                let node = Self.take(&marks, mi, parent: world, z: 5)
-                mi += 1
-                place(node, frame: useArt ? sheet.frame(dotName) : nil, at: CGPoint(x: snap.preview[i], y: snap.preview[i + 1]),
-                      scale: max(0.5, 0.8 * cellsPerPoint), flip: false, fallback: palette.paper,
-                      fallbackSize: CGSize(width: 5 * cellsPerPoint, height: 5 * cellsPerPoint))
+                let node = take("dot", parent: world, z: 5)
+                let at = CGPoint(x: snap.preview[i], y: snap.preview[i + 1])
+                let k = CGFloat(max(0.5, 0.8 * cellsPerPoint))
+                if useArt, let pulse {
+                    placeClip(node, pulse.frame(at: reduceMotion ? 0 : now + Double(n) * 60), pulse, at: at, cellsPerPx: k, flip: false)
+                } else {
+                    place(node, frame: useArt ? sheet.frame(dotName) : nil, at: at, scale: k, flip: false, fallback: palette.paper,
+                          fallbackSize: CGSize(width: 5 * cellsPerPoint, height: 5 * cellsPerPoint))
+                }
                 i += 2
+                n += 1
             }
         }
 
-        // Pins: yours round, the Rival's a diamond. A spent Pin shows faded.
+        // Pins: yours round, the Rival's a diamond, dropped in with a stick. A spent Pin shows faded.
         for pin in snap.pins {
-            let node = Self.take(&marks, mi, parent: world, z: 4)
-            mi += 1
-            let pinScale = max(small ? 1.2 : 0.5, cellsPerPoint)
-            place(node, frame: useArt ? sheet.frame(pin.side == 0 ? "fx_pin_p1" : "fx_pin_p2") : nil, at: CGPoint(x: pin.x, y: pin.y),
-                  scale: pinScale, flip: false, fallback: palette.side(pin.side),
-                  fallbackSize: CGSize(width: 12 * pinScale, height: 12 * pinScale))
+            let node = take("pin", parent: world, z: 4)
+            let pinScale = CGFloat(max(small ? 1.2 : 0.5, cellsPerPoint))
+            let key = "\(pin.side):\(pin.hob):\(Int(pin.x)):\(Int(pin.y))"
+            let drop = fx.library.clip(pin.side == 0 ? "fx_pin_p1_drop" : "fx_pin_p2_drop")
+            if useArt, let drop, let start = fx.pinDrops[key], !reduceMotion {
+                placeClip(node, drop.frame(at: now - start), drop, at: CGPoint(x: pin.x, y: pin.y), cellsPerPx: pinScale, flip: false)
+            } else {
+                place(node, frame: useArt ? sheet.frame(pin.side == 0 ? "fx_pin_p1" : "fx_pin_p2") : nil, at: CGPoint(x: pin.x, y: pin.y),
+                      scale: pinScale, flip: false, fallback: palette.side(pin.side),
+                      fallbackSize: CGSize(width: 12 * pinScale, height: 12 * pinScale))
+            }
             node.alpha = pin.spent ? 0.45 : 1
         }
 
-        // Shells in flight.
+        // Shells in flight, turned to their flight direction.
         for sh in snap.shells {
-            let node = Self.take(&shells, si, parent: world, z: 6)
-            si += 1
+            let node = take("shell", parent: world, z: 6)
             let name = sh.kind.isEmpty || sh.kind == "plain" ? "shell_clodpot" : "shell_\(sh.kind)"
-            let shellScale = max(small ? 1.5 : 0.5, 0.7 * cellsPerPoint)
+            let shellScale = CGFloat(max(small ? 1.5 : 0.5, 0.7 * cellsPerPoint))
             place(node, frame: useArt ? (sheet.frame(name) ?? sheet.frame("shell_clodpot")) : nil, at: CGPoint(x: sh.x, y: sh.y),
                   scale: shellScale, flip: false, fallback: palette.ink,
                   fallbackSize: CGSize(width: 16 * shellScale, height: 16 * shellScale))
-            // Turned to its flight direction (L6).
             node.zRotation = CGFloat(Double(sh.rot) / 10 * Double.pi / 180)
         }
 
-        // Blast flashes, four frames over 0.4 s.
+        // Effects: trails, impacts, booms, chunks, rubble, dust, fizz.
         if !small {
-            for e in fx {
-                let t = Double(now &- e.start) / 1e9
-                guard t < 0.4 else { continue }
-                let node = Self.take(&effects, ei, parent: world, z: 7)
-                ei += 1
-                let n = min(3, Int(t / 0.1))
-                place(node, frame: useArt ? sheet.frame("fx_boom_\(e.big ? "large" : "small")_\(n)") : nil,
-                      at: CGPoint(x: e.x, y: e.y), scale: e.big ? 1.6 : 1.2, flip: false,
-                      fallback: Palette.hex(0xFFF3C4), fallbackSize: CGSize(width: 40, height: 40))
-                node.alpha = useArt ? 1 : CGFloat(1 - t / 0.4)
+            for s in fx.sprites {
+                guard let clip = fx.library.clip(s.clip) ?? FieldFX.synthetic(s.clip) else { continue }
+                let t = now - s.start
+                let node = take("fx", parent: world, z: s.z)
+                let (x, y) = s.position(at: now)
+                let name: String
+                if s.life > 0 && clip.loop { name = clip.frame(at: reduceMotion ? 0 : t) } else { name = clip.frame(at: t, reversed: s.reversed) }
+                if useArt {
+                    placeClip(node, name, clip, at: CGPoint(x: x, y: y), cellsPerPx: CGFloat(s.scale), flip: s.flip)
+                } else {
+                    place(node, frame: nil, at: CGPoint(x: x, y: y), scale: 1, flip: false, fallback: Palette.hex(0xFFF3C4),
+                          fallbackSize: CGSize(width: clip.w * s.scale, height: clip.h * s.scale))
+                }
+                node.zRotation = CGFloat(s.spin * t / 1000 * .pi / 180)
+                let length = s.life > 0 ? s.life : clip.total + s.holdFor
+                if s.fadeLast > 0, length - t < s.fadeLast {
+                    node.alpha = CGFloat(max(0, (length - t) / s.fadeLast))
+                }
             }
         }
 
-        Self.hide(blocks, from: bi)
-        Self.hide(kettles, from: ki)
-        Self.hide(hobs, from: hi)
-        Self.hide(marks, from: mi)
-        Self.hide(shells, from: si)
-        Self.hide(effects, from: ei)
-        Self.hide(props, from: pi)
+        // Weather: wind leaves always, the Squall in its rounds.
+        if useArt {
+            drawWeather(snap: snap, fx: fx, view: worldRect, reduceMotion: reduceMotion)
+        }
+        hideUnused()
     }
+
+    // MARK: Forts
+
+    private func drawFort(_ fort: FortView, snap: BattleSnapshot, fx: FieldFX, palette: Palette, useArt: Bool, small: Bool,
+                          reduceMotion: Bool) {
+        let body = fortNodes[min(fort.side, fortNodes.count - 1)]
+        body.isHidden = false
+        let now = fx.now
+        // Walking: the body slides from the old spot to the new one and bobs on its legs.
+        let px: Double = fort.originX + Double(fort.cols) * fort.block / 2
+        let py: Double = fort.baseY
+        var offX = 0.0
+        var offY = 0.0
+        var tilt = 0.0
+        var walking: (t: Double, w: WalkAnim)?
+        if let w = fx.walks[fort.side] {
+            let t = now - w.start
+            let p = min(1, max(0, t / w.duration))
+            offX = -w.dx * (1 - p)
+            if !reduceMotion {
+                let frame = Int(t / fx.motion.bobFrameMs) % max(1, fx.motion.bobDy.count)
+                offY = -fx.motion.bobDy[frame]
+                tilt = frame < fx.motion.bobTilt.count ? fx.motion.bobTilt[frame] : 0
+            }
+            walking = (t, w)
+        }
+        body.position = CGPoint(x: px + offX, y: py + offY)
+        body.zRotation = CGFloat(-tilt * .pi / 180)
+        func local(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: x - px, y: y - py) }
+        let team = SpriteImages.team(fort.side)
+
+        // Stomper legs under the Footing while walking; the second leg 3 frames later.
+        if let walking, useArt, let clip = fx.library.clip("stomper_\(team)_walk") {
+            let width = Double(fort.cols) * fort.block
+            for (i, fx0) in [0.25, 0.75].enumerated() {
+                let node = take("stomper", parent: body, z: 0.9)
+                let t = walking.t + Double(i) * 3 * fx.motion.bobFrameMs
+                placeClip(node, clip.frame(at: reduceMotion ? 0 : t), clip,
+                          at: local(fort.originX + width * fx0, fort.baseY + 3), cellsPerPx: 1, flip: fort.side == 1)
+            }
+        }
+
+        let shimmerClip = fx.library.clip("fx_shimmer")
+        for (bi, b) in fort.blocks.enumerated() {
+            let node = take("block", parent: body, z: 1)
+            let ratio = Double(max(0, b.hp)) / Double(max(1, b.hpMax))
+            let wear = ratio > 0.66 ? "fresh" : (ratio > 0.33 ? "scuffed" : "battered")
+            let mat = FieldFX.materialKey(b.material)
+            let f = useArt ? (sheet.frame("block_\(mat)_\(wear)") ?? sheet.frame("block_\(mat)_fresh")) : nil
+            node.texture = f?.texture
+            if f == nil {
+                node.color = b.root ? palette.gold : (b.battered ? palette.flattened : palette.material(b.material))
+                node.colorBlendFactor = 1
+            } else if b.root || b.battered {
+                node.color = b.root ? palette.gold : palette.flattened
+                node.colorBlendFactor = b.root ? 0.45 : 0.35
+            } else {
+                node.color = .white
+                node.colorBlendFactor = 0
+            }
+            node.anchorPoint = .zero
+            node.size = CGSize(width: b.w, height: b.h)
+            node.position = local(b.x, b.y)
+            node.xScale = 1
+            // Shimmer: blocks at the end of their reach glint once every 3 s.
+            if b.shimmer, useArt, let shimmerClip {
+                let t = (now + Double(bi * 211)).truncatingRemainder(dividingBy: 3000)
+                if reduceMotion || t < shimmerClip.total {
+                    let s = take("shimmer", parent: body, z: 1.1)
+                    placeClip(s, shimmerClip.frame(at: reduceMotion ? 0 : t), shimmerClip, at: local(b.x, b.y + b.h),
+                              cellsPerPx: 1, flip: false)
+                    s.alpha = reduceMotion ? 0.6 : 1
+                }
+            }
+        }
+
+        // Rooms: Loophole Flaps and Pot Lids.
+        for room in fort.rooms {
+            let key = "\(fort.side):\(room.id)"
+            if let hole = room.loophole, useArt {
+                let anim = fx.flaps[key]
+                if room.flap || anim != nil, let clip = fx.library.clip("loophole_flap_\(team)_close") {
+                    let node = take("flap", parent: body, z: 1.2)
+                    let name: String
+                    if let anim {
+                        let t = now - anim.start
+                        name = anim.closing ? clip.frame(at: t) : (t >= clip.total ? "loophole_open" : clip.frame(at: t, reversed: true))
+                    } else {
+                        name = clip.hold ?? clip.frames.last ?? ""
+                    }
+                    placeClip(node, name, clip, at: local(hole.x0, hole.y1 + 5), cellsPerPx: 1, flip: false)
+                }
+            }
+            drawLid(key: key, on: room.lid, at: local(room.box.midX, room.box.y1), fx: fx, body: body)
+        }
+        if let kr = fort.kettleRoom, useArt {
+            drawLid(key: "\(fort.side):kettle", on: fort.kettleLid, at: local(kr.midX, kr.y1), fx: fx, body: body)
+        }
+
+        // The kettle: its state art, the pop animation, steam when critical.
+        let pct = fort.kettlePercent
+        let state = fort.kettleHp <= 0 ? "popped" : (pct <= 25 ? "critical" : (pct <= 50 ? "hurt" : "full"))
+        let kettle = take("kettle", parent: body, z: 2)
+        let kPoint = local(fort.kettleX, fort.kettleY)
+        if useArt, let pop = fx.kettlePops[fort.side], let clip = fx.library.clip("kettle_pop") {
+            placeClip(kettle, clip.frame(at: now - pop.start), clip, at: kPoint, cellsPerPx: 0.75, flip: fort.side == 1)
+        } else {
+            place(kettle, frame: useArt ? sheet.frame("kettle_\(state)") : nil, at: kPoint,
+                  scale: 0.75, flip: fort.side == 1, fallback: fort.kettleHp > 0 ? palette.kettle : palette.flattened,
+                  fallbackSize: CGSize(width: 20, height: 18))
+        }
+        if useArt, state == "critical", let steam = fx.library.clip("fx_kettle_steam") {
+            let s = take("steam", parent: body, z: 2.1)
+            placeClip(s, steam.frame(at: reduceMotion ? 0 : now), steam, at: local(fort.kettleX, fort.kettleY + 14),
+                      cellsPerPx: 0.8, flip: false)
+        }
+
+        // Hobs: idle, aim pose by power, fire, hit, tumble, land, dig, cheer, Bonked with the balloon.
+        for h in fort.hobs {
+            let node = take("hob", parent: body, z: 3)
+            let selected = h.id == snap.selectedHob && fort.side == snap.activeSide
+            let aiming = snap.phase == .plan && snap.isHuman(fort.side)
+            let lift = fx.bonkLift(side: fort.side, hob: Int(h.id) ?? -1)
+            let at = local(h.x, h.y + lift)
+            if useArt, let pick = fx.hobSprite(side: fort.side, hob: h, selected: selected, aiming: aiming, power: snap.aim.power) {
+                placeClip(node, pick.0, pick.1, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: fort.side == 1)
+            } else {
+                let bonked = h.bonked || h.hp <= 0
+                place(node, frame: nil, at: at, scale: 1, flip: fort.side == 1,
+                      fallback: bonked ? palette.flattened : palette.side(fort.side),
+                      fallbackSize: CGSize(width: small ? 18 : 14, height: small ? 18 : 16))
+            }
+        }
+    }
+
+    private func drawLid(key: String, on: Bool, at point: CGPoint, fx: FieldFX, body: SKNode) {
+        guard let clip = fx.library.clip("pot_lid_raise") else { return }
+        let anim = fx.lids[key]
+        guard on || anim != nil else { return }
+        let node = take("lid", parent: body, z: 2.4)
+        let name: String
+        if let anim {
+            let t = fx.now - anim.start
+            if anim.raising {
+                name = clip.frame(at: t)
+            } else {
+                guard t < clip.total else { node.isHidden = true; return }
+                name = clip.frame(at: t, reversed: true)
+            }
+        } else {
+            name = clip.hold ?? clip.frames.last ?? ""
+        }
+        placeClip(node, name, clip, at: point, cellsPerPx: 0.6, flip: false)
+    }
+
+    // MARK: Weather
+
+    private func drawWeather(snap: BattleSnapshot, fx: FieldFX, view: CGRect, reduceMotion: Bool) {
+        let now = reduceMotion ? 0 : fx.now
+        func frac(_ v: Double) -> Double { v - floor(v) }
+        let width = Double(view.width), height = Double(view.height)
+        if snap.wind != 0, let leaf = fx.library.clip("fx_wind_leaf") {
+            let n = min(6, abs(snap.wind))
+            let speed = Double(snap.wind) * 22
+            for i in 0..<n {
+                let seed = Double(i) * 0.618
+                let x = Double(view.minX) + frac(seed + now / 1000 * speed / max(1, width)) * width
+                let y = Double(view.minY) + (0.35 + 0.5 * frac(seed * 3.7)) * height + sin(now / 400 + Double(i)) * 6
+                let node = take("leaf", parent: world, z: 6.5)
+                placeClip(node, leaf.frame(at: now + Double(i) * 70), leaf, at: CGPoint(x: x, y: y), cellsPerPx: 1, flip: snap.wind < 0)
+            }
+        }
+        if snap.squallRound > 0, let squall = fx.library.clip("fx_squall") {
+            let n = 4 + 2 * snap.squallRound
+            let dir = snap.wind >= 0 ? 1.0 : -1.0
+            for i in 0..<n {
+                let seed = Double(i) * 0.381
+                let x = Double(view.minX) + frac(seed + now / 1000 * 120 * dir / max(1, width)) * width
+                let y = Double(view.minY) + (0.2 + 0.7 * frac(seed * 5.3)) * height
+                let node = take("squall", parent: world, z: 6.6)
+                placeClip(node, squall.frame(at: now + Double(i) * 45), squall, at: CGPoint(x: x, y: y), cellsPerPx: 1.6, flip: dir < 0)
+                node.alpha = 0.8
+            }
+        }
+    }
+
+    // MARK: Terrain
 
     /// Draws the real cell grid: one sprite per chunk, its texture rebuilt only
     /// when that chunk changed (H6). All-air chunks have no sprite.
@@ -419,33 +710,6 @@ final class LensLayer {
         }
     }
 
-    /// World cells per @1x pixel for Hob frames (72 x 80 px at @1x, bonked 72 x 116),
-    /// so a Hob stands about two blocks tall in its Nook. Blocks are 1 cell a pixel.
-    static let hobCellsPerPixel: CGFloat = 0.5
-
-    /// Puts a sprite frame with its anchor at `point`. `scale` is world cells per @1x pixel.
-    private func place(_ node: SKSpriteNode, frame: SpriteSheet.Frame?, at point: CGPoint, scale: CGFloat, flip: Bool,
-                       fallback: UIColor, fallbackSize: CGSize) {
-        node.position = point
-        node.alpha = 1
-        if let frame {
-            node.texture = frame.texture
-            node.colorBlendFactor = 0
-            node.color = .white
-            node.size = CGSize(width: frame.size.width * scale, height: frame.size.height * scale)
-            // Manifest anchors are from the top left; SpriteKit's are unit values from the bottom left.
-            node.anchorPoint = CGPoint(x: frame.anchor.x / max(1, frame.size.width),
-                                       y: 1 - frame.anchor.y / max(1, frame.size.height))
-        } else {
-            node.texture = nil
-            node.color = fallback
-            node.colorBlendFactor = 1
-            node.size = fallbackSize
-            node.anchorPoint = CGPoint(x: 0.5, y: 0)
-        }
-        node.xScale = flip ? -1 : 1
-    }
-
     private func updateGround(snap: BattleSnapshot, palette: Palette) {
         ground.fillColor = palette.dirt
         ground.strokeColor = palette.grass
@@ -471,22 +735,44 @@ final class LensLayer {
         ground.path = path
     }
 
-    private static func take(_ pool: inout [SKSpriteNode], _ i: Int, parent: SKNode, z: CGFloat) -> SKSpriteNode {
-        if i < pool.count {
-            let node = pool[i]
-            node.isHidden = false
-            return node
+    // MARK: Placing sprites
+
+    /// Puts a sprite frame with its anchor at `point`. `scale` is world cells per @1x pixel.
+    private func place(_ node: SKSpriteNode, frame: SpriteSheet.Frame?, at point: CGPoint, scale: CGFloat, flip: Bool,
+                       fallback: UIColor, fallbackSize: CGSize) {
+        node.position = point
+        if let frame {
+            node.texture = frame.texture
+            node.colorBlendFactor = 0
+            node.color = .white
+            node.size = CGSize(width: frame.size.width * scale, height: frame.size.height * scale)
+            // Manifest anchors are from the top left; SpriteKit's are unit values from the bottom left.
+            node.anchorPoint = CGPoint(x: frame.anchor.x / max(1, frame.size.width),
+                                       y: 1 - frame.anchor.y / max(1, frame.size.height))
+        } else {
+            node.texture = nil
+            node.color = fallback
+            node.colorBlendFactor = 1
+            node.size = fallbackSize
+            node.anchorPoint = CGPoint(x: 0.5, y: 0)
         }
-        let node = SKSpriteNode(color: .clear, size: CGSize(width: 1, height: 1))
-        node.zPosition = z
-        parent.addChild(node)
-        pool.append(node)
-        return node
+        node.xScale = flip ? -1 : 1
     }
 
-    private static func hide(_ pool: [SKSpriteNode], from count: Int) {
-        guard count < pool.count else { return }
-        for i in count..<pool.count { pool[i].isHidden = true }
+    /// Puts one frame of an animation with the clip's shared size and anchor at `point`.
+    private func placeClip(_ node: SKSpriteNode, _ frameName: String, _ clip: AnimClip, at point: CGPoint, cellsPerPx: CGFloat, flip: Bool) {
+        node.position = point
+        guard let frame = sheet.frame(frameName) else {
+            node.isHidden = true
+            return
+        }
+        node.texture = frame.texture
+        node.colorBlendFactor = 0
+        node.color = .white
+        let w = CGFloat(clip.w), h = CGFloat(clip.h)
+        node.size = CGSize(width: w * cellsPerPx, height: h * cellsPerPx)
+        node.anchorPoint = CGPoint(x: clip.anchor.x / max(1, w), y: 1 - clip.anchor.y / max(1, h))
+        node.xScale = flip ? -1 : 1
     }
 }
 
@@ -517,44 +803,77 @@ final class TerrainTextures {
     }
 }
 
-/// View-only camera framing: which part of the field each lens shows.
-/// World units are cells, y up.
+/// View-only camera framing: which part of the field each lens wants to show
+/// (UX 3.5). The rig eases toward it. World units are cells, y up.
+@MainActor
 enum Camera {
-    static func worldRect(for focus: LensFocus, snap: BattleSnapshot) -> CGRect {
+    static func fortRect(_ side: Int, snap: BattleSnapshot) -> CGRect {
         let worldW = snap.world.w
-        func fortRect(_ side: Int) -> CGRect {
-            guard let f = snap.fort(side), !(f.blocks.isEmpty && f.hobs.isEmpty) else {
-                let x = side == 0 ? worldW * 0.15 : worldW * 0.85
-                return CGRect(x: x - 120, y: snap.groundAt(x) - 40, width: 240, height: 200)
-            }
-            var minX = f.x - 40, maxX = f.x + 40
-            var minY = snap.groundAt(f.x), maxY = minY + 64
-            for b in f.blocks {
-                minX = min(minX, b.x); maxX = max(maxX, b.x + b.w)
-                minY = min(minY, b.y); maxY = max(maxY, b.y + b.h)
-            }
-            for h in f.hobs {
-                minX = min(minX, h.x - 20); maxX = max(maxX, h.x + 20)
-                maxY = max(maxY, h.y + 44)
-            }
-            return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        guard let f = snap.fort(side), !(f.blocks.isEmpty && f.hobs.isEmpty) else {
+            let x = side == 0 ? worldW * 0.15 : worldW * 0.85
+            return CGRect(x: x - 120, y: snap.groundAt(x) - 40, width: 240, height: 200)
         }
+        var minX = f.x - 40, maxX = f.x + 40
+        var minY = snap.groundAt(f.x), maxY = minY + 64
+        for b in f.blocks {
+            minX = min(minX, b.x); maxX = max(maxX, b.x + b.w)
+            minY = min(minY, b.y); maxY = max(maxY, b.y + b.h)
+        }
+        for h in f.hobs {
+            minX = min(minX, h.x - 20); maxX = max(maxX, h.x + 20)
+            maxY = max(maxY, h.y + 44)
+        }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    /// Both forts plus the arc you can see, biased 55/45 toward the fort being shot at.
+    static func planRect(_ snap: BattleSnapshot) -> CGRect {
+        var r = fortRect(0, snap: snap).union(fortRect(1, snap: snap))
+        var i = 0
+        while i + 1 < snap.preview.count {
+            r = r.union(CGRect(x: snap.preview[i] - 8, y: snap.preview[i + 1] - 8, width: 16, height: 16))
+            i += 2
+        }
+        r = r.insetBy(dx: -90, dy: -40).offsetBy(dx: 0, dy: 60)
+        let bias = r.width * 0.05 * (snap.activeSide == 0 ? 1 : -1)
+        return r.offsetBy(dx: bias, dy: 0)
+    }
+
+    static func worldRect(for focus: LensFocus, snap: BattleSnapshot, fx: FieldFX? = nil, current: CGRect? = nil) -> CGRect {
+        let worldW = snap.world.w
         switch focus {
         case .whole:
             let low = snap.terrain.min() ?? 0
             let top = (snap.terrain.max() ?? 300) + 140
             return CGRect(x: 0, y: low - 20, width: worldW, height: max(100, top - low))
         case .both:
-            return fortRect(0).union(fortRect(1)).insetBy(dx: -90, dy: -40).offsetBy(dx: 0, dy: 60)
+            return planRect(snap)
         case .own:
-            return fortRect(snap.activeSide).insetBy(dx: -170, dy: -60).offsetBy(dx: snap.activeSide == 0 ? 110 : -110, dy: 40)
+            return fortRect(snap.activeSide, snap: snap).insetBy(dx: -170, dy: -60).offsetBy(dx: snap.activeSide == 0 ? 110 : -110, dy: 40)
         case .target:
-            return fortRect(1 - snap.activeSide).insetBy(dx: -150, dy: -50).offsetBy(dx: 0, dy: 30)
+            return fortRect(1 - snap.activeSide, snap: snap).insetBy(dx: -150, dy: -50).offsetBy(dx: 0, dy: 30)
         case .follow:
-            let base = fortRect(0).union(fortRect(1)).insetBy(dx: -80, dy: -40)
-            guard !snap.shells.isEmpty else { return base.offsetBy(dx: 0, dy: 60) }
-            // Frame every shell of a split, not only the first (L6).
-            return snap.shells.reduce(base) { r, sh in r.union(CGRect(x: sh.x - 120, y: sh.y - 120, width: 240, height: 240)) }
+            let base = fortRect(0, snap: snap).union(fortRect(1, snap: snap)).insetBy(dx: -80, dy: -40)
+            if !snap.shells.isEmpty {
+                // Follow the shell with lookahead along its flight, and keep the fort it heads for in view.
+                let target = fortRect(1 - snap.activeSide, snap: snap)
+                var r = CGRect.null
+                for sh in snap.shells {
+                    let a = Double(sh.rot) / 10 * .pi / 180
+                    let lead = CGPoint(x: sh.x + cos(a) * 140, y: sh.y + sin(a) * 90)
+                    r = r.union(CGRect(x: sh.x - 160, y: sh.y - 110, width: 320, height: 220))
+                    r = r.union(CGRect(x: lead.x - 60, y: lead.y - 60, width: 120, height: 120))
+                }
+                r = r.union(target.insetBy(dx: -30, dy: -20))
+                if fx?.reduceMotion == true { r = r.union(base) }
+                return r
+            }
+            // Impact: hold on the hit for 0.6 s, then widen to show the settle.
+            if let fx, let hit = fx.lastImpact, DispatchTime.now().uptimeNanoseconds &- hit.at < 600_000_000 {
+                let size = current?.size ?? CGSize(width: 520, height: 300)
+                return CGRect(x: hit.x - size.width / 2, y: hit.y - size.height / 2, width: size.width, height: size.height)
+            }
+            return base.offsetBy(dx: 0, dy: 60)
         }
     }
 }

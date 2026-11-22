@@ -20,6 +20,23 @@ struct ContentCatalog: Sendable {
         var name: String
         var weight: String
         var card: String
+        /// Flight kind (arc, split, dig, bounce, roller, prop, beam, self) and first damage type.
+        var flight: String = "arc"
+        var dtype: String = "blast"
+    }
+
+    /// Trail kind for a shot in flight (assets: fx_trail_{blast,pierce,dig,fire,mend}).
+    func trailKind(_ id: String) -> String {
+        if id.contains("mend") { return "mend" }
+        guard let s = shots[id] else { return "blast" }
+        if s.flight == "self" { return "mend" }
+        if s.flight == "dig" { return "dig" }
+        switch s.dtype {
+        case "pierce": return "pierce"
+        case "fire": return "fire"
+        case "dig": return "dig"
+        default: return s.flight == "beam" ? "pierce" : "blast"
+        }
     }
 
     var region = "Puddingstone Downs"
@@ -80,7 +97,11 @@ struct ContentCatalog: Sendable {
         if let url = bundle.url(forResource: "shots", withExtension: "json", subdirectory: "content"),
            let data = try? Data(contentsOf: url),
            let list = try? JSONDecoder().decode([RawShot].self, from: data) {
-            for s in list { shots[s.id] = Shot(name: s.name, weight: s.weight ?? "L", card: s.card ?? "") }
+            for s in list {
+                let dtype = (s.triggers ?? []).flatMap { $0.ops ?? [] }.compactMap { $0.dtype }.first ?? "blast"
+                shots[s.id] = Shot(name: s.name, weight: s.weight ?? "L", card: s.card ?? "",
+                                   flight: s.flight?.kind ?? "arc", dtype: dtype)
+            }
         }
         if levels.isEmpty { levels = fallbackLevels }
         if skirmish.isEmpty {
@@ -155,8 +176,17 @@ private struct RawLevel: Decodable {
 }
 
 private struct RawShot: Decodable {
+    struct Flight: Decodable { var kind: String? }
+    struct Op: Decodable { var dtype: String? }
+    struct Trigger: Decodable {
+        var ops: [Op]?
+        private enum CodingKeys: String, CodingKey { case ops = "do" }
+    }
+
     var id: String
     var name: String
     var weight: String?
     var card: String?
+    var flight: Flight?
+    var triggers: [Trigger]?
 }

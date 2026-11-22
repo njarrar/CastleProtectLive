@@ -349,7 +349,6 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 }
             }
         }
-        if (me < 0) return
     }
 
     // ---- input -----------------------------------------------------------

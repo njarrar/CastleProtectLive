@@ -155,39 +155,47 @@ class AnimClip(private val anims: Anims, start: AnimDef, private val backwards: 
     private fun idx(i: Int) = if (backwards) def.frames.size - 1 - i else i
 
     /** Shows one frame of a "pick" pose set (aim: 0, 1, 2 for low, mid, full power). */
-    fun pick(i: Int) { frame = i.coerceIn(0, def.frames.size - 1); done = false }
+    fun pick(i: Int) { frame = i.coerceIn(0, def.frames.size - 1); pos = frame; done = false }
 
-    /** Advances by [dtMs] of view time. [onEvent] gets each event as its frame first shows. */
+    /** Position in play order (0 is the first frame shown), or -1 before the first frame. */
+    private var pos = -1
+
+    /** Advances by [dtMs] of view time. [onEvent] gets each event as its frame first shows, in order. */
     fun advance(dtMs: Float, onEvent: ((String) -> Unit)? = null) {
         if (done || def.pick != null) { if (frame < 0) frame = 0; return }
-        if (frame < 0) enter(0, onEvent)
-        t += dtMs
+        if (pos < 0) enter(0, onEvent)
+        var left = dtMs.coerceAtLeast(0f)
         var guard = 0
-        while (t >= def.total && guard++ < 8) {
+        while (guard++ < 32) {
+            if (t + left < def.total) { t += left; reach(def.frameAt(t), onEvent); return }
+            // This pass ends: show the frames passed over, then loop, go on to next, or hold.
+            reach(def.frames.size - 1, onEvent)
+            left -= def.total - t
             if (def.loop) {
                 val loopStart = def.starts[def.loopFrom].toFloat()
                 val loopLen = (def.total - loopStart).coerceAtLeast(1f)
-                t = loopStart + (t - def.total) % loopLen
-                val i = def.frameAt(t)
-                if (idx(i) != frame) enter(i, onEvent)
-                return
+                if (guard > 1) left %= loopLen
+                t = loopStart
+                enter(def.loopFrom, onEvent)
+                continue
             }
             val nx = def.next?.let { anims[it] }
-            if (nx != null) { t -= def.total; def = nx; frame = -1; enter(0, onEvent) } else { t = def.total.toFloat(); done = true; return }
-        }
-        val i = def.frameAt(t)
-        if (idx(i) != frame) {
-            // Fire events for every frame passed over, in order.
-            val from = if (frame < 0) 0 else (if (backwards) def.frames.size - 1 - frame else frame) + 1
-            for (k in from..i) enter(k, onEvent)
+            if (nx == null) { t = def.total.toFloat(); done = true; return }
+            def = nx; t = 0f; pos = -1; enter(0, onEvent)
         }
     }
 
+    /** Shows every frame after the current one up to [i], firing their events. */
+    private fun reach(i: Int, onEvent: ((String) -> Unit)?) {
+        while (pos < i) enter(pos + 1, onEvent)
+    }
+
     private fun enter(i: Int, onEvent: ((String) -> Unit)?) {
+        pos = i
         frame = idx(i)
         if (onEvent != null) for (e in def.events[i]) onEvent(e)
     }
 
     /** Starts [d] from its first frame. */
-    fun play(d: AnimDef) { def = d; t = 0f; frame = -1; done = false }
+    fun play(d: AnimDef) { def = d; t = 0f; frame = -1; pos = -1; done = false }
 }

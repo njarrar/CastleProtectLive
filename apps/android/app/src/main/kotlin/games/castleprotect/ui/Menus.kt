@@ -58,6 +58,8 @@ import games.castleprotect.core.BattleSpec
 import games.castleprotect.core.Cmd
 import games.castleprotect.core.JsonText
 import games.castleprotect.core.Phase
+import games.castleprotect.core.SideOpts
+import kotlinx.coroutines.delay
 import games.castleprotect.game.GameSession
 import games.castleprotect.game.Screen
 
@@ -96,6 +98,7 @@ fun TitleScreen(session: GameSession) {
                 Spacer(Modifier.height(10.dp))
             }
             CastleButton("Play", {
+                session.firstTap()
                 // First run: straight into level 1-1, so the first shot is seconds away.
                 if (!session.settings.seenIntro && !session.canResume) { session.settings.seenIntro = true; session.go(Screen.MAP); session.openLevel("1-1"); session.fight() } else session.go(Screen.MAP)
             }, Modifier.fillMaxWidth().height(60.dp), size = 20, color = if (session.canResume) C.Cream else C.Gold)
@@ -207,6 +210,7 @@ fun PreBattleScreen(session: GameSession) {
                             }
                         }
                         if (info.note.isNotEmpty()) Label(info.note, Modifier.padding(top = 6.dp), size = 12, color = C.InkSoft)
+                        if (draft == null) Choice("Help", listOf("None", "Some", "Lots"), session.settings.help) { session.settings.help = it; session.openSpecQuiet(session.campaignSpec(info.id)) }
                     }
                 }
                 // The Rummage. Fight quick-picks it, so opening it is optional.
@@ -268,31 +272,110 @@ fun ResultsScreen(session: GameSession) {
     val duel = u.hud.human(0) && u.hud.human(1)
     val won = winner >= 0 && u.hud.human(winner)
     val campaign = session.lastSpec?.kind == "campaign"
-    val head = when { winner < 0 -> "Draw"; duel -> "${u.hud.names.getOrElse(winner) { "" }} wins"; won -> "Victory"; else -> "Flattened" }
-    val how = when (r?.how) {
-        "kettle_pop" -> "Kettle Pop"; "clean_sweep" -> "Clean Sweep"; "squall" -> "Sudden Squall"; "double_pop" -> "Double Pop"
-        "rescue" -> "Rescue"; "round_cap" -> "Dozed off"; "total_hp" -> "On points"; else -> r?.how ?: ""
+    val head = when {
+        winner < 0 -> "Draw"
+        duel -> "${u.hud.names.getOrElse(winner) { "" }} wins"
+        won -> when (r?.how) { "clean_sweep" -> "Clean Sweep!"; "kettle_pop" -> "Kettle Pop!"; else -> "Victory" }
+        r?.how == "give_up" -> "You gave up"
+        else -> "Flattened"
     }
+    val how = howText(r?.how)
     val texts = session.levelInfo(u.level)?.pennants ?: emptyList()
-    Box(Modifier.fillMaxSize().background(if (winner == 1 && duel) C.OrangeLight else if (won) C.BlueLight else C.Parchment).safeDrawingPadding(), contentAlignment = Alignment.Center) {
-        Plate(Modifier.padding(16.dp).widthIn(max = 420.dp).verticalScroll(rememberScrollState()), pad = 20.dp) {
+    // The beats (07 section 4.6): Pennants stamp in at 0.4, 0.9, 1.4 s; Score and Buttons count up from 1.9 s for 0.8 s. One tap skips.
+    var t by remember { mutableStateOf(if (session.settings.reduceMotion) 9999f else 0f) }
+    LaunchedEffect(r) {
+        val start = android.os.SystemClock.uptimeMillis()
+        var stamped = 0
+        while (t < 2800f) {
+            t = (android.os.SystemClock.uptimeMillis() - start).toFloat()
+            val due = ((t - 400f) / 500f).toInt() + 1
+            while (stamped < minOf(due, r?.pennants?.size ?: 0)) { if (r?.pennants?.getOrNull(stamped) == true) { session.audio.play("meta_pennant_stamp", semis = stamped * 2f); session.buzz(15) }; stamped++ }
+            delay(16)
+        }
+    }
+    val count = ((t - 1900f) / 800f).coerceIn(0f, 1f)
+    Box(Modifier.fillMaxSize().background(if (winner == 1 && duel) C.OrangeLight else if (won) C.BlueLight else C.Parchment).safeDrawingPadding()
+        .clickable(onClickLabel = "skip") { t = 9999f }, contentAlignment = Alignment.Center) {
+        Plate(Modifier.padding(16.dp).widthIn(max = 460.dp).verticalScroll(rememberScrollState()), pad = 20.dp) {
             Label(head, Modifier.fillMaxWidth().semantics { heading() }, size = 30, bold = true, align = TextAlign.Center, color = if (winner >= 0) C.side(winner) else C.Ink)
             Label("$how   Round ${r?.round ?: u.hud.round}", Modifier.fillMaxWidth().padding(top = 2.dp), size = 14, color = C.InkSoft, align = TextAlign.Center)
-            if (r != null && campaign) {
+            if (r != null && campaign && r.pennants.isNotEmpty()) {
                 val got = r.pennants.count { it }
-                Label(r.pennants.joinToString(" ") { if (it) "★" else "☆" }, Modifier.fillMaxWidth().padding(top = 10.dp).semantics { contentDescription = "$got of ${r.pennants.size} Pennants" }, size = 40, color = C.GoldDark, align = TextAlign.Center)
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp).semantics(mergeDescendants = true) { contentDescription = "$got of ${r.pennants.size} Pennants" }, horizontalArrangement = Arrangement.Center) {
+                    r.pennants.forEachIndexed { i, ok ->
+                        val shown = t >= 400f + 500f * i
+                        val frame = ((t - (400f + 500f * i)) / 80f).toInt().coerceIn(0, 4)
+                        Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+                            val drawn = shown && ok && frame < 4 && SpriteImage(session.sprites, "ui_pennant_earn_$frame", Modifier.fillMaxSize())
+                            if (!drawn) Label(if (ok && shown) "★" else "☆", size = 40, color = if (ok && shown) C.GoldDark else C.Locked)
+                        }
+                    }
+                }
                 r.pennants.forEachIndexed { i, ok ->
                     val g = texts.getOrElse(i) { "Pennant ${i + 1}" }
-                    Label((if (ok) "★ " else "☆ ") + g, Modifier.semantics { contentDescription = "$g, ${if (ok) "earned" else "missed"}" }, size = 14)
+                    val fresh = r.pennantsNew.getOrElse(i) { false }
+                    Label((if (ok) "★ " else "☆ ") + g + (if (fresh) "  NEW" else ""), Modifier.semantics { contentDescription = "$g, ${if (ok) "earned" else "missed"}${if (fresh) ", new" else ""}" }, size = 14, bold = fresh)
                 }
             } else {
                 Label("Kettles: ${u.hud.names.getOrElse(0) { "" }} ${u.hud.kettlePct.getOrElse(0) { 0 }}%, ${u.hud.names.getOrElse(1) { "" }} ${u.hud.kettlePct.getOrElse(1) { 0 }}%", Modifier.fillMaxWidth().padding(top = 12.dp), size = 14, align = TextAlign.Center)
             }
+            if (r != null) {
+                val score = r.score
+                if (score.size >= 2) Label("Siege Score  ${(score[0] * count).toInt()}  to  ${(score[1] * count).toInt()}", Modifier.fillMaxWidth().padding(top = 10.dp), size = 15, bold = true, align = TextAlign.Center)
+                if (!duel && (campaign || r.buttons > 0)) Label("Buttons +${(r.buttons * count).toInt()}", Modifier.fillMaxWidth().semantics { contentDescription = "Buttons plus ${r.buttons}" }, size = 18, bold = true, color = C.GoldDark, align = TextAlign.Center)
+                val me = if (duel) winner.coerceAtLeast(0) else 0
+                r.stats.getOrNull(me)?.let { st ->
+                    Label("Shots ${st.shots}   Hits ${st.hits}   Blocks dropped ${st.blocksDropped}   Bonks ${st.bonks}   Best streak ${st.bestStreak}", Modifier.fillMaxWidth().padding(top = 6.dp), size = 12, color = C.InkSoft, align = TextAlign.Center)
+                }
+                // "What broke you" after a loss (07 section 4.6): the last blow, the worst blows and what was lost.
+                val b = r.broke
+                if (b != null && !won && !duel) BrokePanel(b)
+                if (b != null && duel) BrokePanel(b, u.hud.names.getOrElse(b.side) { "" })
+            }
             Spacer(Modifier.height(16.dp))
-            if (session.canRematch) CastleButton(if (campaign) (if (won) "Play again" else "Try again") else "Rematch", { session.rematch() }, Modifier.fillMaxWidth(), color = if (won && campaign) C.Cream else C.Gold)
+            if (session.canRematch) CastleButton(if (campaign) (if (won) "Play again" else "Try again") else "Rematch", { session.audio.play("ui_confirm"); session.rematch() }, Modifier.fillMaxWidth(), color = if (won && campaign) C.Cream else C.Gold)
             Spacer(Modifier.height(8.dp))
-            CastleButton(if (campaign) "Back to the map" else "Done", { session.goBack() }, Modifier.fillMaxWidth(), color = if (won && campaign) C.Gold else C.Cream)
+            CastleButton(if (campaign) "Back to the map" else "Done", { session.audio.play("ui_back"); session.goBack() }, Modifier.fillMaxWidth(), color = if (won && campaign) C.Gold else C.Cream)
         }
+    }
+}
+
+/** The result's `how` in plain words. */
+fun howText(how: String?): String = when (how) {
+    "kettle_pop" -> "Kettle Pop"; "clean_sweep" -> "Clean Sweep"; "squall" -> "Sudden Squall"; "double_pop" -> "Double Pop"
+    "rescue" -> "Rescue"; "round_cap" -> "Dozed off"; "total_hp" -> "On points"; "give_up" -> "Given up"
+    "volley_points" -> "Volley Points"; "captive_bonked" -> "The captive was Bonked"
+    null -> ""; else -> how.replace('_', ' ')
+}
+
+/**
+ * One plain line, eight words at most, from what the core says broke the side. It names
+ * only what the result shows, and never invents a cause.
+ */
+fun brokeLine(b: games.castleprotect.core.Broke): String = when {
+    b.how == "give_up" -> "You gave up. No shame in that."
+    b.how == "captive_bonked" -> "The captive was Bonked."
+    b.how == "clean_sweep" -> "Every Hob was Bonked."
+    b.how in setOf("kettle_pop", "double_pop", "squall") && b.kettleLost > 0 -> "Your kettle took ${b.kettleLost} damage."
+    b.blocksLost >= 8 -> "You lost ${b.blocksLost} blocks."
+    b.hobsBonked > 0 -> "${b.hobsBonked} of your Hobs were Bonked."
+    else -> "A close one. Nothing broke first."
+}
+
+@Composable
+private fun BrokePanel(b: games.castleprotect.core.Broke, who: String? = null) {
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).background(C.Cream).border(2.dp, C.Ink, RoundedCornerShape(12.dp)).padding(10.dp)) {
+        Label(if (who != null) "What broke $who" else "What broke you", Modifier.semantics { heading() }, size = 15, bold = true)
+        Label("“${brokeLine(b)}”", Modifier.padding(top = 2.dp), size = 15)
+        b.last?.let { l ->
+            val by = if (l.hobName.isNotEmpty()) " from ${l.hobName}" else ""
+            Label("Last blow: ${l.shotName.ifEmpty { l.shot }}$by, round ${l.round}", Modifier.padding(top = 4.dp), size = 13)
+        }
+        b.top.take(3).forEachIndexed { i, t ->
+            val by = if (t.hobName.isNotEmpty()) " (${t.hobName})" else ""
+            Label("${i + 1}. ${t.shotName.ifEmpty { t.shot }}$by: ${t.dmg} damage", size = 13)
+        }
+        Label("Kettle lost ${b.kettleLost}   Blocks lost ${b.blocksLost}   Hobs Bonked ${b.hobsBonked}", Modifier.padding(top = 4.dp), size = 12, color = C.InkSoft)
     }
 }
 
@@ -304,6 +387,7 @@ fun SkirmishScreen(session: GameSession) {
     var wind by rememberSaveable { mutableIntStateOf(1) }
     var draft by rememberSaveable { mutableIntStateOf(0) }
     var map by rememberSaveable { mutableIntStateOf(0) }
+    var winBy by rememberSaveable { mutableIntStateOf(0) }
     val maps = session.content.duelMaps
     Page("Skirmish", session) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
@@ -311,13 +395,16 @@ fun SkirmishScreen(session: GameSession) {
                 Label("One battle against the AI.", size = 14, color = C.InkSoft)
                 if (maps.size > 1) Choice("Map", maps.map { it.name }, map.coerceAtMost(maps.size - 1)) { map = it }
                 Choice("Rival", listOf("Cozy", "Fair", "Stubborn"), session.settings.preset) { session.settings.preset = it }
-                Choice("Rounds", listOf("10", "15", "20"), rounds) { rounds = it }
+                Choice("Win by", WIN_BY, winBy) { winBy = it }
+                if (winBy == 0) Choice("Rounds", listOf("10", "15", "20"), rounds) { rounds = it }
                 Choice("Wind", listOf("Calm", "Light", "Gusty"), wind) { wind = it }
                 Choice("Shells", listOf("Rummage", "Plain only"), draft) { draft = it }
+                Choice("Help", listOf("None", "Some", "Lots"), session.settings.help) { session.settings.help = it }
                 Spacer(Modifier.height(10.dp))
                 CastleButton("Next", {
                     val level = maps.getOrNull(map)?.id ?: "d1"
-                    session.openSpec(BattleSpec.skirmish(level, session.settings.presetKey, listOf(10, 15, 20)[rounds], wind, draft == 1))
+                    session.openSpec(BattleSpec.skirmish(level, session.settings.presetKey, listOf(10, 15, 20)[rounds], wind, draft == 1,
+                        help = SideOpts(session.settings.helpKey), volley = VOLLEY[winBy]))
                 }, Modifier.fillMaxWidth().height(56.dp), size = 18, enabled = !session.coreMissing)
             }
         }
@@ -337,21 +424,25 @@ fun DuelSetupScreen(session: GameSession) {
     var draft by rememberSaveable { mutableIntStateOf(0) }
     var seats by rememberSaveable { mutableIntStateOf(0) }
     var map by rememberSaveable { mutableIntStateOf(0) }
+    var winBy by rememberSaveable { mutableIntStateOf(0) }
+    var help1 by rememberSaveable { mutableIntStateOf(0) }
+    var help2 by rememberSaveable { mutableIntStateOf(0) }
     val maps = session.content.duelMaps
-    Page("Couch Duel", session, trailing = { CastleButton("Swap sides", { val t = p1; p1 = p2; p2 = t }, color = C.Cream, size = 13) }) {
+    Page("Couch Duel", session, trailing = { CastleButton("Swap sides", { val t = p1; p1 = p2; p2 = t; val hh = help1; help1 = help2; help2 = hh }, color = C.Cream, size = 13) }) {
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Label("2 players, 1 device. Free forever, no ads.", size = 13, color = C.InkSoft)
                 BoxWithConstraints {
                     val wide = maxWidth > 560.dp
-                    val a: @Composable (Modifier) -> Unit = { m -> PlayerPlate(m, 0, p1, { p1 = it }) { p1 = duelNames.filter { it != p2 }.random() } }
-                    val b: @Composable (Modifier) -> Unit = { m -> PlayerPlate(m, 1, p2, { p2 = it }) { p2 = duelNames.filter { it != p1 }.random() } }
+                    val a: @Composable (Modifier) -> Unit = { m -> PlayerPlate(m, 0, p1, { p1 = it }, help1, { help1 = it }) { p1 = duelNames.filter { it != p2 }.random() } }
+                    val b: @Composable (Modifier) -> Unit = { m -> PlayerPlate(m, 1, p2, { p2 = it }, help2, { help2 = it }) { p2 = duelNames.filter { it != p1 }.random() } }
                     if (wide) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { a(Modifier.weight(1f)); b(Modifier.weight(1f)) }
                     else Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { a(Modifier.fillMaxWidth()); b(Modifier.fillMaxWidth()) }
                 }
                 Plate(Modifier.fillMaxWidth()) {
                     if (maps.size > 1) Choice("Map", maps.map { it.name }, map.coerceAtMost(maps.size - 1)) { map = it }
-                    Choice("Rounds", listOf("10", "15", "20"), rounds) { rounds = it }
+                    Choice("Win by", WIN_BY, winBy) { winBy = it }
+                    if (winBy == 0) Choice("Rounds", listOf("10", "15", "20"), rounds) { rounds = it }
                     Choice("Wind", listOf("Calm", "Light", "Gusty"), wind) { wind = it }
                     Choice("Shells", listOf("Rummage", "Plain only"), draft) { draft = it }
                     Choice("Seats", listOf("Side by side", "One seat"), seats) { seats = it }
@@ -361,15 +452,19 @@ fun DuelSetupScreen(session: GameSession) {
                 CastleButton("Next", {
                     val level = maps.getOrNull(map)?.id ?: "d1"
                     session.openSpec(BattleSpec.couch(level, listOf(p1.ifBlank { "Player 1" }, p2.ifBlank { "Player 2" }), listOf(10, 15, 20)[rounds], wind, draft == 1,
-                        if (seats == 0) "side_by_side" else "one_seat"))
+                        if (seats == 0) "side_by_side" else "one_seat", help = listOf(BattleSpec.duelHelp(help1), BattleSpec.duelHelp(help2)), volley = VOLLEY[winBy]))
                 }, Modifier.size(width = 160.dp, height = 56.dp), size = 18, enabled = !session.coreMissing)
             }
         }
     }
 }
 
+/** Win by: Knockout, or Volley Points with 6, 10 or 14 Actions each. */
+private val WIN_BY = listOf("Knockout", "Volley 6", "Volley 10", "Volley 14")
+private val VOLLEY = listOf(0, 6, 10, 14)
+
 @Composable
-private fun PlayerPlate(modifier: Modifier, side: Int, name: String, onName: (String) -> Unit, dice: () -> Unit) {
+private fun PlayerPlate(modifier: Modifier, side: Int, name: String, onName: (String) -> Unit, help: Int, onHelp: (Int) -> Unit, dice: () -> Unit) {
     val shape = if (side == 0) CircleShape else RoundedCornerShape(3.dp)
     Plate(modifier.border(4.dp, C.side(side), PlateShape)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -383,6 +478,8 @@ private fun PlayerPlate(modifier: Modifier, side: Int, name: String, onName: (St
             Spacer(Modifier.width(8.dp))
             CastleButton("⚄", dice, Modifier.size(48.dp), color = C.Cream, description = "Random name for player ${side + 1}", pad = androidx.compose.foundation.layout.PaddingValues(0.dp), size = 20)
         }
+        // Help is the handicap, per player, and is shown openly in battle.
+        Choice("Help", listOf("None", "Some +", "Lots ++"), help) { onHelp(it) }
     }
 }
 
@@ -402,12 +499,11 @@ fun SettingsScreen(session: GameSession) {
 fun SettingsBody(session: GameSession) {
     val s = session.settings
     Section("Sound")
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Label("Sound", Modifier.width(72.dp), size = 14)
-        Slider(s.sound.toFloat(), { s.sound = it.toInt() }, Modifier.weight(1f).semantics { contentDescription = "Sound volume"; stateDescription = "${s.sound} percent" }, valueRange = 0f..100f, onValueChangeFinished = { session.sfx.play("pick") })
-        Label("${s.sound}", Modifier.width(36.dp), size = 14, align = TextAlign.End)
-    }
+    Volume("Music", s.music, { s.music = it }) { session.audio.play("ui_slider_tick") }
+    Volume("Sound", s.sound, { s.sound = it }) { session.audio.play("ui_slider_tick") }
+    Volume("Voices", s.voices, { s.voices = it }) { session.audio.play("bark_marge_picked") }
     Toggle("Mute all", s.muteAll) { s.muteAll = it }
+    Toggle("Subtitles for Hob-speak", s.subtitles) { s.subtitles = it }
     Section("Controls")
     Choice("Rotation", listOf("Follow device", "Stay wide", "Stay tall"), s.rotation) { s.rotation = it }
     Choice("Drag mode", listOf("Pull-back", "Point"), if (s.pointMode) 1 else 0) { s.pointMode = it == 1 }
@@ -417,14 +513,27 @@ fun SettingsBody(session: GameSession) {
     Toggle("Tap only (no hold to repeat)", s.tapOnly) { s.tapOnly = it }
     Section("Assists")
     Choice("Difficulty", listOf("Cozy", "Fair", "Stubborn"), s.preset) { s.preset = it }
+    Choice("Help (more Steam)", listOf("None", "Some", "Lots"), s.help) { s.help = it }
     Section("Access")
     Choice("Text size", listOf("Small", "Normal", "Large"), s.textSize) { s.textSize = it }
     Choice("Haptics", listOf("Off", "Light", "Full"), s.haptics) { s.haptics = it; session.buzz(20) }
     Toggle("Reduce motion", s.reduceMotion) { s.reduceMotion = it }
+    Choice("Screen shake", listOf("100%", "50%", "Off"), s.shake) { s.shake = it }
+    Toggle("Reduce flashes", s.reduceFlashes) { s.reduceFlashes = it }
     Section("About")
     Label("Free forever. No ads. Nothing to buy.", size = 14, bold = true)
     Label("Privacy: Data Not Collected.", size = 13)
-    Label("Castle Protect v0.1, ${session.coreName}", size = 12, color = C.InkSoft)
+    Label("Castle Protect v0.2, ${session.coreName}", size = 12, color = C.InkSoft)
+    Label("Buttons: ${session.buttons}", size = 12, color = C.InkSoft)
+}
+
+@Composable
+private fun Volume(label: String, value: Int, set: (Int) -> Unit, done: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Label(label, Modifier.width(72.dp), size = 14)
+        Slider(value.toFloat(), { set(it.toInt()) }, Modifier.weight(1f).semantics { contentDescription = "$label volume"; stateDescription = "$value percent" }, valueRange = 0f..100f, onValueChangeFinished = done)
+        Label("$value", Modifier.width(36.dp), size = 14, align = TextAlign.End)
+    }
 }
 
 @Composable

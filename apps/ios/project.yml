@@ -41,6 +41,10 @@ targets:
       - path: ../../assets/manifest.json
         buildPhase: resources
         optional: true
+      # Frame order, times and events for every animation (assets/README.md).
+      - path: ../../assets/animations.json
+        buildPhase: resources
+        optional: true
       - path: ../../content
         type: folder
         buildPhase: resources
@@ -54,14 +58,16 @@ targets:
         path: scripts/core-module.sh
         basedOnDependencyAnalysis: false
     postCompileScripts:
-      # assets/sounds is optional; copy it into the bundle only when it exists.
-      - name: Copy sounds
+      # assets/audio: the manifests and the AAC (.m4a) files only; iOS never loads the Opus copies.
+      - name: Copy audio
         basedOnDependencyAnalysis: false
         script: |
-          SRC="${SRCROOT}/../../assets/sounds"
+          SRC="${SRCROOT}/../../assets/audio"
+          DST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/audio"
           if [ -d "$SRC" ]; then
-            mkdir -p "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/sounds"
-            cp -R "$SRC/." "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/sounds/"
+            mkdir -p "$DST"
+            rsync -a --delete --include='*/' --include='*.m4a' --include='audio.json' --include='barks.json' --exclude='*' "$SRC/" "$DST/"
+            echo "Copied $(find "$DST" -name '*.m4a' | wc -l | tr -d ' ') audio files."
           fi
     info:
       path: Config/Info.plist

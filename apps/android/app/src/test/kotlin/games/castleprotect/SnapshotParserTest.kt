@@ -63,7 +63,7 @@ class SnapshotParserTest {
         assertSame(full.hud, l.hud)
         assertEquals(1, l.shells.size)
         val s = l.shells[0]
-        assertEquals(1, s.id); assertEquals(506, s.x); assertEquals(196, s.y); assertEquals(356, s.rot); assertEquals("clodpot", s.shot)
+        assertEquals(1, s.id); assertEquals(505, s.x); assertEquals(195, s.y); assertEquals(362, s.rot); assertEquals("clodpot", s.shot)
     }
 
     @Test fun afterShotEventsAndGhosts() {

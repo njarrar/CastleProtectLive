@@ -73,13 +73,19 @@ final class CoreProtocolTests: XCTestCase {
         XCTAssertEqual(CoreCommand.walk(dx: -8).jsonString(), #"{"cmd":"walk","dx":-8}"#)
         XCTAssertEqual(CoreCommand.pickShell(shell: "marble_sack").jsonString(), #"{"cmd":"pick_shell","shell":"marble_sack"}"#)
         XCTAssertEqual(CoreCommand.aiTurn().jsonString(), #"{"cmd":"ai_turn"}"#)
+        XCTAssertEqual(CoreCommand.giveUp().jsonString(), #"{"cmd":"give_up"}"#)
+        XCTAssertEqual(CoreCommand.giveUp(side: 1).jsonString(), #"{"cmd":"give_up","side":1}"#)
+        XCTAssertEqual(CoreCommand.setWind(wind: -4).jsonString(), #"{"cmd":"set_wind","wind":-4}"#)
+        XCTAssertEqual(CoreCommand.resume(log: #"[{"cmd":"pass"}]"#).jsonString(), #"{"cmd":"resume","log":[{"cmd":"pass"}]}"#)
         // Aim is clamped to the legal range before it is sent.
         XCTAssertEqual(CoreCommand.aim(angle: 2000, power: -3).jsonString(), #"{"angle":1800,"cmd":"aim","power":0}"#)
     }
 
     func testSetupUsesOnlySchemaKeys() throws {
-        let allowedTop: Set<String> = ["level", "mode", "sides", "first_turn", "round_cap", "squall", "wind", "rummage", "puff_up"]
-        let allowedSide: Set<String> = ["control", "preset", "crew", "blueprint", "rows", "doodads", "kit", "name", "steam", "aim"]
+        let allowedTop: Set<String> = ["level", "mode", "sides", "first_turn", "round_cap", "squall", "wind", "rummage", "puff_up",
+                                       "volley", "progress"]
+        let allowedSide: Set<String> = ["control", "preset", "crew", "blueprint", "rows", "doodads", "kit", "name", "steam", "aim",
+                                        "help", "preview_pct", "crew_size"]
         var duel = BattleSetup(mode: .duel, map: "d1", seed: 9)
         duel.names = ["Mabel", "Otis"]
         duel.forts = ["box_1", "box_3"]

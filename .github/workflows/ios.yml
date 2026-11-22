@@ -161,7 +161,7 @@ jobs:
         working-directory: apps/ios
         run: |
           grep -q "Linking the real core" build/xcodebuild-build.log || { echo "::error::The build used the stand-in core, not CastleCore.xcframework."; exit 1; }
-          for t in testRealCoreWhenLinked testRefusedSetupIsReported testRescueLevelHasProps testGoldenHashesMatch testMultiTurnReplayMatchesTheHash; do
+          for t in testRealCoreWhenLinked testRefusedSetupIsReported testRescueLevelHasProps testGoldenHashesMatch testMultiTurnReplayMatchesTheHash testGiveUpOnTheRealCore testHelpVolleyAndBossSetupsStart; do
             if ! grep -qE "Test Case .*${t}\]' passed" build/xcodebuild-test.log; then
               echo "::error::Real-core test ${t} did not pass (skipped or missing)."
               exit 1

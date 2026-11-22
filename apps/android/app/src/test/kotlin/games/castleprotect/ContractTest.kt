@@ -2,6 +2,8 @@ package games.castleprotect
 
 import games.castleprotect.core.BattleSpec
 import games.castleprotect.core.Cmd
+import games.castleprotect.core.Progress
+import games.castleprotect.core.SideOpts
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -30,6 +32,7 @@ class ContractTest {
         listOf(
             Cmd.pickShell("pudding_bomb"), Cmd.QUICK_PICK, Cmd.END_DRAFT, Cmd.pickHob(0), Cmd.pickShot("plain"), Cmd.aim(450, 62),
             Cmd.recall(0), Cmd.walk(-4), Cmd.shoveOff(1), Cmd.FIRE, Cmd.PASS, Cmd.AI_TURN, Cmd.LOG, Cmd.HASH, Cmd.TERRAIN_ALL,
+            Cmd.giveUp(), Cmd.giveUp(1), Cmd.setWind(-3), Cmd.resume("""[{"cmd":"pass"}]"""), Cmd.doodad("mend_bucket"), Cmd.doodadRoom("pot_lid", "kettle"),
         ).forEach(::checkCommand)
     }
 
@@ -56,6 +59,19 @@ class ContractTest {
         checkSetup(BattleSpec.campaign("1-1", "fair").setup)
         checkSetup(BattleSpec.skirmish("d1", "cozy", 15, 2, plainOnly = true).setup)
         checkSetup(BattleSpec.couch("d2", listOf("Mabel", "Otis"), 10, 0, plainOnly = false, seats = "side_by_side").setup)
+        // v0.2: Help, preview share, Volley Points and progress.
+        checkSetup(BattleSpec.campaign("1-3", "cozy", help = SideOpts("lots"), progress = Progress(true, listOf(true, false, true))).setup)
+        checkSetup(BattleSpec.skirmish("d1", "fair", 15, 1, false, help = SideOpts("some"), volley = 10).setup)
+        val couch = BattleSpec.couch("d1", listOf("A", "B"), 15, 1, false, "one_seat", help = listOf(BattleSpec.duelHelp(2), BattleSpec.duelHelp(1)), volley = 6)
+        checkSetup(couch.setup)
+        val o = JSONObject(couch.setup)
+        assertEquals(6, o.getInt("volley"))
+        assertTrue(!o.has("round_cap"))
+        assertEquals("lots", o.getJSONArray("sides").getJSONObject(0).getString("help"))
+        assertEquals(100, o.getJSONArray("sides").getJSONObject(0).getInt("preview_pct"))
+        val camp = JSONObject(BattleSpec.campaign("1-3", "cozy", progress = Progress(true, listOf(true, false, true))).setup)
+        assertEquals(true, camp.getJSONObject("progress").getBoolean("cleared"))
+        assertTrue(!camp.getJSONArray("sides").getJSONObject(0).has("help"))
     }
 
     @Test fun namesWithQuotesAndEmojiSurvive() {

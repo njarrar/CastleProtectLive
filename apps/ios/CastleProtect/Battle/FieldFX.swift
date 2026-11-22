@@ -240,7 +240,7 @@ final class FieldFX {
         return CGPoint(x: nx * mag, y: ny * mag)
     }
 
-    private func random() -> Double {
+    private func cosmetic() -> Double {
         // Cosmetic stream only, never the sim's.
         rng ^= rng << 13
         rng ^= rng >> 17
@@ -643,7 +643,7 @@ final class FieldFX {
         if reduceMotion { return (idle.frames[0], idle) }
         // A blink now and then, from the cosmetic stream.
         let last = lastBlink[key] ?? 0
-        if now - last > 2600 + 2400 * random(), let blink = library.clip(base + "blink") {
+        if now - last > 2600 + 2400 * cosmetic(), let blink = library.clip(base + "blink") {
             lastBlink[key] = now
             hobAnims[key] = HobAnim(suffix: "blink", start: now)
             return (blink.frame(at: 0), blink)
@@ -713,12 +713,12 @@ final class FieldFX {
 
     private func chunks(mat: String, x: Double, y: Double, count: Int) {
         for i in 0..<max(1, count) {
-            let a = (Double(i) / Double(max(1, count)) - 0.5) * 2.2 + (random() - 0.5) * 0.6
+            let a = (Double(i) / Double(max(1, count)) - 0.5) * 2.2 + (cosmetic() - 0.5) * 0.6
             var s = FxSprite(clip: "fx_chunk_\(mat)", x: x, y: y, start: now)
-            s.vx = sin(a) * (70 + 60 * random())
-            s.vy = 90 + 90 * random()
+            s.vx = sin(a) * (70 + 60 * cosmetic())
+            s.vy = 90 + 90 * cosmetic()
             s.gravity = 600
-            s.spin = (random() - 0.5) * 720
+            s.spin = (cosmetic() - 0.5) * 720
             s.life = motion.breakMs + 300
             s.fadeLast = 150
             sprites.append(s)

@@ -8,7 +8,10 @@ import Foundation
 final class FakeCoreBridge: CoreBridge {
     let name = "Stand-in core (fixture player, no XCFramework linked)"
     let isStandIn = true
-    let version = #"{"sim":"fixtures","tick_hz":120}"#
+    let version = #"{"sim":"fixtures","rules":2,"tick_hz":120}"#
+    /// Tests: the next command panics, and every call after it is `dead_handle` (core/API.md).
+    var panicNext = false
+    private var dead = false
 
     private let plan: [String: Any]
     private let lean: [String: Any]
@@ -44,10 +47,17 @@ final class FakeCoreBridge: CoreBridge {
         log = []
         tick = 0
         running = true
+        dead = false
         return nil
     }
 
     func command(_ json: String) -> String {
+        if dead { return reply(["ok": false, "reason": "dead_handle"]) }
+        if panicNext {
+            panicNext = false
+            dead = true
+            return reply(["ok": false, "reason": "panic", "detail": "test panic"])
+        }
         guard running else { return reply(["ok": false, "reason": "no_battle"]) }
         guard let obj = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any],
               let cmd = obj["cmd"] as? String else {
@@ -92,6 +102,39 @@ final class FakeCoreBridge: CoreBridge {
         case "end_draft", "quick_pick", "pick_shell", "walk", "shove_off", "recall", "doodad":
             accept(obj)
             return reply(["ok": true])
+        case "give_up":
+            guard phase != "ended" else { return reply(["ok": false, "reason": "battle_over"]) }
+            accept(obj)
+            let loser = obj["side"] as? Int ?? 0
+            var ended = current
+            ended["phase"] = "ended"
+            ended["awaiting"] = "none"
+            ended["events"] = [["t": "win", "tick": tick, "winner": 1 - loser, "how": "give_up"] as [String: Any]]
+            ended["result"] = ["winner": 1 - loser, "how": "give_up", "round": 1, "pennants": [Bool](),
+                               "pennants_new": [Bool](), "buttons": 40, "score": [0, 0]] as [String: Any]
+            current = ended
+            queue.append(ended)
+            return reply(["ok": true])
+        case "set_wind":
+            guard (current["mode"] as? String) == "test_yard" else { return reply(["ok": false, "reason": "test_yard_only"]) }
+            var hud = current["hud"] as? [String: Any] ?? [:]
+            hud["wind"] = obj["wind"] as? Int ?? 0
+            current["hud"] = hud
+            queue.append(quiet(current))
+            accept(obj)
+            return reply(["ok": true])
+        case "resume":
+            guard log.isEmpty else { return reply(["ok": false, "reason": "cannot_resume"]) }
+            let entries = obj["log"] as? [[String: Any]] ?? []
+            for (i, entry) in entries.enumerated() {
+                guard let data = try? JSONSerialization.data(withJSONObject: entry) else { continue }
+                let r = command(String(decoding: data, as: UTF8.self))
+                if !r.contains("\"ok\":true") {
+                    return reply(["ok": false, "reason": "bad_log", "index": i])
+                }
+            }
+            queue = [current]
+            return reply(["ok": true, "applied": entries.count, "hash": current["hash"] as? String ?? "0"])
         case "log":
             return reply(["ok": true, "log": log])
         case "hash":
@@ -104,11 +147,13 @@ final class FakeCoreBridge: CoreBridge {
     }
 
     func step(_ ticks: Int) -> String {
+        if dead { return reply(["ok": false, "reason": "dead_handle"]) }
         tick += max(0, ticks)
         return reply(["tick": tick, "phase": current["phase"] as? String ?? "plan"])
     }
 
     func snapshot() -> String {
+        if dead { return reply(["ok": false, "reason": "dead_handle"]) }
         guard running else { return #"{"phase":"none"}"# }
         let next = queue.isEmpty ? lean(of: current) : queue.removeFirst()
         return reply(next)
@@ -196,7 +241,7 @@ final class FakeCoreBridge: CoreBridge {
             "steam": [100, 120], "steam_turn_left": 40, "kettle_pct": [100, 100],
             "selected": selected, "names": ["Left", "Sir Pudge"], "control": ["human", "ai"],
         ]
-        let map: [String: Any] = ["w": 1600, "h": 720, "chunk": 256]
+        let map: [String: Any] = ["w": 1600, "h": 720, "chunk": 64]
         let terrain: [String: Any] = ["chunks": [[String: Any]]()]
         return [
             "tick": 0, "phase": "plan", "side": 0, "awaiting": "human", "full": true, "level": "1-1", "mode": "campaign",

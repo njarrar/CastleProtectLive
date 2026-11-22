@@ -116,12 +116,15 @@ data class SaveData(
     val battle: SavedBattle? = null,
     /** The last battle started, for Rematch after a cold start. */
     val last: SavedBattle? = null,
+    /** Buttons earned, summed from the core's result.buttons. */
+    val buttons: Int = 0,
 ) {
     fun toJson(): String {
         val o = JSONObject().put("v", VERSION)
         val p = JSONObject(); for ((k, v) in pennants) p.put(k, v); o.put("pennants", p)
         battle?.let { o.put("battle", it.toJson()) }
         last?.let { o.put("last", it.toJson()) }
+        o.put("buttons", buttons)
         return o.toString()
     }
 
@@ -135,7 +138,7 @@ data class SaveData(
             if (v > VERSION) throw IOException("save version $v is newer than this app ($VERSION)")
             val pen = HashMap<String, Int>()
             o.optJSONObject("pennants")?.let { p -> for (k in p.keys()) pen[k] = p.getInt(k) }
-            return SaveData(pen, o.optJSONObject("battle")?.let { battle(it) }, o.optJSONObject("last")?.let { battle(it) })
+            return SaveData(pen, o.optJSONObject("battle")?.let { battle(it) }, o.optJSONObject("last")?.let { battle(it) }, o.optInt("buttons", 0))
         }
 
         private fun battle(b: JSONObject) = SavedBattle(

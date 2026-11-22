@@ -37,6 +37,9 @@ struct ResultInfo: Equatable {
         case ("total_hp", false): return "Lost on points"
         case ("gave_up", false), ("give_up", false): return "You gave up"
         case ("gave_up", true), ("give_up", true): return "They gave up"
+        case ("volley_points", true): return "Won on Volley Points!"
+        case ("volley_points", false): return "Lost on Volley Points"
+        case ("captive_bonked", _): return "The captive was Bonked"
         case (_, true): return "Victory!"
         default: return "Flattened"
         }
@@ -106,8 +109,11 @@ final class AppModel: ObservableObject {
         campaign = catalog.campaign(pennants: loaded.progress.pennants)
         screen = loaded.firstRunDone ? .map : .title
         showResume = loaded.firstRunDone && loaded.battle != nil
+        // No sound before the Play tap on first launch (audio README, mixing rules).
+        sound.unlocked = loaded.firstRunDone && !isUITesting
         applySettings()
         notice = launchNotice
+        if screen == .map { sound.playMusic("mus_map") }
     }
 
     // MARK: Save
@@ -130,6 +136,8 @@ final class AppModel: ObservableObject {
         let s = save.settings
         Theme.largeText = s.largeText
         sound.volume = s.sound
+        sound.musicVolume = s.music
+        sound.voiceVolume = s.voices
         sound.muted = s.muteAll
         haptics.level = s.haptics
         session?.settings = s
@@ -184,7 +192,8 @@ final class AppModel: ObservableObject {
     // MARK: Title and map
 
     func play() {
-        sound.play("ui_tap")
+        if !isUITesting { sound.unlocked = true }
+        sound.play("mus_title_jingle")
         save.firstRunDone = true
         persist()
         if save.progress.pennants.isEmpty, let first = campaign.levels.first {
@@ -205,7 +214,8 @@ final class AppModel: ObservableObject {
     }
 
     private func startCampaign(_ level: LevelInfo, skipSheet: Bool) {
-        let setup = BattleSetup.campaign(level.id, preset: save.settings.preset, seed: Self.newSeed())
+        var setup = BattleSetup.campaign(level.id, preset: save.settings.preset, seed: Self.newSeed())
+        setup.progress = save.progress.coreProgress(level: level.id)
         save.lastLevel = level.id
         begin(setup, title: "\(level.id)  \(level.name)", sheet: skipSheet ? nil : level)
     }
@@ -218,6 +228,8 @@ final class AppModel: ObservableObject {
         setup.wind = options.wind
         setup.winBy = options.winBy
         setup.shells = options.shells
+        setup.help = [options.help, .none]
+        if options.winBy == .volley { setup.rounds = BattleSetup.volleyChoices.contains(options.rounds) ? options.rounds : 10 }
         let mapName = catalog.maps.first { $0.id == options.map }?.name ?? "Skirmish"
         let sheet = LevelInfo(id: "skirmish", name: mapName, state: "open", rival: "Rival (AI)",
                               habit: "Plays \(options.preset.label).", goals: ["Win"],
@@ -237,6 +249,7 @@ final class AppModel: ObservableObject {
         setup.names = options.names
         setup.help = options.help
         setup.forts = options.forts
+        if options.winBy == .volley { setup.rounds = BattleSetup.volleyChoices.contains(options.rounds) ? options.rounds : 10 }
         let sheet = LevelInfo(id: "duel", name: "Couch Duel", state: "open",
                               rival: "\(options.names[0]) and \(options.names[1])",
                               goals: [], hasDraft: options.shells == .draft, roundCap: options.rounds)
@@ -252,6 +265,7 @@ final class AppModel: ObservableObject {
         let s = makeSession(setup: setup, title: title)
         session = s
         s.start()
+        sound.startBattleMusic()
         if let sheet {
             game.holdTurns = true
             preBattle = sheet
@@ -272,7 +286,36 @@ final class AppModel: ObservableObject {
         s.onResult = { [weak self] session, result in self?.recordResult(session, result) }
         s.onEnded = { [weak self] session, result in self?.battleEnded(session, result) }
         s.onFault = { [weak self] session, why in self?.battleFault(session, why) }
+        s.onFrame = { [weak self] snap in self?.updateAudio(snap) }
+        let sound = self.sound
+        s.fx.onSound = { id, pitch, gain in sound.play(id, pitch: pitch, gain: gain) }
+        s.fx.onBark = { def, event, side in sound.bark(hob: def, event: event, side: side) }
+        sound.onSubtitle = { [weak s] text, side in s?.showSubtitle(text, side: side) }
         return s
+    }
+
+    /// Loops and music layers from the frame (audio README: music layers; 9.3 loops).
+    private func updateAudio(_ snap: BattleSnapshot) {
+        guard screen == .battle || preBattle != nil else { return }
+        let kettles = snap.forts.map { $0.kettlePercent }
+        let standing = snap.forts.map { f in f.hobs.filter { !$0.bonked && $0.hp > 0 }.count }
+        let ended = snap.phase == .ended
+        let peril = !ended && (standing.contains(1) || kettles.contains { $0 <= 25 } || snap.squallRound > 0)
+        let stir = !ended && (kettles.contains { $0 <= 50 } || standing.contains { $0 <= 2 }
+            || (snap.squallIn > 0 && snap.squallIn <= 3))
+        sound.setLayers(stir: stir, peril: peril)
+        sound.setLoop("wx_wind_loop", gain: ended ? 0 : Float(abs(snap.wind)) / 10)
+        sound.setLoop("wx_squall_loop", gain: snap.squallRound > 0 && !ended ? min(1, 0.5 + 0.25 * Float(snap.squallRound)) : 0)
+        // The kettle whistle: your kettle at 50% or less, pitch up as HP falls.
+        let mine = snap.isDuel ? snap.activeSide : 0
+        let k = mine < kettles.count ? kettles[mine] : 100
+        sound.setLoop("ket_whistle_loop", gain: k <= 50 && k > 0 && !ended ? 1 : 0, pitch: Double(50 - min(50, k)) / 50 * 3)
+        // A shell's whistle while it flies, pitched by height.
+        if let sh = snap.shells.first, snap.world.h > 0 {
+            sound.setLoop("fly_whistle_loop", gain: 1, pitch: (sh.y / snap.world.h) * 14 - 7)
+        } else {
+            sound.setLoop("fly_whistle_loop", gain: 0)
+        }
     }
 
     /// Fight on the pre-battle sheet: picks left are filled by Quick Pick in the core.
@@ -293,6 +336,7 @@ final class AppModel: ObservableObject {
     private func endSession(abandon: Bool) {
         guard let s = session else { return }
         s.stop()
+        sound.stopLoops()
         // The core keeps nothing between battles; the battle save (if any) stays in SaveData.
         _ = abandon
         game.end()
@@ -307,8 +351,16 @@ final class AppModel: ObservableObject {
         autosave()
         endSession(abandon: false)
         screen = .map
+        sound.playMusic("mus_map")
         showResume = save.battle != nil
         refreshCampaign()
+    }
+
+    /// Give up from the Pause card: the other side wins; the result screen follows as usual.
+    func giveUp() {
+        guard let s = session else { return }
+        sound.play("ui_back")
+        s.giveUp()
     }
 
     func retry() {
@@ -330,9 +382,13 @@ final class AppModel: ObservableObject {
         let goals = campaign.levels.first { $0.id == s.setup.level }?.goals ?? []
         lastResult = ResultInfo(result: result, setup: s.setup, title: s.title, names: names, goals: goals)
         if s.setup.mode == .campaign, let level = s.setup.level {
-            save.progress.record(level: level, pennants: result.winner == 0 ? result.pennants : 0, buttons: result.buttons)
+            // The core worked out the Buttons from `setup.progress` (design 5.2).
+            save.progress.record(level: level, flags: result.winner == 0 ? result.pennantFlags : [],
+                                 won: result.winner == 0, buttons: result.buttons)
         } else if s.setup.mode == .duel, result.winner == 0 || result.winner == 1 {
             tonight[result.winner] += 1
+        } else {
+            save.progress.buttons += max(0, result.buttons)
         }
         save.battle = nil
         persist()
@@ -346,6 +402,11 @@ final class AppModel: ObservableObject {
         endSession(abandon: false)
         if result.pennants > 0 { haptics.play(.pennant) }
         screen = .results
+    }
+
+    /// The map theme after the results sting (quietly after a loss).
+    func resultsShown() {
+        sound.playMusic("mus_map")
     }
 
     /// The core stopped answering (M13): leave the fight, keep the last autosave.
@@ -423,6 +484,7 @@ final class AppModel: ObservableObject {
                 let s = self.makeSession(setup: saved.setup, title: saved.title)
                 self.session = s
                 s.start()
+                self.sound.startBattleMusic()
                 self.screen = .battle
             case .rulesChanged:
                 self.dropSavedBattle("This saved fight was made by an older version of the game rules, so it cannot be carried on.")
@@ -446,7 +508,8 @@ final class AppModel: ObservableObject {
 
     // MARK: Events from the core
 
-    /// Sounds, haptics and screen reader lines for what the core says happened.
+    /// Haptics, the turn chime, stings and screen reader lines for what the core
+    /// says happened. Field sounds that follow an animation come from FieldFX.
     private func handle(_ events: [BattleEvent], _ snap: BattleSnapshot) {
         for e in events {
             switch e.type {
@@ -454,15 +517,14 @@ final class AppModel: ObservableObject {
                 shotDamage = 0
                 shotBonks = 0
                 shotLive = true
-                sound.play("fire_launch")
             case "damage":
                 shotDamage += max(0, e.amount)
                 if e.text == "hob", e.side == 0, !snap.isDuel { haptics.play(.hobHit) }
             case "bonk":
                 shotBonks += 1
-                sound.play("hob_bonk")
                 haptics.play(e.side == 0 && !snap.isDuel ? .bonkYours : .bonkTheirs)
             case "turn":
+                sound.newTurnStep()
                 var shot = ""
                 if shotLive {
                     // One short line per shot for VoiceOver (M5), spoken with the turn line.
@@ -474,40 +536,36 @@ final class AppModel: ObservableObject {
                 let side = e.side >= 0 ? e.side : snap.activeSide
                 let who = snap.isDuel ? "\(snap.name(side))'s turn" : (snap.isHuman(side) ? "Your turn" : "\(snap.name(side)) aims")
                 announce("\(shot)\(who). Wind \(abs(snap.wind)) \(snap.wind >= 0 ? "right" : "left").")
-                sound.play(snap.isHuman(side) && !snap.isDuel ? "turn_yours" : (side == 0 ? "turn_yours" : "turn_theirs"))
+                // Pitch 0 for side 0 or Player 1, 2 semitones down for the Rival or Player 2.
+                sound.play("turn_yours", pitch: side == 0 ? 0 : -2)
             case "kettle_pop":
-                sound.play("kettle_pop")
                 haptics.play(.kettlePop)
                 announce(e.side == 0 && !snap.isDuel ? "Your kettle popped!" : "\(snap.name(e.side)) kettle popped!")
             case "end":
                 let headline = ResultInfo.headline(how: e.text, won: e.side == 0)
                 announce(snap.isDuel ? "\(snap.name(e.side)) wins!" : headline)
                 let win = snap.isDuel || e.side == 0
-                sound.play(win ? "win_fanfare" : "loss_sting")
+                sound.stopLoops()
+                sound.playSting(win ? "sting_win" : "sting_lose")
             case "squall_warn":
                 if !e.text.isEmpty { announce(e.text) }
-                sound.play("squall_warn")
+            case "draft_start":
+                sound.play("ui_card_flip")
+            case "draft_pick":
+                sound.play("ui_card_take", pitch: snap.isHuman(e.side) ? 0 : -3)
+            case "boss_phase":
+                announce("The Grand Fort changes: phase \(e.raw?.phase ?? 2)")
             default:
-                if let cue = Self.cue(for: e) { sound.play(cue) }
                 if let kind = Self.haptic(for: e, snap: snap) { haptics.play(kind) }
             }
         }
     }
 
-    static func cue(for e: BattleEvent) -> String? {
-        switch e.type {
-        case "fire": return "fire_launch"
-        case "hit": return e.amount > 40 ? "blast_large" : "blast_small"
-        case "break", "fall": return "block_break"
-        case "bonk": return "hob_bonk"
-        case "kettle_pop": return "kettle_pop"
-        default: return nil
-        }
-    }
-
     static func haptic(for e: BattleEvent, snap: BattleSnapshot) -> Haptics.Kind? {
         switch e.type {
-        case "hit": return e.amount > 40 ? .blastLarge : .blastSmall
+        case "hit":
+            let r = e.raw?.r ?? 16
+            return r > 30 ? .blastLarge : .blastSmall
         case "fall": return .chunk
         case "thump": return .thump
         case "threaded": return .threaded

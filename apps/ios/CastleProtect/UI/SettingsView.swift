@@ -48,8 +48,10 @@ struct SettingsView: View {
     @ViewBuilder
     private var soundTab: some View {
         Section {
-            // Music, Voices and Subtitles come back when the game has music and voices (M12).
+            percentRow("Music", \.music)
             percentRow("Sound", \.sound)
+            percentRow("Voices", \.voices)
+            Toggle("Subtitles", isOn: model.setting(\.subtitles))
             Toggle("Mute all", isOn: model.setting(\.muteAll))
         }
     }
@@ -91,6 +93,12 @@ struct SettingsView: View {
             }
             Toggle("Large text", isOn: model.setting(\.largeText))
             Toggle("Reduce motion", isOn: model.setting(\.reduceMotion))
+            Picker("Screen shake", selection: model.setting(\.shake)) {
+                Text("100%").tag(100)
+                Text("50%").tag(50)
+                Text("Off").tag(0)
+            }
+            .pickerStyle(.segmented)
             Picker("Haptics", selection: model.setting(\.haptics)) {
                 ForEach(HapticsLevel.allCases) { h in Text(h.label).tag(h) }
             }

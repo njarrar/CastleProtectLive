@@ -48,6 +48,8 @@ struct GameSettings: Codable, Equatable, Sendable {
     var reduceMotion = false
     var colourSet = ColourSet.brickabrac
     var largeText = false
+    /// Reduce shake: 100, 50 or 0 percent (UX 6.2).
+    var shake = 100
 
     init() {}
 
@@ -70,11 +72,12 @@ struct GameSettings: Codable, Equatable, Sendable {
         reduceMotion = c.value(.reduceMotion, d.reduceMotion)
         colourSet = c.value(.colourSet, d.colourSet)
         largeText = c.value(.largeText, d.largeText)
+        shake = c.value(.shake, d.shake)
     }
 
     private enum CodingKeys: String, CodingKey {
         case music, sound, voices, muteAll, subtitles, rotation, dragMode, quickFire, leftHand
-        case tapOnly, rivalTurnsFast, preset, haptics, reduceMotion, colourSet, largeText
+        case tapOnly, rivalTurnsFast, preset, haptics, reduceMotion, colourSet, largeText, shake
     }
 }
 
@@ -83,7 +86,11 @@ struct GameSettings: Codable, Equatable, Sendable {
 struct CampaignProgress: Codable, Equatable, Sendable {
     /// Best Pennant count per level id ("1-1": 2).
     var pennants: [String: Int] = [:]
+    /// Which of the three Pennants each level has ("1-1": [true, false, true]).
+    var flags: [String: [Bool]] = [:]
     var buttons = 0
+    /// The local date (yyyy-MM-dd) the Daily Dust-up last paid.
+    var dailyPaidOn: String?
 
     init() {}
 
@@ -92,7 +99,29 @@ struct CampaignProgress: Codable, Equatable, Sendable {
         // Strict: damaged Pennants make the whole file count as damaged, so the
         // backup is read instead of an empty record that a later write would keep (M11).
         pennants = try c.decodeIfPresent([String: Int].self, forKey: .pennants) ?? [:]
+        flags = c.value(.flags, [:])
         buttons = c.value(.buttons, 0)
+        dailyPaidOn = c.value(.dailyPaidOn, nil)
+    }
+
+    /// What the core needs to work out the Buttons for this level (`setup.progress`).
+    func coreProgress(level: String) -> CoreProgress {
+        let count = pennants[level] ?? 0
+        var bits = flags[level] ?? (0..<3).map { $0 < count }
+        while bits.count < 3 { bits.append(false) }
+        return CoreProgress(cleared: count > 0 || bits.contains(true), pennants: Array(bits.prefix(3)))
+    }
+
+    /// Keeps every Pennant ever earned on a level (the core's flags, OR'd).
+    mutating func record(level: String, flags earned: [Bool], won: Bool, buttons gained: Int) {
+        var bits = flags[level] ?? []
+        while bits.count < max(3, earned.count) { bits.append(false) }
+        for (i, f) in earned.enumerated() where f { bits[i] = true }
+        if won || bits.contains(true) {
+            flags[level] = bits
+            pennants[level] = max(pennants[level] ?? 0, max(won ? 1 : 0, bits.filter { $0 }.count))
+        }
+        buttons += max(0, gained)
     }
 
     var totalPennants: Int { pennants.values.reduce(0, +) }
@@ -102,7 +131,7 @@ struct CampaignProgress: Codable, Equatable, Sendable {
         buttons += max(0, gained)
     }
 
-    private enum CodingKeys: String, CodingKey { case pennants, buttons }
+    private enum CodingKeys: String, CodingKey { case pennants, flags, buttons, dailyPaidOn }
 }
 
 /// The battle in play: the core's own bytes, plus a few words for the
@@ -161,12 +190,14 @@ struct SkirmishOptions: Codable, Equatable, Sendable {
     var wind = WindSetting.light
     var winBy = WinBy.knockout
     var shells = ShellRule.draft
+    var help = HelpLevel.none
 
     init() {}
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = SkirmishOptions()
+        help = c.value(.help, d.help)
         map = c.value(.map, d.map)
         preset = c.value(.preset, d.preset)
         rounds = c.value(.rounds, d.rounds)
@@ -175,7 +206,7 @@ struct SkirmishOptions: Codable, Equatable, Sendable {
         shells = c.value(.shells, d.shells)
     }
 
-    private enum CodingKeys: String, CodingKey { case map, preset, rounds, wind, winBy, shells }
+    private enum CodingKeys: String, CodingKey { case map, preset, rounds, wind, winBy, shells, help }
 }
 
 /// Everything the app keeps on the device, in one Codable file.

@@ -34,6 +34,12 @@ class LiveBattle private constructor(
 
     fun takeRebuilt(): Boolean { val r = rebuilt; rebuilt = false; return r }
 
+    /** The core's whole log now (the last aim included), for a save. Falls back to the kept copy. */
+    fun freshLog(): String {
+        if (broken == null) readLog(game)?.let { log = it; lastAim = null }
+        return log
+    }
+
     /** Sends one command. A dead reply starts a recovery and is returned as it came. */
     fun command(json: String): String {
         if (broken != null) return """{"ok":false,"reason":"dead_handle","detail":"battle could not be rebuilt"}"""
