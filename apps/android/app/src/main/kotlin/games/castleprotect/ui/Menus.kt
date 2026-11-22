@@ -60,6 +60,7 @@ import games.castleprotect.core.JsonText
 import games.castleprotect.core.Phase
 import games.castleprotect.core.SideOpts
 import kotlinx.coroutines.delay
+import games.castleprotect.game.BrokeText
 import games.castleprotect.game.GameSession
 import games.castleprotect.game.HudText
 import games.castleprotect.game.PhoneLayout
@@ -306,6 +307,8 @@ fun ResultsScreen(session: GameSession) {
         Plate(Modifier.padding(16.dp).widthIn(max = 460.dp).verticalScroll(rememberScrollState()), pad = 20.dp) {
             Label(head, Modifier.fillMaxWidth().semantics { heading() }, size = 30, bold = true, align = TextAlign.Center, color = if (winner >= 0) C.side(winner) else C.Ink)
             Label("$how   Round ${r?.round ?: u.hud.round}", Modifier.fillMaxWidth().padding(top = 2.dp), size = 14, color = C.InkSoft, align = TextAlign.Center)
+            // A Double Pop names its winner by a rule nobody sees: say it (QA playtest 2, n5).
+            BrokeText.doublePop(r?.how)?.let { Label(it, Modifier.fillMaxWidth().padding(top = 4.dp), size = 13, align = TextAlign.Center) }
             if (r != null && campaign && r.pennants.isNotEmpty()) {
                 val got = r.pennants.count { it }
                 Row(Modifier.fillMaxWidth().padding(top = 10.dp).semantics(mergeDescendants = true) { contentDescription = "$got of ${r.pennants.size} Pennants" }, horizontalArrangement = Arrangement.Center) {
@@ -386,14 +389,9 @@ private fun BrokePanel(b: games.castleprotect.core.Broke, who: String? = null) {
     Column(Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).background(C.Cream).border(2.dp, C.Ink, RoundedCornerShape(12.dp)).padding(10.dp)) {
         Label(if (who != null) "What broke $who" else "What broke you", Modifier.semantics { heading() }, size = 15, bold = true)
         Label("“${brokeLine(b)}”", Modifier.padding(top = 2.dp), size = 15)
-        b.last?.let { l ->
-            val by = if (l.hobName.isNotEmpty()) " from ${l.hobName}" else ""
-            Label("Last blow: ${l.shotName.ifEmpty { l.shot }}$by, round ${l.round}", Modifier.padding(top = 4.dp), size = 13)
-        }
-        b.top.take(3).forEachIndexed { i, t ->
-            val by = if (t.hobName.isNotEmpty()) " (${t.hobName})" else ""
-            Label("${i + 1}. ${t.shotName.ifEmpty { t.shot }}$by: ${t.dmg} damage", size = 13)
-        }
+        // Who dealt each blow comes from the core's `by` (rules v4, QA playtest 2 B1): a Hob, or the Squall, a fall, Fatigue.
+        b.last?.let { l -> Label(BrokeText.last(l), Modifier.padding(top = 4.dp), size = 13) }
+        b.top.take(3).forEachIndexed { i, t -> Label("${i + 1}. ${BrokeText.blow(t)}: ${t.dmg} damage", size = 13) }
         Label("Kettle lost ${b.kettleLost}   Blocks lost ${b.blocksLost}   Hobs Bonked ${b.hobsBonked}", Modifier.padding(top = 4.dp), size = 12, color = C.InkSoft)
     }
 }

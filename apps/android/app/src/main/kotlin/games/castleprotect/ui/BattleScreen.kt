@@ -77,6 +77,7 @@ import games.castleprotect.core.Phase
 import games.castleprotect.game.BattleUi
 import games.castleprotect.game.FireLight
 import games.castleprotect.game.GameSession
+import games.castleprotect.game.HobLook
 import games.castleprotect.game.HudText
 import games.castleprotect.game.PhoneLayout
 import kotlinx.coroutines.delay
@@ -317,20 +318,23 @@ private fun KettleGauge(u: BattleUi, side: Int) {
 private fun Pips(u: BattleUi, side: Int) {
     Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         for (h in u.hud.crew.getOrElse(side) { emptyList() }) {
-            val frac = h.hpPct.coerceIn(0, 100) / 100f
-            val out = h.state == "bonked"
+            // Only a Bonked Hob's pip is out; a Squashed one stays filled with a dashed ring (QA playtest 2, N2).
+            val frac = HobLook.pipFill(h.state, h.hpPct)
+            val out = HobLook.pipOut(h.state)
+            val squashed = HobLook.pipSquashed(h.state, h.hpPct)
             val col = C.side(side)
             // Yours are round, the Rival's are diamonds: shape as well as colour tells the sides apart.
             Canvas(Modifier.size(18.dp)) {
                 val r = size.minDimension / 2
+                val ring = if (squashed) Stroke(1.5.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 2.dp.toPx()))) else Stroke(1.5.dp.toPx())
                 if (side == 0) {
                     drawCircle(C.Paper, r); drawArc(if (out) C.Locked else col, -90f, 360f * frac, true)
-                    drawCircle(C.Ink, r, style = Stroke(1.5.dp.toPx()))
+                    drawCircle(C.Ink, r, style = ring)
                 } else {
                     val p = androidx.compose.ui.graphics.Path().apply { moveTo(r, 0f); lineTo(2 * r, r); lineTo(r, 2 * r); lineTo(0f, r); close() }
                     drawPath(p, if (out) C.Locked else C.Paper)
                     if (!out) drawRect(col, Offset(r * 0.5f, r * 0.5f + r * (1 - frac)), Size(r, r * frac))
-                    drawPath(p, C.Ink, style = Stroke(1.5.dp.toPx()))
+                    drawPath(p, C.Ink, style = ring)
                 }
             }
         }
@@ -362,6 +366,8 @@ private fun TurnBanner(session: GameSession, u: BattleUi, modifier: Modifier) {
     LaunchedEffect(u.hud.turn, u.phase == Phase.PLAN) {
         if (u.phase == Phase.PLAN && shown != u.hud.turn) {
             shown = u.hud.turn
+            // "Your turn" waits until a Fatigue banner has had its time (QA playtest 2, N1).
+            while (true) { val w = session.fatigue.turnBannerWait(SystemClock.uptimeMillis()); if (w <= 0L) break; delay(w) }
             val start = SystemClock.uptimeMillis()
             while (true) {
                 val e = (SystemClock.uptimeMillis() - start).toFloat()
@@ -497,7 +503,7 @@ private fun CrewRow(session: GameSession, u: BattleUi, side: Int, enabled: Boole
         for (h in hobs) {
             val sel = h.id == u.hud.selectedHob && side == u.side
             val frac = if (h.max > 0) h.hp.toFloat() / h.max else 0f
-            val state = if (h.bonked) "Bonked" else if (h.buried) "Loophole buried" else if (h.rest > 0) "resting ${h.rest}" else "${h.hp} of ${h.max} HP"
+            val state = HobLook.words(h)
             Box(Modifier.size(48.dp).alpha(if (h.bonked) 0.45f else 1f).clip(CircleShape).background(if (sel) C.GoldLight else C.Cream)
                 .clickable(enabled = enabled && !h.bonked) { session.pickHob(h) }
                 .semantics { contentDescription = "${h.name}, ${h.cls}, $state"; this.selected = sel }, contentAlignment = Alignment.Center) {
@@ -513,6 +519,8 @@ private fun CrewRow(session: GameSession, u: BattleUi, side: Int, enabled: Boole
                         Label(h.name.take(6), size = 8, maxLines = 1)
                     }
                 }
+                // Squashed: the portrait stays live, with a star badge (QA playtest 2, N2).
+                if (h.squashed) Label("★", Modifier.align(Alignment.TopEnd).clip(CircleShape).background(C.Gold).border(1.dp, C.Ink, CircleShape).padding(horizontal = 3.dp).clearAndSetSemantics { }, size = 10, bold = true, color = C.Ink)
                 if (h.rest > 0) Label("${h.rest}", Modifier.align(Alignment.BottomEnd).clip(CircleShape).background(C.InkSoft).padding(horizontal = 4.dp), size = 9, color = Color.White)
             }
         }
@@ -615,7 +623,8 @@ private fun BattleBanner(session: GameSession, modifier: Modifier) {
     var now by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
     LaunchedEffect(b) { while (SystemClock.uptimeMillis() < b.second) { now = SystemClock.uptimeMillis(); delay(200) }; now = SystemClock.uptimeMillis() }
     if (now >= b.second) return
-    Label(b.first, modifier.widthIn(max = 420.dp).clip(RoundedCornerShape(16.dp)).background(C.InkSoft).border(2.dp, C.Ink, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 6.dp).clearAndSetSemantics { },
+    // The Fatigue collapse banner is red (QA playtest 2, N1).
+    Label(b.first, modifier.widthIn(max = 420.dp).clip(RoundedCornerShape(16.dp)).background(if (session.bannerDanger) C.Danger else C.InkSoft).border(2.dp, C.Ink, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 6.dp).clearAndSetSemantics { },
         size = 15, bold = true, color = Color.White, align = TextAlign.Center, maxLines = 2)
 }
 

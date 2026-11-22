@@ -38,7 +38,7 @@ object HudText {
     fun fatigueBanner(h: Hud): String? = if (h.fatigueIn == 1) "Fatigue next round" else null
 
     /** Banner for the `fatigue` event: the round 10 collapse that follows plays as normal collapses. */
-    const val FATIGUE_ON = "Fatigue! Battered blocks give way"
+    const val FATIGUE_ON = FatigueBeat.START
 
     /** A short badge for an unready shot chip, from `hud.shots[].why`. The chip's full words are its `text`. */
     fun chipBadge(why: String?): String = when (why) {
@@ -96,10 +96,10 @@ object FireLight {
     }
 }
 
-/** Saves and the rules version (core/API.md: rules v3, old saves do not resume). */
+/** Saves and the rules version (core/API.md: rules v4, saves from rules v3 do not resume). */
 object SaveCompat {
     /** The rules version this app is built for. */
-    const val RULES = 3
+    const val RULES = 4
     private val RULES_RE = Regex("\"rules\"\\s*:\\s*(\\d+)")
 
     fun rulesOf(version: String): Int? = RULES_RE.find(version)?.groupValues?.get(1)?.toIntOrNull()

@@ -295,6 +295,8 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
     }
 
     @Volatile var reduceMotion = false
+    /** The gold ring on the picked Hob teaches the owner rule (QA playtest 2, 4.1). Set by the view. */
+    @Volatile var teachRing = false
 
     private fun hasProp(props: List<games.castleprotect.core.Prop>, id: Int): Boolean { for (i in props.indices) if (props[i].id == id) return true; return false }
 
@@ -478,6 +480,9 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
             val hr = 9f * l.scale
             val anim = fx.hobClip(h)
             val asp = anim?.let { fx.spriteOf(it) }
+            // Squashed (QA playtest 2, N2): alive on 1 HP, drawn flattened at the feet, never as Bonked.
+            val flat = h.squashed
+            if (flat) { c.save(); c.scale(1.18f, 0.55f, hx, hy) }
             if (anim != null && asp != null) {
                 // Every frame of one animation shares its size and anchor (animations.json); a Hob is 80 px tall at @1x, about 28 cells.
                 val d = anim.def; val u = HOB_K * l.scale
@@ -499,7 +504,14 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
                     line.color = ink; line.strokeWidth = 1.3f * dp; c.drawCircle(hx, cy, hr, line)
                 }
             }
+            if (flat) { c.restore(); drawStars(c, hx, hy - 16f * l.scale, hr) }
             if (h.bonked) continue
+            // Owner rule: a pulsing gold ring on the picked Hob each Plan step until 3 aims were started from the fort.
+            if (teachRing && selected && f.phase == Phase.PLAN && f.hud.human(f.side)) {
+                val pulse = if (reduceMotion) 0f else ((time * 1.6f) % 1f)
+                line.color = 0xFFFFC23D.toInt(); line.strokeWidth = 4f * dp; line.alpha = (255 * (1f - 0.5f * pulse)).toInt()
+                c.drawCircle(hx, hy - 14f * l.scale, (24f + 10f * pulse) * l.scale, line); line.alpha = 255
+            }
             if (selected && f.phase == Phase.PLAN) {
                 line.color = 0xFFFFC23D.toInt(); line.strokeWidth = 2.5f * dp; line.pathEffect = ghostDash
                 c.drawCircle(hx, hy - 14f * l.scale, 19f * l.scale, line); line.pathEffect = null
@@ -522,6 +534,30 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
             fill.color = col; c.drawPath(path, fill); line.strokeWidth = 1.3f * dp; c.drawPath(path, line)
         }
         if (walking) c.restore()
+    }
+
+    /** Three small stars circling a Squashed Hob's head. */
+    private fun drawStars(c: Canvas, x: Float, y: Float, hr: Float) {
+        val spin = if (reduceMotion) 0f else time * 3f
+        for (i in 0 until 3) {
+            val a = spin + i * 2.094f
+            val sx = x + kotlin.math.cos(a) * hr * 1.3f; val sy = y + kotlin.math.sin(a) * hr * 0.45f
+            star(c, sx, sy, max(2.5f * dp, hr * 0.38f))
+        }
+    }
+
+    private val starPath = android.graphics.Path()
+    private fun star(c: Canvas, x: Float, y: Float, r: Float) {
+        starPath.rewind()
+        for (k in 0 until 10) {
+            val rr = if (k % 2 == 0) r else r * 0.45f
+            val a = -Math.PI / 2 + k * Math.PI / 5
+            val px = x + (rr * Math.cos(a)).toFloat(); val py = y + (rr * Math.sin(a)).toFloat()
+            if (k == 0) starPath.moveTo(px, py) else starPath.lineTo(px, py)
+        }
+        starPath.close()
+        fill.color = 0xFFFFC23D.toInt(); c.drawPath(starPath, fill)
+        line.color = ink; line.strokeWidth = 1f * dp; c.drawPath(starPath, line)
     }
 
     private fun drawPin(c: Canvas, x: Float, y: Float, side: Int, round: Int, spent: Boolean) {

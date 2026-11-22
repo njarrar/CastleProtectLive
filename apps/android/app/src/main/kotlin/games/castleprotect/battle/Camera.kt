@@ -46,6 +46,12 @@ object Camera {
     fun minBlockScale(dp: Float) = 8f * dp / 16f
 
     /**
+     * The Wide plan frame's floor (QA playtest 2, N3): on a phone it may go down to 6 dp blocks
+     * to hold both forts; 8 dp elsewhere.
+     */
+    fun planBlockScale(dp: Float, phone: Boolean) = (if (phone) 6f else 8f) * dp / 16f
+
+    /**
      * The scale and centre that fit a world box [x0, y0, x1, y1] (plus [margin] cells on
      * each side) into a clear rect of [w] x [h] px, never below [floor] px per cell and
      * never above [ceil]. Writes cx, cy, scale into [out].

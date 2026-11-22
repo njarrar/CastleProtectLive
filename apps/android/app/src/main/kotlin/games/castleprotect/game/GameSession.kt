@@ -131,6 +131,18 @@ class GameSession(app: Application) : AndroidViewModel(app) {
     /** A battle banner (Fatigue, a shot switched to the Plain Shot) and when it hides (uptime ms). */
     var banner by mutableStateOf<Pair<String, Long>?>(null)
         private set
+    /** The banner is a warning in red (the Fatigue collapse starts). */
+    var bannerDanger by mutableStateOf(false)
+        private set
+    /** Fatigue banners, the "Your turn" wait and the camera hold (QA playtest 2, N1). */
+    val fatigue = FatigueBeat()
+    /** The Rival fort peek in the Wide layout (QA playtest 2, N3). */
+    val peek = RivalPeek()
+    /** The gold ring on the picked Hob teaches the owner rule until 3 aims were started from the fort. */
+    @Volatile var teachRing = true
+        private set
+    /** The sky drag nudge was shown in this battle. */
+    @Volatile private var nudged = false
     /** The core's words for a shot that can not fire (a refused Fire, a tap on grey Fire), and when they hide. */
     var fireNote by mutableStateOf<Pair<String, Long>?>(null)
         private set
@@ -232,6 +244,7 @@ class GameSession(app: Application) : AndroidViewModel(app) {
                 SaveStore.Loaded.Missing -> {}
             }
             val s = save
+            teachRing = OwnerRule.ringOn(s.aimStarts)
             audio.menuMusic()
             ui {
                 content = c; progress = s.pennants; buttons = s.buttons; canResume = s.battle != null; notice = msg; fort = s.fort
@@ -399,6 +412,7 @@ class GameSession(app: Application) : AndroidViewModel(app) {
             for (id in Cues.forEvent(e, m) { s, c, r -> blockMat(f, s, c, r) }) audio.play(id, pan)
             when (e.t) {
                 "fire" -> {
+                    fatigue.onEvent(e.t, e.why, f.hud.round, now)
                     shotFired = true; shotBreaks = 0; shotHits = 0; shotDmg = 0
                     juice.newShot()
                     hobOf(f, e.hob)?.let { h -> audio.bark(h.def, "fire", h.side, f.hud.turn, pan(f, h.x), ::say2) }
@@ -445,10 +459,12 @@ class GameSession(app: Application) : AndroidViewModel(app) {
                 "threaded" -> { juice.slowMo(0.4f, 400, now); pattern(8, 60, 8) }
                 "walk" -> buzz(10)
                 "squall_round" -> say("Sudden Squall! Round ${e.n}.")
-                // Rules v3 (QA playtest 1, M2): a warning a round ahead, then the collapse plays as normal collapse events.
-                "fatigue_warning" -> { val t = e.text.ifEmpty { "Fatigue next round" }; say(t); showBanner(t, 3500) }
-                "fatigue" -> { say(HudText.FATIGUE_ON); showBanner(HudText.FATIGUE_ON, 3000); fatigueUntil = now + 2500 }
-                "collapse" -> if (e.why == "fatigue") { fatigueUntil = now + 2500; say("Fatigue: ${plural(e.blockCount, "block")} fell.") }
+                // A warning a round ahead, then a red banner as the collapse starts (QA playtest 2, N1).
+                "fatigue_warning", "fatigue" -> fatigue.onEvent(e.t, e.why, f.hud.round, now)?.let { b ->
+                    say(b.text); showBanner(b.text, b.ms, b.danger)
+                    if (e.t == "fatigue") fatigueUntil = now + 2500
+                }
+                "collapse" -> if (e.why == "fatigue") { fatigue.onEvent(e.t, e.why, f.hud.round, now); fatigueUntil = now + 2500; say("Fatigue: ${plural(e.blockCount, "block")} fell.") }
                 // At turn start (or on a Hob pick) a shot that can not fire moves to the Plain Shot (M1).
                 "shot_switch" -> if (f.hud.human(e.side)) {
                     val h = hobOf(f, e.hob)
@@ -471,8 +487,7 @@ class GameSession(app: Application) : AndroidViewModel(app) {
                     val name = f.hud.names.getOrElse(e.side) { "" }
                     say(if (f.hud.human(e.side) && !(f.hud.human(0) && f.hud.human(1))) "Your turn" else "$name's turn")
                     // The Fatigue warning also comes from the HUD, so a resumed battle shows it too.
-                    if (f.hud.human(e.side) && f.events.none { it.t == "fatigue_warning" }) HudText.fatigueBanner(f.hud)?.let { if (fatigueWarnedRound != f.hud.round) showBanner(it, 3000) }
-                    if (HudText.fatigueBanner(f.hud) != null) fatigueWarnedRound = f.hud.round
+                    if (f.hud.human(e.side)) fatigue.onTurnStart(f.hud.fatigueIn, f.hud.round, now)?.let { b -> showBanner(b.text, b.ms, b.danger) }
                 }
                 "win" -> {
                     val human = f.hud.human(e.winner)
@@ -502,10 +517,42 @@ class GameSession(app: Application) : AndroidViewModel(app) {
                 saveNow() // autosave at every turn start
             }
         }
+        openOnAble(f)
         if (f.result != null && lastResult == null) {
             lastResult = f.result
             onBattleEnded(f)
         }
+    }
+
+    private var openedTurn = -1
+
+    /** A turn opens on a Hob who can act (QA playtest 2, n1): once per turn, on the person's own Plan step. */
+    private fun openOnAble(f: Frame) {
+        if (f.phase != Phase.PLAN || f.awaiting != Awaiting.HUMAN || f.hud.turn == openedTurn) return
+        openedTurn = f.hud.turn
+        val id = OwnerRule.openOn(f.hobs, f.side, f.hud.selectedHob) ?: return
+        val g = game ?: return
+        if (Reply.parse(g.command(Cmd.pickHob(id))).ok) dirty = true
+    }
+
+    /** An Aim Drag started on the fort: counts toward the 3 that end the gold ring (saved). Main thread. */
+    fun aimStarted() {
+        if (!teachRing) return
+        post {
+            val n = (save.aimStarts + 1).coerceAtMost(OwnerRule.TEACH)
+            save = save.copy(aimStarts = n)
+            teachRing = OwnerRule.ringOn(n)
+            store.write(save)
+        }
+    }
+
+    /** A drag that started in the sky on your turn: true (once per battle) when the nudge should show. Main thread. */
+    fun skyDrag(inAimLens: Boolean): Boolean {
+        val u = _ui.value
+        if (!OwnerRule.nudge(u.humanTurn, u.selected != null, inAimLens, nudged)) return false
+        nudged = true
+        _announce.tryEmit(OwnerRule.NUDGE)
+        return true
     }
 
     /** Music layers, the wind bed, the Squall, the flight whistle and the kettle whistle. */
@@ -567,9 +614,8 @@ class GameSession(app: Application) : AndroidViewModel(app) {
 
     /** Until when a Fatigue collapse may shake the view (uptime ms). */
     @Volatile private var fatigueUntil = 0L
-    private var fatigueWarnedRound = -1
 
-    private fun showBanner(text: String, ms: Long) { val until = SystemClock.uptimeMillis() + ms; ui { banner = text to until } }
+    private fun showBanner(text: String, ms: Long, danger: Boolean = false) { val until = SystemClock.uptimeMillis() + ms; ui { banner = text to until; bannerDanger = danger } }
 
     /** Shows the core's words for a shot that can not fire (main thread). */
     fun showFireNote(text: String) { fireNote = text to SystemClock.uptimeMillis() + 3500 }
@@ -612,7 +658,8 @@ class GameSession(app: Application) : AndroidViewModel(app) {
         gameSpec = null
         parser = SnapshotParser()
         frame = Frame.EMPTY
-        lastTurn = -1; lastResult = null; aiAt = 0L; shotFired = false; quietNext = false; fatigueWarnedRound = -1; fatigueUntil = 0L
+        lastTurn = -1; lastResult = null; aiAt = 0L; shotFired = false; quietNext = false; fatigueUntil = 0L; openedTurn = -1; nudged = false
+        fatigue.reset()
         main.post { banner = null; fireNote = null }
         hobsAtStart = listOf(0, 0); windOn = -1; squallOn = -1; whistleSemis = Float.NaN
         fxFrames.clear()

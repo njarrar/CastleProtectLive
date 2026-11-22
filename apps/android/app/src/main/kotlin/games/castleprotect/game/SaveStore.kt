@@ -128,6 +128,8 @@ data class SaveData(
     val buttons: Int = 0,
     /** The Workshop fort: rows top down, the Footing row last (core/API.md `sides[i].rows`). Empty: none saved. */
     val fort: List<String> = emptyList(),
+    /** Aims started from the fort so far, up to [OwnerRule.TEACH]: the gold ring teaches the owner rule until then. */
+    val aimStarts: Int = 0,
 ) {
     fun toJson(): String {
         val o = JSONObject().put("v", VERSION)
@@ -136,6 +138,7 @@ data class SaveData(
         last?.let { o.put("last", it.toJson()) }
         o.put("buttons", buttons)
         if (fort.isNotEmpty()) o.put("fort", JSONArray(fort))
+        if (aimStarts > 0) o.put("aim_starts", aimStarts)
         return o.toString()
     }
 
@@ -150,7 +153,7 @@ data class SaveData(
             val pen = HashMap<String, Int>()
             o.optJSONObject("pennants")?.let { p -> for (k in p.keys()) pen[k] = p.getInt(k) }
             val fort = o.optJSONArray("fort")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList()
-            return SaveData(pen, o.optJSONObject("battle")?.let { battle(it) }, o.optJSONObject("last")?.let { battle(it) }, o.optInt("buttons", 0), fort)
+            return SaveData(pen, o.optJSONObject("battle")?.let { battle(it) }, o.optJSONObject("last")?.let { battle(it) }, o.optInt("buttons", 0), fort, o.optInt("aim_starts", 0))
         }
 
         private fun battle(b: JSONObject) = SavedBattle(

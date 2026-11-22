@@ -185,7 +185,8 @@ class QaPlaytestOneTest {
         // No version from the core: this app's own rules version is assumed.
         assertNotNull(SaveCompat.refusal(v2, null, standIn = false))
         assertNull(SaveCompat.refusal("fixture", "fixture", standIn = true))
-        assertEquals(3, SaveCompat.RULES)
+        // Rules v4 since QA playtest 2 (QaPlaytestTwoTest).
+        assertTrue(SaveCompat.RULES >= 3)
     }
 
     // ---- Layout lessons (M3, M5, M7, M8, m3, m5) -----------------------------------------
@@ -272,7 +273,7 @@ class QaPlaytestOneTest {
         while (JSONObject(g.step(0)).getString("phase").let { it == "resolve" || it == "settle" } && n++ < 20) g.step(600)
     }
 
-    @Test fun nativeCoreIsRulesThree() {
+    @Test fun nativeCoreMatchesTheAppRules() {
         assumeTrue(ready())
         assertEquals(SaveCompat.RULES, SaveCompat.rulesOf(NativeCore.version()))
     }

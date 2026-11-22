@@ -53,7 +53,10 @@ data class Hob(
     val buried: Boolean, val cover: Boolean, val dummy: Boolean, val grudge: Boolean, val clatter: Boolean,
     val canFire: Boolean, val angle: Int, val power: Int,
 ) {
-    val bonked: Boolean get() = state == "bonked"
+    /** Out of the fight: only `bonked` or 0 HP (core/API.md rules v4, QA playtest 2 N2). */
+    val bonked: Boolean get() = state == "bonked" || hp <= 0
+    /** Crushed to 1 HP but alive and able to act: `squashed`, or `dropped` at 1 HP. Drawn flattened, never as Bonked. */
+    val squashed: Boolean get() = !bonked && (state == "squashed" || (state == "dropped" && hp <= 1))
     /** Renderer-owned cache slot (resolved sprite set). */
     @Transient @JvmField var look: Any? = null
 }
@@ -146,8 +149,11 @@ data class SideStats(
     val bestShot: BestShot? = null,
 )
 
-/** One blow in `result.broke`: the shot (or `squall`, `ground`, `prop`, `shears`) and who fired it. */
-data class Blow(val shot: String, val shotName: String, val hob: Int, val hobName: String, val round: Int, val dmg: Int)
+/**
+ * One blow in `result.broke`: the shot and who dealt it. [by] (rules v4): `hob`, `squall`, `ground`,
+ * `fatigue`, `self`, `shears` or `prop`; empty from an older core. [hobName] is never null from v4.
+ */
+data class Blow(val shot: String, val shotName: String, val hob: Int, val hobName: String, val round: Int, val dmg: Int, val by: String = "")
 
 /** `result.broke`: "what broke you" for the losing side. */
 data class Broke(
@@ -799,16 +805,16 @@ class SnapshotParser {
     }
 
     private fun readBlow(j: JsonReader): Blow {
-        var shot = ""; var shotName = ""; var hob = -1; var hobName = ""; var round = 0; var dmg = 0
+        var shot = ""; var shotName = ""; var hob = -1; var hobName = ""; var round = 0; var dmg = 0; var by = ""
         j.beginObject()
         while (j.hasNext()) when (j.nextName()) {
-            "shot" -> shot = j.nextString(); "shot_name" -> shotName = j.nextString()
-            "hob" -> hob = if (j.nextNull()) -1 else j.nextInt(); "hob_name" -> hobName = if (j.nextNull()) "" else j.nextString()
-            "round" -> round = j.nextInt(); "dmg" -> dmg = j.nextInt()
+            "shot" -> shot = str(j); "shot_name" -> shotName = str(j)
+            "hob" -> hob = if (j.nextNull()) -1 else j.nextInt(); "hob_name" -> hobName = str(j)
+            "round" -> round = num(j); "dmg" -> dmg = num(j); "by" -> by = str(j)
             else -> j.skipValue()
         }
         j.endObject()
-        return Blow(shot, shotName, hob, hobName, round, dmg)
+        return Blow(shot, shotName, hob, hobName, round, dmg, by)
     }
 
     private fun readBroke(j: JsonReader): Broke {
