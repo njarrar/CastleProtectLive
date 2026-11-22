@@ -282,7 +282,17 @@ final class AppModel: ObservableObject {
         s.isPad = UIDevice.current.userInterfaceIdiom == .pad
         s.onTurnStarted = { [weak self] _ in self?.autosave() }
         s.onEvents = { [weak self] events, snap in self?.handle(events, snap) }
-        s.onLocalHaptic = { [weak self] kind in self?.haptics.play(kind) }
+        s.onLocalHaptic = { [weak self] kind in
+            guard let self else { return }
+            self.haptics.play(kind)
+            // The UI sounds that go with the player's own touches (audio 9.3).
+            switch kind {
+            case .fire: self.sound.play("ui_fire_press")
+            case .dragStart: self.sound.play("aim_drag_start")
+            case .illegal: self.sound.play("ui_denied")
+            default: break
+            }
+        }
         s.onResult = { [weak self] session, result in self?.recordResult(session, result) }
         s.onEnded = { [weak self] session, result in self?.battleEnded(session, result) }
         s.onFault = { [weak self] session, why in self?.battleFault(session, why) }
