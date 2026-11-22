@@ -6,7 +6,9 @@ import UIKit
 /// reads touches for the Aim Drag. The battle clock itself runs in the session.
 /// Drawing only: nothing here decides an outcome.
 final class BattleSKView: SKView {
-    var session: BattleSession
+    var session: BattleSession {
+        didSet { wireLensMap() }
+    }
     private let battleScene: BattleScene
     private var link: CADisplayLink?
     private var lastBoundsSize: CGSize = .zero
@@ -26,6 +28,7 @@ final class BattleSKView: SKView {
         backgroundColor = Palette.hex(0xA6DCEF)
         battleScene.scaleMode = .resizeFill
         presentScene(battleScene)
+        wireLensMap()
         isAccessibilityElement = true
         accessibilityLabel = "Battlefield"
         updateHint()
@@ -34,6 +37,12 @@ final class BattleSKView: SKView {
     }
 
     @objc private func voiceOverChanged() { updateHint() }
+
+    /// The session asks where a touch lands in the world (the own-fort rule for an Aim Drag).
+    private func wireLensMap() {
+        let scene = WeakRef(battleScene)
+        session.lensMap = { point in scene.value?.lensMap(at: point) }
+    }
 
     private func updateHint() {
         // A VoiceOver user cannot drag on the fort: point them at Fine Tune (M5).
@@ -147,6 +156,14 @@ final class BattleScene: SKScene {
     }
 
     /// True while any lens camera is still easing toward its target.
+    /// The camera of the shown field lens under a view point, or nil.
+    func lensMap(at point: CGPoint) -> LensMap? {
+        for layer in layers where !layer.crop.isHidden {
+            if let map = layer.map, map.viewport.contains(point) { return map }
+        }
+        return nil
+    }
+
     /// Only shown lenses count: a rig left easing when its lens was hidden must not keep the scene at 60 fps.
     var cameraMoving: Bool { layers.contains { !$0.crop.isHidden && $0.rig.moving } }
 
@@ -220,6 +237,8 @@ final class CameraRig {
 final class LensLayer {
     let crop = SKCropNode()
     let rig = CameraRig()
+    /// This lens's camera at the last draw (nil for the Field Strip, which is not aimed in).
+    private(set) var map: LensMap?
     private let mask = SKSpriteNode(color: .white, size: CGSize(width: 1, height: 1))
     private let backdrop = SKSpriteNode(color: .clear, size: CGSize(width: 1, height: 1))
     private let world = SKNode()
@@ -325,6 +344,8 @@ final class LensLayer {
         let shake = small ? .zero : fx.shakeOffset(planning: snap.phase == .plan || snap.phase == .handoff)
         world.position = CGPoint(x: frameCentre.x - worldRect.midX * scale + shake.x,
                                  y: frameCentre.y - worldRect.midY * scale + shake.y)
+        map = small ? nil : LensMap(viewport: vp, frameCentre: frameCentre, worldRect: worldRect, scale: scale,
+                                    sceneHeight: sceneHeight)
         let cellsPerPoint = Double(1 / max(0.0001, scale))
         let useArt = !small && !sheet.isEmpty
         let now = fx.now
@@ -930,5 +951,25 @@ struct Palette {
     static func hex(_ v: UInt32) -> UIColor {
         UIColor(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255,
                 blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+    }
+}
+
+/// One lens's camera: view points (UIKit, y down) to world cells (y up) and back.
+struct LensMap: Equatable {
+    var viewport: CGRect
+    var frameCentre: CGPoint
+    var worldRect: CGRect
+    var scale: CGFloat
+    var sceneHeight: CGFloat
+
+    func world(_ p: CGPoint) -> CGPoint {
+        let s = max(0.0001, scale)
+        return CGPoint(x: (p.x - frameCentre.x) / s + worldRect.midX,
+                       y: (sceneHeight - p.y - frameCentre.y) / s + worldRect.midY)
+    }
+
+    func view(_ w: CGPoint) -> CGPoint {
+        CGPoint(x: frameCentre.x + (w.x - worldRect.midX) * scale,
+                y: sceneHeight - (frameCentre.y + (w.y - worldRect.midY) * scale))
     }
 }

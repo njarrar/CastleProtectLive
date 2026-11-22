@@ -206,6 +206,8 @@ final class BattleSession: ObservableObject {
     var onFault: ((BattleSession, String) -> Void)?
     /// Spoken lines (shot results) for VoiceOver.
     var onAnnounce: ((String) -> Void)?
+    /// Where a view point lands in the world, from the field view's lens cameras.
+    var lensMap: ((CGPoint) -> LensMap?)?
     /// Each new frame, for loops and music layers.
     var onFrame: ((BattleSnapshot) -> Void)?
     /// The Pause card went up (true) or away (false): sound follows it (UX 8.2).
@@ -521,10 +523,32 @@ final class BattleSession: ObservableObject {
     // MARK: Aim Drag
 
     func touchBegan(at point: CGPoint) {
-        guard canAct, gesture == nil, layout.aimRegion.contains(point) else { return }
+        guard canAct, gesture == nil, layout.aimRegion.contains(point), aimMayStart(at: point) else { return }
         gesture = AimGesture(anchor: point, powerSpan: layout.powerSpan, mode: settings.dragMode)
         aimBeforeDrag = snapshot.aim
         hitFullPower = false
+    }
+
+    /// Design 00, 2.3: an Aim Drag only starts on the player's own fort (its blocks' box grown
+    /// by 32 cells, two blocks) or within 48 pt of the picked Hob. A press anywhere else never
+    /// changes the aim. Without a lens camera yet (no draw so far) the old rule holds.
+    func aimMayStart(at point: CGPoint) -> Bool {
+        guard let map = lensMap?(point) else { return lensMap == nil }
+        guard let fort = snapshot.fort(snapshot.activeSide) else { return true }
+        let w = map.world(point)
+        let m = 32.0
+        let x0 = fort.originX
+        let x1 = fort.originX + Double(fort.cols) * fort.block
+        let tops = fort.blocks.map { $0.y + $0.h }
+        let bottoms = fort.blocks.map { $0.y }
+        let y0 = min(bottoms.min() ?? fort.baseY, fort.baseY)
+        let y1 = max(tops.max() ?? fort.baseY + fort.block, fort.baseY)
+        if Double(w.x) >= x0 - m && Double(w.x) <= x1 + m && Double(w.y) >= y0 - m && Double(w.y) <= y1 + m { return true }
+        if let id = snapshot.selectedHob, let hob = fort.hobs.first(where: { $0.id == id }) {
+            let at = map.view(CGPoint(x: hob.x, y: hob.y))
+            if hypot(at.x - point.x, at.y - point.y) <= 48 { return true }
+        }
+        return false
     }
 
     func touchMoved(to point: CGPoint) {

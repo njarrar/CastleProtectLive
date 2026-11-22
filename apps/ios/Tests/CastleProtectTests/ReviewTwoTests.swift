@@ -465,3 +465,59 @@ final class CollapseOrderTests: XCTestCase {
         XCTAssertNil(fx.kettlePops[1], "a relit kettle is drawn lit")
     }
 }
+
+// MARK: Owner rule (design 00, 2.3): an Aim Drag starts only on the player's own fort
+
+final class OwnFortAimTests: XCTestCase {
+    @MainActor
+    private func makeSession() throws -> (BattleSession, RecordingBridge) {
+        let bridge = RecordingBridge()
+        let game = CoreGame(bridge: bridge, catalog: ContentCatalog.load())
+        let setup = BattleSetup.campaign("1-1", preset: .fair, seed: 5)
+        XCTAssertNil(game.start(setup))
+        let session = BattleSession(game: game, setup: setup, title: "1-1")
+        session.updateViewport(size: CGSize(width: 2000, height: 1000), insets: Insets())
+        // One lens, 1 point a cell, view y down from 1000: world (x, 1000 - y).
+        let map = LensMap(viewport: CGRect(x: 0, y: 0, width: 2000, height: 1000), frameCentre: .zero,
+                          worldRect: .zero, scale: 1, sceneHeight: 1000)
+        session.lensMap = { _ in map }
+        XCTAssertTrue(session.canAct)
+        return (session, bridge)
+    }
+
+    @MainActor
+    private func drag(_ session: BattleSession, from a: CGPoint, by d: CGVector) {
+        session.touchBegan(at: a)
+        session.touchMoved(to: CGPoint(x: a.x + d.dx / 2, y: a.y + d.dy / 2))
+        session.touchMoved(to: CGPoint(x: a.x + d.dx, y: a.y + d.dy))
+        session.touchEnded(at: CGPoint(x: a.x + d.dx, y: a.y + d.dy))
+    }
+
+    /// A drag that starts in open sky leaves the aim as it was and sends no aim.
+    @MainActor
+    func testDragFromOpenSkyLeavesTheAim() throws {
+        let (session, bridge) = try makeSession()
+        let fort = try XCTUnwrap(session.snapshot.fort(0))
+        let before = session.hud.aim
+        let sky = CGPoint(x: fort.originX + Double(fort.cols) * fort.block + 300, y: 20)
+        XCTAssertFalse(session.aimMayStart(at: sky))
+        drag(session, from: sky, by: CGVector(dx: -150, dy: 120))
+        XCTAssertEqual(session.hud.aim, before)
+        XCTAssertEqual(bridge.count("aim"), 0)
+        XCTAssertFalse(session.dragging)
+    }
+
+    /// The same drag started on the own fort aims.
+    @MainActor
+    func testDragFromTheOwnFortAims() throws {
+        let (session, bridge) = try makeSession()
+        let fort = try XCTUnwrap(session.snapshot.fort(0))
+        let b = try XCTUnwrap(fort.blocks.first)
+        let onFort = CGPoint(x: b.x + b.w / 2, y: 1000 - (b.y + b.h / 2))
+        XCTAssertTrue(session.aimMayStart(at: onFort))
+        // Two blocks out from the fort's edge still counts.
+        XCTAssertTrue(session.aimMayStart(at: CGPoint(x: fort.originX - 30, y: onFort.y)))
+        drag(session, from: onFort, by: CGVector(dx: -150, dy: 120))
+        XCTAssertGreaterThan(bridge.count("aim"), 0)
+    }
+}
