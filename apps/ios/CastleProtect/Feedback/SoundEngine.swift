@@ -2,11 +2,12 @@ import AVFoundation
 
 /// Sound effects through AVAudioEngine with pre-loaded PCM buffers.
 ///
-/// Cue ids come from the core's `audio` events (the core applies the voice
-/// rules). Each cue loads `Sounds/<cue>.caf`, `.wav` or `.m4a` from the app
-/// bundle (copied from assets/ at build time); a cue with no file uses a small
-/// generated sound so v0.1 is never silent. The session is `ambient`, so the
-/// silent switch and the player's own music are respected.
+/// Cues are picked from the core's events (fire, explode, break, bonk,
+/// kettle_pop, turn_start, win). Each cue loads `sounds/<cue>.caf`, `.wav` or
+/// `.m4a` from the app bundle (assets/sounds, copied at build time, mono
+/// 44.1 kHz float); a cue with no file uses a small generated sound so v0.1 is
+/// never silent. The session is `ambient`, so the silent switch and the
+/// player's own music are respected.
 @MainActor
 final class SoundEngine {
     static let cues = [
@@ -96,7 +97,7 @@ final class SoundEngine {
 
     private func loadFile(_ cue: String) -> AVAudioPCMBuffer? {
         for ext in ["caf", "wav", "m4a"] {
-            guard let url = Bundle.main.url(forResource: cue, withExtension: ext, subdirectory: "Sounds")
+            guard let url = Bundle.main.url(forResource: cue, withExtension: ext, subdirectory: "sounds")
                 ?? Bundle.main.url(forResource: cue, withExtension: ext) else { continue }
             guard let file = try? AVAudioFile(forReading: url) else { continue }
             let frames = AVAudioFrameCount(file.length)

@@ -21,6 +21,8 @@ final class CoreGame {
     var rivalFast = false
     /// The Rival's think pose before `ai_turn`, in ms (rulings C3: 0.8 to 1.5 s).
     var thinkMs = 1000
+    /// True while the pre-battle sheet is up: Rummage picks run, turns wait for Fight.
+    var holdTurns = false
 
     private var lastPhase = "none"
     private var lastAwaiting = "none"
@@ -68,6 +70,7 @@ final class CoreGame {
         handoffTo = nil
         recallIndex = 0
         speed = 1
+        holdTurns = false
     }
 
     // MARK: Commands
@@ -101,7 +104,13 @@ final class CoreGame {
     /// asks the AI to play once its think pose is over.
     func advance(milliseconds ms: Int) {
         guard isRunning, ms > 0 else { return }
-        if lastPhase == "plan" || lastPhase == "draft", lastAwaiting == "ai", handoffTo == nil {
+        if lastPhase == "draft", lastAwaiting == "ai" {
+            // A Rival that picks first in the Rummage picks at once.
+            send(.aiTurn())
+            return
+        }
+        guard !holdTurns else { return }
+        if lastPhase == "plan", lastAwaiting == "ai", handoffTo == nil {
             thinkElapsed += ms
             if thinkElapsed >= thinkMs {
                 thinkElapsed = 0

@@ -218,6 +218,7 @@ final class AppModel: ObservableObject {
         session = s
         s.start()
         if let sheet {
+            game.holdTurns = true
             preBattle = sheet
         } else {
             s.endDraft()
@@ -241,6 +242,7 @@ final class AppModel: ObservableObject {
         guard let s = session else { return }
         sound.play("ui_tap")
         s.endDraft()
+        game.holdTurns = false
         preBattle = nil
         screen = .battle
     }
