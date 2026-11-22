@@ -136,6 +136,9 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
   const st = !shaking && cache ? cache.state(r, cam, terr.rev, sprites.scale, o.dpr, o.reduceMotion) : 0;
   if (st === 2) { const c = cache!.build(r, o.dpr); backdrop(c, r, cam, cache, o); terrainLayer(c, r, cam, terr, o.dpr, cache); }
   if (st) {
+    // With the CSS sky the cached backdrop is transparent where the sky shows, so wipe the lens
+    // first; otherwise last frame's aim preview and drag line stay on screen and pile up.
+    if (o.cssSky) ctx.clearRect(r.x, r.y, r.w, r.h);
     ctx.drawImage(cache!.canvas, r.x, r.y, r.w, r.h);
     clouds(ctx, r, cam, snap, terr, o);
     if (snap.squall.on && !o.reduceMotion) squall(ctx, r, snap.wind, feel.time);
@@ -265,7 +268,7 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
   ctx.beginPath();
   ctx.rect(r.x, r.y, r.w, r.h);
   ctx.clip();
-  feel.fx.drawNums(ctx, r, cam, snap.kettles);
+  feel.fx.drawNums(ctx, r, cam);
   ctx.restore();
   if (o.label) {
     ctx.save();

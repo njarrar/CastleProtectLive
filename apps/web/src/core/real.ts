@@ -38,7 +38,6 @@ const WEIGHT: Record<string, 0 | 1 | 2> = { l: 0, m: 1, h: 2, light: 0, medium: 
 const HOW: Record<string, string> = {
   clean_sweep: 'Clean Sweep', kettle_pop: 'Kettle Pop', squall: 'Squall Pop', double_pop: 'Double Pop',
   rescue: 'Rescue', round_cap: 'Doze Off', total_hp: 'On points',
-  give_up: 'Gave up', volley_points: 'Volley Points', captive_bonked: 'Captive Bonked',
 };
 const newStats = (): [SideStats, SideStats] => [{ shots: 0, hits: 0, blocks: 0, kettle: 100 }, { shots: 0, hits: 0, blocks: 0, kettle: 100 }];
 
@@ -74,7 +73,6 @@ export class RealCore implements CoreApi {
   private shotBy?: { side: Side; hob: string; round: number; angle: number; power: number };
   private best?: ResultView['bestShot'];
   private levelsCache?: LevelInfo[];
-  battleGen = 0;
 
   constructor(private mod: WasmModule) {
     let v: Partial<PVersion> = {};
@@ -207,9 +205,7 @@ export class RealCore implements CoreApi {
     this.game = g;
     this.setupJson = setupJson;
     this.seed = seed;
-    this.battleGen++;
-    // After a wasm trap the old Game stays borrowed and free() throws: drop it all the same.
-    try { old?.free(); } catch { /* dead handle */ }
+    old?.free();
     this.last = undefined;
     this.lastCastles = undefined;
     this.cache = undefined;
@@ -357,7 +353,7 @@ export class RealCore implements CoreApi {
         this.shotDmg += dmg;
         if (this.shotBy && (!this.best || this.shotDmg > this.best.dmg)) this.best = { ...this.shotBy, dmg: this.shotDmg };
         const tgt = String(e.target);
-        // A view count for the live hand-off card; the result uses the core's own stats.
+        // Hit counting stays a view stat until the core sends one (core request).
         if (this.shotBy && e.why !== 'crush' && e.why !== 'fall' && n('side') !== this.shotBy.side) this.stats[this.shotBy.side].hits++;
         const out: BattleEvent[] = [];
         if (e.threaded) out.push(...note('Threaded!', undefined, 'bonk'));
@@ -419,7 +415,7 @@ export class RealCore implements CoreApi {
       case 'kettle_pop': return [{ t: 'kettle_pop', side: n('side') as Side }];
       case 'squall_warning': return [{ t: 'squall_warn', left: n('n') }];
       case 'squall_round': return [{ t: 'squall', n: n('n') }];
-      case 'win': return [{ t: 'end', winner: n('winner') as Side, how: HOW[String(e.how)] ?? String(e.how), key: String(e.how) }];
+      case 'win': return [{ t: 'end', winner: n('winner') as Side, how: HOW[String(e.how)] ?? String(e.how) }];
       // Everything else gets a short line, and a floating word where it has a place.
       case 'threaded': { const p = hobAt(n('hob')); return [...note('Threaded!', p, 'bonk'), ...(p ? [{ t: 'threaded' as const, x: p[0], y: p[1] }] : [])]; }
       case 'front': return note(`New Weather Front: wind ${n('wind')}`, undefined, 'squall');
@@ -446,17 +442,8 @@ export class RealCore implements CoreApi {
       case 'boss_phase': return note(`Grand Fort: phase ${n('phase')}`, undefined, 'squall');
       case 'roller': return note('Big Smoothie Jr. rolls out!', [n('x'), H - n('y')], 'thud');
       case 'roller_stop': return note('The roller stopped', undefined, 'thud');
-      // The roller and the shears move on their own between turns: a sound and a word each, never silent.
-      case 'roller_move': return note(e.why === 'blocked' ? 'The roller bumps to a stop' : 'The roller rolls on', [n('to'), H - n('y')], 'roll', false);
-      case 'roller_done': return note('The roller is done', undefined, 'thud');
-      case 'shears': return note('The shears!', [n('x'), H - n('y')], 'shears');
-      case 'column': return note('Blast up the column!', slotAt(n('side'), n('c'), n('r')), 'boom', false);
-      case 'prop': return note(e.kind === 'turnip' || e.shot === 'turnip' ? 'A turnip!' : 'Tick-tock...', [n('x'), H - n('y')], 'thud', false);
-      case 'prop_wake': return note('The Crock wakes!', [n('x'), H - n('y')], 'crock');
-      case 'carve': return [{ t: 'note', text: '', x: n('x'), y: H - n('y'), sound: 'carve', status: false }];
-      case 'mound': return [{ t: 'note', text: '', x: n('x'), y: H - n('y'), sound: 'mound', status: false }];
       case 'shears_open': return note('The shears open: the red line is cut next turn', undefined, 'sheet');
-      case 'shears_snip': return note('Snip!', undefined, 'snip');
+      case 'shears_snip': return note('Snip!', undefined, 'break');
       case 'shears_jam': return note(`The shears jam for ${n('turns')} turns`, undefined, 'thud');
       case 'relight': return note('Kettle relit', fortMid(n('side')), 'pennant');
       default: return [];
@@ -631,13 +618,7 @@ export class RealCore implements CoreApi {
 
   saveBattle(): string {
     const log = this.query<PCommand[]>({ cmd: 'log' }, 'log') ?? [];
-    let hash = this.query<string>({ cmd: 'hash' }, 'hash') ?? '';
-    // `resume` replays the log and runs on to the next stable point (the next plan or draft).
-    // A save taken while a shot is in the air or the fort settles must store the hash of the
-    // state the replay lands on, not the hash of this tick, or it could never load. A scratch
-    // Game replays the log once to find it (the live battle reaches the same state).
-    const ph = this.last?.phase;
-    if (ph === 'resolve' || ph === 'settle') hash = this.landingHash(log) ?? '';
+    const hash = this.query<string>({ cmd: 'hash' }, 'hash') ?? '';
     return JSON.stringify({
       v: SAVE_VERSION, core: 'wasm', rules: this.rules, sim: this.version, hash,
       setup: this.setupJson, seed: String(this.seed), view: this.viewSetup, log,
@@ -645,25 +626,12 @@ export class RealCore implements CoreApi {
     });
   }
 
-  private landingHash(log: PCommand[]): string | undefined {
-    let g: WasmGame | undefined;
-    try {
-      g = new this.mod.Game('', this.setupJson, this.seed);
-      const rep = JSON.parse(g.command(JSON.stringify({ cmd: 'resume', log } satisfies PCommand))) as PReply & { hash?: string };
-      return rep.ok ? rep.hash : undefined;
-    } catch {
-      return undefined;
-    } finally {
-      try { g?.free(); } catch { /* a trapped scratch game is dropped */ }
-    }
-  }
-
   /**
    * Replay the log with the core's `resume`. The save must be this save format and this rules
-   * version, and the core must accept the whole log. The state hash after the replay is checked
-   * against the stored one; a miss is reported as a note, never a reason to throw a good log away.
+   * version, the core must accept the whole log, and the state hash at the end must match the
+   * one stored at save time.
    */
-  loadBattle(data: string): string | void {
+  loadBattle(data: string): void {
     let d: { v?: number; rules?: number; hash?: string; setup: string; seed: string; view: BattleSetup; log: PCommand[]; stats?: [SideStats, SideStats]; best?: ResultView['bestShot'] | null };
     try {
       d = JSON.parse(data);
@@ -676,11 +644,10 @@ export class RealCore implements CoreApi {
     this.start(d.setup, BigInt(d.seed));
     this.viewSetup = d.view;
     const g = this.game!;
-    // v0.2: the core replays the log itself, stepping between commands as a live app does,
-    // and lands on the next stable point after the last command.
+    // v0.2: the core replays the log itself, stepping between commands as a live app does.
     const rep = JSON.parse(g.command(JSON.stringify({ cmd: 'resume', log: d.log } satisfies PCommand))) as PReply & { hash?: string };
     if (!rep.ok) throw new SaveError('This saved fight no longer replays.', 'mismatch');
-    const note = d.hash && rep.hash !== d.hash ? 'This saved fight replayed a little differently from when it was saved.' : undefined;
+    if (d.hash && rep.hash !== d.hash) throw new SaveError('This saved fight no longer replays the same.', 'mismatch');
     // The next snapshot is full with the whole map; its events are the replay's and are dropped.
     this.cache = undefined;
     this.lastCastles = undefined;
@@ -691,7 +658,6 @@ export class RealCore implements CoreApi {
     this.events = [];
     if (Array.isArray(d.stats) && d.stats.length === 2) this.stats = [{ ...newStats()[0], ...d.stats[0] }, { ...newStats()[1], ...d.stats[1] }];
     this.best = d.best ?? undefined;
-    return note;
   }
 }
 

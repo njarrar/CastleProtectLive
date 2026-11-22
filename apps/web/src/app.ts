@@ -20,7 +20,7 @@ export type Route =
   | { to: 'title' }
   | { to: 'map'; focus?: string }
   | { to: 'prebattle'; level: string; again?: boolean }
-  | { to: 'battle'; setup: BattleSetup; resume?: string; prepared?: boolean; handoff?: boolean; live?: number }
+  | { to: 'battle'; setup: BattleSetup; resume?: string; prepared?: boolean; handoff?: boolean }
   | { to: 'results'; setup: BattleSetup }
   | { to: 'skirmish' }
   | { to: 'duel' }
@@ -107,12 +107,8 @@ export class App {
       return;
     }
     this.cur?.destroy?.();
-    // A battle route on the back stack is stale once a fight is entered again (it would start a new one).
-    if (r.to === 'battle') this.back = this.back.filter((b) => b.to !== 'battle');
     if (opt.history !== false && this.route.to !== r.to && r.to !== 'battle' && r.to !== 'results') {
-      // Settings opened from a fight: Back (browser or Android) must return to that fight, not
-      // rebuild it from its setup, so the route kept is the one Settings goes back to.
-      this.back.push(r.to === 'settings' ? r.back : this.route);
+      this.back.push(this.route);
       if (this.back.length > 20) this.back.shift();
       history.pushState({ cp: true }, '');
     }

@@ -17,17 +17,14 @@ const SLOW: Record<Slow, [number, number]> = {
   threaded: [0.4, 400],
 };
 
-/** Blast radius bands (cells, 00 §9.3): the one place the view keeps them. */
-const BLAST_MIN = [64, 42, 28, 18] as const;
-const BLAST_NAME = ['huge', 'large', 'medium', 'small', 'tiny'] as const;
-/** 0 huge .. 4 tiny. */
-function blastIdx(r: number): number { let i = 0; while (i < 4 && r < BLAST_MIN[i]) i++; return i; }
-/** A blast radius to its band name (sound files are named by it). */
-export function blastBand(r: number): string { return BLAST_NAME[blastIdx(r)]; }
-
-const TRAUMA: [number, number][] = [[0.8, 450], [0.55, 350], [0.35, 250], [0.2, 200], [0.1, 150]];
-/** 07 §6.2: trauma added and decay, by blast radius band. */
-export function blastTrauma(r: number): [number, number] { return TRAUMA[blastIdx(r)]; }
+/** 07 §6.2: trauma added and decay, by blast radius band (cells, 00 §9.3). */
+export function blastTrauma(r: number): [number, number] {
+  if (r >= 64) return [0.8, 450];
+  if (r >= 42) return [0.55, 350];
+  if (r >= 28) return [0.35, 250];
+  if (r >= 18) return [0.2, 200];
+  return [0.1, 150];
+}
 
 /** 07 §6.1: hit stop ms for a hit of this much damage on a Hob (bands from 00 §9.3). */
 export function hobHitStop(dmg: number): number {
@@ -127,10 +124,10 @@ export class Juice {
       if (room <= 40) return false;
       if (added > room) d = room / (1 - speed);
     }
-    // A stronger slow wins over a weaker one still running (and the weaker one spends nothing).
-    if (this.slowLeft > 0 && this.slowSpeed < speed) return false;
     this.addedThisTurn += d * (1 - speed);
     this.slowThisShot = true;
+    // A stronger slow wins over a weaker one still running.
+    if (this.slowLeft > 0 && this.slowSpeed < speed) return true;
     this.slowSpeed = speed;
     this.slowLeft = d;
     this.slowKind = kind;

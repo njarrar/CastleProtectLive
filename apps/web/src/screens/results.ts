@@ -106,12 +106,10 @@ export function resultTitle(res: ResultView, win: boolean, rival = 'The Rival'):
     return ({
       clean_sweep: 'Clean Sweep!', kettle_pop: 'Kettle Pop!', squall: 'Squall Pop!', double_pop: 'Double Pop!',
       rescue: 'Rescued!', round_cap: `${rival} dozed off!`, total_hp: 'Won on points!',
-      give_up: `${rival} gave up!`, volley_points: 'Won on Volley Points!', captive_bonked: 'Captive Bonked: you win!',
     } as Record<string, string>)[k] ?? `${res.how}!`;
   }
   return ({
     clean_sweep: 'Swept', kettle_pop: 'Kettle popped', squall: 'Squalled', double_pop: 'Double Pop',
     rescue: 'Rescue failed', round_cap: 'Out of rounds', total_hp: 'Lost on points',
-    give_up: 'You gave up', volley_points: 'Lost on Volley Points', captive_bonked: 'Captive Bonked',
   } as Record<string, string>)[k] ?? 'Flattened';
 }

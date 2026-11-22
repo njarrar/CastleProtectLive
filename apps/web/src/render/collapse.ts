@@ -42,8 +42,6 @@ class CGroup {
   left = 0;
   fell = false;
   landed = 0;
-  /** View speed of this group: 1, or 2 once the next turn has started (hurry). */
-  speed = 1;
   wobble: [number, number][] = [];
   sway = 0;
 }
@@ -78,7 +76,7 @@ export class Collapses {
       mats[b.mat] = (mats[b.mat] ?? 0) + 1;
     }
     const mat = Object.keys(mats).sort((a, b) => mats[b] - mats[a])[0];
-    g.active = true; g.t = 0; g.side = e.side; g.lean = e.lean; g.count = e.blocks.length; g.left = 0; g.speed = 1;
+    g.active = true; g.t = 0; g.side = e.side; g.lean = e.lean; g.count = e.blocks.length; g.left = e.blocks.length;
     g.rows = rMax - rMin + 1; g.fell = false; g.landed = 0;
     // Taller chunks lean further: the material lean from the data, up to 12 degrees.
     g.deg = Math.min(MAX_LEAN, (d?.lean.deg[mat] ?? 4) * (1 + 0.4 * (g.rows - 1)));
@@ -90,7 +88,6 @@ export class Collapses {
     for (const b of e.blocks) {
       const s = this.blocks.find((q) => !q.active);
       if (!s) break;
-      g.left++; // only the slots taken count, so a full pool never leaves the group busy for good
       s.active = true; s.g = g; s.x = b.x; s.y = b.y; s.mat = b.mat; s.fall = Math.max(0, b.fall); s.row = b.r - rMin;
       const pct = b.maxHp ? b.hp / b.maxHp : 1;
       s.sprite = `block_${b.mat}_${pct >= 0.67 ? 'fresh' : pct >= 0.34 ? 'scuffed' : 'battered'}`;
@@ -98,28 +95,13 @@ export class Collapses {
       s.landT = -1; s.broke = false; s.rubbled = false;
       s.crack = anims.get(`fx_crack_${matKey(b.mat)}`);
     }
-    if (!g.left) { g.active = false; return; }
     if (this.sink) { SINK_ARG.side = g.side; SINK_ARG.count = g.count; SINK_ARG.x = (x0 + x1) / 2; SINK_ARG.y = yb; SINK_ARG.mat = mat; this.sink('creak', SINK_ARG); }
-  }
-
-  /**
-   * The next turn has started (the core's 60 tick settle is shorter than the show): a group still
-   * in its creak or lean skips to the drop, rows let go 30 ms apart, and the rest plays at 2x.
-   */
-  hurry(): void {
-    for (const g of this.groups) {
-      if (!g.active || g.speed > 1) continue;
-      g.speed = 2;
-      if (g.t < CREAK + LEAN) g.t = CREAK + LEAN;
-      g.gap = Math.min(g.gap, 30);
-    }
-    for (const b of this.blocks) if (b.active && b.landT < 0) b.release = Math.min(b.release, CREAK + LEAN + b.row * b.g.gap);
   }
 
   /** Advance by view ms; spawns dust, shards and rubble into `fx` as blocks land. */
   step(dt: number, fx: FxPool): void {
     const d = anims.data?.collapse;
-    for (const g of this.groups) { if (g.active) { g.t += dt * g.speed; g.landed = 0; } }
+    for (const g of this.groups) { if (g.active) { g.t += dt; g.landed = 0; } }
     for (const b of this.blocks) {
       if (!b.active) continue;
       const g = b.g;

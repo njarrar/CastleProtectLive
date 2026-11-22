@@ -5,7 +5,7 @@ import type { BattleEvent, HobView, KettleView, PinView, RoomView, Side, Snapsho
 import { AnimPlayer, anims, frameIndexAt, type Clip } from './anim';
 import { Collapses } from './collapse';
 import { FxPool, type DmgType } from './fx';
-import { Juice, blastBand, blastTrauma, hobHitStop } from './juice';
+import { Juice, blastTrauma, hobHitStop } from './juice';
 import { hobSpriteName } from './sprites';
 import type { TerrainLayer } from './terrain';
 import { matKey, stage } from './view';
@@ -58,8 +58,7 @@ export class Feel {
   reduceMotion = false;
   you: Side = 0;
   sound: (c: Cue, arg?: string, gain?: number) => void = () => undefined;
-  /** A bark: sprite name, event, side, turn step, and the Hob id (for the subtitle tag). */
-  bark: (hob: string, ev: Bark, side: number, step: number, id: string) => void = () => undefined;
+  bark: (hob: string, ev: Bark, side: number, step: number) => void = () => undefined;
   private shotN = 0;
   private lastShot = '';
   private shooter: HobAnim | null = null;
@@ -91,8 +90,8 @@ export class Feel {
   private hobPower = 0;
   private picked = '';
   private plan = false;
-  private lastBonkX = 0;
-  private lastBonkY = 0;
+  /** A battle-ending moment played (the results card waits for its slow motion). */
+  ending = false;
   /** Scratch out-values for the draw code (no tuples). */
   outDy = 0;
   outAlpha = 1;
@@ -124,8 +123,6 @@ export class Feel {
     switch (e.t) {
       case 'turn':
         this.juice.newTurn();
-        // The core's settle is shorter than the show: a collapse still creaking skips to its drop.
-        this.col.hurry();
         this.fireTick = -1;
         break;
       case 'fire': {
@@ -148,7 +145,7 @@ export class Feel {
         this.shakeAt(tr, decay, e.x, e.y, viewCenterX, viewW);
         this.boom(e.x, e.y, e.r);
         this.impact(e.x, e.y, snap);
-        this.sound('boom', blastBand(e.r));
+        this.sound('boom', e.r >= 64 ? 'huge' : e.r >= 42 ? 'large' : e.r >= 28 ? 'medium' : e.r >= 18 ? 'small' : 'tiny');
         // Near miss on a kettle under 25% (07 §6.4).
         for (const k of snap.kettles) {
           if (k.hp <= 0 || k.hp > k.maxHp * 0.25 || this.kettleHitThisShot) continue;
@@ -167,9 +164,9 @@ export class Feel {
             const a = e.hob ? this.hobs.get(e.hob) : undefined;
             if (a?.clips.hit && a.mode !== 'bonked' && a.mode !== 'tumble') { a.p.play(a.clips.hit); a.mode = 'act'; }
             this.sound('hit_hob');
-            if (a) this.bark(a.nm, 'takes_hit', a.side, this.shotN, a.id);
+            if (a) this.bark(a.nm, 'takes_hit', a.side, this.shotN);
             const sh = this.shooter;
-            if (sh && a && sh.side !== a.side) this.bark(sh.nm, 'hit_lands', sh.side, this.shotN, sh.id);
+            if (sh && a && sh.side !== a.side) this.bark(sh.nm, 'hit_lands', sh.side, this.shotN);
           } else if (e.what === 'kettle') {
             this.kettleHitThisShot = true;
             this.fx.number(`k${e.side ?? 0}`, e.x, e.y + 16, e.dmg, 2, type, dir);
@@ -214,14 +211,15 @@ export class Feel {
       case 'bonk': {
         this.fx.word('Bonk!', e.x, e.y + 44, 22, '#FFF4DE', true, 1400);
         this.juice.hitStop(80);
-        // A plain Bonk slow. Whether it ended the fight is the core's call: the win event
-        // (how: clean_sweep) turns it into the Clean Sweep slow below. In Volley Points a side
-        // with no Hobs left plays on, so nothing here guesses from a count.
-        this.lastBonkX = e.x; this.lastBonkY = e.y;
-        this.juice.slow('bonk');
+        const h = snap.hobs.find((q) => q.id === e.hob);
+        const side = h?.side;
+        const left = side === undefined ? 1 : snap.hobs.filter((q) => q.side === side && q.state !== 'bonked').length;
+        if (left === 0 && side !== this.you) { this.ending = true; this.juice.slow('clean_sweep', true, [e.x, e.y + 30], 1.35); }
+        else if (left === 0) { this.ending = true; this.juice.slow('own_last_bonk', true); }
+        else this.juice.slow('bonk');
         this.sound('bonk');
         const ba = this.hobs.get(e.hob);
-        if (ba) this.bark(ba.nm, 'bonked', ba.side, -1 - this.shotN, ba.id);
+        if (ba) this.bark(ba.nm, 'bonked', ba.side, -1 - this.shotN);
         break;
       }
       case 'kettle_pop': {
@@ -231,6 +229,7 @@ export class Feel {
         st.on = true;
         this.juice.hitStop(80);
         this.juice.shake(1, 600);
+        this.ending = true;
         if (k) {
           const kx = k.x + k.size / 2, ky = k.y + k.size / 2;
           this.juice.slow('kettle_pop', true, [kx, ky], 1.4);
@@ -259,16 +258,12 @@ export class Feel {
         break;
       }
       case 'note':
-        if (e.text && e.x !== undefined && e.y !== undefined) this.fx.word(e.text, e.x, e.y + 30, 16, '#FFF4DE', false, 1400);
+        if (e.x !== undefined && e.y !== undefined) this.fx.word(e.text, e.x, e.y + 30, 16, '#FFF4DE', false, 1400);
         break;
       case 'squall':
         if (e.n === 1) this.sound('squall');
         break;
       case 'end':
-        if (e.key === 'clean_sweep') {
-          if (e.winner === this.you) this.juice.slow('clean_sweep', true, [this.lastBonkX, this.lastBonkY + 30], 1.35);
-          else this.juice.slow('own_last_bonk', true);
-        }
         for (const h of snap.hobs) {
           if (h.side !== e.winner || h.state === 'bonked') continue;
           const a = this.hobs.get(h.id);
@@ -440,14 +435,14 @@ export class Feel {
   private hobSink = (ev: string): void => {
     const a = this.cur;
     if (ev === 'release') this.release(a);
-    else if (ev === 'jump') { this.sound('cheer'); if (a && !a.barked) { a.barked = true; this.bark(a.nm, 'win', a.side, -100, a.id); } }
+    else if (ev === 'jump') { this.sound('cheer'); if (a && !a.barked) { a.barked = true; this.bark(a.nm, 'win', a.side, -100); } }
     else if (ev === 'thud' || ev === 'land') this.sound('hob_land');
     else if (ev === 'fall') this.sound('tumble');
     else if (ev === 'clear') this.sound('dig');
   };
   private release(a: HobAnim | null | undefined): void {
     this.sound('release', this.lastShot);
-    if (a) this.bark(a.nm, 'fire', a.side, this.shotN, a.id);
+    if (a) this.bark(a.nm, 'fire', a.side, this.shotN);
   }
 
   /** The sprite for a Hob now. Sets outDy (cells, up) for the balloon float. */

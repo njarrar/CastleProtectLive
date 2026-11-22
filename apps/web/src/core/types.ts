@@ -66,8 +66,8 @@ export type Command =
   | { cmd: 'end_draft' }
   | { cmd: 'recall'; pin: string }
   | { cmd: 'fast'; on: boolean }
-  | { cmd: 'set_wind'; wind: number } // Test Yard only (see CoreApi.features)
-  | { cmd: 'give_up' } // see CoreApi.features
+  | { cmd: 'set_wind'; wind: number } // Test Yard only; real core: unsupported (see CoreApi.features)
+  | { cmd: 'give_up' } // real core: unsupported (see CoreApi.features)
   | { cmd: 'shove_off' } // clear the picked Hob's buried Loophole
   | { cmd: 'pass' }
   | { cmd: 'doodad'; id: string; room?: string };
@@ -221,7 +221,7 @@ export type BattleEvent =
   | { t: 'thump'; side: Side }
   /** A Hob animation cue from a core event: tumble, land, dig (Shove Off), nextdoor (a Passive acts). */
   | { t: 'hob'; hob: string; act: 'tumble' | 'land' | 'dig' | 'nextdoor' | 'cheer' }
-  | { t: 'end'; winner: Side | -1; how: string; key?: string };
+  | { t: 'end'; winner: Side | -1; how: string };
 
 export interface DraftChip {
   id: string;
@@ -383,14 +383,8 @@ export interface CoreApi {
   snapshot(): Snapshot;
   /** Opaque save of the live battle (commands plus seed); the layout is never in it. */
   saveBattle(): string;
-  /**
-   * Replays a save. Throws a SaveError when it is from another version, damaged, or the core
-   * refuses its log. A log that replays but lands on another state hash still loads: the
-   * returned text is a note for the player.
-   */
-  loadBattle(data: string): string | void;
-  /** Bumps each time a battle is built; a screen can take over the live battle when it still matches. */
-  readonly battleGen?: number;
+  /** Replays a save. Throws a SaveError when it is from another version or does not replay. */
+  loadBattle(data: string): void;
 }
 
 export const TICK_HZ = 120;
