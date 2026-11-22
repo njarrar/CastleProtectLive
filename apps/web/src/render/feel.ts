@@ -206,10 +206,10 @@ export class Feel {
         this.col.start(e);
         break;
       case 'fall':
-        this.fx.word('Drop!', e.x, e.y + 30, 26, '#FFF4DE', true, 1400);
+        this.fx.word('Drop!', e.x, e.y + 40, 20, '#FFF4DE', true, 1400);
         break;
       case 'bonk': {
-        this.fx.word('Bonk!', e.x, e.y + 44, 28, '#FFF4DE', true, 1400);
+        this.fx.word('Bonk!', e.x, e.y + 44, 22, '#FFF4DE', true, 1400);
         this.juice.hitStop(80);
         const h = snap.hobs.find((q) => q.id === e.hob);
         const side = h?.side;
@@ -233,7 +233,7 @@ export class Feel {
         if (k) {
           const kx = k.x + k.size / 2, ky = k.y + k.size / 2;
           this.juice.slow('kettle_pop', true, [kx, ky], 1.4);
-          this.fx.word('Kettle Pop!', kx, ky + 60, 30, '#4FE3C1', true, 2000);
+          this.fx.word('Kettle Pop!', kx, ky + 60, 24, '#4FE3C1', true, 2000);
           this.boom(kx, ky, 42);
         }
         break;

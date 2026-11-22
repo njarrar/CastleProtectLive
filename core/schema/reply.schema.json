@@ -79,6 +79,32 @@
         },
         "log": {
           "type": "array"
+        },
+        "cost": {
+          "type": "integer"
+        },
+        "used": {
+          "type": "integer"
+        },
+        "budget": {
+          "type": "integer"
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "applied": {
+          "type": "integer"
+        },
+        "index": {
+          "type": "integer"
         }
       }
     }

@@ -15,7 +15,8 @@
         "campaign",
         "skirmish",
         "couch",
-        "test_yard"
+        "test_yard",
+        "daily"
       ]
     },
     "sides": {
@@ -68,12 +69,34 @@
             "type": "string"
           },
           "steam": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
           },
           "aim": {
             "type": "integer",
             "minimum": 1,
             "maximum": 5
+          },
+          "help": {
+            "enum": [
+              "none",
+              "some",
+              "lots"
+            ],
+            "description": "Help handicap: the side's Steam pool from content/app.json help_steam (some 120, lots 140). An explicit steam wins."
+          },
+          "preview_pct": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Preview share of the arc for this side (Couch Duel handicap: 30, 45, 60 or 100)."
+          },
+          "crew_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Crew size handicap: seat only the first n Hobs."
           }
         }
       }
@@ -140,6 +163,32 @@
     },
     "puff_up": {
       "type": "boolean"
+    },
+    "volley": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 30,
+      "description": "Volley Points: Actions per side (6, 10 or 14). Skirmish, Daily and Couch Duel only. No round cap, no Squall."
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What the save holds for this level, for the Buttons reward in result.buttons.",
+      "properties": {
+        "cleared": {
+          "type": "boolean"
+        },
+        "pennants": {
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          },
+          "maxItems": 3
+        },
+        "daily_paid": {
+          "type": "boolean"
+        }
+      }
     }
   }
 }

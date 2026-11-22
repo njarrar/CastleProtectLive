@@ -20,6 +20,8 @@ export class TerrainLayer {
   private ctx: CanvasRenderingContext2D;
   private img?: ImageData;
   dirty = true;
+  /** Bumped on every repaint (the lens background cache keys on it). */
+  rev = 0;
   /** Column tops for the Field Strip silhouette. */
   tops = new Int16Array(0);
 
@@ -27,7 +29,7 @@ export class TerrainLayer {
   private soilW = 0;
 
   /** Use the terrain_soil tile (1 px per cell at @1x) for the ground body, and repaint. */
-  setSoil(img: HTMLImageElement): void {
+  setSoil(img: CanvasImageSource & { width: number; height: number }): void {
     const c = document.createElement('canvas');
     c.width = img.width;
     c.height = img.height;
@@ -115,5 +117,6 @@ export class TerrainLayer {
     }
     this.ctx.putImageData(img, 0, 0, x0, H - y1, x1 - x0, y1 - y0);
     this.dirty = true;
+    this.rev++;
   }
 }

@@ -8,6 +8,8 @@ export function settingsScreen(app: App, route: Route): Screen {
   const s = app.settings;
   const vol = h('input', { type: 'range', min: 0, max: 100, value: s.sound, 'aria-label': 'Sound' }) as HTMLInputElement;
   vol.addEventListener('input', () => void app.setSettings({ sound: Number(vol.value) }));
+  const mus = h('input', { type: 'range', min: 0, max: 100, value: s.music, 'aria-label': 'Music' }) as HTMLInputElement;
+  mus.addEventListener('input', () => void app.setSettings({ music: Number(mus.value) }));
   const resetIn = h('input', { placeholder: 'Type RESET', 'aria-label': 'Type RESET to confirm' }) as HTMLInputElement;
   const row = (label: string, ctl: HTMLElement) => h('div', { class: 'field-row' }, h('span', { class: 'lab' }, label), ctl);
   const section = (title: string, ...kids: HTMLElement[]) => h('section', { class: 'sheet' }, h('h2', {}, title), ...kids);
@@ -15,7 +17,7 @@ export function settingsScreen(app: App, route: Route): Screen {
   const el = h('main', { class: 'screen settings' },
     h('header', { class: 'topbar' }, btn('←', () => app.go(back), 'round-btn', { 'aria-label': 'Back', 'data-autofocus': true }), h('h1', {}, 'Settings')),
     h('div', { class: 'list' },
-      section('Sound', row('Sound', vol), toggle('Mute all', s.mute, (v) => void app.setSettings({ mute: v }))),
+      section('Sound', row('Sound', vol), row('Music', mus), toggle('Mute all', s.mute, (v) => void app.setSettings({ mute: v }))),
       section('Assists',
         row('Difficulty', seg([['cozy', 'Cozy'], ['fair', 'Fair'], ['stubborn', 'Stubborn']], s.difficulty, (v) => void app.setSettings({ difficulty: v }), 'Difficulty')),
         toggle('Wind off', s.windOff, (v) => void app.setSettings({ windOff: v })),

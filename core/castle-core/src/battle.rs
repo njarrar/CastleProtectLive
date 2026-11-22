@@ -361,7 +361,9 @@ pub fn num(v: &Value, key: &str, lo: i64, hi: i64) -> Result<Option<i64>, Value>
 
 /// A whole number inside a JSON array (targets), range checked.
 fn num_at(x: &Value, lo: i64, hi: i64) -> Option<i32> {
-    x.as_i64().filter(|n| *n >= lo && *n <= hi).map(|n| n as i32)
+    x.as_i64()
+        .filter(|n| *n >= lo && *n <= hi)
+        .map(|n| n as i32)
 }
 
 pub fn mat_table(content: &Content) -> MatTable {
@@ -617,15 +619,19 @@ impl Battle {
             };
             crate::castle::validate_blueprint(&content, &bp, crew.len() as i32)?;
             let help = cfg.help.clone().unwrap_or_else(|| "none".into());
-            let help_steam = content.app_help_steam(&help).ok_or(format!("unknown help {help}"))?;
+            let help_steam = content
+                .app_help_steam(&help)
+                .ok_or(format!("unknown help {help}"))?;
             if let Some(st) = cfg.steam {
                 if !(0..=1000).contains(&st) {
                     return Err("steam must be 0 to 1000".into());
                 }
             }
-            let steam = cfg
-                .steam
-                .unwrap_or(if help_steam > 0 { help_steam } else { rules.steam });
+            let steam = cfg.steam.unwrap_or(if help_steam > 0 {
+                help_steam
+            } else {
+                rules.steam
+            });
             if let Some(p) = cfg.preview_pct {
                 if !(0..=100).contains(&p) {
                     return Err("preview_pct must be 0 to 100".into());
@@ -1390,7 +1396,11 @@ impl Battle {
             let cs = &self.castles[0];
             for r in 0..cs.rows {
                 for c in 0..cs.cols {
-                    if cs.has_block(c, r) && !self.content.materials.blocks[cs.block(c, r).map(|b| b.mat as usize).unwrap_or(0)].never_falls {
+                    if cs.has_block(c, r)
+                        && !self.content.materials.blocks
+                            [cs.block(c, r).map(|b| b.mat as usize).unwrap_or(0)]
+                        .never_falls
+                    {
                         let b = cs.slot_box(c, r);
                         if b.0 <= cut.2 && b.2 >= cut.0 && b.1 <= cut.3 && b.3 >= cut.1 {
                             broke.push((c, r));
@@ -1685,12 +1695,7 @@ impl Battle {
             }
         }
         if let Some(obj) = &self.rules.objective {
-            if !lost[0]
-                && self
-                    .props
-                    .iter()
-                    .any(|p| p.kind == "captive" && p.hp <= 0)
-            {
+            if !lost[0] && self.props.iter().any(|p| p.kind == "captive" && p.hp <= 0) {
                 self.end_battle(1, "captive_bonked");
                 return true;
             }
@@ -1778,17 +1783,15 @@ impl Battle {
                     let base = c.reward(if gf { "replay_grand_fort" } else { "replay" });
                     base + c.reward("per_new_pennant") * new.iter().filter(|x| **x).count() as i32
                 } else {
-                    let base = c.reward(if gf { "first_clear_grand_fort" } else { "first_clear" });
+                    let base = c.reward(if gf {
+                        "first_clear_grand_fort"
+                    } else {
+                        "first_clear"
+                    });
                     base + c.reward("per_pennant") * pennants.iter().filter(|x| **x).count() as i32
                 }
             }
-            "daily" => {
-                if won && !self.progress.daily_paid {
-                    c.reward("daily")
-                } else {
-                    0
-                }
-            }
+            "daily" if won && !self.progress.daily_paid => c.reward("daily"),
             _ => 0,
         }
     }
@@ -2576,11 +2579,13 @@ impl Battle {
             moved += 4 * dir;
             // dirt that rested on the fort settles in the old and new footprint
             let castles = self.castles.clone();
-            self.terrain.settle(old_x.min(nx) - 2, old_x.max(nx) + w + 2, |cx, cy| {
-                castles
-                    .iter()
-                    .any(|c| c.slot_at(cx, cy).is_some_and(|(cc, rr)| c.has_block(cc, rr)))
-            });
+            self.terrain
+                .settle(old_x.min(nx) - 2, old_x.max(nx) + w + 2, |cx, cy| {
+                    castles.iter().any(|c| {
+                        c.slot_at(cx, cy)
+                            .is_some_and(|(cc, rr)| c.has_block(cc, rr))
+                    })
+                });
             if drop > THUMP_DROP {
                 thumps += 1;
                 break;
@@ -2605,7 +2610,8 @@ impl Battle {
     fn walk_thump(&mut self, s: usize) {
         self.ev(json!({"t": "thump", "side": s}));
         let mut broke = vec![];
-        let footing = |b: &crate::castle::Block| self.content.materials.blocks[b.mat as usize].never_falls;
+        let footing =
+            |b: &crate::castle::Block| self.content.materials.blocks[b.mat as usize].never_falls;
         let cs = &self.castles[s];
         for r in 0..cs.rows {
             for c in 0..cs.cols {
@@ -3092,10 +3098,7 @@ impl Battle {
                         Some(Preset::parse(p))
                     }
                     Some(_) => {
-                        return Err(err_d(
-                            "bad_value",
-                            "preset must be cozy, fair or stubborn",
-                        ))
+                        return Err(err_d("bad_value", "preset must be cozy, fair or stubborn"))
                     }
                 };
                 let was = self.logging;
@@ -3181,9 +3184,13 @@ impl Battle {
                 let (cost, used, cells) = crate::castle::blueprint_report(&self.content, &bp);
                 let cells: Vec<Value> = cells.iter().map(|p| json!([p.0, p.1])).collect();
                 match crate::castle::validate_blueprint(&self.content, &bp, seats) {
-                    Ok(()) => json!({"ok": true, "cost": cost, "blocks": used, "budget": crate::castle::BUDGET}),
-                    Err(e) => json!({"ok": false, "reason": "invalid_blueprint", "detail": e, "cells": cells,
-                                     "cost": cost, "blocks": used, "budget": crate::castle::BUDGET}),
+                    Ok(()) => {
+                        json!({"ok": true, "cost": cost, "used": used, "budget": crate::castle::BUDGET})
+                    }
+                    Err(e) => {
+                        json!({"ok": false, "reason": "invalid_blueprint", "detail": e, "cells": cells,
+                                     "cost": cost, "used": used, "budget": crate::castle::BUDGET})
+                    }
                 }
             }
             _ => err("unknown_command"),

@@ -366,8 +366,8 @@ fn quick_solve(
         tried.push(p);
         let a = w.aim_probe(side, hob, shot, angle, p);
         let (_, end, _) = w.probe_path(a, 600, false, units);
-        let miss = isqrt(((end.0 - tx) as i64).pow(2) as u64 + ((end.1 - ty) as i64).pow(2) as u64)
-            as i32;
+        let miss =
+            isqrt(((end.0 - tx) as i64).pow(2) as u64 + ((end.1 - ty) as i64).pow(2) as u64) as i32;
         if best.is_none_or(|b| miss < b.1) {
             best = Some((p, miss));
         }
@@ -389,7 +389,11 @@ fn quick_solve(
             (p as i64 * isqrt((want * 10_000 / reach) as u64) as i64 / 100) as i32
         };
         // stay inside the bracket; bisect when the estimate leaves it
-        p = if np >= lo && np <= hi { np } else { (lo + hi) / 2 };
+        p = if np >= lo && np <= hi {
+            np
+        } else {
+            (lo + hi) / 2
+        };
     }
     best
 }
@@ -672,9 +676,17 @@ fn plan_turn_with(
             if units > refine_budget {
                 break;
             }
-            if let Some((p, m)) =
-                quick_solve(&solve_world, side, r.hob, r.shot_ix, a, r.tx, r.ty, &mut units, budget)
-            {
+            if let Some((p, m)) = quick_solve(
+                &solve_world,
+                side,
+                r.hob,
+                r.shot_ix,
+                a,
+                r.tx,
+                r.ty,
+                &mut units,
+                budget,
+            ) {
                 if m < r.miss {
                     r.angle = a;
                     r.power = p;
@@ -774,11 +786,6 @@ fn plan_turn_with(
             .then(a.shot.cmp(&b.shot))
     });
 
-    if std::env::var("AI_DEBUG").is_ok() {
-        eprintln!("AIDBG side {side} round {} targets {:?}", k.round, tg);
-        for r in rough.iter().take(6) { eprintln!("AIDBG rough hob {} key {} a {} p {} miss {}", r.hob, r.key, r.angle, r.power, r.miss); }
-        for c in scored.iter().take(4) { eprintln!("AIDBG scored hob {} {} key {} a {} p {} miss {} score {}", c.hob, c.shot, c.target, c.angle, c.power, c.miss, c.score); }
-    }
     // Doodads: mend when walls are hurt and no shot pays more
     let best_score = scored.first().map(|c| c.score).unwrap_or(-1);
     if let Some(cmd) = doodad_choice(&k, side, best_score, preset) {

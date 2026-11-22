@@ -58,7 +58,10 @@ pub struct Game {
 impl Game {
     fn guarded<F: FnOnce(&mut castle_core::Game) -> String>(&mut self, f: F) -> String {
         if self.dead {
-            return refusal("dead_handle", "an earlier call panicked; rebuild from the log");
+            return refusal(
+                "dead_handle",
+                "an earlier call panicked; rebuild from the log",
+            );
         }
         match catch_unwind(AssertUnwindSafe(|| f(&mut self.inner))) {
             Ok(s) => {

@@ -7,7 +7,9 @@
 // its frames in as it lands. A low-DPI screen never fetches them.
 // When the art is missing, every draw returns false and the renderer uses its plain shapes.
 
-interface Frame { img: HTMLImageElement; x: number; y: number; w: number; h: number; scale: number }
+/** Decoded pixels: an ImageBitmap where the browser has one, so pages are not decoded again each frame. */
+export type Pix = (ImageBitmap | HTMLImageElement) & { width: number; height: number };
+interface Frame { img: Pix; x: number; y: number; w: number; h: number; scale: number }
 interface Meta { w: number; h: number; ax: number; ay: number }
 interface Page { image: string; scale: number; frames: Record<string, { x: number; y: number; w: number; h: number }> }
 
@@ -20,7 +22,8 @@ class SpriteBank {
   scale = 0;
   private frames = new Map<string, Frame>();
   private meta = new Map<string, Meta>();
-  private textures = new Map<string, HTMLImageElement>();
+  private textures = new Map<string, Pix>();
+  private texUrls = new Map<string, string>();
   private urls = new Map<string, string>();
   private waiters: (() => void)[] = [];
   private root = '';
@@ -35,8 +38,8 @@ class SpriteBank {
       for (const k in meta) { const m = meta[k]; this.meta.set(k, { w: m[0], h: m[1], ax: m[2], ay: m[3] }); }
       await this.loadScale(1);
       await Promise.all([
-        ...BG.map(async (t) => { const i = await loadTex(`${this.root}sprites/${t}`); if (i) this.textures.set(t, i); }),
-        ...TILES.map(async (t) => { try { this.textures.set(t, await loadImg(`${this.root}sprites/${t}.png`)); } catch { /* optional */ } }),
+        ...BG.map(async (t) => { const i = await loadTex(`${this.root}sprites/${t}`); if (i) { this.textures.set(t, await pix(i)); this.texUrls.set(t, i.src); } }),
+        ...TILES.map(async (t) => { try { this.textures.set(t, await pix(await loadImg(`${this.root}sprites/${t}.png`))); } catch { /* optional */ } }),
       ]);
       this.ready = this.frames.size > 0;
     } catch (e) {
@@ -58,7 +61,7 @@ class SpriteBank {
       void (async () => {
         try {
           await this.loadScale(2);
-          for (const t of BG) { const i = await loadTex(`${this.root}sprites/${t}@2x`); if (i) this.textures.set(t, i); }
+          for (const t of BG) { const i = await loadTex(`${this.root}sprites/${t}@2x`); if (i) { this.textures.set(t, await pix(i)); this.texUrls.set(t, i.src); } }
           this.urls.clear();
         } catch (e) { console.info('[castle] @2x art not loaded:', (e as Error).message); }
       })();
@@ -70,7 +73,7 @@ class SpriteBank {
     // @1x: all pages at once (there is one). @2x: in turn, so the network stays free for play.
     const one = async (p: string) => {
       const page = await getJson<Page>(`${this.root}atlas/${p}`);
-      const img = await loadImg(`${this.root}atlas/${page.image}`);
+      const img = await pix(await loadImg(`${this.root}atlas/${page.image}`));
       for (const name in page.frames) { const f = page.frames[name]; this.frames.set(name, { img, x: f.x, y: f.y, w: f.w, h: f.h, scale: page.scale }); }
     };
     if (scale === 1) await Promise.all(list.pages.map(one));
@@ -86,7 +89,9 @@ class SpriteBank {
     return m ? { w: m.w, h: m.h, anchor: [m.ax, m.ay] } : undefined;
   }
   /** Backgrounds by base name (best scale loaded), terrain tiles by file name. */
-  texture(name: string): HTMLImageElement | undefined { return this.textures.get(name); }
+  texture(name: string): Pix | undefined { return this.textures.get(name); }
+  /** The URL of a background, for CSS. */
+  textureUrl(name: string): string | undefined { return this.texUrls.get(name); }
 
   /**
    * Draw a sprite with its anchor at (x, y). `scale` is screen px per @1x sprite px.
@@ -158,6 +163,11 @@ async function getJson<T>(url: string): Promise<T> {
 async function loadTex(base: string): Promise<HTMLImageElement | undefined> {
   try { return await loadImg(`${base}.webp`); } catch { /* try png */ }
   try { return await loadImg(`${base}.png`); } catch { return undefined; }
+}
+
+async function pix(i: HTMLImageElement): Promise<Pix> {
+  if (typeof createImageBitmap !== 'function') return i;
+  try { return await createImageBitmap(i); } catch { return i; }
 }
 
 function loadImg(src: string): Promise<HTMLImageElement> {

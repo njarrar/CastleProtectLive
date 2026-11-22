@@ -284,8 +284,12 @@ Not rule breaks today, but each is a number the core should own:
 
 ## Fixes
 
-Fixed on branch `castle-protect-plan` and proven on the public CI (`ios` workflow,
-GitHub Actions, macOS runner, real core linked). Paths are relative to `apps/ios/CastleProtect/`.
+Fixed on branch `castle-protect-plan` and built on the public CI (`ios` workflow, GitHub
+Actions, macOS runner, real core linked). In run 45037491160 the app built and 53 of 54 unit
+tests and both UI tests passed. The one failure is `testGoldenHashesMatch`: the core in
+progress gives new golden hashes and `core/castle-core/tests/golden/expected.txt` has not been
+updated yet (the core's own `cargo test golden` fails the same way). It turns green once the core
+fixer updates that file. Paths are relative to `apps/ios/CastleProtect/`.
 
 | Id | Status | What was done |
 |---|---|---|

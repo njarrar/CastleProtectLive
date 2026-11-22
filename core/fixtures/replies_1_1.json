@@ -1,4 +1,9 @@
 {
+  "aim": {
+    "angle": 455,
+    "ok": true,
+    "power": 62
+  },
   "commands": [
     {
       "can_fire": true,

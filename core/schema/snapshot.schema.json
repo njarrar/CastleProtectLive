@@ -59,7 +59,7 @@
           "type": "integer"
         },
         "chunk": {
-          "type": "integer"
+          "const": 64
         }
       }
     },
@@ -436,19 +436,23 @@
             "type": "boolean"
           },
           "aim": {
-            "type": "object",
-            "required": [
-              "angle",
-              "power"
-            ],
-            "properties": {
-              "angle": {
-                "type": "integer"
+            "description": "Live aim, only for the side on turn; null for the other side.",
+            "oneOf": [
+              {
+                "type": "null"
               },
-              "power": {
-                "type": "integer"
+              {
+                "type": "object",
+                "properties": {
+                  "angle": {
+                    "type": "integer"
+                  },
+                  "power": {
+                    "type": "integer"
+                  }
+                }
               }
-            }
+            ]
           }
         }
       }
@@ -723,6 +727,139 @@
           "items": {
             "type": "boolean"
           }
+        },
+        "steam_max": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "shove_off_cost": {
+          "type": "integer"
+        },
+        "shots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "shot",
+              "ready",
+              "why"
+            ],
+            "properties": {
+              "shot": {
+                "type": "string"
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ready": {
+                "type": "boolean"
+              },
+              "why": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "handicap": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "help": {
+                "enum": [
+                  "none",
+                  "some",
+                  "lots"
+                ]
+              },
+              "steam": {
+                "type": "integer"
+              },
+              "preview_pct": {
+                "type": "integer"
+              },
+              "crew": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "volley": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "actions",
+                "left"
+              ],
+              "properties": {
+                "actions": {
+                  "type": "integer"
+                },
+                "left": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "boss": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "phase"
+              ],
+              "properties": {
+                "phase": {
+                  "type": "integer"
+                },
+                "roller": {},
+                "roller_done": {
+                  "type": "boolean"
+                },
+                "shears": {},
+                "cut": {
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                },
+                "jam": {
+                  "type": "integer"
+                }
+              }
+            }
+          ]
+        },
+        "rules": {
+          "type": "object",
+          "properties": {
+            "objective": {},
+            "cap_win": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
         }
       }
     },
@@ -856,7 +993,10 @@
                 "double_pop",
                 "rescue",
                 "round_cap",
-                "total_hp"
+                "total_hp",
+                "give_up",
+                "volley_points",
+                "captive_bonked"
               ]
             },
             "round": {
@@ -866,6 +1006,86 @@
               "type": "array",
               "items": {
                 "type": "boolean"
+              }
+            },
+            "pennants_new": {
+              "type": "array",
+              "items": {
+                "type": "boolean"
+              }
+            },
+            "buttons": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "score": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "stats": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "shots": {
+                    "type": "integer"
+                  },
+                  "hits": {
+                    "type": "integer"
+                  },
+                  "blocks_dropped": {
+                    "type": "integer"
+                  },
+                  "bonks": {
+                    "type": "integer"
+                  },
+                  "blocks_lost": {
+                    "type": "integer"
+                  },
+                  "kettle_lost": {
+                    "type": "integer"
+                  },
+                  "hobs_lost": {
+                    "type": "integer"
+                  },
+                  "best_streak": {
+                    "type": "integer"
+                  }
+                }
+              }
+            },
+            "broke": {
+              "type": "object",
+              "required": [
+                "side",
+                "how",
+                "top",
+                "kettle_lost",
+                "blocks_lost",
+                "hobs_bonked"
+              ],
+              "properties": {
+                "side": {
+                  "type": "integer"
+                },
+                "how": {
+                  "type": "string"
+                },
+                "last": {},
+                "top": {
+                  "type": "array"
+                },
+                "kettle_lost": {
+                  "type": "integer"
+                },
+                "blocks_lost": {
+                  "type": "integer"
+                },
+                "hobs_bonked": {
+                  "type": "integer"
+                }
               }
             }
           }
@@ -877,6 +1097,30 @@
     },
     "hash": {
       "type": "string"
+    },
+    "aim": {
+      "description": "Lean snapshots after an aim command: the new aim of the selected Hob.",
+      "type": "object",
+      "required": [
+        "side",
+        "hob",
+        "angle",
+        "power"
+      ],
+      "properties": {
+        "side": {
+          "type": "integer"
+        },
+        "hob": {
+          "type": "integer"
+        },
+        "angle": {
+          "type": "integer"
+        },
+        "power": {
+          "type": "integer"
+        }
+      }
     }
   }
 }

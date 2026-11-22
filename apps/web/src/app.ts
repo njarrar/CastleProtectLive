@@ -56,7 +56,7 @@ export class App {
     this.core = core;
     this.settings = await loadSettings();
     this.progress = await loadProgress();
-    setVolume(this.settings.sound, this.settings.mute);
+    setVolume(this.settings.sound, this.settings.mute, this.settings.music);
     this.applyMotion();
     this.updateLayout(true);
     let raf = 0;
@@ -143,7 +143,7 @@ export class App {
 
   async setSettings(p: Partial<Settings>): Promise<void> {
     Object.assign(this.settings, p);
-    setVolume(this.settings.sound, this.settings.mute);
+    setVolume(this.settings.sound, this.settings.mute, this.settings.music);
     this.applyMotion();
     this.updateLayout(true);
     this.cur?.relayout?.();

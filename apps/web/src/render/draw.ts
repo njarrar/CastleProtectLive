@@ -52,86 +52,105 @@ export interface DrawOpts {
   label?: string;
   /** Lean Lines: blocks that would fall, as "c,r", and the held block. */
   lean?: { side: Side; c: number; r: number; falls: Set<string> };
+  /** The sky is the canvas's CSS background: clear instead of drawing it. */
+  cssSky: boolean;
+  /** Canvas pixels per CSS pixel (for the backdrop cache). */
+  dpr: number;
   /** Shell positions carried on between ticks: [id, x, y] per shell. */
   shells: Float64Array;
   nShells: number;
 }
 
-export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap: Snapshot, terr: TerrainLayer, feel: Feel, o: DrawOpts): void {
+/**
+ * A copy of an image pre-scaled to the size it is drawn at, so a moving camera blits it at 1:1
+ * instead of scaling a big image every frame. Rebuilt once the size has held for 3 frames.
+ */
+class ScaledCopy {
+  canvas = document.createElement('canvas');
+  private c = this.canvas.getContext('2d')!;
+  private src: CanvasImageSource | null = null;
+  private rev = -1; private w = 0; private h = 0;
+  private pw = 0; private ph = 0; private prev = -1; private psrc: CanvasImageSource | null = null; private n = 0;
+  get(src: CanvasImageSource, rev: number, w: number, h: number, smooth: boolean): HTMLCanvasElement | null {
+    w = Math.round(w); h = Math.round(h);
+    if (src === this.src && rev === this.rev && w === this.w && h === this.h) return this.canvas;
+    if (w * h > 9e6 || w < 1 || h < 1) return null;
+    if (src !== this.psrc || rev !== this.prev || w !== this.pw || h !== this.ph) { this.psrc = src; this.prev = rev; this.pw = w; this.ph = h; this.n = 0; return null; }
+    if (++this.n < 3) return null;
+    this.canvas.width = w; this.canvas.height = h;
+    this.c.imageSmoothingEnabled = smooth;
+    this.c.imageSmoothingQuality = 'high';
+    this.c.drawImage(src, 0, 0, w, h);
+    this.src = src; this.rev = rev; this.w = w; this.h = h;
+    return this.canvas;
+  }
+}
+
+/**
+ * The backdrop of a lens (sky, hills, terrain) is the costly part of a frame: several screen-sized
+ * scaled draws. While the camera holds still (the Plan step, most of a game) it is drawn once into
+ * a cache and blitted at 1:1; while the camera moves it is drawn straight, with no extra copy.
+ */
+export class LensCache {
+  sky = new ScaledCopy();
+  hills = [new ScaledCopy(), new ScaledCopy()];
+  terr = new ScaledCopy();
+  canvas = document.createElement('canvas');
+  private ctx = this.canvas.getContext('2d')!;
+  private k = new Float64Array(10);
+  private stillFrames = 0;
+  valid = false;
+  /** 0: draw straight (the camera moves). 1: blit the cache. 2: draw into `ctx2` (returned by build) then blit. */
+  state(r: Rect, cam: Cam, terrRev: number, spriteScale: number, dpr: number, rm: boolean): number {
+    const k = this.k;
+    const same = k[0] === cam.cx && k[1] === cam.cy && k[2] === cam.s && k[3] === r.x && k[4] === r.y && k[5] === r.w && k[6] === r.h && k[7] === terrRev && k[8] === spriteScale + (rm ? 10 : 0) && k[9] === dpr;
+    if (!same) {
+      k[0] = cam.cx; k[1] = cam.cy; k[2] = cam.s; k[3] = r.x; k[4] = r.y; k[5] = r.w; k[6] = r.h; k[7] = terrRev; k[8] = spriteScale + (rm ? 10 : 0); k[9] = dpr;
+      this.stillFrames = 0;
+      this.valid = false;
+      return 0;
+    }
+    if (this.valid) return 1;
+    if (++this.stillFrames < 2) return 0;
+    return 2;
+  }
+  build(r: Rect, dpr: number): CanvasRenderingContext2D {
+    const w = Math.max(1, Math.round(r.w * dpr)), h = Math.max(1, Math.round(r.h * dpr));
+    if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
+    const c = this.ctx;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, w, h);
+    c.setTransform(dpr, 0, 0, dpr, -r.x * dpr, -r.y * dpr);
+    this.valid = true;
+    return c;
+  }
+}
+
+export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap: Snapshot, terr: TerrainLayer, feel: Feel, o: DrawOpts, cache?: LensCache): void {
   ctx.save();
   ctx.beginPath();
   ctx.rect(r.x, r.y, r.w, r.h);
   ctx.clip();
-  // sky and far hills: sprites when loaded, plain shapes otherwise
-  const sky = sprites.texture('bg_downs_sky');
-  if (sky) {
-    // Cover the lens and keep the art's aspect (no stretched sun); pinned to the top edge.
-    const k = Math.max(r.w / sky.width, r.h / sky.height);
-    const w = sky.width * k, hh = sky.height * k;
-    ctx.drawImage(sky, r.x + (r.w - w) / 2, r.y, w, hh);
-  } else {
-    ctx.fillStyle = '#9ED8EC';
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-  }
-  const baseY = sy(r, cam, 230);
-  const far = sprites.texture('bg_downs_hills_far');
-  const near = sprites.texture('bg_downs_hills_near');
-  if (far && near) {
-    for (let li = 0; li < 2; li++) {
-      const img = li ? near : far, par = li ? 0.45 : 0.2, k = li ? 0.7 : 0.9;
-      const hh = Math.max(60, Math.min(r.h * 0.6, 256 * Math.max(0.35, cam.s) * k));
-      const ww = (img.width / img.height) * hh;
-      // Reduce motion: parallax off (the hills sit still).
-      const off = o.reduceMotion ? 0 : ((-(cam.cx * cam.s * par)) % ww + ww) % ww;
-      const yb = Math.min(r.y + r.h, baseY + hh * 0.35);
-      for (let x = r.x - ww + off; x < r.x + r.w; x += ww) ctx.drawImage(img, x, yb - hh, ww + 1, hh);
-    }
-  } else {
-    ctx.fillStyle = '#B7DDA8';
-    ctx.beginPath();
-    ctx.moveTo(r.x, r.y + r.h);
-    for (let px = r.x; px <= r.x + r.w + 8; px += 8) {
-      const wx = cam.cx * 0.5 + (px - r.x) / Math.max(0.3, cam.s * 0.6);
-      ctx.lineTo(px, baseY - 30 * cam.s - 26 * Math.sin(wx / 180) * Math.min(1.5, cam.s + 0.3));
-    }
-    ctx.lineTo(r.x + r.w, r.y + r.h);
-    ctx.fill();
-  }
-  // clouds
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  for (let i = 0; i < 6; i++) {
-    const drift = o.reduceMotion ? 0 : o.time * 6 * (snap.wind || 0.5);
-    const span = Math.max(1600, terr.w) + 400;
-    const wx = ((((i * 431 + drift) % span) + span) % span) - 200;
-    cloud(ctx, sx(r, cam, wx), sy(r, cam, 560 + (i % 3) * 50), 18 * Math.max(0.5, cam.s));
-  }
-  if (snap.squall.on && !o.reduceMotion) squall(ctx, r, snap.wind, feel.time);
-
-  // Only the field shakes (the HUD is DOM and never moves): offset plus a little roll.
   const j = feel.juice;
-  if (j.ox || j.oy || j.roll) {
-    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
-    ctx.translate(cx + j.ox, cy + j.oy);
-    if (j.roll) ctx.rotate(j.roll);
-    ctx.translate(-cx, -cy);
-  }
-
-  // terrain
-  if (terr.w) {
-    // Only the part of the terrain canvas this lens shows (canvas y grows down from the map top).
-    const wx0 = cam.cx + (-r.w / 2) / cam.s, wx1 = cam.cx + (r.w / 2) / cam.s;
-    const wy1 = cam.cy + (r.h / 2) / cam.s, wy0 = cam.cy - (r.h / 2) / cam.s;
-    const x0 = Math.max(0, Math.floor(wx0)), ex = Math.min(terr.w, Math.ceil(wx1));
-    const y0 = Math.max(0, Math.floor(terr.h - wy1)), ey = Math.min(terr.h, Math.ceil(terr.h - wy0));
-    ctx.imageSmoothingEnabled = cam.s < 1;
-    if (ex > x0 && ey > y0) ctx.drawImage(terr.canvas, x0, y0, ex - x0, ey - y0, sx(r, cam, x0), sy(r, cam, terr.h - y0), (ex - x0) * cam.s, (ey - y0) * cam.s);
-    // below the map floor and past its ends: plain loam, so no gap shows
-    const floorY = sy(r, cam, 0);
-    ctx.fillStyle = '#9A6440';
-    if (floorY < r.y + r.h + 20) ctx.fillRect(r.x - 20, floorY - 1, r.w + 40, r.y + r.h - floorY + 21);
-    const lx = sx(r, cam, 0), rx = sx(r, cam, terr.w);
-    if (lx > r.x - 20) { const gy = sy(r, cam, terr.tops[0] ?? 0); ctx.fillRect(r.x - 20, gy, lx - r.x + 21, r.y + r.h - gy + 20); }
-    if (rx < r.x + r.w + 20) { const gy = sy(r, cam, terr.tops[terr.w - 1] ?? 0); ctx.fillRect(rx - 1, gy, r.x + r.w - rx + 21, r.y + r.h - gy + 20); }
+  const shaking = j.ox !== 0 || j.oy !== 0 || j.roll !== 0;
+  const st = !shaking && cache ? cache.state(r, cam, terr.rev, sprites.scale, o.dpr, o.reduceMotion) : 0;
+  if (st === 2) { const c = cache!.build(r, o.dpr); backdrop(c, r, cam, cache, o); terrainLayer(c, r, cam, terr, o.dpr, cache); }
+  if (st) {
+    ctx.drawImage(cache!.canvas, r.x, r.y, r.w, r.h);
+    clouds(ctx, r, cam, snap, terr, o);
+    if (snap.squall.on && !o.reduceMotion) squall(ctx, r, snap.wind, feel.time);
+  } else {
+    backdrop(ctx, r, cam, cache, o);
+    clouds(ctx, r, cam, snap, terr, o);
+    if (snap.squall.on && !o.reduceMotion) squall(ctx, r, snap.wind, feel.time);
+    // Only the field shakes (the HUD is DOM and never moves): offset plus a little roll.
+    if (shaking) {
+      const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      ctx.translate(cx + j.ox, cy + j.oy);
+      if (j.roll) ctx.rotate(j.roll);
+      ctx.translate(-cx, -cy);
+    }
+    terrainLayer(ctx, r, cam, terr, o.dpr, cache);
   }
 
   // ghosts and pins under the forts: the picked Hob's last two, and the Rival's last two
@@ -245,6 +264,87 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     ctx.fillText(o.label, r.x + 8, r.y + 14);
     ctx.restore();
   }
+}
+
+
+/** Sky and the far hills (parallax), plain shapes when the art is missing. */
+function backdrop(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, lc: LensCache | undefined, o: DrawOpts) {
+  // sky and far hills: sprites when loaded, plain shapes otherwise
+  const sky = sprites.texture('bg_downs_sky');
+  // The wide lens shows the sky as the canvas's CSS background (the compositor draws it for free).
+  if (o.cssSky) ctx.clearRect(r.x, r.y, r.w, r.h);
+  else if (sky) {
+    // Cover the lens and keep the art's aspect (no stretched sun); pinned to the top edge.
+    const k = Math.max(r.w / sky.width, r.h / sky.height);
+    const w = sky.width * k, hh = sky.height * k;
+    const pre = lc?.sky.get(sky, 0, w * o.dpr, hh * o.dpr, true);
+    ctx.drawImage(pre ?? sky, r.x + (r.w - w) / 2, r.y, w, hh);
+  } else {
+    ctx.fillStyle = '#9ED8EC';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+  }
+  const baseY = sy(r, cam, 230);
+  const far = sprites.texture('bg_downs_hills_far');
+  const near = sprites.texture('bg_downs_hills_near');
+  if (far && near) {
+    for (let li = 0; li < 2; li++) {
+      const img = li ? near : far, par = li ? 0.45 : 0.2, k = li ? 0.7 : 0.9;
+      const hh = Math.max(60, Math.min(r.h * 0.6, 256 * Math.max(0.35, cam.s) * k));
+      const ww = (img.width / img.height) * hh;
+      // Reduce motion: parallax off (the hills sit still).
+      const off = o.reduceMotion ? 0 : ((-(cam.cx * cam.s * par)) % ww + ww) % ww;
+      const yb = Math.min(r.y + r.h, baseY + hh * 0.35);
+      const pre = lc?.hills[li].get(img, 0, (ww + 1) * o.dpr, hh * o.dpr, true);
+      for (let x = r.x - ww + off; x < r.x + r.w; x += ww) ctx.drawImage(pre ?? img, x, yb - hh, ww + 1, hh);
+    }
+  } else {
+    ctx.fillStyle = '#B7DDA8';
+    ctx.beginPath();
+    ctx.moveTo(r.x, r.y + r.h);
+    for (let px = r.x; px <= r.x + r.w + 8; px += 8) {
+      const wx = cam.cx * 0.5 + (px - r.x) / Math.max(0.3, cam.s * 0.6);
+      ctx.lineTo(px, baseY - 30 * cam.s - 26 * Math.sin(wx / 180) * Math.min(1.5, cam.s + 0.3));
+    }
+    ctx.lineTo(r.x + r.w, r.y + r.h);
+    ctx.fill();
+  }
+}
+
+function clouds(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap: Snapshot, terr: TerrainLayer, o: DrawOpts) {
+  // clouds
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  for (let i = 0; i < 6; i++) {
+    const drift = o.reduceMotion ? 0 : o.time * 6 * (snap.wind || 0.5);
+    const span = Math.max(1600, terr.w) + 400;
+    const wx = ((((i * 431 + drift) % span) + span) % span) - 200;
+    cloud(ctx, sx(r, cam, wx), sy(r, cam, 560 + (i % 3) * 50), 18 * Math.max(0.5, cam.s));
+  }
+}
+
+function terrainLayer(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, terr: TerrainLayer, dpr: number, lc: LensCache | undefined) {
+  // terrain
+  if (terr.w) {
+    // Only the part of the terrain canvas this lens shows (canvas y grows down from the map top).
+    const wx0 = cam.cx + (-r.w / 2) / cam.s, wx1 = cam.cx + (r.w / 2) / cam.s;
+    const wy1 = cam.cy + (r.h / 2) / cam.s, wy0 = cam.cy - (r.h / 2) / cam.s;
+    const x0 = Math.max(0, Math.floor(wx0)), ex = Math.min(terr.w, Math.ceil(wx1));
+    const y0 = Math.max(0, Math.floor(terr.h - wy1)), ey = Math.min(terr.h, Math.ceil(terr.h - wy0));
+    ctx.imageSmoothingEnabled = cam.s < 1;
+    if (ex > x0 && ey > y0) {
+      const k = cam.s * dpr;
+      const pre = lc?.terr.get(terr.canvas, terr.rev, terr.w * k, terr.h * k, cam.s < 1);
+      if (pre) ctx.drawImage(pre, x0 * k, y0 * k, (ex - x0) * k, (ey - y0) * k, sx(r, cam, x0), sy(r, cam, terr.h - y0), (ex - x0) * cam.s, (ey - y0) * cam.s);
+      else ctx.drawImage(terr.canvas, x0, y0, ex - x0, ey - y0, sx(r, cam, x0), sy(r, cam, terr.h - y0), (ex - x0) * cam.s, (ey - y0) * cam.s);
+    }
+    // below the map floor and past its ends: plain loam, so no gap shows
+    const floorY = sy(r, cam, 0);
+    ctx.fillStyle = '#9A6440';
+    if (floorY < r.y + r.h + 20) ctx.fillRect(r.x - 20, floorY - 1, r.w + 40, r.y + r.h - floorY + 21);
+    const lx = sx(r, cam, 0), rx = sx(r, cam, terr.w);
+    if (lx > r.x - 20) { const gy = sy(r, cam, terr.tops[0] ?? 0); ctx.fillRect(r.x - 20, gy, lx - r.x + 21, r.y + r.h - gy + 20); }
+    if (rx < r.x + r.w + 20) { const gy = sy(r, cam, terr.tops[terr.w - 1] ?? 0); ctx.fillRect(rx - 1, gy, r.x + r.w - rx + 21, r.y + r.h - gy + 20); }
+  }
+
 }
 
 const DASH_NEW = [10, 6], DASH_OLD = [4, 6], DASH_RIVAL = [2, 4, 8, 4], NO_DASH: number[] = [], DOT_DASH = [2, 3];

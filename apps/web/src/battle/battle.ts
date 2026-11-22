@@ -7,7 +7,7 @@ import { SaveError, TICK_HZ } from '../core/types';
 import { clearBattle, dropBattleSave, saveBattle } from '../save/db';
 import { DEBUG } from '../ui/fatal';
 import { CLASS_COLOR, CLASS_ICON, btn, h, repeatKey } from '../ui/dom';
-import { type DrawOpts, drawLens, drawStrip } from '../render/draw';
+import { type DrawOpts, LensCache, drawLens, drawStrip } from '../render/draw';
 import { type Cam, type Rect, toScreen, toWorld } from '../render/view';
 import { Feel } from '../render/feel';
 import { firePress, handoffFlip, turnBanner } from '../ui/motion';
@@ -218,6 +218,9 @@ export function battleScreen(app: App, route: Route): Screen {
     c.cx += (t.cx - c.cx) * k;
     c.cy += (t.cy - c.cy) * k;
     c.s += (t.s - c.s) * k;
+    // Settle exactly, so a still camera is still (the backdrop cache keys on it).
+    if (Math.abs(t.s - c.s) < 0.002 * t.s) c.s = t.s;
+    if (Math.abs(t.cx - c.cx) < 0.05 && Math.abs(t.cy - c.cy) < 0.05) { c.cx = t.cx; c.cy = t.cy; }
   }
 
   // ---------- Wide camera (07 §3.5) ----------
@@ -238,14 +241,15 @@ export function battleScreen(app: App, route: Route): Screen {
     const y0 = Math.min(fa.y, fo.y) - 30, y1 = Math.max(fa.y + fa.h, fo.y + fo.h) + 170;
     const both = Math.min(cr.w / (x1 - x0), cr.h / (y1 - y0));
     const dir = fo.x > fa.x ? 1 : -1;
-    if (both >= FLOOR) {
+    // Both forts only when they still draw big (blocks 12 px or more); else this fort and its arc.
+    if (both >= 0.75) {
       out.s = Math.min(both, ZMAX);
       // 55/45 toward the rival (07 §3.5); a Couch Duel stays centred.
       out.cx = (x0 + x1) / 2 + (setup.mode === 'duel' ? 0 : dir * (x1 - x0) * 0.05);
     } else {
-      out.s = clamp(Math.min(cr.h / (fa.h + 230), (cr.w * 0.42) / (fa.w + 80)), FLOOR, 0.8);
+      out.s = clamp(Math.min(cr.h / (fa.h + 190), (cr.w * 0.4) / (fa.w + 60)), FLOOR, 1);
       const half = cr.w / 2 / out.s;
-      out.cx = dir > 0 ? fa.x - 50 + half : fa.x + fa.w + 50 - half;
+      out.cx = dir > 0 ? fa.x - 40 + half : fa.x + fa.w + 40 - half;
     }
     groundY(cr, Math.min(fa.y, fo.y), out);
     return out;
@@ -279,7 +283,7 @@ export function battleScreen(app: App, route: Route): Screen {
       }
       planFrame(cr, fromSide, t);
       // Follow with lookahead; the middle 30% is a dead zone; never under the floor.
-      const s = Math.max(FLOOR, Math.min(t.s, 0.9));
+      const s = clamp(t.s, FLOOR, 1); // the plan scale: no zoom jump at Fire
       const lookX = sx0 + shellVX * 0.35, lookY = sy0 + shellVY * 0.2;
       const dz = (0.15 * cr.w) / s;
       const prev = (camWide.cx - (0 - (cr.x + cr.w / 2 - W / 2)) / camWide.s);
@@ -317,6 +321,10 @@ export function battleScreen(app: App, route: Route): Screen {
       wideRate = 8;
     }
     t.s *= zoomWide;
+    // Pan limits: the map edge plus a little slack, so the view never shows past the map.
+    const mw = terr.w || snap.terrain.width;
+    const half = cr.w / 2 / t.s, slack = 40;
+    if (mw > 0) t.cx = 2 * half > mw ? mw / 2 : clamp(t.cx, half - slack, mw - half + slack);
     return t;
   }
   let camFollowX: number | null = null;
@@ -355,8 +363,12 @@ export function battleScreen(app: App, route: Route): Screen {
     joined = following && !rm;
     if (joined && lastShell) {
       const rj: Rect = { x: rt.x, y: rt.y, w: rt.w, h: rb.y + rb.h - rt.y };
-      const s = clamp((8 * vw) / 390, 6, 14) / 16 * 1.0;
-      const lowY = Math.min(f[0].y, f[1].y) - 30 + (rj.h / s) * 0.5;
+      // 8 pt blocks at the top of the arc, easing in to 12 pt as the shell comes down (07 §2.6.3).
+      const ground = Math.min(f[0].y, f[1].y);
+      const k = clamp((lastShell[1] - ground) / 420, 0, 1);
+      const s = (clamp((8 * vw) / 390, 6, 14) / 16) * (1.5 - 0.5 * k);
+      // The ground sits a quarter up the joined lens (the Field Strip covers its foot).
+      const lowY = ground + (rj.h / s) * 0.25;
       const t: Cam = { cx: lastShell[0], cy: Math.max(lowY, lastShell[1] - (rj.h / s) * 0.1), s };
       if (!wasJoined) { camJoin.cx = camBottom.cx; camJoin.cy = camBottom.cy + (rt.h / 2) / camBottom.s; camJoin.s = camBottom.s; }
       ease(camJoin, t, dt, false);
@@ -511,14 +523,23 @@ export function battleScreen(app: App, route: Route): Screen {
       if (i === 0 && p) { shellVX = ((sh.x - p[0]) / Math.max(1, lastN)) * TICK_HZ; shellVY = ((sh.y - p[1]) / Math.max(1, lastN)) * TICK_HZ; }
     }
   }
-  const opts: DrawOpts = { you: 0, seeThrough: -1, showPreview: false, time: 0, reduceMotion: false, shells: shellBuf, nShells: 0 };
+  const opts: DrawOpts = { you: 0, seeThrough: -1, showPreview: false, time: 0, reduceMotion: false, cssSky: false, dpr: 1, shells: shellBuf, nShells: 0 };
+  // Wide layout: the sky art as the canvas background, sized like the old draw (cover, pinned to the top).
+  let skySet = '';
+  function skyCss(): boolean {
+    const src = sprites.textureUrl('bg_downs_sky');
+    if (!src) return false;
+    if (skySet !== src) { skySet = src; canvas.style.background = `#9ED8EC url("${src}") center top / cover no-repeat`; }
+    return true;
+  }
+  const caches: Record<string, LensCache> = { wide: new LensCache(), top: new LensCache(), bottom: new LensCache(), joined: new LensCache() };
   const stripRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   const stripLenses: { rect: Rect; cam: Cam }[] = [{ rect: rc.top, cam: camTop }, { rect: rc.bottom, cam: camBottom }];
 
   function render(now: number): void {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#9ED8EC';
-    ctx.fillRect(0, 0, W, H);
+    // The wide lens covers the whole canvas; only the tall layout has gaps between lenses.
+    if (layout === 'tall') { ctx.fillStyle = '#9ED8EC'; ctx.fillRect(0, 0, W, H); }
     const me = youSide();
     const human = snap.sides[snap.hud.active].human || setup.mode === 'yard';
     const plan = snap.phase === 'plan' && human;
@@ -526,9 +547,11 @@ export function battleScreen(app: App, route: Route): Screen {
     opts.you = me; opts.seeThrough = plan ? snap.hud.active : -1; opts.pickedHob = plan ? snap.hud.hob : undefined;
     opts.showPreview = plan; opts.time = (now - startT) / 1000; opts.reduceMotion = app.settings.reduceMotion; opts.lean = lean ?? undefined;
     opts.nShells = nShell;
+    opts.dpr = dpr;
+    opts.cssSky = layout === 'wide' && skyCss();
     for (const l of lenses) {
       if (l.id === 'strip') continue;
-      drawLens(ctx, l.rect, l.cam, snap, terr, feel, opts);
+      drawLens(ctx, l.rect, l.cam, snap, terr, feel, opts, caches[l.id]);
     }
     if (layout === 'tall') {
       if (joined) { stripRect.x = rc.strip.x; stripRect.w = rc.strip.w; stripRect.h = rc.strip.h; stripRect.y = rc.bottom.y + rc.bottom.h - 34; stripLenses[0].rect = lenses[0].rect; stripLenses[0].cam = camJoin; }
@@ -1238,7 +1261,7 @@ export function battleScreen(app: App, route: Route): Screen {
   if (r.resume && r.handoff && setup.mode === 'duel' && setup.seats !== 'one' && snap.phase === 'plan') openHandoff(snap.hud.active, snap.round);
 
   // For tests and debugging only (dev, or ?debug in the URL): a read-only view of the latest snapshot.
-  if (DEBUG) (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, layout: () => layout, core: core.name, cam: () => ({ ...camWide }), feel: () => ({ fx: feel.fx.live, collapse: feel.col.busy, slow: feel.juice.slowing, trauma: feel.juice.trauma }) };
+  if (DEBUG) (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, layout: () => layout, core: core.name, cam: () => ({ ...camWide }), feel: () => ({ terr: terr.rev, fx: feel.fx.live, collapse: feel.col.busy, slow: feel.juice.slowing, trauma: feel.juice.trauma }) };
 
   return {
     el: root,

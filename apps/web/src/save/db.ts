@@ -7,6 +7,7 @@ import type { BattleSetup, Blueprint, BlueprintCell, Difficulty } from '../core/
 export interface Settings {
   version: number;
   sound: number; // 0 to 100
+  music: number; // 0 to 100
   mute: boolean;
   difficulty: Difficulty;
   windOff: boolean;
@@ -48,6 +49,7 @@ export const PROGRESS_VERSION = 1;
 export const DEFAULT_SETTINGS: Settings = {
   version: SETTINGS_VERSION,
   sound: 70,
+  music: 70,
   mute: false,
   difficulty: 'fair',
   windOff: false,
@@ -188,6 +190,7 @@ export function migrateSettings(raw: unknown): Settings {
   return {
     version: SETTINGS_VERSION,
     sound: num(raw.sound, d.sound, 0, 100),
+    music: num(raw.music, d.music, 0, 100),
     mute: bool(raw.mute, d.mute),
     difficulty: oneOf(raw.difficulty, ['cozy', 'fair', 'stubborn'] as const, d.difficulty),
     windOff: bool(raw.windOff, d.windOff),

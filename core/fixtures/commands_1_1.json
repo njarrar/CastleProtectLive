@@ -1,4 +1,5 @@
 {
+  "after_hash": "4bbc2dd008953f05",
   "commands": [
     {
       "cmd": "pick_hob",
@@ -20,9 +21,14 @@
       "side": 1
     }
   ],
-  "first_snapshot_terrain_chunks": 21,
+  "first_snapshot_terrain_chunks": 300,
+  "plan_hash": "c41acd18ae31c8ae",
   "seed": 42,
   "then": [
+    {
+      "angle": 455,
+      "cmd": "aim"
+    },
     {
       "cmd": "fire"
     },

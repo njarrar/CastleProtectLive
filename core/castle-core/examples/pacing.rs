@@ -48,7 +48,11 @@ fn main() {
             }
             if b.phase == Phase::Plan {
                 let side = b.side;
-                let able = b.hobs.iter().filter(|h| h.side == side && b.can_fire_hob(side, h.id)).count();
+                let able = b
+                    .hobs
+                    .iter()
+                    .filter(|h| h.side == side && b.can_fire_hob(side, h.id))
+                    .count();
                 let t = Instant::now();
                 let r = b.command(&json!({"cmd": "ai_turn"}));
                 think.push(t.elapsed().as_micros());
@@ -81,12 +85,22 @@ fn main() {
             println!("{lvl} seed {} round {} {}", 7000 + i, r.round, r.how);
         }
         *hows.entry(r.how.clone()).or_insert(0) += 1;
-        if b.squall_round() > 0 || r.how == "squall" || r.how == "double_pop" {
+        // reached the Squall: the battle went past its round cap
+        if b.rules.squall && r.round > b.rules.round_cap {
             squall += 1;
         }
         for s in 0..2u8 {
-            let total: i32 = per_hob.iter().filter(|(k, _)| k.0 == s).map(|(_, v)| *v).sum();
-            let max = per_hob.iter().filter(|(k, _)| k.0 == s).map(|(_, v)| *v).max().unwrap_or(0);
+            let total: i32 = per_hob
+                .iter()
+                .filter(|(k, _)| k.0 == s)
+                .map(|(_, v)| *v)
+                .sum();
+            let max = per_hob
+                .iter()
+                .filter(|(k, _)| k.0 == s)
+                .map(|(_, v)| *v)
+                .max()
+                .unwrap_or(0);
             if total >= 4 {
                 let share = max * 100 / total;
                 hob_max_share.push(share);
@@ -98,21 +112,45 @@ fn main() {
         }
     }
     let total: i32 = rounds.values().sum();
-    let in_band: i32 = rounds.iter().filter(|(r, _)| (7..=11).contains(*r)).map(|(_, v)| *v).sum();
-    let mut sorted: Vec<i32> = rounds.iter().flat_map(|(r, c)| std::iter::repeat_n(*r, *c as usize)).collect();
+    let in_band: i32 = rounds
+        .iter()
+        .filter(|(r, _)| (7..=11).contains(*r))
+        .map(|(_, v)| *v)
+        .sum();
+    let mut sorted: Vec<i32> = rounds
+        .iter()
+        .flat_map(|(r, c)| std::iter::repeat_n(*r, *c as usize))
+        .collect();
     sorted.sort();
     think.sort();
     println!("{p0} vs {p1}, {n} battles on {levels:?}");
     println!("end round: {rounds:?}");
-    println!("median round {}, rounds 7 to 11: {}%, reached the Squall: {}%", sorted[sorted.len() / 2], in_band * 100 / total, squall * 100 / total as usize);
+    println!(
+        "median round {}, rounds 7 to 11: {}%, reached the Squall: {}%",
+        sorted[sorted.len() / 2],
+        in_band * 100 / total,
+        squall * 100 / total as usize
+    );
     println!("ends: {hows:?}");
     hob_max_share.sort();
     println!("busiest Hob share per side (turns with 2+ Hobs able): median {}%, over 60%: {lock_sides} of {sides} sides", hob_max_share.get(hob_max_share.len() / 2).copied().unwrap_or(0));
     let sides_n = 2 * total as i64;
-    println!("per side at the end: kettle lost {}, blocks lost {}, Hobs Bonked {}", kettle_lost / sides_n, blocks_lost / sides_n, hobs_lost * 10 / sides_n);
-    println!("hit rate: {}% of {shots_all} shots", hits_all * 100 / shots_all.max(1));
+    println!(
+        "per side at the end: kettle lost {}, blocks lost {}, Hobs Bonked {}",
+        kettle_lost / sides_n,
+        blocks_lost / sides_n,
+        hobs_lost * 10 / sides_n
+    );
+    println!(
+        "hit rate: {}% of {shots_all} shots",
+        hits_all * 100 / shots_all.max(1)
+    );
     println!("Plain Shot share: {}%", plain * 100 / fired.max(1));
     let ms = |us: u128| format!("{}.{}", us / 1000, us % 1000 / 100);
-    println!("ai_turn ms: p50 {} p95 {} max {}",
-        ms(think[think.len() / 2]), ms(think[think.len() * 95 / 100]), ms(*think.last().unwrap()));
+    println!(
+        "ai_turn ms: p50 {} p95 {} max {}",
+        ms(think[think.len() / 2]),
+        ms(think[think.len() * 95 / 100]),
+        ms(*think.last().unwrap())
+    );
 }

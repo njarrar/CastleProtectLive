@@ -55,3 +55,47 @@ fn no_hash_maps_in_rules() {
         }
     }
 }
+
+/// Code of a line with comments and string literals blanked.
+fn code_only(line: &str) -> String {
+    let mut out = String::new();
+    let mut in_str = false;
+    let mut prev = ' ';
+    let chars: Vec<char> = line.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if !in_str && c == '/' && chars.get(i + 1) == Some(&'/') {
+            break;
+        }
+        if c == '"' && prev != '\\' {
+            in_str = !in_str;
+            out.push(' ');
+        } else {
+            out.push(if in_str { ' ' } else { c });
+        }
+        prev = c;
+        i += 1;
+    }
+    out
+}
+
+#[test]
+fn no_float_literals_or_casts_in_rules() {
+    // A bare literal such as `0.5` or a call such as `as_f64` slips past the
+    // word check; look for digit '.' digit outside strings and comments.
+    for (path, src) in sources() {
+        for (n, line) in src.lines().enumerate() {
+            let code = code_only(line);
+            let b = code.as_bytes();
+            for i in 1..b.len().saturating_sub(1) {
+                let float_lit = b[i] == b'.'
+                    && b[i - 1].is_ascii_digit()
+                    && b[i + 1].is_ascii_digit()
+                    && (i < 2 || b[i - 2] != b'.');
+                assert!(!float_lit, "float literal in {path} line {}", n + 1);
+            }
+            assert!(!code.contains("as_f64"), "as_f64 in {path} line {}", n + 1);
+        }
+    }
+}

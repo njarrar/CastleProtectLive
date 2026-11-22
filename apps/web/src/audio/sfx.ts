@@ -39,12 +39,13 @@ export function unlockAudio(): void {
     ctx = new AC();
     master = ctx.createGain();
     musicBus = ctx.createGain();
-    musicBus.gain.value = 0.7;
+    sfxBus = ctx.createGain();
     lowpass = ctx.createBiquadFilter();
     lowpass.type = 'lowpass';
     lowpass.frequency.value = 20000;
     master.connect(lowpass).connect(ctx.destination);
     musicBus.connect(master);
+    sfxBus.connect(master);
     applyVol();
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -56,14 +57,20 @@ export function unlockAudio(): void {
   if (ctx.state !== 'running') void ctx.resume().catch(() => undefined);
 }
 
-export function setVolume(v: number, mute: boolean): void {
+let musicVol = 0.7;
+/** Sound slider (effects, barks), Music slider and Mute all. */
+export function setVolume(v: number, mute: boolean, mus = musicVol * 100): void {
   volume = v / 100;
   muted = mute;
+  musicVol = mus / 100;
   applyVol();
 }
 function applyVol() {
-  if (master) master.gain.value = muted ? 0 : volume * 0.8;
+  if (master) master.gain.value = muted ? 0 : 0.8;
+  if (sfxBus) sfxBus.gain.value = volume;
+  if (musicBus) musicBus.gain.value = musicVol * 0.8;
 }
+let sfxBus: GainNode | null = null;
 
 /** Read audio.json, if the build has one. Nothing is fetched beyond it until a gesture. */
 export function loadAudio(at: string): Promise<void> {
@@ -118,7 +125,7 @@ function sample(id: string | null | undefined, gain = 1, semis = 0): boolean {
   if (st) src.playbackRate.value = Math.pow(2, st / 12);
   const g = ctx.createGain();
   g.gain.value = gain * (s.volume ?? 1);
-  src.connect(g).connect(master);
+  src.connect(g).connect(sfxBus ?? master);
   src.start();
   return true;
 }
@@ -147,7 +154,7 @@ function tone(freq: number, dur: number, type: OscillatorType, gain: number, sli
   if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, f * slide), t + dur);
   g.gain.setValueAtTime(gain, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(master);
+  o.connect(g).connect(sfxBus ?? master);
   o.start(t);
   o.stop(t + dur + 0.02);
 }
@@ -165,7 +172,7 @@ function noise(dur: number, gain: number, freq: number, q = 1, delay = 0) {
   const g = ctx.createGain();
   g.gain.setValueAtTime(gain, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  s.connect(f).connect(g).connect(master);
+  s.connect(f).connect(g).connect(sfxBus ?? master);
   s.start(t);
   s.stop(t + dur + 0.02);
 }
@@ -320,7 +327,7 @@ export function loop(id: string, gain: number, semis = 0): void {
     if (!gap && s.samples && s.sample_rate) src.loopEnd = s.samples / s.sample_rate;
     const g = ctx.createGain();
     g.gain.value = 0;
-    src.connect(g).connect(master);
+    src.connect(g).connect(sfxBus ?? master);
     src.start();
     l.src = src; l.g = g; l.on = true;
     if (gap) { src.onended = () => { if (l) { l.on = false; l.src = null; l.gapT = (ctx?.currentTime ?? 0) + gap; } }; }

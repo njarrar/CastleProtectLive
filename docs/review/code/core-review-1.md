@@ -265,3 +265,123 @@ Reading the code, the golden hashes should match on arm64, x86_64, armv7 and was
 | Content | Bad content cases: cycle, duplicate id, zero width map, unknown Pennant type, hanging blocks in a blueprint, Rescue with a Squall |
 | Collapse | A chain longer than 6 passes. A chunk that lands on a Nook two columns wide. Crush on a kettle with the 60 cap already used |
 | Input | Fractions, negatives, values past `u8` and `i32`, for every numeric command field (M3) |
+
+---
+
+## Fixes
+
+Fix pass on branch `castle-protect-plan`, `core/` and `content/` only. Rules version 2, sim 0.2.0. Checked with `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace` (all green: 23 new regression tests in `tests/review_fixes.rs`, 4 in `tests/replay_live.rs`, FFI and wasm panic tests), `scripts/build-wasm.sh`, and `scripts/run-golden.sh`. The golden replays were also run in wasm under Node (`scripts/golden-wasm.mjs`): the hashes match native. Golden hashes and `core/fixtures/` were regenerated.
+
+### Findings
+
+| Id | Status | What changed, or why not |
+|---|---|---|
+| C1 | Fixed | `fly_tick` does all position maths in `i64` with range checks and a speed cap per axis. A shell above 4 map heights ends as `Hit::Off`, a beam (or any shell with no gravity that is not falling) ends as soon as it is above the map top, with a `miss` event. Content check: a shot with no gravity must be a beam or set `life_ticks`. Tests: Sunspear straight up at power 100 ends in under 200 ticks; a fuzz test fires every Plain Shot, Knack and Trick Shell of all three kits at 0, 45, 88, 90, 92 and 180 degrees with power 0, 1 and 100 |
+| C2 | Fixed | The Tick-Tock Crock wake collects prop ids and looks each up again; a prop broken by an earlier wake is skipped. Test: turnips and crocks of both sides mixed in the list |
+| C3 | Fixed | Every `extern "C"` function runs in `catch_unwind`. A panic returns `{"ok":false,"reason":"panic"}`, sets `cp_last_error`, and marks the handle dead: later calls return `dead_handle` and touch nothing; `cp_free` works. Wasm: a panic hook stores the text, `last_error()` returns it, and the dead `Game` is rebuilt with `resume` from the saved log (a trap can not be caught on `wasm32-unknown-unknown`; documented). Tests: a panic through the guard, then refusals on every call |
+| H1 | Fixed | Mound dirt is never stamped inside a fort's box. The walk finds the ground from the fort's base (climb through solid ground, at most 16 cells a step; drop at most 64), never from the sky down, and settles loose ground in the old and new footprint. Test: Sod Sack on the roof, then a walk |
+| H2 | Fixed | Firing never lowers Rest (`rest = max(rest, new)`). Test: one Hob crew with the Heavy Crock |
+| H3 | Fixed | Aims are solved breadth first: every (Hob, flight) pair gets target 1, then target 2, and so on; shots that fly the same share one solve; the first Hob is picked with the AI stream; the best candidate of each Hob is simulated first. The solver is a bracketed power search (3 to 5 probes) instead of 28 probes per target. Targets now include the Kettle Room walls and the weakest Hob's Nook front. The AI walks at most twice a battle when no shot pays, and a walk replans with half the budget. Measured below. Test: no Hob takes more than 75% of the turns where 2 or more Hobs could fire, in more than half the sides |
+| H4 | Fixed | Terrain keeps one hash per 64 x 64 tile, updated in `Terrain::set`; the state hash folds them (a few microseconds). `aim` no longer forces a full snapshot: the lean snapshot carries `aim` and `preview`. Lean snapshots skip the full parts entirely (L10). Test: incremental tile hashes equal a full recompute |
+| H5 | Fixed | `run_until_plan` runs the full settle (a separate `run_until_plan_fast` is used only by AI sims on clones). `ai_turn` is logged as itself (also in the draft), and its own commands are not; replaying reruns the AI on the same state, memory and stream, so the AI state comes back from the log. New `resume` command and `replay::from_log`. Tests: every golden played live in 2 tick frames equals its log replay (hash and tick); 9 bot battles across presets and maps equal their log replay, AI streams and memory included; a Give up mid flight replays |
+| M1 | Fixed | `check_win` after the Fatigue collapse at the round start and after the Squall collapse (which now also catches a Clean Sweep). Test: a battered Cobble roof falls on an open Kettle Room at round 10 and ends the fight |
+| M2 | Fixed | `fire` uses the trigger rule (an exact dial trigger replaces the plain one). Test: Barn Raising with `puff_up` sends no `rebuild` |
+| M3 | Fixed | One number helper: whole numbers in range or `bad_value` (fractions, strings, `12.0`, out of range). `dx` is cut to the map width. `recall` is `plan` only. Setup numbers are range checked and refused with a reason. Test covers each case from the finding |
+| M4 | Fixed | The hash now covers Doodads, the draft, every front, `squall_dir`, `first_side`, `acted`, the selection, burial, Grudge, Clatter, extra Rest, Puff Up, turns taken, block `max` and `root`, prop id, side, kind and tag, the settle counter, scores and stats, every random stream, AI memory, ghosts, Volley and boss state. Test changes each field and expects a new hash |
+| M5 | Fixed | Flight cap 720 ticks (6 s). A flying shell that ages out sends `miss` (`why: "time"`); a rolling or boring one bursts where it is |
+| M6 | Fixed | `cp_last_error(handle)` returns the last refusal reply or panic text. The `cp_new` error is per thread (no data race) and cleared by a good `cp_new`. Bad UTF-8 is an error. `"{}"` is no longer the built in content. Debug builds refuse calls from another thread (`wrong_thread`) |
+| M7 | Partly fixed | Done: a Cozy Rival's shells never Thread (rule in `make_actor`) and Threading candidates are dropped; no AI fires a Dud; the knowledge view wipes fronts past the forecast, `squall_dir` and the hidden streams; the budget numbers live only in `ai.rs` `tuning()` (60k, 120k, 180k, as in API.md). Not done: the Sporting weight, Cozy's 50% Shove Off and Doodad use, and the full anti-lock rule; design doc 04 still says 48k/96k/144k (design owner to settle) |
+| M8 | Fixed | 1-7 has `squall: false` and `cap_win: 1`. On a level with an objective, the rival's kettle or crew does not end the fight; a Bonked captive loses (`captive_bonked`). `Content::check` refuses a Rescue with a Squall. Test |
+| M9 | Fixed | `validate_blueprint` runs the support solver and refuses hanging blocks. `Content::check` adds: duplicate ids, split and prop cycles, map size, pads a fort plus 64 apart, HP above 0, known Pennant types, `first_turn`, `cap_win`, `round_cap`, block glyphs, the 110 cap, objects on the map, boss numbers; setup Doodads are checked. The Block Budget check stays as a guard but can not fail on an 8 x 10 grid (by construction). Test |
+| M10 | Fixed | The collapse loops until nothing falls (guard 100 passes). Thump and Squall breaks send `break`. `kettle_pop` once per pop, `big_drop` once per shot. Test |
+| M11 | Fixed | Chunks are 64 x 64 (one terrain tile, at most about 5.5 KB of base64 per changed chunk). `map.chunk` is 64 |
+| L1 | Fixed | Only diggable ground counts as burial, so Shove Off always clears what buries; a Shove Off that would clear nothing is refused and not paid; a Bonked Hob can not be shoved |
+| L2 | Fixed | The Pot Lid stops rollers and bores where they stop |
+| L3 | Fixed | A shell is past its apex on its first tick if it is not rising, so flat Pepper Rain splits and Nosy Goose guides. Test |
+| L4 | Fixed | A split on a bounce ends the parent |
+| L5 | Not fixed | Mirror rounding changes every result and every golden; it is the same on every platform, so it is a fairness skew, not a determinism bug. Left for a rules version with its own bot check |
+| L6 | Fixed | A stale shot selection falls back to `plain` at the turn start |
+| L7 | Mostly fixed | Mend Bucket with nothing hurt, a Mendglob `target` off the grid, Puff Up with no Bonked Hob or free Nook, and Rebuild with nothing to rebuild are refused before paying. A mend still digs out only one buried Hob |
+| L8 | Fixed | Mud costs x3, a step climbs at most 16 cells, a walk off a drop over 48 cells is a Thump |
+| L9 | Fixed | `hobs[].aim` is null for the side not on turn |
+| L10 | Fixed | The lean test is first; the full parts are built only for full snapshots |
+| L11 | Fixed | A run of `aim` commands is one log entry; the log is shared copy on write, so AI views clone it for free; AI sims build no events (`quiet`) |
+| L12 | Partly fixed | Measured on the review server (release, x86_64) after the fixes: `ai_turn` Cozy p95 19.5 ms, Fair 43.4 ms, Stubborn 61.7 ms, worst 96 ms. A walk replans with half the budget. Not measured on a 2 GB phone |
+| L13 | Not fixed (out of scope) | The CI files that pin Rust 1.99.1 and wasm-bindgen 0.2.130 are in `.github/`, which this pass does not own; the toolchain file and `Cargo.lock` decide. No armv7 job added. The flight maths that could overflow now uses range checks and saturating adds, so it does not depend on the overflow profile |
+| L14 | Fixed | `core/API.md` rewritten for v0.2 (errors and panics, BigInt seed, null handle reasons, `"{}"`, every new field) |
+
+### Test gaps closed
+
+Crash fuzz over every shot at the edge aims; props of both sides mixed; FFI panic, NULL and bad UTF-8 per argument, `cp_last_error` after a refusal, free of NULL; live `step(2)` against log replay for every golden and for bot battles; Rest with one Hob; walk after a mound; Fatigue collapse popping a kettle; `puff_up` dial; Cozy never Threads and no Dud fired; Hob share; every state field in the hash; bad content cases (duplicate, cycle, zero width map, unknown Pennant, hanging blocks, Rescue with a Squall); fractions, negatives, values past `u8`, `i32` and `u32` for the numeric fields; a float literal and `as_f64` check in `no_floats.rs`; fixtures compared file by file (every snapshot and hash, not only replies). Still open: an armv7 golden run, a collapse chain longer than 6 passes on a shipped fort, Rescue win and boss regrow goldens.
+
+### Pacing (bots, Fair against Fair)
+
+96 battles on the duel maps (1-2 to 1-9 and d1, d2; the Grand Fort and 1-7 are left out: their caps and rules differ), seeds 7000 to 7095, `cargo run --release -p castle-core --example pacing -- 96 fair fair`.
+
+| | Before (commit 569b368) | After |
+|---|---|---|
+| End round, count | 7:1 8:3 9:1 10:1 11:7 12:9 13:9 14:2 15:8 16:5 17:14 18:36 | 2:1 4:3 5:2 6:4 7:7 8:3 9:7 10:36 11:8 12:7 13:5 14:2 15:3 16:4 17:2 18:2 |
+| Median end round | 17 | 10 |
+| Rounds 7 to 11 | 13% | 63% |
+| Reached the Squall | 71% | 15% by the old count (any battle in a Squall round or ending in a double pop), 12.5% by round past the level's cap (12 of 96, 3 of them on 1-2 with its cap of 10) |
+| Ends | 57 Clean Sweep, 38 double pop, 1 Kettle Pop | 90 Clean Sweep, 5 double pop, 1 Squall |
+| Busiest Hob share (turns with 2+ Hobs able) | median 60% | median 57% |
+| Plain Shot share | 67% | 55% |
+
+Cozy against Cozy: median round 13. Stubborn against Stubborn: median 7, no Squall.
+
+What was tuned (numbers, not rules), in the order design 00 section 9.6 gives ("tune falls first: support reach, crush"):
+
+- `content/materials.json`: Timber side support 2 to 1; crush Timber 100% to 200%, Cobble 200% to 300%; crush to Hobs 100% to 200%. New field `cover_pct` (was a constant 50 in code): 65.
+- AI (`ai.rs`, named constants): Knack cost 150 to 30, Trick Shell cost 300% to 100% of its value, Rest 60 to 20 per turn, focus weight on damage that leaves a Hob low, Kettle weight 15 to 30 and the Kettle Room walls, block HP weight 1, 60 for firing the same Hob twice running, at most 2 walks a battle.
+- Fatigue is unchanged and as designed (round 10, battered blocks lose one block of side reach); with Timber at reach 1 a battered Timber block now reaches 0, which is why so many fights end at round 10.
+
+These numbers differ from the canonical table in design 00 (Timber reach 2, crush multipliers, Cover 50%). The design owner should either take them into the canon or pick other knobs; the bot report above reruns in about 4 minutes. Shipped blueprints all still pass the validator (now with the support check).
+
+### Owner-facing gaps (apps/ios README, web and Android core requests)
+
+| Request | Status |
+|---|---|
+| Give up | `give_up` command, any phase, `how: "give_up"`, logged with its tick |
+| Help and handicaps per side | Setup `sides[i].help` (`none`, `some`, `lots`, Steam from `content/app.json`), `preview_pct`, `crew_size`, `steam`; `hud.handicap` shows them |
+| Buttons and Pennant rewards | `result.buttons` (design 5.2 earn rates, numbers in `app.json` `rewards`), `result.pennants_new`, setup `progress` |
+| "What broke you" | `result.broke`, plus `result.stats` and `result.score` |
+| Volley Points | Setup `volley` (Skirmish, Daily, Couch Duel), `hud.volley`, `relight` event, `how: "volley_points"` |
+| 1-10 phases 2 and 3 | Roller and shears as level data (`rules.boss`), props `roller` and `shears`, `hud.boss`, new events |
+| Web 1: log only the last aim | A run of `aim` commands folds into one log entry |
+| Web 2: `hud.steam_max` | Sent |
+| Web 3: per shot readiness | `hud.shots[]` with `ready` and `why` for the selected Hob |
+| Web 4: Shove Off cost | `hud.shove_off_cost` |
+| Web 5: Test Yard dummy | A side of dummies passes itself in `test_yard` |
+| Web 6: `set_wind`, `give_up` | Both added (`give_up` in every mode, not only Couch Duel; `how` is `"give_up"`) |
+| Web 7: result stats | `result.stats`, `result.broke`; snapshot schema updated |
+| Web 8: rewards and unlocks | Rewards are computed by the core. Joins and unlocks stay in `content/app.json` (validated against `content/schema/app.schema.json` by `content_check`); moving them into level files is a later content change |
+| Web 9: presets | `help` replaces sending Steam for Help; wind, Rummage presets, think time and walk speed stay app data in `app.json` |
+| Web 10, 11: Workshop | `validate_blueprint` returns `cost`, `used`, `budget` and, on a refusal, `cells` to mark |
+| Web 12: fixtures with props and a root | `snapshot_rescue_1_7.json`, `snapshot_boss_1_10.json`, plus `snapshot_aim_lean.json` and `snapshot_ended.json` |
+| Android M12: `catch_unwind` | Done (C3) |
+
+`content/app.json` and `content/schema/app.schema.json` are kept, validated, and extended with the canon reward keys (`first_clear`, `first_clear_grand_fort`, `per_pennant`, `replay`, `replay_grand_fort`, `per_new_pennant`, `loss`, `daily`). `buttons_win` and `buttons_loss` stay for apps that have not moved to `result.buttons`.
+
+### API changes (v0.1 to v0.2) for the app agents
+
+1. `cp_version()`: `{"sim":"0.2.0","rules":2,...}`. The Daily seed changes with the rules version. Saves from rules 1 do not replay.
+2. Panics: `{"ok":false,"reason":"panic"}`, then `dead_handle` on every call; rebuild with `cp_new` plus `resume`. Wasm: `last_error()` after a `RuntimeError`.
+3. `cp_last_error(handle)` returns the last refusal reply or panic text; `cp_last_error(NULL)` is per thread. NULL handle replies are `{"ok":false,"reason":"null_handle"}` (was `{}` for step and snapshot).
+4. Bad UTF-8 is refused; `content_json` of `"{}"` is refused (use `""`).
+5. Every bad number is refused with `bad_value` (fractions and `12.0` included); angle and power out of range are refused, not clamped.
+6. Terrain chunks are 64 x 64 (`map.chunk` 64).
+7. `aim` gives a lean snapshot with `aim` and `preview`; the rival's `hobs[].aim` is null.
+8. `terrain_all` makes the next snapshot full.
+9. The log: `ai_turn` is one entry (its commands are not logged), aim runs fold, `give_up` carries `tick`. Replay by stepping to the next `plan`/`draft` before each entry, or send `resume`.
+10. New commands: `give_up`, `set_wind` (Test Yard), `resume`.
+11. `recall` only in `plan`. `shove_off` refused when nothing would clear. Self shots and the Mend Bucket refused when they would do nothing (`nothing_to_mend`, `no_one_to_puff_up`, `bad_target`).
+12. Setup: `help`, `preview_pct`, `crew_size` per side; `volley`; `progress`; mode `daily`; range checks with reasons; unknown Doodads refused.
+13. HUD: `steam_max`, `shove_off_cost`, `shots`, `handicap`, `volley`, `boss`, `rules`.
+14. Result: `pennants_new`, `buttons`, `score`, `stats`, `broke`; new `how` values `give_up`, `volley_points`, `captive_bonked`.
+15. Events: `relight`, `boss_phase`, `roller`, `roller_move`, `roller_stop`, `shears`, `shears_open`, `shears_snip`, `shears_jam`; `break` for Thump and Squall losses (`why`); `kettle_pop` and `big_drop` once; `miss` `why: "time"`; `win` carries `pennants_new` and `buttons`.
+16. Props: kinds `roller` and `shears` on 1-10.
+17. `validate_blueprint`: `cost`, `used`, `budget`, and `cells` on a refusal; hanging blocks are refused.
+18. Walk: mud x3, climb 16 cells a step, Thump on a drop over 48.
+19. Rules: Rest never lowered by a Plain Shot; flight cap 6 s; Cozy never Threads; 1-7 has no Squall and needs the rescue; pacing numbers in `materials.json` (Timber reach 1, crush, `cover_pct` 65).
+20. Fixtures: new `snapshot_aim_lean.json`, `snapshot_rescue_1_7.json`, `snapshot_boss_1_10.json`, `setup_couch.json`, `snapshot_ended.json`; `commands_1_1.json` has `plan_hash` and `after_hash`. Schemas in `core/schema/` updated for all of the above.

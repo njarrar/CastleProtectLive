@@ -919,7 +919,9 @@ impl Battle {
         self.hobs[h as usize].hp -= dmg;
         let side = self.hobs[h as usize].side;
         self.note_taken(side, dmg);
-        self.ev(json!({"t": "hit", "target": "hob", "hob": h, "side": side, "dmg": dmg, "why": why}));
+        self.ev(
+            json!({"t": "hit", "target": "hob", "hob": h, "side": side, "dmg": dmg, "why": why}),
+        );
         if self.hobs[h as usize].hp <= 0 {
             self.bonk(h);
         }
@@ -1201,7 +1203,14 @@ impl Battle {
         let hp = self.castles[side as usize].kettle_hp;
         self.ev(json!({"t": "hit", "target": "kettle", "side": side, "dmg": d, "hp": hp.max(0), "why": why}));
         if hp <= 0 {
-            self.kettle_popped(side, if shooter < 2 && shooter != side { Some(shooter) } else { None });
+            self.kettle_popped(
+                side,
+                if shooter < 2 && shooter != side {
+                    Some(shooter)
+                } else {
+                    None
+                },
+            );
         }
     }
 

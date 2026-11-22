@@ -237,7 +237,7 @@ export class FxPool {
       ctx.save();
       ctx.translate(x, y);
       ctx.scale(k, k);
-      if (n.burst) burst(ctx, n.size * (word ? 2.2 : 1.6));
+      if (n.burst) burst(ctx, n.size * (word ? 0.55 + 0.11 * n.str.length : 1.2));
       ctx.font = n.font;
       ctx.lineWidth = 4;
       ctx.strokeStyle = INK;

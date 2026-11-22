@@ -102,8 +102,13 @@ impl Battle {
                 // an aim drag: the new aim and preview, nothing else
                 let s = self.side as usize;
                 let h = &self.hobs[self.sel[s].hob as usize];
-                lean["aim"] = json!({"side": self.side, "hob": h.id, "angle": h.angle, "power": h.power});
-                lean["preview"] = json!(self.preview().iter().map(|p| json!([p.0, p.1])).collect::<Vec<_>>());
+                lean["aim"] =
+                    json!({"side": self.side, "hob": h.id, "angle": h.angle, "power": h.power});
+                lean["preview"] = json!(self
+                    .preview()
+                    .iter()
+                    .map(|p| json!([p.0, p.1]))
+                    .collect::<Vec<_>>());
             }
             return lean;
         }
@@ -205,7 +210,11 @@ impl Battle {
         let shots: Vec<Value> = {
             let hob = self.sel[s].hob;
             let mut list: Vec<String> = vec!["plain".into()];
-            if self.hobs.get(hob as usize).is_some_and(|h| h.knack.is_some()) {
+            if self
+                .hobs
+                .get(hob as usize)
+                .is_some_and(|h| h.knack.is_some())
+            {
                 list.push("knack".into());
             }
             list.extend(self.hands[s].iter().cloned());

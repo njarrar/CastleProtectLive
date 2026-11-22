@@ -856,9 +856,17 @@ impl Content {
         dups("hob", self.hobs.iter().map(|x| &x.id), &mut errs);
         dups("shot", self.shots.iter().map(|x| &x.id), &mut errs);
         dups("doodad", self.doodads.iter().map(|x| &x.id), &mut errs);
-        dups("blueprint", self.blueprints.iter().map(|x| &x.id), &mut errs);
+        dups(
+            "blueprint",
+            self.blueprints.iter().map(|x| &x.id),
+            &mut errs,
+        );
         dups("level", self.levels.iter().map(|x| &x.id), &mut errs);
-        dups("material", self.materials.blocks.iter().map(|x| &x.id), &mut errs);
+        dups(
+            "material",
+            self.materials.blocks.iter().map(|x| &x.id),
+            &mut errs,
+        );
         for m in &self.materials.blocks {
             if m.hp <= 0 {
                 errs.push(format!("material {} needs HP above 0", m.id));
@@ -883,12 +891,18 @@ impl Content {
             let mut stack = vec![(i, 0)];
             while let Some((j, depth)) = stack.pop() {
                 if depth > self.shots.len() {
-                    errs.push(format!("shot {} splits or turns into itself", self.shots[i].id));
+                    errs.push(format!(
+                        "shot {} splits or turns into itself",
+                        self.shots[i].id
+                    ));
                     break;
                 }
                 for child in self.children(j) {
                     if child == i {
-                        errs.push(format!("shot {} splits or turns into itself", self.shots[i].id));
+                        errs.push(format!(
+                            "shot {} splits or turns into itself",
+                            self.shots[i].id
+                        ));
                         stack.clear();
                         break;
                     }
@@ -1096,7 +1110,11 @@ impl Content {
     fn children(&self, i: usize) -> Vec<usize> {
         let s = &self.shots[i];
         let mut out = vec![];
-        let effs = s.triggers.iter().flat_map(|t| t.effects.iter()).chain(s.self_effects.iter());
+        let effs = s
+            .triggers
+            .iter()
+            .flat_map(|t| t.effects.iter())
+            .chain(s.self_effects.iter());
         for e in effs {
             if let Effect::Split { child, .. } | Effect::BecomeProp { shot: child } = e {
                 if let Some(j) = self.shots.iter().position(|x| &x.id == child) {

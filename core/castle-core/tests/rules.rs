@@ -146,8 +146,9 @@ fn arm_fort(mat: char, reach: usize) -> Blueprint {
 fn side_support_reach_by_material() {
     let c = content();
     for (mat, reach, ok) in [
-        ('t', 2, true),
-        ('t', 3, false),
+        // Timber reach 1 since the pacing pass (canon 9.6: tune falls first)
+        ('t', 1, true),
+        ('t', 2, false),
         ('c', 1, true),
         ('c', 2, false),
         ('w', 2, true),
@@ -162,12 +163,12 @@ fn side_support_reach_by_material() {
 #[test]
 fn lean_lines_show_what_falls() {
     let c = content();
-    let bp = arm_fort('t', 2);
+    let bp = arm_fort('t', 1);
     let cs = castle_core::castle::Castle::from_blueprint(&c, &bp, 0, 100).unwrap();
-    // the top row is (0..=2, 5); the column under it is (0, 4)
+    // the top row is (0..=1, 5); the column under it is (0, 4)
     let falls = cs.lean_lines(&c, 0, 4, &[]);
-    assert_eq!(falls, vec![(0, 5), (1, 5), (2, 5)]);
-    assert!(cs.lean_lines(&c, 2, 5, &[]).is_empty());
+    assert_eq!(falls, vec![(0, 5), (1, 5)]);
+    assert!(cs.lean_lines(&c, 1, 5, &[]).is_empty());
 }
 
 #[test]

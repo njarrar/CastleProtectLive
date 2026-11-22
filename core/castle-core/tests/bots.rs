@@ -10,6 +10,7 @@ fn fifty_bot_battles_finish() {
     let levels: Vec<String> = content.levels.iter().map(|l| l.id.clone()).collect();
     let presets = ["cozy", "fair", "stubborn"];
     let mut ends = std::collections::BTreeMap::new();
+    let mut rounds = vec![];
     for i in 0..50u64 {
         let lvl = &levels[i as usize % levels.len()];
         let p0 = presets[i as usize % 3];
@@ -29,6 +30,14 @@ fn fifty_bot_battles_finish() {
             .as_ref()
             .unwrap_or_else(|| panic!("battle {i} on {lvl} did not end"));
         *ends.entry(r.how.clone()).or_insert(0) += 1;
+        rounds.push(r.round);
     }
-    println!("ends: {ends:?}");
+    rounds.sort();
+    println!("ends: {ends:?}, rounds {rounds:?}");
+    // pacing gate (canon 9.6): the median fight ends by round 12
+    assert!(
+        rounds[rounds.len() / 2] <= 12,
+        "median end round {}",
+        rounds[rounds.len() / 2]
+    );
 }

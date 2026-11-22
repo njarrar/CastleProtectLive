@@ -224,7 +224,11 @@ pub fn validate_blueprint(content: &Content, bp: &Blueprint, seats: i32) -> Resu
     }
     // every block must stand: run the support solver on the new fort
     let cs = Castle::from_blueprint(content, bp, 0, 0)?;
-    let hanging: Vec<(i32, i32)> = cs.falling_chunks(content, &[]).into_iter().flatten().collect();
+    let hanging: Vec<(i32, i32)> = cs
+        .falling_chunks(content, &[])
+        .into_iter()
+        .flatten()
+        .collect();
     if let Some(&(c, r)) = hanging.first() {
         return Err(format!(
             "{} block(s) have no support, first at column {} row {}",
@@ -257,7 +261,12 @@ pub fn blueprint_report(content: &Content, bp: &Blueprint) -> (i32, i32, Vec<(i3
     let mut cells = vec![];
     for (c, r) in nooks.iter().copied().chain(std::iter::once(k)) {
         for d in 0..2 {
-            for p in [(c + d, r - 1), (c + d, r + 2), (c - 1, r + d), (c + 2, r + d)] {
+            for p in [
+                (c + d, r - 1),
+                (c + d, r + 2),
+                (c - 1, r + d),
+                (c + 2, r + d),
+            ] {
                 if !is_block(&slots, cols, rows, p.0, p.1) && !cells.contains(&p) {
                     cells.push(p);
                 }

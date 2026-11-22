@@ -30,7 +30,9 @@
               "type": "string"
             },
             "side": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1
             }
           }
         },
@@ -45,7 +47,9 @@
               "const": "quick_pick"
             },
             "side": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1
             }
           }
         },
@@ -73,7 +77,9 @@
               "const": "pick_hob"
             },
             "hob": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
             }
           }
         },
@@ -127,7 +133,9 @@
               "const": "recall"
             },
             "ghost": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
             }
           }
         },
@@ -143,7 +151,9 @@
               "const": "walk"
             },
             "dx": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": -100000,
+              "maximum": 100000
             }
           }
         },
@@ -159,7 +169,9 @@
               "const": "shove_off"
             },
             "hob": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
             }
           }
         },
@@ -264,7 +276,9 @@
               "const": "lean_lines"
             },
             "side": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1
             },
             "c": {
               "type": "integer"
@@ -285,7 +299,9 @@
               "const": "shimmer"
             },
             "side": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1
             }
           }
         },
@@ -344,6 +360,60 @@
           "properties": {
             "cmd": {
               "const": "terrain_all"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "give_up"
+            },
+            "side": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd",
+            "wind"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "set_wind"
+            },
+            "wind": {
+              "type": "integer",
+              "minimum": -10,
+              "maximum": 10
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "cmd",
+            "log"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cmd": {
+              "const": "resume"
+            },
+            "log": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
             }
           }
         }

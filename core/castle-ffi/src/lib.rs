@@ -11,10 +11,10 @@
 //! setup, seed and command log (`cp_new`, then the `resume` command).
 
 use castle_core::Game;
+use std::cell::RefCell;
 use std::ffi::{c_char, CStr, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
-use std::cell::RefCell;
 
 /// Opaque battle handle.
 pub struct CpGame {
@@ -82,7 +82,10 @@ fn guarded<F: FnOnce(&mut Game) -> String>(h: &mut CpGame, f: F) -> String {
     }
     #[cfg(debug_assertions)]
     if std::thread::current().id() != h.owner {
-        let r = refusal("wrong_thread", "call a handle only from the thread that made it");
+        let r = refusal(
+            "wrong_thread",
+            "call a handle only from the thread that made it",
+        );
         h.last_error = CString::new(r.clone()).ok();
         return r;
     }
@@ -296,7 +299,10 @@ mod tests {
             let level = CString::new(r#"{"level":"1-1"}"#).unwrap();
             let h = cp_new(ptr::null(), level.as_ptr(), 7);
             let r = guarded(&mut *h, |_| panic!("boom in the sim"));
-            assert!(r.contains("\"reason\":\"panic\"") && r.contains("boom"), "{r}");
+            assert!(
+                r.contains("\"reason\":\"panic\"") && r.contains("boom"),
+                "{r}"
+            );
             let e = text(cp_last_error(h));
             assert!(e.contains("panic: boom"), "{e}");
             // every later call refuses, and touches nothing

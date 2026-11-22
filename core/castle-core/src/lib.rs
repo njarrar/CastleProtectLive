@@ -30,10 +30,10 @@ pub use content::Content;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-pub const SIM_VERSION: &str = "0.1.0";
+pub const SIM_VERSION: &str = "0.2.0";
 pub const TICK_HZ: i32 = 120;
 /// Bumped whenever a rule changes results. Keys the Daily seed.
-pub const RULES_VERSION: u32 = 1;
+pub const RULES_VERSION: u32 = 2;
 
 /// Daily Dust-up seed from the local date text ("2026-11-22") and the rules
 /// version. No content delay: the same date and rules give the same seed.

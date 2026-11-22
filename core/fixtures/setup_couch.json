@@ -1,0 +1,15 @@
+{
+  "first_turn": 0,
+  "level": "d1",
+  "mode": "couch",
+  "sides": [
+    {
+      "help": "some",
+      "kit": "kit_oak"
+    },
+    {
+      "kit": "kit_stone",
+      "preview_pct": 45
+    }
+  ]
+}
