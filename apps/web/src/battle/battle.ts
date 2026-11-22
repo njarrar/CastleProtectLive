@@ -1,10 +1,10 @@
 // The battle screen: canvas lenses, HUD in both layouts, aim input, camera, hand-off card.
 // It never decides an outcome. It sends commands to the core and draws its snapshots.
 import type { App, Route, Screen } from '../app';
-import { bark, cue, loop, musicLayers, play, setMusic, slowmoAudio, stopLoops, unlockAudio } from '../audio/sfx';
+import { bark, cue, loop, musicLayers, play, preloadBarks, releaseBarks, setMusic, slowmoAudio, stopLoops, unlockAudio } from '../audio/sfx';
 import type { BattleSetup, Command, PinView, Side, Snapshot } from '../core/types';
 import { SaveError, TICK_HZ } from '../core/types';
-import { clearBattle, dropBattleSave, saveBattle } from '../save/db';
+import { clearBattle, dropBattleSave, loadBattleSave, saveBattle } from '../save/db';
 import { DEBUG } from '../ui/fatal';
 import { CLASS_COLOR, CLASS_ICON, btn, h, repeatKey } from '../ui/dom';
 import { type DrawOpts, LensCache, drawLens, drawStrip } from '../render/draw';
@@ -32,10 +32,15 @@ export function battleScreen(app: App, route: Route): Screen {
   const r = route as Extract<Route, { to: 'battle' }>;
   const setup: BattleSetup = r.setup;
   const core = app.core;
-  // A save that is from another version, damaged, or replays to a different state is put
-  // aside and the player lands on the map with a note (App.go turns the throw into that).
+  // A save that is from another version, damaged, or whose log the core refuses is put aside and
+  // the player lands on the map with a note (App.go turns the throw into that). A log that
+  // replays to another hash still loads, with a note: a good fight is never thrown away.
+  // Back from Settings takes over the live battle when the core still holds it (a shot in the
+  // air carries on where it was); the save string is only the fallback.
+  let loadNote: string | void = undefined;
   try {
-    if (r.resume) core.loadBattle(r.resume);
+    if (r.live !== undefined && r.live === core.battleGen) core.resendTerrain?.();
+    else if (r.resume) loadNote = core.loadBattle(r.resume);
     else if (!r.prepared) core.newBattle(setup);
     else core.resendTerrain?.(); // the pre-battle sheet already read the first snapshot
   } catch (e) {
@@ -53,7 +58,14 @@ export function battleScreen(app: App, route: Route): Screen {
   const feel = new Feel();
   feel.terr = terr;
   feel.sound = cue;
-  feel.bark = bark;
+  // A bark shows its subtitle as a speech tag over the Hob, with or without sound (07 §7.6).
+  feel.bark = (nm, ev, side, step, id) => {
+    const line = bark(nm, ev, side, step);
+    if (!line) return;
+    const hb = snap.hobs.find((q) => q.id === id);
+    if (hb) feel.fx.word(`"${line}"`, hb.x, hb.y + 70, 13, side === 0 ? '#CFE0FF' : '#FFD9B8', false, Math.max(2000, 1500 + 60 * line.length));
+  };
+  preloadBarks(snap.hobs.map((hb) => hobSpriteName(hb.def ?? hb.id, hb.cls)));
   setMusic('battle');
   // Shell positions carried on between ticks: [id, x, y] per shell (no allocation per frame).
   const shellBuf = new Float64Array(3 * 16);
@@ -114,7 +126,7 @@ export function battleScreen(app: App, route: Route): Screen {
   const overlay = h('div', { class: 'overlay-layer' });
   let yardBar: HTMLElement | null = null;
   if (setup.mode === 'yard') {
-    // The wind slider only where the core takes a wind command (the real core does not yet).
+    // The wind slider only where the core takes a wind command.
     let windCtl: HTMLElement | string = '';
     if (core.features.setWind) {
       const slider = h('input', { type: 'range', min: -10, max: 10, step: 1, value: 0, 'aria-label': 'Wind' }) as HTMLInputElement;
@@ -155,12 +167,14 @@ export function battleScreen(app: App, route: Route): Screen {
 
   // ---------- canvas sizing ----------
   let W = 0, H = 0, dpr = 1;
-  // Adaptive resolution: if frames run long (a slow phone, a software canvas), the field draws
-  // at fewer pixels per point, down to 1; it steps back up when there is room again.
+  // Adaptive resolution: if the work in a frame runs long (a slow phone, a software canvas), the
+  // field draws at fewer pixels per point, down to 1; it steps back up when there is room again.
+  // It times the work inside tick, not the gap between frames: a phone capped at 30 fps (iOS Low
+  // Power Mode) has 33 ms gaps but may draw in 5 ms, and must not stay blurry for good.
   let dprCap = 2;
   let slowFrames = 0, fastFrames = 0;
-  function adaptRes(dtMs: number): void {
-    if (dtMs > 22) { slowFrames++; fastFrames = 0; } else if (dtMs < 17.5) { fastFrames++; slowFrames = Math.max(0, slowFrames - 1); }
+  function adaptRes(workMs: number): void {
+    if (workMs > 14) { slowFrames++; fastFrames = 0; } else if (workMs < 8) { fastFrames++; slowFrames = Math.max(0, slowFrames - 1); }
     const full = Math.min(2, window.devicePixelRatio || 1);
     if (slowFrames > 20 && dprCap > 1) { dprCap = Math.max(1, dprCap - 0.5); slowFrames = 0; resize(); }
     else if (fastFrames > 240 && dprCap < full) { dprCap = Math.min(full, dprCap + 0.5); fastFrames = 0; resize(); }
@@ -444,7 +458,7 @@ export function battleScreen(app: App, route: Route): Screen {
   }
   function tick(now: number): void {
     const dt = Math.min(0.1, (now - last) / 1000);
-    if (!paused && !handoffOpen && document.visibilityState === 'visible') adaptRes(now - last);
+    const work0 = performance.now();
     last = now;
     readRects();
     flushAim();
@@ -457,7 +471,7 @@ export function battleScreen(app: App, route: Route): Screen {
     feel.juice.shakeScale = app.settings.reduceShake / 100;
     feel.juice.fast = fast;
     feel.you = youSide();
-    const vs = feel.update(running ? dt * 1000 : 0, snap, calm, lw.cam.cx, lw.cam.cy, lw.rect.w / lw.cam.s, shellBuf, nShell);
+    const vs = feel.update(!paused ? dt * 1000 : 0, snap, calm, lw.cam.cx, lw.cam.cy, lw.rect.w / lw.cam.s, shellBuf, nShell);
     slowmoAudio(feel.juice.slowing !== null);
     sounds();
     if (running) {
@@ -484,6 +498,7 @@ export function battleScreen(app: App, route: Route): Screen {
     snapCams = false;
     render(now);
     updateHud(now);
+    if (!paused && !handoffOpen && document.visibilityState === 'visible') adaptRes(performance.now() - work0);
   }
 
   /** A throw in the frame loop (a wasm trap, a draw bug): stop the loop and offer a way out. */
@@ -495,8 +510,12 @@ export function battleScreen(app: App, route: Route): Screen {
     console.error(e);
     card('crash-card', 'crash-h',
       h('h2', { id: 'crash-h' }, 'The fight got stuck'),
-      h('p', {}, 'Something went wrong in this fight. Your last turn is saved.'),
-      btn('Retry', () => { closeCards(); app.go({ to: 'battle', setup }); }, 'primary', { 'data-autofocus': true, 'data-testid': 'crash-retry' }),
+      h('p', {}, 'Something went wrong in this fight. Retry picks it up from the last saved turn.'),
+      btn('Retry', () => {
+        closeCards();
+        // A new Game replays the saved log (core/API.md "Errors and panics"); no save: a fresh fight.
+        void loadBattleSave().catch(() => undefined).then((sv) => app.go(sv && sv.coreName === core.name && setup.mode !== 'yard' ? { to: 'battle', setup: sv.setup, resume: sv.core } : { to: 'battle', setup }));
+      }, 'primary', { 'data-autofocus': true, 'data-testid': 'crash-retry' }),
       btn('Map', () => { closeCards(); app.go({ to: 'map' }); }, 'secondary'),
     );
   }
@@ -700,6 +719,8 @@ export function battleScreen(app: App, route: Route): Screen {
     const human = s.sides[hd.active].human || setup.mode === 'yard';
     const plan = s.phase === 'plan' && human;
     setClass(hud, 'aiming', drag?.mode === 'aim');
+    // The tall lenses joined for a flight: the strip borders go and the floats move up off the drawn strip.
+    setClass(hud, 'joined', layout === 'tall' && joined);
     setClass(hud, 'flight', s.phase === 'flight' || s.phase === 'resolve' || s.phase === 'rival' || !human);
     setData(hud, 'phase', s.phase);
     setData(hud, 'active', String(hd.active));
@@ -768,6 +789,8 @@ export function battleScreen(app: App, route: Route): Screen {
         if (c.weight) b.append(h('i', { class: 'cogs', 'aria-hidden': 'true' }, '⚙'.repeat(c.weight)));
         if (c.best && c.kind === 'shell') b.append(h('i', { class: 'best', style: `--c:${CLASS_COLOR[c.best]}` }, CLASS_ICON[c.best]));
         b.addEventListener('contextmenu', (e) => { e.preventDefault(); shellCard(c.name, c.weight, c.best); });
+        // iOS Safari sends no contextmenu on a long press: a 500 ms hold opens the card too.
+        longPress(b, () => shellCard(c.name, c.weight, c.best));
         return b;
       });
       const doodadBtns = hd.doodads.map((d) => {
@@ -1174,9 +1197,11 @@ export function battleScreen(app: App, route: Route): Screen {
     if (ended) return;
     paused = true;
     lose();
+    // No low-pass or pitch drop held on the music while the Pause card is up.
+    slowmoAudio(false);
     const lvl = setup.level ? app.levels().find((l) => l.id === setup.level) : undefined;
     const goals = lvl ? h('ul', { class: 'goals' }, ...lvl.goals.map((g) => h('li', {}, g))) : '';
-    // Give up only where the core has the command (the real core does not yet).
+    // Give up where the core has the command.
     const giveUp = setup.mode !== 'yard' && core.features.giveUp ? btn('Give up', () => { closePause(); send({ cmd: 'give_up' }); }, 'secondary', { 'data-testid': 'give-up' }) : '';
     // Pass is always on offer on your turn, so no turn can lock.
     const pass = snap.hud.canPass ? btn('Pass turn', () => { closePause(); flushAim(); if (send({ cmd: 'pass' })) afterAction(); }, 'secondary', { 'data-testid': 'pass' }) : '';
@@ -1188,10 +1213,11 @@ export function battleScreen(app: App, route: Route): Screen {
       pass,
       btn('Retry', () => { closePause(); void clearBattle(); app.go({ to: 'battle', setup }); }, 'secondary'),
       btn('Settings', () => {
+        // Back from Settings takes over this live battle (core.battleGen); the save is the fallback.
         const data = core.saveBattle();
-        app.go({ to: 'settings', back: { to: 'battle', setup, resume: data } });
-      }, 'secondary'),
-      btn('Map', () => { void autosave(snap.hud.active, snap.round).then(() => app.go({ to: 'map' })); }, 'secondary'),
+        app.go({ to: 'settings', back: { to: 'battle', setup, resume: data, live: core.battleGen, handoff: false } });
+      }, 'secondary', { 'data-testid': 'pause-settings' }),
+      btn('Map', () => { void autosave(snap.hud.active, snap.round).then(() => app.go({ to: 'map' })); }, 'secondary', { 'data-testid': 'pause-map' }),
       giveUp,
     );
     overlay.querySelector<HTMLElement>('[data-autofocus]')?.focus();
@@ -1219,13 +1245,25 @@ export function battleScreen(app: App, route: Route): Screen {
       h('div', { class: `crest ${side ? 'diamond' : 'round'}`, 'aria-hidden': 'true' }, '⚑'),
       h('p', {}, 'Pass the device to'),
       h('h2', { class: 'who', id: 'handoff-h' }, name.toUpperCase()),
-      help !== 'none' ? h('p', { class: 'helpmark' }, `Help: ${help === 'some' ? 'Some +' : 'Lots ++'}`) : '',
+      handicapLine(side, help),
       h('p', { class: 'small' }, `♨ ${pct}%  ${crew.map((c) => CLASS_ICON[c.cls]).join(' ')}  Round ${round}/${snap.roundCap}`),
       ready,
     );
     play('sheet');
     handoffFlip(overlay.querySelector('.handoff') as HTMLElement, side, app.settings.reduceMotion);
     setTimeout(() => ready.focus(), 0);
+  }
+
+  /** The handicaps the core applies to this side (hud.handicap), shown openly: Help, Steam, preview share, crew. */
+  function handicapLine(side: Side, help: string): HTMLElement | string {
+    const hc = snap.hud.handicap?.[side];
+    const parts: string[] = [];
+    const hl = hc?.help ?? help;
+    if (hl && hl !== 'none') parts.push(`Help: ${hl === 'some' ? 'Some +' : hl === 'lots' ? 'Lots ++' : hl}`);
+    if (hc?.steam) parts.push(`Steam ${hc.steam > 0 ? '+' : ''}${hc.steam}`);
+    if (hc?.previewPct !== undefined && hc.previewPct < 100) parts.push(`Preview ${hc.previewPct}%`);
+    if (hc?.crew) parts.push(`Crew ${hc.crew}`);
+    return parts.length ? h('p', { class: 'helpmark', 'data-testid': 'handicap' }, parts.join(' · ')) : '';
   }
 
   function shellCard(name: string, weight: number, best?: string): void {
@@ -1280,7 +1318,8 @@ export function battleScreen(app: App, route: Route): Screen {
   if (r.resume && r.handoff && setup.mode === 'duel' && setup.seats !== 'one' && snap.phase === 'plan') openHandoff(snap.hud.active, snap.round);
 
   // For tests and debugging only (dev, or ?debug in the URL): a read-only view of the latest snapshot.
-  if (DEBUG) (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, layout: () => layout, core: core.name, cam: () => ({ ...camWide }), feel: () => ({ terr: terr.rev, fx: feel.fx.live, collapse: feel.col.busy, slow: feel.juice.slowing, trauma: feel.juice.trauma }) };
+  if (DEBUG) (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, layout: () => layout, core: core.name, cam: () => ({ ...camWide }), dpr: () => dpr, joined: () => joined, feel: () => ({ terr: terr.rev, fx: feel.fx.live, collapse: feel.col.busy, slow: feel.juice.slowing, trauma: feel.juice.trauma }) };
+  if (loadNote) app.notice(loadNote);
 
   return {
     el: root,
@@ -1300,6 +1339,12 @@ export function battleScreen(app: App, route: Route): Screen {
       cancelAnimationFrame(raf);
       stopLoops();
       slowmoAudio(false);
+      releaseBarks();
+      // iOS Safari frees canvas memory late: give every cache canvas back now (a few Retries
+      // must not hit the canvas limit and draw blank).
+      for (const k in caches) caches[k].free();
+      terr.free();
+      canvas.width = 0; canvas.height = 0;
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', lose);
@@ -1314,6 +1359,20 @@ function merge(prev: Snapshot, next: Snapshot): Snapshot {
   next.events = [...(prev.events ?? []), ...next.events];
   next.terrain.chunks = [...(prev.terrain.chunks ?? []), ...next.terrain.chunks];
   return next;
+}
+
+/** A 500 ms hold with the finger still (under 10 px): for cards iOS will not open on contextmenu. */
+function longPress(el: HTMLElement, fn: () => void): void {
+  let t = 0, x = 0, y = 0;
+  const stop = () => clearTimeout(t);
+  el.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    x = e.clientX; y = e.clientY;
+    stop();
+    t = window.setTimeout(() => { fn(); }, 500);
+  });
+  el.addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - x, e.clientY - y) > 10) stop(); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, stop);
 }
 
 function clamp(v: number, a: number, b: number): number { return Math.max(a, Math.min(b, v)); }

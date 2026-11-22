@@ -265,7 +265,7 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
   ctx.beginPath();
   ctx.rect(r.x, r.y, r.w, r.h);
   ctx.clip();
-  feel.fx.drawNums(ctx, r, cam);
+  feel.fx.drawNums(ctx, r, cam, snap.kettles);
   ctx.restore();
   if (o.label) {
     ctx.save();
