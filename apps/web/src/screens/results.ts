@@ -7,22 +7,14 @@ import { btn, h } from '../ui/dom';
 export function resultsScreen(app: App, route: Route): Screen {
   const r = route as Extract<Route, { to: 'results' }>;
   const setup = r.setup;
-  const res = app.lastResult as ResultView | undefined;
+  const res = app.lastResult;
   if (!res) { queueMicrotask(() => app.go({ to: 'map' })); return { el: h('main', { class: 'screen' }) }; }
   if (setup.mode === 'duel' || setup.mode === 'skirmish') return versusResults(app, setup, res);
 
   const win = res.winner === 0;
   const lvl = app.levels().find((l) => l.id === setup.level);
-  // Record progress. Pennants are kept: a later run only adds to them.
-  if (lvl) {
-    const rec = app.progress.levels[lvl.id] ?? { pennants: [false, false, false], wins: 0, losses: 0 };
-    rec.pennants = rec.pennants.map((p, i) => p || !!res.pennants[i]);
-    if (win) rec.wins++; else rec.losses++;
-    app.progress.levels[lvl.id] = rec;
-    app.progress.buttons += res.buttons;
-    void app.saveProgress();
-  }
-  const title = win ? (res.how === 'Kettle Pop' ? 'Kettle Pop!' : 'Clean Sweep!') : 'Flattened';
+  // Progress was written by the battle screen the moment the fight ended (app.recordResult).
+  const title = resultTitle(res, win, lvl?.rival);
   const pens = h('div', { class: 'pennants' }, ...(lvl?.goals ?? []).map((g, i) => h('div', { class: `pennant ${res.pennants[i] ? 'got' : ''}`, 'data-i': i },
     h('i', { 'aria-hidden': 'true' }, '⚑'), h('span', {}, g))));
   const next = app.levels()[app.levels().findIndex((l) => l.id === setup.level) + 1];
@@ -31,7 +23,7 @@ export function resultsScreen(app: App, route: Route): Screen {
   const el = h('main', { class: `screen results ${win ? 'win' : 'loss'}` },
     h('div', { class: 'sheet' },
       h('h1', {}, title),
-      h('p', { class: 'small' }, `Round ${res.stats[0].shots ? '' : ''}${lvl ? `${lvl.id} ${lvl.name}` : ''}${res.how === 'Doze Off' ? '. Sir Pudge dozed off.' : ''}`),
+      h('p', { class: 'small' }, `${lvl ? `${lvl.id} ${lvl.name}` : ''}${res.round ? `, Round ${res.round}` : ''}`),
       pens,
       h('p', { class: 'score' }, `Buttons +${res.buttons}`),
       res.bestShot && win ? h('p', { class: 'small' }, `Best shot: ${res.bestShot.hob}, ${(res.bestShot.angle / 10).toFixed(1)} / ${res.bestShot.power}, ${res.bestShot.dmg} dmg`) : '',
@@ -60,7 +52,8 @@ function versusResults(app: App, setup: Extract<Route, { to: 'results' }>['setup
   const duel = setup.mode === 'duel';
   const w = res.winner;
   const names = setup.sides.map((s) => s.name);
-  if (duel && w >= 0) app.duelScore[names[w]] = (app.duelScore[names[w]] ?? 0) + 1;
+  // Scored by side, never by name: two players may share a name, and a name is any text.
+  if (duel && (w === 0 || w === 1)) app.duelScore[w]++;
   const title = w < 0 ? 'A draw!' : duel ? `${names[w]} wins!` : w === 0 ? 'You win!' : `${names[1]} wins`;
   const helpMark = (s: Side) => (setup.sides[s].help === 'some' ? ' +' : setup.sides[s].help === 'lots' ? ' ++' : '');
   const col = (s: Side) => h('div', { class: `statcol side${s}` },
@@ -79,17 +72,32 @@ function versusResults(app: App, setup: Extract<Route, { to: 'results' }>['setup
   const el = h('main', { class: 'screen results duel' },
     h('div', { class: 'sheet' },
       h('h1', { class: w >= 0 ? `side${w}` : '' }, title),
-      h('p', { class: 'small' }, `${res.how}${w >= 0 && duel ? helpMark(w as Side) && ` (Help${helpMark(w as Side)})` : ''}`),
+      h('p', { class: 'small' }, `${resultTitle(res, true).replace(/!$/, '')}${w >= 0 && duel ? helpMark(w as Side) && ` (Help${helpMark(w as Side)})` : ''}`),
       h('div', { class: 'stats' }, col(order[0]), col(order[1])),
       res.bestShot ? h('p', { class: 'small' }, `Best shot: ${names[res.bestShot.side]}, Round ${res.bestShot.round}, ${res.bestShot.dmg} dmg`) : '',
-      duel ? h('p', { class: 'tonight' }, `Tonight: ${names[0]} ${app.duelScore[names[0]] ?? 0} : ${app.duelScore[names[1]] ?? 0} ${names[1]}`) : '',
+      duel ? h('p', { class: 'tonight' }, `Tonight: ${names[0]} ${app.duelScore[0]} : ${app.duelScore[1]} ${names[1]}`) : '',
       h('div', { class: 'row-btns' },
-        btn('Map', () => { app.duelScore = {}; app.go({ to: 'map' }); }, 'secondary'),
+        btn('Map', () => { app.duelScore = [0, 0]; app.go({ to: 'map' }); }, 'secondary'),
         btn('Change setup', () => app.go({ to: duel ? 'duel' : 'skirmish' }), 'secondary'),
-        duel ? btn('Swap sides', () => { const s = structuredClone(setup); s.sides = [s.sides[1], s.sides[0]]; app.go({ to: 'battle', setup: s }); }, 'secondary') : '',
+        duel ? btn('Swap sides', () => { const s = structuredClone(setup); s.sides = [s.sides[1], s.sides[0]]; app.duelScore = [app.duelScore[1], app.duelScore[0]]; app.go({ to: 'battle', setup: s }); }, 'secondary') : '',
         btn('REMATCH', () => app.go({ to: 'battle', setup: rematchSetup() }), 'primary big', { 'data-autofocus': true }),
       ),
     ),
   );
   return { el };
+}
+
+/** One title per `how` from core/API.md, for the winner's side or the loser's. */
+export function resultTitle(res: ResultView, win: boolean, rival = 'The Rival'): string {
+  const k = res.howKey ?? '';
+  if (win) {
+    return ({
+      clean_sweep: 'Clean Sweep!', kettle_pop: 'Kettle Pop!', squall: 'Squall Pop!', double_pop: 'Double Pop!',
+      rescue: 'Rescued!', round_cap: `${rival} dozed off!`, total_hp: 'Won on points!',
+    } as Record<string, string>)[k] ?? `${res.how}!`;
+  }
+  return ({
+    clean_sweep: 'Swept', kettle_pop: 'Kettle popped', squall: 'Squalled', double_pop: 'Double Pop',
+    rescue: 'Rescue failed', round_cap: 'Out of rounds', total_hp: 'Lost on points',
+  } as Record<string, string>)[k] ?? 'Flattened';
 }

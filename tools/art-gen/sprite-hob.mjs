@@ -22,32 +22,67 @@ export const TEAMS = {
   orange: { col: C.rival, dark: C.rivalD, light: C.rivalL, hatch: true },
 };
 
-// pose table: each pose has 2 or 3 frames
+// pose table. Frames 0.. of the first six poses are the v0.1 frames and must keep their look.
+// New frames are added at the end. The play order is in assets/animations.json, not in the frame number.
+export const V01_FRAMES = { idle: 3, aim: 2, fire: 2, hit: 2, bonked: 2, cheer: 2 };
+export const NEXT_DOOR = { grub: 'Broad Back', hetty: 'Ridgepole', thumper: 'Old Grudge', nan: 'Clatter Call' };
 export const POSES = {
   idle: [
     { face: 'happy' },
     { face: 'happy', sy: .97 },
     { face: 'blink' },
+    { face: 'happy', sy: 1.025, sx: .99, hatDy: -1 },
   ],
   aim: [
     { face: 'grit', toolRot: -12, hf: [23, -32], lean: -2 },
     { face: 'grit', toolRot: -18, hf: [23, -35], lean: -4, hb: [-22, -30] },
+    { face: 'grit', toolRot: -26, hf: [22, -39], lean: -6, hb: [-23, -32], sy: .98 },
   ],
   fire: [
     { face: 'shout', toolRot: -12, hf: [27, -34], dx: -5, lean: -5, sy: .96, puff: true },
     { face: 'shout', toolRot: -18, hf: [24, -33], dx: -2, lean: -2 },
+    { face: 'grit', toolRot: -30, hf: [17, -37], hb: [-24, -34], dx: -3, lean: -9, sy: .94, sx: 1.04 },
+    { face: 'shout', toolRot: 4, hf: [31, -33], hb: [-17, -26], dx: 4, lean: 5, sy: 1.04, sx: .98, hatDy: -5, flash: true },
   ],
   hit: [
     { face: 'ouch', sy: .86, sx: 1.08, lean: -7, hf: [24, -40], hb: [-25, -40], toolRot: 14, stars: 0 },
     { face: 'ouch', sy: .93, sx: 1.04, lean: -4, hf: [23, -36], hb: [-24, -36], toolRot: 8, stars: 1 },
+    { face: 'blink', sy: 1.03, sx: .98, lean: 2, hf: [21, -30], hb: [-22, -30], toolRot: 2, hatRot: 6, stars: 2 },
   ],
   bonked: [
     { face: 'bonk', tool: false, hf: [20, -22], hb: [-21, -22], balloon: 0, dy: -2 },
     { face: 'bonk', tool: false, hf: [21, -21], hb: [-22, -21], balloon: 1, dy: -8, lean: 3 },
+    { face: 'dizzy', tool: false, hf: [24, -25], hb: [-25, -23], lean: -6, sy: .97, hatRot: -7, stars: 3 },
+    { face: 'bonk', tool: false, hf: [21, -19], hb: [-22, -19], lean: 4, sy: .93, sx: 1.03, hatDy: 2, balloon: { sway: 1, str: 18, k: .5, zz: false } },
   ],
   cheer: [
     { face: 'cheer', sy: .93, hf: [26, -40], hb: [-25, -42], toolRot: 4 },
     { face: 'cheer', dy: -10, hatDy: -9, hf: [30, -54], hb: [-26, -56], toolRot: 12, sy: 1.03 },
+    { face: 'cheer', dy: -13, hatDy: -10, hatRot: -9, hf: [29, -58], hb: [-27, -58], toolRot: 18, sy: 1.01 },
+    { face: 'cheer', sy: .9, sx: 1.06, hatDy: -1, hf: [27, -36], hb: [-26, -38], toolRot: 2 },
+  ],
+  // falling through a broken floor: hang, then flail. The hat stays up a beat
+  tumble: [
+    { face: 'wide', hf: [27, -46], hb: [-27, -46], hatDy: -7, toolRot: 16, sy: 1.04, sx: .97, shadow: false, boots: 'dangle' },
+    { face: 'shout', lean: -12, hf: [26, -58], hb: [-26, -55], hatDy: -12, hatRot: -8, toolRot: 28, sy: 1.06, sx: .96, shadow: false, boots: 'dangle', lines: true },
+    { face: 'shout', lean: 11, hf: [28, -55], hb: [-25, -60], hatDy: -14, hatRot: 9, toolRot: -16, sy: 1.06, sx: .96, shadow: false, boots: 'dangle', lines: true },
+    { face: 'wide', lean: -5, hf: [24, -61], hb: [-27, -51], hatDy: -11, hatRot: -4, toolRot: 20, sy: 1.05, sx: .96, shadow: false, boots: 'dangle', lines: true },
+  ],
+  // dropped landing: splat, then pop back
+  land: [
+    { face: 'ouch', sy: .72, sx: 1.2, hf: [29, -24], hb: [-29, -24], hatDy: 4, toolRot: 18, dust: 1 },
+    { face: 'blink', sy: 1.07, sx: .95, hf: [22, -34], hb: [-23, -34], hatDy: -6, toolRot: -4, dust: 2 },
+  ],
+  // Shove Off: push the dirt out of a buried Loophole
+  dig: [
+    { face: 'grit', lean: -8, hf: [14, -35], hb: [-24, -36], toolRot: -24, dx: -3, sy: .96, sx: 1.02 },
+    { face: 'shout', lean: 9, hf: [34, -30], hb: [-14, -31], toolRot: 14, dx: 4, sy: 1.02, dirt: 0 },
+    { face: 'grit', lean: 4, hf: [30, -28], hb: [-18, -28], toolRot: 8, dx: 2, dirt: 1 },
+  ],
+  // next door Passive is live (Broad Back, Ridgepole, Old Grudge, Clatter Call)
+  nextdoor: [
+    { face: 'happy', glow: 1 },
+    { face: 'happy', glow: 2, sy: .975 },
   ],
 };
 
@@ -69,6 +104,13 @@ function faceSvg(kind, skin) {
       return path('M-1 -68 L5 -65 L-1 -62 M19 -68 L13 -65 L19 -62', 'none', { stroke: ink, sw: 2.5 }) + nose + blush + path('M3 -50 q2.5 -3 5 0 t5 0 t5 0', 'none', { stroke: ink, sw: 2.5 });
     case 'cheer':
       return path('M-2 -64 Q2 -69 6 -64 M11 -64 Q15 -69 19 -64', 'none', { stroke: ink, sw: 2.5 }) + nose + blush + path('M3 -52 Q10 -41 17 -52 Z', ink, { stroke: ink, sw: 2 }) + path('M7 -47.5 Q10 -45 13 -47.5', 'none', { stroke: C.blush, sw: 2.2 });
+    case 'dizzy': {
+      // eyes spin: a small swirl in each eye, mouth a wobbly line
+      const sw = (x) => path(`M${x} -65 m0 -1.2 a1.4 1.4 0 0 1 1.4 1.4 a2.6 2.6 0 0 1 -2.6 2.6 a3.8 3.8 0 0 1 -3.8 -3.8 a5 5 0 0 1 5 -5 a5.6 5.6 0 0 1 5.4 4`, 'none', { stroke: ink, sw: 1.9 });
+      return sw(1.5) + sw(14.5) + nose + blush + path('M3 -50 q2.5 3 5 0 t5 0 t5 0', 'none', { stroke: ink, sw: 2.5 });
+    }
+    case 'wide':
+      return ell(2, -65, 4.6, 5.6, '#FFF', { stroke: ink, sw: 2 }) + ell(15, -65, 4.6, 5.6, '#FFF', { stroke: ink, sw: 2 }) + circ(2.6, -64.5, 1.9, ink) + circ(15.6, -64.5, 1.9, ink) + nose + blush + ell(10, -49.5, 3.4, 4, ink) + path('M-2 -74 L5 -75 M12 -75 L19 -74', 'none', { stroke: ink, sw: 2.2 });
     default:
       return eyes + nose + blush + path('M4 -51 Q10 -46 16 -51', 'none', { stroke: ink, sw: 2.5 });
   }
@@ -78,26 +120,30 @@ function faceSvg(kind, skin) {
 const zed = (x, y, k) => path(`M${f(x)} ${f(y)} h${f(8 * k)} l${f(-8 * k)} ${f(9 * k)} h${f(8 * k)}`, 'none', { stroke: ink, sw: 2.6 });
 
 export function snoozeBalloon(x, y, o = {}) {
-  const { tag = false, sway = 0, str = 46 } = o;
+  const { tag = false, sway = 0, str = 46, k = 1, zz = true } = o;
   let b = path(`M0 0 C${f(-5 + sway)} ${f(-str * .4)} ${f(5 + sway)} ${f(-str * .7)} ${f(sway)} ${f(-str)}`, 'none', { stroke: ink, sw: 2 });
   if (tag) b += g(path('M0 -6 L5 0 L0 6 L-5 0 Z', C.rival, { stroke: ink, sw: 1.8 }) + line(-2, 0, 2, 0, '#FFFFFF', 1.2), `translate(${f(sway * .4 + 1)} ${f(-str * .45)})`);
   const cy = -str - 26;
-  b += path(`M${f(sway - 4)} ${f(-str)} L${f(sway + 4)} ${f(-str)} L${f(sway)} ${f(-str - 5)} Z`, '#BFA8F0', { stroke: ink, sw: 2 });
-  b += ell(sway, cy, 22, 26, '#BFA8F0', { stroke: ink, sw: 3 });
-  b += clipped(ell(sway, cy, 22, 26, '#000'), ell(sway + 10, cy + 8, 22, 26, ink, { op: .12 }));
-  b += path(`M${f(sway - 11)} ${f(cy - 11)} Q${f(sway - 7)} ${f(cy - 19)} ${f(sway + 1)} ${f(cy - 21)}`, 'none', { stroke: '#FFFFFF', sw: 3.5, op: .75 });
-  b += zed(sway + 24, cy - 22, .8) + zed(sway + 33, cy - 38, 1.1);
+  let bl = path(`M${f(sway - 4)} ${f(-str)} L${f(sway + 4)} ${f(-str)} L${f(sway)} ${f(-str - 5)} Z`, '#BFA8F0', { stroke: ink, sw: 2 });
+  bl += ell(sway, cy, 22, 26, '#BFA8F0', { stroke: ink, sw: 3 });
+  bl += clipped(ell(sway, cy, 22, 26, '#000'), ell(sway + 10, cy + 8, 22, 26, ink, { op: .12 }));
+  bl += path(`M${f(sway - 11)} ${f(cy - 11)} Q${f(sway - 7)} ${f(cy - 19)} ${f(sway + 1)} ${f(cy - 21)}`, 'none', { stroke: '#FFFFFF', sw: 3.5, op: .75 });
+  if (zz) bl += zed(sway + 24, cy - 22, .8) + zed(sway + 33, cy - 38, 1.1);
+  // k below 1: the balloon is still filling. It grows from the knot
+  b += k === 1 ? bl : g(bl, `translate(${f(sway)} ${f(-str)}) scale(${k}) translate(${f(-sway)} ${f(str)})`);
   return g(b, `translate(${f(x)} ${f(y)})`);
 }
 
 export function posedHob(key, teamKey, p = {}) {
   const def = HOBS[key], o = def.o, team = TEAMS[teamKey];
-  const { face = 'happy', toolRot = 0, hf = [20, -27], hb = [-21, -28], dx = 0, dy = 0, sx = 1, sy = 1, lean = 0, hatDy = 0, tool = true, stars = null, balloon = null, puff = false } = p;
+  const { face = 'happy', toolRot = 0, hf = [20, -27], hb = [-21, -28], dx = 0, dy = 0, sx = 1, sy = 1, lean = 0, hatDy = 0, tool = true, stars = null, balloon = null, puff = false,
+    shadow = true, hatRot = 0, boots = '', flash = false, lines = false, dust = 0, dirt = null, glow = 0 } = p;
   const skin = o.skin, coat = o.coat, hand = o.hands || skin;
   const s = def.scale || 1;
   let b = '';
   // boots
-  b += rr(-16, -11, 14, 11, 5, '#4A3328', { stroke: ink, sw: 3 }) + rr(3, -11, 15, 11, 5, '#4A3328', { stroke: ink, sw: 3 });
+  if (boots === 'dangle') b += g(rr(-16, -11, 14, 11, 5, '#4A3328', { stroke: ink, sw: 3 }), 'translate(-2 3) rotate(16 -9 -11)') + g(rr(3, -11, 15, 11, 5, '#4A3328', { stroke: ink, sw: 3 }), 'translate(2 4) rotate(-14 10 -11)');
+  else b += rr(-16, -11, 14, 11, 5, '#4A3328', { stroke: ink, sw: 3 }) + rr(3, -11, 15, 11, 5, '#4A3328', { stroke: ink, sw: 3 });
   // back parts and back hand
   b += (o.back || '') + circ(hb[0], hb[1], 6.5, hand, { stroke: ink, sw: 3 });
   // body
@@ -127,7 +173,7 @@ export function posedHob(key, teamKey, p = {}) {
     const [px, py] = def.patch;
     hat += g(path('M0 -6.5 L6 0 L0 6.5 L-6 0 Z', team.col, { stroke: ink, sw: 2 }) + path('M0 -3.6 L3.3 0 L0 3.6 L-3.3 0 Z', 'none', { stroke: '#FFFFFF', sw: 1.1, dash: '1.6 1.6' }), `translate(${px} ${py})`);
   }
-  head += g(hat, hatDy ? `translate(0 ${f(hatDy)})` : '');
+  head += g(hat, hatRot ? `translate(0 ${f(hatDy)}) rotate(${hatRot} 0 -78)` : hatDy ? `translate(0 ${f(hatDy)})` : '');
   b += head;
   // tool and front hand: the tool turns about the hand
   if (tool) {
@@ -138,13 +184,31 @@ export function posedHob(key, teamKey, p = {}) {
   // extras that ride with the body
   let fx = '';
   if (puff) fx += path('M50 -62 l9 -6 M54 -50 l11 -1 M50 -38 l9 5', 'none', { stroke: ink, sw: 2.5 }) + star4(46, -50, 5, C.gold, { stroke: ink, sw: 1.5 });
+  if (flash) fx += star4(52, -44, 11, '#FFF3C4', { stroke: C.gold, sw: 2 }) + star4(52, -44, 4.5, '#FFFFFF');
+  if (lines) fx += path('M-40 -96 v-22 M-33 -70 v-16 M42 -100 v-22 M36 -74 v-14', 'none', { stroke: ink, sw: 2.5, op: .55 });
   if (stars !== null) {
-    const pts = stars ? [[-30, -92, 6], [34, -86, 7.5], [8, -104, 5]] : [[-24, -84, 7.5], [30, -92, 6], [2, -98, 5]];
+    // 0 and 1: hit stars. 2: stars drift off. 3: stars ring the head (eyes spin)
+    const pts = stars === 3 ? [[-26, -98, 6.5], [0, -110, 5], [27, -100, 7], [36, -80, 4.5]] : stars === 2 ? [[-38, -100, 4.5], [42, -92, 5.5], [12, -116, 4]] : stars ? [[-30, -92, 6], [34, -86, 7.5], [8, -104, 5]] : [[-24, -84, 7.5], [30, -92, 6], [2, -98, 5]];
     for (const [x, y, r] of pts) fx += star4(x, y, r, C.gold, { stroke: ink, sw: 1.8 });
   }
   // exact scale (f() rounds to one decimal, too coarse for a 3% breathe)
   const body = `<g transform="translate(${f(dx)} ${f(dy)}) rotate(${lean}) scale(${(sx * s).toFixed(3)} ${(sy * s).toFixed(3)})">${b}${fx}</g>`;
-  let out = ell(0, 0, 24 * s, 5, ink, { op: dy < -4 ? .12 : .18 }) + body;
-  if (balloon !== null) out += snoozeBalloon(-4 + dx, dy - 92 * s, { tag: teamKey === 'orange', sway: balloon ? 5 : -2, str: balloon ? 50 : 40 });
+  let out = '';
+  // next door glow: a gold ring at the feet. Gold, never teal or a team colour
+  if (glow) out += ell(0, 0, 30 + glow * 5, 7 + glow * 1.5, C.gold, { op: .3 + glow * .12 }) + ell(0, 0, 37 + glow * 7, 9.5 + glow * 2, 'none', { stroke: C.gold, sw: 2.5, op: .5 + glow * .2, extra: ' stroke-dasharray="5 5"' });
+  if (shadow) out += ell(0, 0, 24 * s, 5, ink, { op: dy < -4 ? .12 : .18 });
+  out += body;
+  // landing dust: soft, no outline, drawn at the floor
+  if (dust) { const k = dust === 1 ? 1 : 1.5, op = dust === 1 ? .9 : .5; for (const sg of [-1, 1]) out += circ(sg * (26 + k * 8), -5 * k, 6 * k, '#CFC8C0', { op }) + circ(sg * (34 + k * 12), -3 - k, 4 * k, '#E4DED6', { op }) + circ(sg * (20 + k * 6), -3, 4.5 * k, '#E4DED6', { op }); }
+  // Shove Off dirt: clods fly out to the front. 0 = the heap breaks, 1 = clods in the air
+  if (dirt !== null) {
+    const cl = (x, y, r, col = '#9A6440') => path(`M${f(x - r)} ${f(y)} C${f(x - r)} ${f(y - r * 1.1)} ${f(x + r * .9)} ${f(y - r * 1.2)} ${f(x + r)} ${f(y - r * .1)} C${f(x + r * .9)} ${f(y + r * .9)} ${f(x - r * .8)} ${f(y + r)} ${f(x - r)} ${f(y)} Z`, col, { stroke: ink, sw: 2.2 });
+    out += dirt === 0 ? cl(50, -22, 10) + cl(62, -34, 6.5, '#B07A52') + cl(64, -12, 7) + cl(74, -24, 4.5, '#7A4A2E') + path('M44 -42 l5 -8 M56 -46 l2 -8', 'none', { stroke: ink, sw: 2.2 })
+      : cl(58, -40, 6.5) + cl(72, -54, 5, '#B07A52') + cl(74, -26, 5.5) + cl(64, -12, 4, '#7A4A2E') + cl(78, -42, 3.2, '#7A4A2E') + circ(50, -6, 6, '#CFC8C0', { op: .7 }) + circ(60, -4, 4, '#E4DED6', { op: .7 });
+  }
+  if (balloon !== null) {
+    const bo = typeof balloon === 'object' ? balloon : { sway: balloon ? 5 : -2, str: balloon ? 50 : 40 };
+    out += snoozeBalloon(-4 + dx, dy - 92 * s, { tag: teamKey === 'orange', ...bo });
+  }
   return out;
 }

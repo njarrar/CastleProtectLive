@@ -71,7 +71,7 @@ echo "Built $PROFILE libraries:"
 find "$OUT_DIR" -name '*.so' -exec ls -l {} \;
 
 # Check 16 KB alignment of each LOAD segment on 64-bit ABIs.
-readelf_bin="$(find "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt" -name llvm-readelf -type f 2>/dev/null | head -n1 || true)"
+readelf_bin="$(find "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt" -name llvm-readelf \( -type f -o -type l \) 2>/dev/null | head -n1 || true)"
 if [ -n "$readelf_bin" ]; then
   bad=0
   for so in "$OUT_DIR"/arm64-v8a/*.so "$OUT_DIR"/x86_64/*.so; do

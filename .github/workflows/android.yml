@@ -122,7 +122,8 @@ jobs:
             unzip -l "$apk" | grep -q "$so" || { echo "::error::$so is missing from the APK"; exit 1; }
           done
           tmp="$RUNNER_TEMP/apk"; rm -rf "$tmp"; mkdir -p "$tmp"; unzip -q "$apk" 'lib/*' -d "$tmp"
-          readelf_bin="$(find "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt" -name llvm-readelf -type f | head -n1)"
+          readelf_bin="$(find "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt" -name llvm-readelf \( -type f -o -type l \) | head -n1)"
+          [ -n "$readelf_bin" ] || { echo "::error::llvm-readelf not found in the NDK"; exit 1; }
           # The shim must need the core by bare name, never a CI build path.
           "$readelf_bin" -d "$tmp/lib/arm64-v8a/libcastle_jni.so" | grep NEEDED
           if "$readelf_bin" -d "$tmp/lib/arm64-v8a/libcastle_jni.so" | grep NEEDED | grep -q '/'; then

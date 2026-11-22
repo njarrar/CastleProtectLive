@@ -13,7 +13,7 @@ export const HOBS: HobInfo[] = [
   { id: 'nan', name: 'Nan', cls: 'scatterjack', hp: 100, joins: '1-10' },
 ];
 
-export const LEVELS: LevelInfo[] = [
+export const LEVELS: Omit<LevelInfo, 'draftPool' | 'draftPicks' | 'doodads'>[] = [
   { id: '1-1', name: 'First Lump', type: 'Siege', rival: 'Sir Pudge', habit: 'Shoots wide first. Then a bit closer.', rivalCrew: ['lobber'], aim: 1, roundCap: 8, wind: 'No wind', goals: ['Win', 'Land 2 hits in a row', 'Win by Round 5'], crewSize: 1, draft: false },
   { id: '1-2', name: 'Two Hats', type: 'Siege', rival: 'Private Tuft Edgerly', habit: 'Shoots your top Hob first.', rivalCrew: ['zinger', 'lobber'], aim: 1, roundCap: 10, wind: 'No wind', goals: ['Win', 'Bonk with each Hob', 'No Hob of yours Bonked'], crewSize: 2, draft: false },
   { id: '1-3', name: 'Kettle on the Knoll', type: 'Siege', rival: 'Corporal Fernsby Clip', habit: 'Hides his crew deep. Leaves the kettle near the wall.', rivalCrew: ['lobber', 'zinger'], aim: 1, roundCap: 12, wind: 'No wind', goals: ['Win', 'Pop the kettle', 'Win by Round 8'], crewSize: 2, draft: false },

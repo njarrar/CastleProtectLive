@@ -4,12 +4,17 @@ import type { BattleSetup, Blueprint, Help } from '../core/types';
 import { btn, classBadge, h, seg } from '../ui/dom';
 import { gear } from './home';
 
-const MAPS: [string, string][] = [['two-tumps', 'Two Tumps'], ['long-dip', 'Long Dip'], ['knoll-hop', 'Knoll Hop']];
+/** Skirmish and duel maps come from the core's content (non-campaign levels). */
+function mapsOf(app: App): [string, string][] {
+  const m = app.core.maps?.() ?? [];
+  return m.length ? m : [['d1', 'Map 1']];
+}
+const pickMap = (app: App, id?: string) => (mapsOf(app).some(([k]) => k === id) ? id! : mapsOf(app)[0][0]);
 
 export function skirmishScreen(app: App): Screen {
   const last = app.lastSetup?.mode === 'skirmish' ? app.lastSetup : undefined;
   const st = {
-    map: last?.map ?? 'two-tumps',
+    map: pickMap(app, last?.map),
     difficulty: last?.difficulty ?? app.settings.difficulty,
     cap: String(last?.roundCap ?? 15) as '10' | '15' | '20',
     wind: last?.wind ?? 'light',
@@ -17,11 +22,13 @@ export function skirmishScreen(app: App): Screen {
   };
   const start = () => {
     const crew = app.roster().slice(0, 4);
+    let mine = app.progress.blueprint;
+    if (mine && !app.core.checkFort(mine, crew.length).ok) { app.notice('Your fort cannot take this crew, so you get a standard fort.'); mine = undefined; }
     const setup: BattleSetup = {
       mode: 'skirmish', map: st.map, seed: hashSeed(st.map) ^ Date.now(), difficulty: st.difficulty, windOff: st.wind === 'off',
       roundCap: Number(st.cap), wind: st.wind, shells: st.shells,
       sides: [
-        { name: 'You', human: true, crew, blueprint: app.progress.blueprint },
+        { name: 'You', human: true, crew, blueprint: mine },
         { name: 'Sir Pudge', human: false, crew: app.core.hobs().slice(0, 4).map((x) => x.id), blueprint: app.core.starterForts()[1] },
       ],
     };
@@ -30,7 +37,7 @@ export function skirmishScreen(app: App): Screen {
   const el = h('main', { class: 'screen setup skirmish' },
     h('header', { class: 'topbar' }, btn('←', () => app.go({ to: 'modes' }), 'round-btn', { 'aria-label': 'Back' }), h('h1', {}, 'Skirmish'), gear(app, { to: 'skirmish' })),
     h('div', { class: 'sheet' },
-      field('Map', seg(MAPS, st.map, (v) => (st.map = v))),
+      field('Map', seg(mapsOf(app), st.map, (v) => (st.map = v))),
       field('Rival', seg([['cozy', 'Cozy'], ['fair', 'Fair'], ['stubborn', 'Stubborn']], st.difficulty, (v) => (st.difficulty = v))),
       field('Rounds', seg([['10', '10'], ['15', '15'], ['20', '20']], st.cap, (v) => (st.cap = v))),
       field('Wind', seg([['off', 'Off'], ['light', 'Light'], ['full', 'Full']], st.wind, (v) => (st.wind = v))),
@@ -58,7 +65,7 @@ export function duelScreen(app: App): Screen {
     { name: last?.sides[0].name ?? app.progress.duelNames[0], fort: 1, crew: last?.sides[0].crew ?? hobs.slice(0, 5).map((x) => x.id), help: last?.sides[0].help ?? 'none' },
     { name: last?.sides[1].name ?? app.progress.duelNames[1], fort: 0, crew: (last?.sides[1].crew ?? hobs.slice(0, 5).map((x) => x.id)).map((c) => c.replace(/^p2_/, '')), help: last?.sides[1].help ?? 'none' },
   ];
-  const rules = { map: last?.map ?? 'two-tumps', cap: String(last?.roundCap ?? 15) as '10' | '15' | '20', wind: last?.wind ?? 'light', shells: last?.shells ?? 'draft', seats: 'side' as 'side' | 'one' };
+  const rules = { map: pickMap(app, last?.map), cap: String(last?.roundCap ?? 15) as '10' | '15' | '20', wind: last?.wind ?? 'light', shells: last?.shells ?? 'draft', seats: 'side' as 'side' | 'one' };
   const cards = h('div', { class: 'duelcards' });
 
   const fortOf = (i: number): Blueprint | undefined => (i < forts.length ? forts[i] : mine);
@@ -93,15 +100,26 @@ export function duelScreen(app: App): Screen {
   function paint(): void { cards.replaceChildren(card(0), card(1)); }
   paint();
 
+  /** The chosen fort if the core says it seats that crew; else a content fort that does, with a note. */
+  function fortFit(i: 0 | 1): Blueprint | undefined {
+    const p = players[i];
+    const f = fortOf(p.fort);
+    if (!f || app.core.checkFort(f, p.crew.length).ok) return f;
+    const alt = app.core.fortFor(p.crew.length);
+    app.notice(`${p.name}: that fort cannot take ${p.crew.length} Hobs, so ${alt?.name ?? 'a standard fort'} is used.`);
+    return alt;
+  }
+
   function go(): void {
     app.progress.duelNames = [players[0].name, players[1].name];
     void app.saveProgress();
+    const forts2: [Blueprint | undefined, Blueprint | undefined] = [fortFit(0), fortFit(1)];
     const setup: BattleSetup = {
       mode: 'duel', map: rules.map, seed: hashSeed(rules.map) ^ (Date.now() & 0xffff), difficulty: 'fair',
       windOff: rules.wind === 'off', roundCap: Number(rules.cap), wind: rules.wind, shells: rules.shells,
       sides: [
-        { name: players[0].name, human: true, crew: players[0].crew, blueprint: fortOf(players[0].fort), help: players[0].help },
-        { name: players[1].name, human: true, crew: players[1].crew, blueprint: fortOf(players[1].fort), help: players[1].help },
+        { name: players[0].name, human: true, crew: players[0].crew, blueprint: forts2[0], help: players[0].help },
+        { name: players[1].name, human: true, crew: players[1].crew, blueprint: forts2[1], help: players[1].help },
       ],
     };
     setup.seats = rules.seats;
@@ -118,7 +136,7 @@ export function duelScreen(app: App): Screen {
     h('p', { class: 'small sub' }, '2 players, 1 device. Free forever, no ads.'),
     cards,
     h('section', { class: 'rules sheet' },
-      field('Map', seg(MAPS, rules.map, (v) => (rules.map = v))),
+      field('Map', seg(mapsOf(app), rules.map, (v) => (rules.map = v))),
       field('Rounds', seg([['10', '10'], ['15', '15'], ['20', '20']], rules.cap, (v) => (rules.cap = v))),
       field('Wind', seg([['off', 'Off'], ['light', 'Light'], ['full', 'Full']], rules.wind, (v) => (rules.wind = v))),
       field('Shells', seg([['quick', 'Quick Pick'], ['plain', 'Plain only']], rules.shells === 'draft' ? 'quick' : rules.shells, (v) => (rules.shells = v))),

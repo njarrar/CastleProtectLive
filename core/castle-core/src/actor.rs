@@ -67,6 +67,10 @@ pub enum FlyOut {
     },
 }
 
+/// Speed cap per axis: 64 cells a tick (7,680 cells a second), far above any
+/// shot. Keeps every position step inside `i32`.
+pub const MAX_SPEED: Fx = 64 << FX_SHIFT;
+
 pub fn gravity_q() -> Fx {
     accel_q(600)
 }
@@ -148,6 +152,12 @@ impl Battle {
     }
 
     /// One tick of free flight. Moves the actor up to its first contact.
+    ///
+    /// Positions are Q16.16 in `i32` (about 32,767 cells each way), so a shell
+    /// that leaves the world must end before it gets far: anything above
+    /// `-4 * map height` ends as `Hit::Off`, and a shell with no gravity (a
+    /// beam) ends as soon as it is above the top of the map, since it can not
+    /// come back. All position maths is done in `i64` and range checked.
     pub fn fly_tick(&self, a: &mut Actor) -> FlyOut {
         let def = &self.content.shots[a.shot];
         let f = &def.flight;
@@ -155,8 +165,8 @@ impl Battle {
         if !beam {
             let wind_acc = pct(accel_q(self.wind as i64 * 10), f.wind_pct);
             let g = pct(gravity_q(), a.gravity_pct);
-            a.vx += wind_acc;
-            a.vy += g;
+            a.vx = a.vx.saturating_add(wind_acc).clamp(-MAX_SPEED, MAX_SPEED);
+            a.vy = a.vy.saturating_add(g).clamp(-MAX_SPEED, MAX_SPEED);
             if f.guide_tenths > 0 && a.apex_done && a.bent < f.guide_tenths {
                 if let Some((tx, ty)) = self.guide_target(a.side, cell(a.x), cell(a.y)) {
                     let dx = (tx - cell(a.x)) as i64;
@@ -173,21 +183,39 @@ impl Battle {
                 }
             }
         }
-        let was_rising = a.vy < 0;
-        let (sx, sy) = (a.x, a.y);
-        let dx = a.vx;
-        let dy = a.vy;
+        // no gravity and not falling: it never comes back once above the map
+        let no_return = beam || (a.gravity_pct <= 0 && a.vy <= 0);
+        let top_limit = -4 * self.terrain.h;
+        let (sx, sy) = (a.x as i64, a.y as i64);
+        let dx = a.vx as i64;
+        let dy = a.vy as i64;
         let n = (dx.abs().max(dy.abs()) >> FX_SHIFT) + 1;
-        let mut px = cell(sx);
-        let mut py = cell(sy);
+        let mut px = cell(a.x);
+        let mut py = cell(a.y);
         for k in 1..=n {
-            let nx = sx + (dx as i64 * k as i64 / n as i64) as i32;
-            let ny = sy + (dy as i64 * k as i64 / n as i64) as i32;
-            let (cx, cy) = (cell(nx), cell(ny));
+            let nx = sx + dx * k / n;
+            let ny = sy + dy * k / n;
+            let (cx64, cy64) = (nx >> FX_SHIFT, ny >> FX_SHIFT);
+            let gone = cy64 < top_limit as i64
+                || (no_return && cy64 < 0)
+                || cx64 < -1
+                || cx64 > self.terrain.w as i64;
+            if gone {
+                let cx = cx64.clamp(-1, self.terrain.w as i64) as i32;
+                let cy = cy64.clamp(top_limit as i64, self.terrain.h as i64) as i32;
+                return FlyOut::Contact {
+                    hit: Hit::Off,
+                    cx,
+                    cy,
+                    px,
+                    py,
+                };
+            }
+            let (cx, cy) = (cx64 as i32, cy64 as i32);
             if (cx, cy) != (px, py) {
                 if let Some(hit) = self.collide(a.side, cx, cy, a.skip, false) {
-                    a.x = nx;
-                    a.y = ny;
+                    a.x = nx as i32;
+                    a.y = ny as i32;
                     return FlyOut::Contact {
                         hit,
                         cx,
@@ -209,9 +237,11 @@ impl Battle {
                 py = cy;
             }
         }
-        a.x = sx + dx;
-        a.y = sy + dy;
-        if !beam && was_rising && a.vy >= 0 && !a.apex_done {
+        a.x = (sx + dx) as i32;
+        a.y = (sy + dy) as i32;
+        // Apex: the first tick the shell is not rising. A shell launched flat
+        // or downward is past its apex on its first tick.
+        if !beam && !a.apex_done && a.vy >= 0 {
             a.apex_done = true;
             return FlyOut::Apex;
         }

@@ -347,6 +347,10 @@ export interface CoreApi {
   fortFor(seats: number): Blueprint | undefined;
   /** Lean Lines query: blocks that would fall if (c, r) of that side broke. Changes nothing. */
   leanLines(side: Side, c: number, r: number): [number, number][];
+  /** Display name of a Doodad id. */
+  doodadName?(id: string): string;
+  /** Skirmish and duel maps: [level id, name]. */
+  maps?(): [string, string][];
   newBattle(setup: BattleSetup): void;
   command(c: Command): CommandResult;
   /** Advance the sim by whole ticks at 120 Hz. */

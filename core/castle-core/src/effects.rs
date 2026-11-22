@@ -30,7 +30,7 @@ pub fn calc(base: i32, falloff_pm: i64, pcts: &[i32]) -> i32 {
 }
 
 impl Battle {
-    fn triggers(&self, shot: usize, on: TriggerOn) -> Vec<Effect> {
+    pub(crate) fn triggers(&self, shot: usize, on: TriggerOn) -> Vec<Effect> {
         let def = &self.content.shots[shot];
         let dial = self.cur.as_ref().and_then(|c| c.dial.clone());
         let exact: Vec<&Trigger> = def
@@ -83,7 +83,17 @@ impl Battle {
         a.age += 1;
         let f = self.content.shots[a.shot].flight.clone();
         if a.age > MAX_ACTOR_AGE {
-            a.done = true;
+            // flight cap: a shell still out after 6 s ends where it is
+            let (x, y) = (cell(a.x), cell(a.y));
+            match a.mode {
+                Mode::Fly => {
+                    a.done = true;
+                    self.mark_pin(x, y);
+                    self.ev(json!({"t": "miss", "x": x, "y": y, "why": "time"}));
+                }
+                Mode::Roll { .. } => self.roll_stop(a, x, y, None),
+                Mode::Bore { .. } => self.bore_stop(a, x, y, None, false),
+            }
             return;
         }
         if f.life_ticks > 0 && a.age >= f.life_ticks {
@@ -223,7 +233,10 @@ impl Battle {
                 if !hard && a.bounces < f.bounces {
                     let effs = self.triggers(a.shot, TriggerOn::Bounce);
                     a.bounces += 1;
-                    self.run_effects(&effs, a, px, py, None, false);
+                    if self.run_effects(&effs, a, px, py, None, false) {
+                        a.done = true;
+                        return;
+                    }
                     let vert = self.collide(a.side, px, cy, None, false).is_some();
                     let horiz = self.collide(a.side, cx, py, None, false).is_some();
                     let (mut vx, mut vy) = (a.vx, a.vy);
@@ -367,7 +380,25 @@ impl Battle {
         }
     }
 
+    /// A Pot Lid at (x, y) eats a shell that stops there. True when it did.
+    fn lid_stop(&mut self, a: &mut Actor, x: i32, y: i32) -> bool {
+        if let Some((s, room)) = self.lid_at(a.side, x, y) {
+            match room {
+                None => self.castles[s].kettle.lid = false,
+                Some(i) => self.castles[s].nooks[i].lid = false,
+            }
+            self.mark_pin(x, y);
+            self.ev(json!({"t": "lid_block", "side": s, "x": x, "y": y}));
+            a.done = true;
+            return true;
+        }
+        false
+    }
+
     fn roll_stop(&mut self, a: &mut Actor, x: i32, y: i32, hit: Option<Hit>) {
+        if self.lid_stop(a, x, y) {
+            return;
+        }
         let effs = self.triggers(a.shot, TriggerOn::Stop);
         self.mark_pin(x, y);
         // Roller hop: burst one block up so it meets the first Body row
@@ -461,6 +492,9 @@ impl Battle {
     }
 
     fn bore_stop(&mut self, a: &mut Actor, x: i32, y: i32, hit: Option<Hit>, half: bool) {
+        if self.lid_stop(a, x, y) {
+            return;
+        }
         self.mark_pin(x, y);
         self.update_buried();
         let effs = self.triggers(a.shot, TriggerOn::Stop);
@@ -643,7 +677,17 @@ impl Battle {
                 }
                 Effect::Mound { radius } => {
                     let loam = content.terrain_code("loam");
-                    self.terrain.stamp(x, y, *radius, loam);
+                    // dirt never fills a fort's own box; it piles round it
+                    let boxes: Vec<(i32, i32, i32, i32)> = self
+                        .castles
+                        .iter()
+                        .map(|cs| (cs.x, cs.top_y(), cs.x + cs.width_cells() - 1, cs.base_y - 1))
+                        .collect();
+                    self.terrain.stamp(x, y, *radius, loam, |cx, cy| {
+                        boxes
+                            .iter()
+                            .any(|b| cx >= b.0 && cx <= b.2 && cy >= b.1 && cy <= b.3)
+                    });
                     self.settle_ground(x - radius - 2, x + radius + 2);
                     self.update_buried();
                     self.ev(json!({"t": "mound", "x": x, "y": y, "r": radius}));
@@ -847,9 +891,12 @@ impl Battle {
                         }
                     }
                 }
-                for (c, r) in broke {
+                for &(c, r) in &broke {
                     let i = cs.idx(c, r);
                     cs.slots[i] = Slot::Empty;
+                }
+                for (c, r) in broke {
+                    self.ev(json!({"t": "break", "side": s, "c": c, "r": r, "why": "thump"}));
                 }
                 let ids: Vec<u8> = self
                     .hobs
@@ -870,7 +917,9 @@ impl Battle {
             return;
         }
         self.hobs[h as usize].hp -= dmg;
-        self.ev(json!({"t": "hit", "target": "hob", "hob": h, "dmg": dmg, "why": why}));
+        let side = self.hobs[h as usize].side;
+        self.note_taken(side, dmg);
+        self.ev(json!({"t": "hit", "target": "hob", "hob": h, "side": side, "dmg": dmg, "why": why}));
         if self.hobs[h as usize].hp <= 0 {
             self.bonk(h);
         }
@@ -902,6 +951,7 @@ impl Battle {
             if c.side != victim_side {
                 let s = c.side as usize;
                 self.stats[s].score += 150;
+                self.stats[s].bonks += 1;
                 if let Some(sh) = c.hob {
                     let d = self.hobs[sh as usize].def.clone();
                     if !self.stats[s].bonked_by_hob.contains(&d) {
@@ -969,10 +1019,12 @@ impl Battle {
             root = b.root;
         }
         self.ev(json!({"t": "hit", "target": "block", "side": side, "c": c, "r": r, "dmg": d}));
+        self.note_taken(side, d);
         if broke {
             let cs = &mut self.castles[side as usize];
             let i = cs.idx(c, r);
             cs.slots[i] = Slot::Empty;
+            self.stats[side as usize].blocks_lost += 1;
             self.ev(json!({"t": "break", "side": side, "c": c, "r": r}));
             if root && self.root_round == 0 {
                 self.root_round = round;
@@ -985,8 +1037,41 @@ impl Battle {
                 cx.self_hit = true;
             }
         }
-        if shooter != side {
-            self.stats[shooter as usize].score += d as i64;
+        if shooter != side && shooter < 2 {
+            self.add_score(shooter, d);
+        }
+    }
+
+    /// Siege Score for enemy damage: damage x the shot's Skill Factor.
+    pub(crate) fn add_score(&mut self, shooter: u8, d: i32) {
+        let skill = self.cur.as_ref().map(|c| c.skill_pct).unwrap_or(100);
+        self.stats[shooter as usize].score += d as i64 * skill as i64 / 100;
+    }
+
+    /// "What broke you": who dealt damage to `victim` and with what.
+    pub(crate) fn note_taken(&mut self, victim: u8, d: i32) {
+        if d <= 0 || victim > 1 {
+            return;
+        }
+        let (shot, hob) = match &self.cur {
+            Some(c) if c.side != victim => (
+                c.shot.clone().unwrap_or_else(|| "prop".into()),
+                c.hob.map(|h| h as i32).unwrap_or(-1),
+            ),
+            Some(_) => ("self".to_string(), -1),
+            None => (
+                if self.squall_round() > 0 {
+                    "squall".to_string()
+                } else {
+                    "ground".to_string()
+                },
+                -1,
+            ),
+        };
+        let st = &mut self.stats[victim as usize];
+        match st.taken.iter_mut().find(|t| t.0 == shot && t.1 == hob) {
+            Some(t) => t.2 += d as i64,
+            None => st.taken.push((shot, hob, d as i64)),
         }
     }
 
@@ -1036,6 +1121,7 @@ impl Battle {
             return;
         }
         self.hobs[h as usize].hp -= d;
+        self.note_taken(side, d);
         if let Some(c) = self.cur.as_mut() {
             if let Some(x) = c.hob_dealt.get_mut(h as usize) {
                 *x += d;
@@ -1048,8 +1134,8 @@ impl Battle {
             }
         }
         self.ev(json!({"t": "hit", "target": "hob", "hob": h, "side": side, "dmg": d, "type": dtype, "threaded": threaded}));
-        if shooter != side {
-            self.stats[shooter as usize].score += d as i64 * if threaded { 3 } else { 2 } / 2;
+        if shooter != side && shooter < 2 {
+            self.add_score(shooter, d);
             // Clatter Call: buff the shooter's next door Hobs once per shot
             if let Some(sh) = self.cur.as_ref().and_then(|c| c.hob) {
                 if self.hobs[sh as usize].has_passive(|p| matches!(p, Passive::ClatterCall { .. }))
@@ -1096,6 +1182,8 @@ impl Battle {
             return;
         }
         self.castles[side as usize].kettle_hp -= d;
+        self.stats[side as usize].kettle_lost += d as i64;
+        self.note_taken(side, d);
         if let Some(c) = self.cur.as_mut() {
             c.kettle_dealt[side as usize] += d;
             if shooter != side {
@@ -1103,13 +1191,25 @@ impl Battle {
             }
         }
         if shooter < 2 && shooter != side {
-            self.stats[shooter as usize].score += d as i64 * 3 / 2;
+            self.add_score(shooter, d);
         }
         let hp = self.castles[side as usize].kettle_hp;
         self.ev(json!({"t": "hit", "target": "kettle", "side": side, "dmg": d, "hp": hp.max(0), "why": why}));
         if hp <= 0 {
-            self.ev(json!({"t": "kettle_pop", "side": side}));
+            self.kettle_popped(side, if shooter < 2 && shooter != side { Some(shooter) } else { None });
         }
+    }
+
+    /// Sends `kettle_pop` once per pop and pays the 400 point bonus.
+    pub(crate) fn kettle_popped(&mut self, side: u8, by: Option<u8>) {
+        if self.popped[side as usize] {
+            return;
+        }
+        self.popped[side as usize] = true;
+        if let Some(b) = by {
+            self.stats[b as usize].score += 400;
+        }
+        self.ev(json!({"t": "kettle_pop", "side": side}));
     }
 
     /// An area or point payload at (x, y).
@@ -1293,7 +1393,8 @@ impl Battle {
     pub fn resolve_collapse(&mut self, side: u8) {
         let content = self.content.clone();
         let s = side as usize;
-        for _pass in 0..6 {
+        // the grid holds at most 80 slots, so this ends well before the guard
+        for _pass in 0..100 {
             // blocks at 0 HP from crush break first
             let held = self.held_slots(side);
             let chunks = self.castles[s].falling_chunks(&content, &held);
@@ -1396,13 +1497,18 @@ impl Battle {
                 s
             }]
             .blocks_dropped += total;
+            let mut big = None;
             if let Some(c) = self.cur.as_mut() {
                 c.dropped_blocks += total;
-                if c.dropped_blocks >= 4 {
-                    let first = !self.drop_called;
-                    self.drop_called = true;
-                    self.ev(json!({"t": "big_drop", "callout": first, "blocks": total}));
+                if c.dropped_blocks >= 4 && !c.big_drop_sent {
+                    c.big_drop_sent = true;
+                    big = Some(c.dropped_blocks);
                 }
+            }
+            if let Some(n) = big {
+                let first = !self.drop_called;
+                self.drop_called = true;
+                self.ev(json!({"t": "big_drop", "callout": first, "blocks": n}));
             }
             self.hob_falls(side);
         }

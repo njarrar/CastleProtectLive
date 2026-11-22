@@ -1,5 +1,5 @@
 // Canvas2D drawing of one lens (a viewport with a camera) from the snapshot.
-import type { BlockView, HobView, KettleView, PinView, Side, Snapshot } from '../core/types';
+import type { BlockView, HobView, KettleView, PinView, PropView, RoomView, Side, Snapshot } from '../core/types';
 import type { TerrainLayer } from './terrain';
 import { hobSpriteName, sprites } from './sprites';
 
@@ -57,6 +57,8 @@ export interface DrawOpts {
   time: number;
   reduceMotion: boolean;
   label?: string;
+  /** Lean Lines: blocks that would fall, as "side:c,r", and the held block. */
+  lean?: { side: Side; c: number; r: number; falls: Set<string> };
 }
 
 export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap: Snapshot, terr: TerrainLayer, fx: Fx, o: DrawOpts): void {
@@ -66,8 +68,12 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
   ctx.clip();
   // sky and far hills: sprites when loaded, plain shapes otherwise
   const sky = sprites.texture('bg_downs_sky@2x');
-  if (sky) ctx.drawImage(sky, r.x, r.y, r.w, r.h);
-  else {
+  if (sky) {
+    // Cover the lens and keep the art's aspect (no stretched sun); pinned to the top edge.
+    const k = Math.max(r.w / sky.width, r.h / sky.height);
+    const w = sky.width * k, hh = sky.height * k;
+    ctx.drawImage(sky, r.x + (r.w - w) / 2, r.y, w, hh);
+  } else {
     const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
     g.addColorStop(0, '#9ED8EC');
     g.addColorStop(1, '#FFF1D0');
@@ -99,7 +105,9 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
   // clouds
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
   for (let i = 0; i < 6; i++) {
-    const wx = ((i * 431 + o.time * 6 * (snap.wind || 0.5)) % 2800) - 200;
+    const drift = o.reduceMotion ? 0 : o.time * 6 * (snap.wind || 0.5);
+    const span = Math.max(1600, terr.w) + 400;
+    const wx = ((((i * 431 + drift) % span) + span) % span) - 200;
     const [sx, sy] = toScreen(r, cam, wx, 560 + (i % 3) * 50);
     cloud(ctx, sx, sy, 18 * Math.max(0.5, cam.s));
   }
@@ -110,9 +118,16 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
 
   // terrain
   if (terr.w) {
-    const [tx, ty] = toScreen(r, cam, 0, terr.h);
+    // Only the part of the terrain canvas this lens shows (canvas y grows down from the map top).
+    const [wx0, wy1] = toWorld(r, cam, r.x, r.y);
+    const [wx1, wy0] = toWorld(r, cam, r.x + r.w, r.y + r.h);
+    const sx = Math.max(0, Math.floor(wx0)), ex = Math.min(terr.w, Math.ceil(wx1));
+    const sy = Math.max(0, Math.floor(terr.h - wy1)), ey = Math.min(terr.h, Math.ceil(terr.h - wy0));
     ctx.imageSmoothingEnabled = cam.s < 1;
-    ctx.drawImage(terr.canvas, tx, ty, terr.w * cam.s, terr.h * cam.s);
+    if (ex > sx && ey > sy) {
+      const [dx, dy] = toScreen(r, cam, sx, terr.h - sy);
+      ctx.drawImage(terr.canvas, sx, sy, ex - sx, ey - sy, dx, dy, (ex - sx) * cam.s, (ey - sy) * cam.s);
+    }
     // below the map floor and past its ends: plain loam, so no gap shows
     const [, floorY] = toScreen(r, cam, 0, 0);
     ctx.fillStyle = '#9A6440';
@@ -125,9 +140,14 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
   pickedPins.forEach((p, i) => ghost(ctx, r, cam, p, i === pickedPins.length - 1 ? 0.4 : 0.2, i === pickedPins.length - 1 ? [10, 6] : [4, 6]));
   rivalPins.forEach((p) => ghost(ctx, r, cam, p, 0.3, [2, 4, 8, 4]));
 
-  for (const b of snap.blocks) block(ctx, r, cam, b, o.seeThrough === b.side ? 0.55 : 1, o);
-  for (const k of snap.kettles) kettle(ctx, r, cam, k, o.time, o.seeThrough === k.side);
-  for (const hb of snap.hobs) hob(ctx, r, cam, hb, hb.id === o.pickedHob, o.time, snap.phase === 'flight' && snap.shells.some((x) => x.side === hb.side));
+  for (const b of snap.blocks) block(ctx, r, cam, b, o.seeThrough === b.side ? 0.55 : 1, o, snap.fatigue?.[b.side] ?? false);
+  for (const k of snap.kettles) {
+    kettle(ctx, r, cam, k, o.reduceMotion ? 0 : o.time, o.seeThrough === k.side);
+    if (k.lid && k.room) lid(ctx, r, cam, k.room.x, k.room.y + k.room.h, k.room.w);
+  }
+  for (const rm of snap.rooms ?? []) room(ctx, r, cam, rm);
+  for (const p of snap.props ?? []) prop(ctx, r, cam, p);
+  for (const hb of snap.hobs) hob(ctx, r, cam, hb, hb.id === o.pickedHob, o.reduceMotion ? 0 : o.time, snap.phase === 'flight' && snap.shells.some((x) => x.side === hb.side));
   for (const p of snap.pins) pin(ctx, r, cam, p, p.side === o.you);
 
   // preview arc (already cut to the preview share by the core)
@@ -137,13 +157,17 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     ctx.lineWidth = 1.5;
     const pts = snap.hud.preview;
     const step = Math.max(1, Math.round(8 / Math.max(0.3, cam.s * 3)));
+    const rad = Math.max(2.5, 4 * Math.min(1, cam.s * 1.2));
+    // One path for all dots: one fill and one stroke per lens.
+    ctx.beginPath();
     for (let i = 1; i < pts.length; i += step) {
       const [x, y] = toScreen(r, cam, pts[i][0], pts[i][1]);
-      ctx.beginPath();
-      ctx.arc(x, y, Math.max(2.5, 4 * Math.min(1, cam.s * 1.2)), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      if (x < r.x - 8 || x > r.x + r.w + 8 || y < r.y - 8 || y > r.y + r.h + 8) continue;
+      ctx.moveTo(x + rad, y);
+      ctx.arc(x, y, rad, 0, Math.PI * 2);
     }
+    ctx.fill();
+    ctx.stroke();
   }
 
   // shells in flight
@@ -221,13 +245,14 @@ function cloud(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
   ctx.fill();
 }
 
-function block(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, b: BlockView, alpha: number, o: DrawOpts) {
+function block(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, b: BlockView, alpha: number, o: DrawOpts, fatigue: boolean) {
   const [x, y] = toScreen(r, cam, b.x, b.y + b.size);
   const s = b.size * cam.s;
   if (x > r.x + r.w || y > r.y + r.h || x + s < r.x || y + s < r.y) return;
   const st = b.hp >= b.maxHp * 0.75 ? 'fresh' : b.hp >= b.maxHp * 0.4 ? 'scuffed' : 'battered';
   if (sprites.draw(ctx, `block_${b.mat}_${st}`, x, y, cam.s, false, alpha)) {
     if (b.shimmer && !o.reduceMotion) sprites.draw(ctx, 'fx_shimmer', x, y, cam.s, false, 0.3 + 0.3 * Math.sin(o.time * 2));
+    blockMarks(ctx, x, y, s, b, o, fatigue);
     return;
   }
   const [base, shade, light] = MAT[b.mat] ?? MAT.timber;
@@ -270,6 +295,115 @@ function block(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, b: BlockView, a
     ctx.fillRect(x + s * t, y, s * 0.15, s);
   }
   ctx.globalAlpha = 1;
+  blockMarks(ctx, x, y, s, b, o, fatigue);
+}
+
+/** Snapshot marks on a block: the boss root, Battered under Fatigue, Ridgepole hold, Lean Lines. */
+function blockMarks(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, b: BlockView, o: DrawOpts, fatigue: boolean) {
+  if (b.root) {
+    ctx.save();
+    ctx.strokeStyle = '#4FE3C1';
+    ctx.lineWidth = Math.max(2, s / 7);
+    ctx.strokeRect(x + 1, y + 1, s - 2, s - 2);
+    ctx.fillStyle = '#2FB7A6';
+    ctx.beginPath();
+    ctx.moveTo(x + s / 2, y + s * 0.2); ctx.lineTo(x + s * 0.75, y + s * 0.55); ctx.lineTo(x + s / 2, y + s * 0.85); ctx.lineTo(x + s * 0.25, y + s * 0.55);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  if (fatigue && b.battered && s > 4) {
+    ctx.save();
+    ctx.strokeStyle = '#E5484D';
+    ctx.lineWidth = Math.max(1, s / 12);
+    ctx.setLineDash([Math.max(2, s / 5), Math.max(2, s / 6)]);
+    ctx.strokeRect(x + 1.5, y + 1.5, s - 3, s - 3);
+    ctx.restore();
+  }
+  if (b.held) {
+    ctx.fillStyle = '#E0AE3E';
+    ctx.fillRect(x + s * 0.1, y + s * 0.42, s * 0.8, Math.max(2, s * 0.16));
+  }
+  const l = o.lean;
+  if (l && l.side === b.side) {
+    const k = `${b.c},${b.r}`;
+    const held = l.c === b.c && l.r === b.r;
+    if (held || l.falls.has(k)) {
+      ctx.fillStyle = held ? 'rgba(255,194,61,0.55)' : 'rgba(229,72,77,0.5)';
+      ctx.fillRect(x, y, s, s);
+    }
+  }
+}
+
+/** Nooks: a Loophole Flap that is down, a Pot Lid, a broken Nook. */
+function room(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, rm: RoomView) {
+  if (rm.flap && rm.loophole) {
+    const lp = rm.loophole;
+    const [x, y] = toScreen(r, cam, lp.x, lp.y + lp.h);
+    if (!sprites.draw(ctx, rm.side === 0 ? 'loophole_flap_blue' : 'loophole_flap_orange', x, y, cam.s)) {
+      ctx.fillStyle = TEAM[rm.side];
+      ctx.fillRect(x, y, lp.w * cam.s, lp.h * cam.s);
+      ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.strokeRect(x, y, lp.w * cam.s, lp.h * cam.s);
+    }
+  }
+  if (rm.lid) lid(ctx, r, cam, rm.x, rm.y + rm.h, rm.w);
+  if (!rm.intact) {
+    const [x, y] = toScreen(r, cam, rm.x, rm.y + rm.h);
+    ctx.strokeStyle = 'rgba(43,30,46,0.6)';
+    ctx.lineWidth = Math.max(1, cam.s * 2);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + rm.w * cam.s, y + rm.h * cam.s); ctx.stroke();
+  }
+}
+
+/** Pot Lid over a room: a grey dome on its top edge. */
+function lid(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, wx: number, wy: number, ww: number) {
+  const [x, y] = toScreen(r, cam, wx + ww / 2, wy);
+  const w = ww * cam.s * 0.55;
+  ctx.save();
+  ctx.fillStyle = '#9AA3AB';
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = Math.max(1, cam.s * 1.5);
+  ctx.beginPath(); ctx.ellipse(x, y, w, w * 0.35, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y - w * 0.38, Math.max(1.5, w * 0.12), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+/** Level objects: cage bars and the captive (1-7), the crock and the turnip. */
+function prop(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, p: PropView) {
+  const [x, y] = toScreen(r, cam, p.x, p.y);
+  if (x < r.x - 60 || x > r.x + r.w + 60 || y < r.y - 80 || y > r.y + r.h + 20) return;
+  ctx.save();
+  if (p.kind === 'cage_bar') {
+    const w = Math.max(2, 5 * cam.s), hh = 44 * cam.s;
+    ctx.fillStyle = p.hp < p.maxHp ? '#8C7C6E' : '#6B5F57';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = Math.max(1, cam.s * 1.2);
+    ctx.fillRect(x - w / 2, y - hh, w, hh);
+    ctx.strokeRect(x - w / 2, y - hh, w, hh);
+    ctx.fillStyle = '#E0AE3E';
+    ctx.fillRect(x - w, y - hh - 2 * cam.s, w * 2, 3 * cam.s);
+  } else if (p.kind === 'captive') {
+    if (!sprites.draw(ctx, 'hob_hetty_blue_idle_0', x, y, cam.s * HOB_SCALE)) {
+      ctx.fillStyle = '#2FB7A6';
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = Math.max(1, cam.s);
+      ctx.beginPath(); ctx.arc(x, y - 18 * cam.s, 8 * cam.s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillRect(x - 6 * cam.s, y - 10 * cam.s, 12 * cam.s, 10 * cam.s);
+    }
+    if (p.hp < p.maxHp) {
+      const s = Math.max(10, 24 * cam.s);
+      ctx.fillStyle = INK;
+      ctx.fillRect(x - s * 0.3, y + 2, s * 0.6, 4);
+      ctx.fillStyle = TEAM[0];
+      ctx.fillRect(x - s * 0.3 + 1, y + 3, (s * 0.6 - 2) * Math.max(0, p.hp / p.maxHp), 2);
+    }
+  } else {
+    const rad = Math.max(3, 9 * cam.s);
+    ctx.fillStyle = p.kind === 'turnip' ? '#C86FC9' : '#B9733A';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = Math.max(1, cam.s * 1.5);
+    ctx.beginPath(); ctx.arc(x, y - rad, rad, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function kettle(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, k: KettleView, t: number, glow: boolean) {
@@ -317,6 +451,18 @@ function hob(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, h: HobView, picke
   const s = Math.max(10, 24 * cam.s);
   const [x, y] = toScreen(r, cam, h.x, h.y);
   if (x < r.x - s || x > r.x + r.w + s || y < r.y - s * 2 || y > r.y + r.h + s) return;
+  hobBody(ctx, r, cam, h, picked, t, firing, s, x, y);
+  if (h.state === 'dug') {
+    // Buried Loophole: a heap of dirt in front of the Hob.
+    const dir = h.side === 0 ? 1 : -1;
+    ctx.fillStyle = '#9A6440';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = Math.max(1, s / 16);
+    ctx.beginPath(); ctx.ellipse(x + dir * s * 0.45, y - s * 0.25, s * 0.42, s * 0.32, 0, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+}
+
+function hobBody(ctx: CanvasRenderingContext2D, _r: Rect, cam: Cam, h: HobView, picked: boolean, t: number, firing: boolean, s: number, x: number, y: number) {
   const bonked = h.state === 'bonked';
   const team = h.side === 0 ? 'blue' : 'orange';
   const nm = hobSpriteName(h.def ?? h.id, h.cls);

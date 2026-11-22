@@ -25,7 +25,7 @@ the snapshots the core sends back (see `core/API.md`).
 | `scripts/sync-assets.sh` | Copies the app icon and launch logo from `assets/sprites` into the asset catalog |
 
 The build copies these folders from the repo into the app bundle: `assets/atlas`,
-`assets/sprites`, `assets/manifest.json`, `assets/sounds` (when it exists), `content/`
+`assets/sprites`, `assets/manifest.json`, `assets/sounds` (when it exists, by a script phase), `content/`
 and `core/fixtures/`. Change the art in `assets/` and the next build picks it up.
 
 ## How CI builds it

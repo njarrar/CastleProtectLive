@@ -5,7 +5,8 @@
 import fs from 'fs';
 import path_ from 'path';
 import * as L from './lib.mjs';
-import { posedHob, snoozeBalloon, HOBS, POSES, TEAMS } from './sprite-hob.mjs';
+import { posedHob, snoozeBalloon, HOBS, POSES, TEAMS, V01_FRAMES } from './sprite-hob.mjs';
+import { buildAnim } from './sprite-anim.mjs';
 const { C, rr, circ, ell, path, line, g, star4, burst, puff, clipped, shade, f, rng, MAT } = L;
 const ink = C.ink;
 const ROOT = path_.resolve(path_.dirname(new URL(import.meta.url).pathname), '../..');
@@ -18,7 +19,7 @@ const sprites = [];
 // opts.fixed = [px...] exports square files at those sizes in place of @1x and @2x.
 function add(name, group, w, h, vb, body, purpose, o = {}) {
   if (sprites.find(s => s.name === name)) throw new Error('duplicate ' + name);
-  sprites.push({ name, group, w, h, vb, body, purpose, anchor: o.anchor || [w / 2, h / 2], atlas: o.atlas !== false, fixed: o.fixed || null, defs: o.defs || '', tile: o.tile || null });
+  sprites.push({ name, group, w, h, vb, body, purpose, anchor: o.anchor || [w / 2, h / 2], anim: !!o.anim, atlas: o.atlas !== false, fixed: o.fixed || null, defs: o.defs || '', tile: o.tile || null });
 }
 const O = (sw = 6, stroke = ink) => ({ stroke, sw });
 
@@ -113,8 +114,9 @@ for (const tk of ['blue', 'orange']) {
 const HOB_NAME = { marge: 'Marge Dumpling', quill: 'Quill Needlesworth', jax: 'Jax Peppercorn', grub: 'Grub Mudgett', bobbin: 'Bobbin Springheel', hetty: 'Hetty Mortarboard', thumper: 'Old Thumper Grumbleby', nan: 'Nan Clatterpot' };
 for (const hk of Object.keys(HOB_NAME)) {
   for (const tk of ['blue', 'orange']) {
-    for (const [pose, frames] of Object.entries(POSES)) {
-      frames.forEach((p, i) => {
+    for (const [pose, n] of Object.entries(V01_FRAMES)) {
+      // the v0.1 frames. The extra frames for smoother play are made in sprite-anim.mjs
+      POSES[pose].slice(0, n).forEach((p, i) => {
         const tall = pose === 'bonked';
         const vb = tall ? [-60, -224, 144, 232] : [-60, -152, 144, 160];
         add(`hob_${hk}_${tk}_${pose}_${i}`, 'hobs', 72, vb[3] / 2, vb, posedHob(hk, tk, p),
@@ -312,6 +314,7 @@ for (const [n, [purpose, body]] of Object.entries(SHELLS)) {
 }
 
 // ================================================================ UI
+const shared = {};
 {
   const lip = 5;
   // round pill button with a lip. face = fill, dark = lip colour
@@ -321,6 +324,7 @@ for (const [n, [purpose, body]] of Object.entries(SHELLS)) {
       clipped(circ(r + 3, cy, r - 1.5, '#000'), ell(r + 3, cy - r * .62, r * .78, r * .36, '#FFFFFF', { op: .3 })) + g(icon, `translate(${r + 3} ${cy})`);
   };
   const boomIcon = burst(0, 0, 21, 12, 8, '#FFFFFF', { sw: 3, rot: Math.PI / 8 }) + circ(0, 0, 5, ink);
+  Object.assign(shared, { roundBtn, boomIcon });
   add('ui_fire', 'ui', 80, 86, [0, 0, 80, 86], roundBtn(37, C.saffron, C.saffronD, boomIcon), 'Fire button, up. Gold pill, no text', { anchor: [40, 40] });
   add('ui_fire_pressed', 'ui', 80, 86, [0, 0, 80, 86], roundBtn(37, C.saffronD, C.saffronD, boomIcon, true), 'Fire button, pressed', { anchor: [40, 40] });
   add('ui_fire_off', 'ui', 80, 86, [0, 0, 80, 86], roundBtn(37, '#D8CDB8', '#A99E8C', burst(0, 0, 21, 12, 8, '#F1E9DA', { sw: 3, stroke: C.ink2, rot: Math.PI / 8 }) + circ(0, 0, 5, C.ink2)), 'Fire button, not usable (rival turn, Hob resting)', { anchor: [40, 40] });
@@ -408,6 +412,10 @@ for (const [n, [purpose, body]] of Object.entries(SHELLS)) {
   add('app_icon', 'app', 1024, 1024, [0, 0, S, S], b, 'App icon: the Heartkettle on a fort wall with Marge. Full square, no clear pixels', { atlas: false, fixed: [1024, 512, 192], anchor: [0, 0], defs: '<linearGradient id="icg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6FC3E6"/><stop offset="1" stop-color="#FFF1D0"/></linearGradient>' });
 }
 
+// ================================================================ animation frames and data
+// All new frames are added after the v0.1 sprites, so the old SVG files do not change.
+const anim = buildAnim({ add: (n, grp, w, h, vb, body, purpose, o = {}) => add(n, grp, w, h, vb, body, purpose, { ...o, anim: true }), solidBlock, SHELLS, shared, HOB_NAME });
+
 // ================================================================ write
 fs.rmSync(path_.join(ASSETS, 'svg'), { recursive: true, force: true });
 fs.mkdirSync(path_.join(ASSETS, 'svg'), { recursive: true });
@@ -420,6 +428,7 @@ for (const s of sprites) {
   if (s.fixed) e.files = Object.fromEntries(s.fixed.map(px => [String(px), `sprites/${s.name}-${px}.png`]));
   else e.files = { '1x': `sprites/${s.name}.png`, '2x': `sprites/${s.name}@2x.png` };
   e.atlas = s.atlas;
+  if (s.anim) e.anim = true;
   if (s.tile) e.tile = s.tile;
   manifest.sprites.push(e);
 }
@@ -427,5 +436,8 @@ const groups = {};
 for (const s of sprites) groups[s.group] = (groups[s.group] || 0) + 1;
 manifest.groups = groups;
 manifest.count = sprites.length;
+manifest.animations = 'animations.json';
+manifest.data = { fort_bob: anim.data.fort_bob };
+fs.writeFileSync(path_.join(ASSETS, 'animations.json'), anim.json);
 fs.writeFileSync(path_.join(ASSETS, 'manifest.json'), JSON.stringify(manifest, null, 1) + '\n');
 console.log('sprites', sprites.length, groups);

@@ -3,8 +3,9 @@
 import type { App, Route, Screen } from '../app';
 import { play, unlockAudio } from '../audio/sfx';
 import type { BattleSetup, Command, PinView, Side, Snapshot } from '../core/types';
-import { TICK_HZ } from '../core/types';
-import { clearBattle, saveBattle } from '../save/db';
+import { SaveError, TICK_HZ } from '../core/types';
+import { clearBattle, dropBattleSave, saveBattle } from '../save/db';
+import { DEBUG } from '../ui/fatal';
 import { CLASS_COLOR, CLASS_ICON, btn, h, repeatKey } from '../ui/dom';
 import { type Cam, type Rect, drawLens, drawStrip, newFx, stepFx, toScreen, toWorld } from '../render/draw';
 import { TerrainLayer } from '../render/terrain';
@@ -15,7 +16,7 @@ type LensId = 'wide' | 'top' | 'bottom' | 'joined' | 'strip';
 interface Gesture {
   id: number;
   lens: LensId;
-  mode: 'maybe-aim' | 'aim' | 'maybe-pan' | 'pan' | 'strip';
+  mode: 'maybe-aim' | 'aim' | 'maybe-pan' | 'pan' | 'strip' | 'lean';
   x0: number;
   y0: number;
   x: number;
@@ -28,8 +29,15 @@ export function battleScreen(app: App, route: Route): Screen {
   const r = route as Extract<Route, { to: 'battle' }>;
   const setup: BattleSetup = r.setup;
   const core = app.core;
-  if (r.resume) core.loadBattle(r.resume);
-  else if (!r.prepared) core.newBattle(setup);
+  // A save that is from another version, damaged, or replays to a different state is put
+  // aside and the player lands on the map with a note (App.go turns the throw into that).
+  try {
+    if (r.resume) core.loadBattle(r.resume);
+    else if (!r.prepared) core.newBattle(setup);
+  } catch (e) {
+    if (r.resume) { void dropBattleSave(); throw new Error(e instanceof SaveError ? `${e.message} It was put aside.` : 'That saved fight could not be loaded. It was put aside.'); }
+    throw new Error(`This fight cannot start: ${e instanceof Error ? e.message : String(e)}`);
+  }
   app.lastSetup = setup;
   let snap = core.snapshot();
   if (snap.phase === 'draft') { core.command({ cmd: 'end_draft' }); snap = merge(snap, core.snapshot()); }
@@ -41,13 +49,18 @@ export function battleScreen(app: App, route: Route): Screen {
   const canvas = h('canvas', { class: 'field', 'aria-label': 'Battle field' });
   const ctx = canvas.getContext('2d')!;
   const root = h('div', { class: 'battle' }, canvas);
+  let crashed = false;
   const hud = h('div', { class: 'hud' });
   root.append(hud);
 
   // ---------- HUD parts ----------
   const kettleEl: [HTMLElement, HTMLElement] = [h('div', { class: 'kettle side0' }), h('div', { class: 'kettle side1' })];
   const pipsEl: [HTMLElement, HTMLElement] = [h('div', { class: 'pips side0' }), h('div', { class: 'pips side1' })];
-  const roundEl = h('div', { class: 'round', 'aria-live': 'polite' });
+  const roundEl = h('div', { class: 'round' });
+  // One status line per event for screen readers (the canvas has no text of its own).
+  const liveEl = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite' });
+  let liveT = 0;
+  const say = (text: string) => { clearTimeout(liveT); liveT = window.setTimeout(() => { liveEl.textContent = text; }, 50); };
   const windEl = h('div', { class: 'wind' });
   const top = h('div', { class: 'topstrip' });
   const pause = btn('II', () => openPause(), 'pause round-btn', { 'aria-label': 'Pause', 'data-key': 'Esc' });
@@ -89,10 +102,15 @@ export function battleScreen(app: App, route: Route): Screen {
   const overlay = h('div', { class: 'overlay-layer' });
   let yardBar: HTMLElement | null = null;
   if (setup.mode === 'yard') {
-    const slider = h('input', { type: 'range', min: -10, max: 10, step: 1, value: 0, 'aria-label': 'Wind' }) as HTMLInputElement;
-    const lab = h('span', {}, 'Wind 0');
-    slider.addEventListener('input', () => { send({ cmd: 'set_wind', wind: Number(slider.value) }); lab.textContent = `Wind ${slider.value}`; });
-    yardBar = h('div', { class: 'yardbar' }, btn('Back', () => app.go(app.progress.blueprint ? { to: 'workshop' } : { to: 'map' }), 'small'), lab, slider);
+    // The wind slider only where the core takes a wind command (the real core does not yet).
+    let windCtl: HTMLElement | string = '';
+    if (core.features.setWind) {
+      const slider = h('input', { type: 'range', min: -10, max: 10, step: 1, value: 0, 'aria-label': 'Wind' }) as HTMLInputElement;
+      const lab = h('span', {}, 'Wind 0');
+      slider.addEventListener('input', () => { send({ cmd: 'set_wind', wind: Number(slider.value) }); lab.textContent = `Wind ${slider.value}`; });
+      windCtl = h('span', { class: 'row' }, lab, slider);
+    }
+    yardBar = h('div', { class: 'yardbar' }, btn('Back', () => app.go(app.progress.blueprint ? { to: 'workshop' } : { to: 'map' }), 'small'), windCtl);
   }
 
   // ---------- layout ----------
@@ -100,7 +118,8 @@ export function battleScreen(app: App, route: Route): Screen {
   function relayout(): void {
     layout = app.layout;
     hud.className = `hud ${layout}`;
-    if (drag?.mode === 'aim') endDrag(true);
+    // Turning the device ends a drag as if the finger lifted: the aim so far is kept (07 §2.6).
+    if (drag?.mode === 'aim') endDrag('keep');
     top.replaceChildren(
       layout === 'wide' ? pause : '',
       kettleEl[0], pipsEl[0], roundEl, windEl, pipsEl[1], kettleEl[1], saveTick,
@@ -118,6 +137,7 @@ export function battleScreen(app: App, route: Route): Screen {
       if (yardBar) lensTop.replaceChildren(yardBar);
     }
     resize();
+    rectsDirty = true;
     snapCams = true;
   }
 
@@ -132,16 +152,27 @@ export function battleScreen(app: App, route: Route): Screen {
     canvas.style.width = `${W}px`;
     canvas.style.height = `${H}px`;
   }
-  const rectOf = (el: HTMLElement): Rect => { const b = el.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; };
-  function clearRect(): Rect {
+  const readRect = (el: HTMLElement): Rect => { const b = el.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; };
+  // Layout is read once after it changes (relayout, a new crew or tray), never every frame.
+  let rectsDirty = true;
+  const z = (): Rect => ({ x: 0, y: 0, w: 0, h: 0 });
+  const rc: Record<'top' | 'bottom' | 'strip' | 'clear' | 'fire', Rect> = { top: z(), bottom: z(), strip: z(), clear: z(), fire: z() };
+  function readRects(): void {
+    if (!rectsDirty) return;
+    rectsDirty = false;
+    if (layout === 'tall') { rc.top = readRect(lensTop); rc.bottom = readRect(lensBottom); rc.strip = readRect(strip); }
     const t = top.getBoundingClientRect().bottom;
-    const bottom = Math.min(trayEl.getBoundingClientRect().top, fire.getBoundingClientRect().top) - 4;
+    const tr = trayEl.getBoundingClientRect(), fr = fire.getBoundingClientRect();
+    const bottom = Math.min(tr.height ? tr.top : H, fr.height ? fr.top : H) - 4;
     const left = hobsEl.getBoundingClientRect().right + 4;
-    return { x: left, y: t, w: Math.max(100, W - left - 8), h: Math.max(80, bottom - t) };
+    rc.clear = { x: left, y: t, w: Math.max(100, W - left - 8), h: Math.max(80, bottom - t) };
+    rc.fire = { x: fr.left, y: fr.top, w: fr.width, h: fr.height };
   }
+  const rectOf = (el: HTMLElement): Rect => (el === lensTop ? rc.top : el === lensBottom ? rc.bottom : el === strip ? rc.strip : el === fire ? rc.fire : readRect(el));
+  function clearRect(): Rect { return rc.clear; }
 
   // ---------- cameras ----------
-  const camWide: Cam = { cx: 1200, cy: 300, s: 0.4 };
+  const camWide: Cam = { cx: 800, cy: 300, s: 0.4 };
   const camTop: Cam = { cx: 1800, cy: 300, s: 0.75 };
   const camBottom: Cam = { cx: 600, cy: 300, s: 1 };
   const camJoin: Cam = { cx: 1200, cy: 300, s: 0.5 };
@@ -194,12 +225,14 @@ export function battleScreen(app: App, route: Route): Screen {
         t = frameBox(cr, Math.min(bx0, sx - 200), Math.max(bx1, sx + 200), by0, Math.max(by1, sy + 120), 0.15, 2);
         t.s = Math.min(t.s, frameBox(cr, bx0, bx1, by0, by1, 0.15, 2).s);
       } else if (following && rm) {
-        t = frameBox(cr, 0, 2400, 0, 720, 0.1, 2);
+        t = frameBox(cr, 0, terr.w || snap.terrain.width, 0, terr.h || snap.terrain.height, 0.1, 2);
       } else {
         t = frameBox(cr, bx0, bx1, by0, by1, 0.15, 2);
         const bias = (snap.hud.active === 0 ? 1 : -1) * (bx1 - bx0) * 0.05;
         t.cx += bias * (setup.mode === 'duel' ? 0 : 1);
       }
+      // Spare height goes to the sky, not the soil: keep the ground under the forts near the bottom.
+      if (!(following && rm)) t.cy = Math.max(t.cy, by0 + cr.h / 2 / t.s - 24 / t.s);
       if (manual && !following) return;
       if (following) manual = false;
       t.s *= zoomWide;
@@ -249,7 +282,19 @@ export function battleScreen(app: App, route: Route): Screen {
   // ---------- commands ----------
   function send(c: Command): boolean {
     const res = core.command(c);
+    lastRefusal = res.ok ? '' : res.error ?? '';
     return res.ok;
+  }
+  let lastRefusal = '';
+  // Aim Drag: keep only the newest aim and send it once per frame (and on release), so a 120 Hz
+  // touch screen does not send 120 logged aim commands and snapshots a second.
+  let pendingAim: { angle: number; power: number } | null = null;
+  function flushAim(): void {
+    if (!pendingAim) return;
+    const a = snap.hud.aim;
+    const p = pendingAim;
+    pendingAim = null;
+    if (!a || a.angle !== p.angle || a.power !== p.power) { send({ cmd: 'aim', ...p }); snap = merge(snap, core.snapshot()); }
   }
 
   // ---------- frame loop ----------
@@ -266,16 +311,32 @@ export function battleScreen(app: App, route: Route): Screen {
   let paused = false;
   const startT = performance.now();
 
+  let lastN = 1;
+  const prevShell = new Map<number, [number, number]>();
   function frame(now: number): void {
-    if (!alive) return;
-    raf = requestAnimationFrame(frame);
+    if (!alive || crashed) return;
+    try {
+      tick(now);
+      raf = requestAnimationFrame(frame);
+    } catch (e) {
+      crash(e);
+    }
+  }
+  function tick(now: number): void {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+    readRects();
+    flushAim();
     if (!paused && !handoffOpen) {
-      acc += dt * TICK_HZ * (fast ? 2 : 1) * (snap.phase === 'rival' && app.settings.rivalFast ? 2 : 1);
+      // "Rival turns at 2x" speeds up the whole Rival turn: think pose and flight.
+      const rivalTurn = !snap.sides[snap.hud.active].human && setup.mode !== 'yard';
+      acc += dt * TICK_HZ * (fast ? 2 : 1) * (rivalTurn && app.settings.rivalFast ? 2 : 1);
       const n = Math.floor(acc);
       acc -= n;
       if (n > 0) {
+        prevShell.clear();
+        for (const sh of snap.shells) prevShell.set(sh.id, [sh.x, sh.y]);
+        lastN = n;
         core.step(n);
         snap = merge(snap, core.snapshot());
       }
@@ -292,6 +353,21 @@ export function battleScreen(app: App, route: Route): Screen {
     updateHud(now);
   }
 
+  /** A throw in the frame loop (a wasm trap, a draw bug): stop the loop and offer a way out. */
+  function crash(e: unknown): void {
+    if (crashed) return;
+    crashed = true;
+    alive = false;
+    cancelAnimationFrame(raf);
+    console.error(e);
+    card('crash-card', 'crash-h',
+      h('h2', { id: 'crash-h' }, 'The fight got stuck'),
+      h('p', {}, 'Something went wrong in this fight. Your last turn is saved.'),
+      btn('Retry', () => { closeCards(); app.go({ to: 'battle', setup }); }, 'primary', { 'data-autofocus': true, 'data-testid': 'crash-retry' }),
+      btn('Map', () => { closeCards(); app.go({ to: 'map' }); }, 'secondary'),
+    );
+  }
+
   function render(now: number): void {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#9ED8EC';
@@ -300,15 +376,22 @@ export function battleScreen(app: App, route: Route): Screen {
     const human = snap.sides[snap.hud.active].human || setup.mode === 'yard';
     const plan = snap.phase === 'plan' && human;
     const lenses = lensRects();
+    // Between ticks the shell is carried on by the part of a tick that has passed (smooth on 90 and 144 Hz).
+    const view = snap.shells.length && !paused && !handoffOpen ? { ...snap, shells: snap.shells.map((sh) => {
+      const p = prevShell.get(sh.id);
+      if (!p) return sh;
+      const k = Math.min(1, acc) / Math.max(1, lastN);
+      return { ...sh, x: sh.x + (sh.x - p[0]) * k, y: sh.y + (sh.y - p[1]) * k };
+    }) } : snap;
     for (const l of lenses) {
       if (l.id === 'strip') continue;
-      drawLens(ctx, l.rect, l.cam, snap, terr, fx, {
+      drawLens(ctx, l.rect, l.cam, view, terr, fx, {
         you: me, seeThrough: plan ? snap.hud.active : -1, pickedHob: plan ? snap.hud.hob : undefined,
-        showPreview: plan, time: (now - startT) / 1000, reduceMotion: app.settings.reduceMotion,
+        showPreview: plan, time: (now - startT) / 1000, reduceMotion: app.settings.reduceMotion, lean: lean ?? undefined,
       });
     }
     if (layout === 'tall') {
-      const rs = joined ? { ...rectOf(strip), y: rectOf(lensBottom).y + rectOf(lensBottom).h - 34 } : rectOf(strip);
+      const rs = joined ? { ...rc.strip, y: rc.bottom.y + rc.bottom.h - 34 } : rc.strip;
       drawStrip(ctx, rs, snap, terr, joined ? [{ rect: lenses[0].rect, cam: camJoin }] : [{ rect: rectOf(lensTop), cam: camTop }, { rect: rectOf(lensBottom), cam: camBottom }], me);
     }
     if (drag && drag.mode === 'aim') {
@@ -328,14 +411,22 @@ export function battleScreen(app: App, route: Route): Screen {
 
   // ---------- events -> sound, effects, banners, save ----------
   function handleEvents(now: number): void {
+    const rm = app.settings.reduceMotion;
     for (const e of snap.events) {
       switch (e.t) {
-        case 'fire': play('fire'); setTimeout(() => play('whoosh'), 80); turnHits = { blocks: 0, dmg: 0, who: snap.sides[e.side].name }; break;
+        case 'fire': play('fire'); setTimeout(() => play('whoosh'), 80); turnHits = { blocks: 0, dmg: 0, who: snap.sides[e.side].name }; say(`${snap.sides[e.side].name} fired`); break;
+        case 'note':
+          if (e.x !== undefined && e.y !== undefined) fx.texts.push({ x: e.x, y: e.y + 30, text: e.text, life: 1.4, max: 1.4, big: false, color: '#FFF4DE' });
+          else showBanner(e.text, 'slate');
+          if (e.sound) play(e.sound as Parameters<typeof play>[0]);
+          if (e.status) say(e.text);
+          break;
         case 'hit':
+          if (e.dmg > 0) say(`Hit ${e.what}, ${e.dmg} damage`); else say('Missed');
           if (e.dmg > 0) {
             fx.texts.push({ x: e.x, y: e.y, text: String(e.dmg), life: 1.2, max: 1.2, big: e.dmg > 50, color: '#FFF4DE' });
             fx.booms.push({ x: e.x, y: e.y - 12, t: 0, size: e.dmg > 60 ? 'large' : e.dmg > 30 ? 'medium' : 'small' });
-            fx.shake = Math.min(12, fx.shake + e.dmg / 8);
+            if (!rm) fx.shake = Math.min(12, fx.shake + e.dmg / 8);
             turnHits.dmg += e.dmg;
             play('hit');
           } else {
@@ -343,12 +434,12 @@ export function battleScreen(app: App, route: Route): Screen {
             missCount++;
             fx.booms.push({ x: e.x, y: e.y, t: 0, size: 'small' });
           }
-          for (let i = 0; i < 10; i++) fx.parts.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 220, vy: Math.random() * 240, life: 0.7, max: 0.7, color: e.what === 'ground' ? '#9A6440' : '#FFF1D0', size: 4 });
+          if (!rm) for (let i = 0; i < 10; i++) fx.parts.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 220, vy: Math.random() * 240, life: 0.7, max: 0.7, color: e.what === 'ground' ? '#9A6440' : '#FFF1D0', size: 4 });
           break;
         case 'break':
           turnHits.blocks++;
           play('break');
-          for (let i = 0; i < 6; i++) fx.parts.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 260, vy: Math.random() * 260, life: 0.9, max: 0.9, color: matColor(e.mat), size: 5 });
+          if (!rm) for (let i = 0; i < 6; i++) fx.parts.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 260, vy: Math.random() * 260, life: 0.9, max: 0.9, color: matColor(e.mat), size: 5 });
           break;
         case 'fall':
           if (e.count >= 6 && firstDrop) { firstDrop = false; fx.texts.push({ x: e.x, y: e.y + 30, text: 'Drop!', life: 1.4, max: 1.4, big: true, color: '#FFC23D' }); }
@@ -360,9 +451,9 @@ export function battleScreen(app: App, route: Route): Screen {
           break;
         case 'boom':
           fx.booms.push({ x: e.x, y: e.y, t: 0, size: e.r > 40 ? 'large' : e.r > 22 ? 'medium' : 'small' });
-          fx.shake = Math.min(12, fx.shake + e.r / 6);
+          if (!rm) fx.shake = Math.min(12, fx.shake + e.r / 6);
           break;
-        case 'kettle_pop': play('pop'); fx.texts.push({ x: snap.forts[e.side].x + snap.forts[e.side].w / 2, y: snap.forts[e.side].y + 80, text: 'Kettle Pop!', life: 2, max: 2, big: true, color: '#4FE3C1' }); break;
+        case 'kettle_pop': play('pop'); say(`${snap.sides[e.side].name}'s kettle popped`); fx.texts.push({ x: snap.forts[e.side].x + snap.forts[e.side].w / 2, y: snap.forts[e.side].y + 80, text: 'Kettle Pop!', life: 2, max: 2, big: true, color: '#4FE3C1' }); break;
         case 'squall_warn': if (e.left === 3) showBanner('Squall in 3', 'slate'); break;
         case 'squall': if (e.n === 1) { showBanner('Sudden Squall', 'slate'); play('squall'); } break;
         case 'turn': onTurn(e.side, e.round, now); break;
@@ -386,6 +477,7 @@ export function battleScreen(app: App, route: Route): Screen {
       if (human) { showBanner('Your turn', 'blue'); play('turn'); }
       else showBanner(`${snap.sides[side].name} aims`, 'orange');
     }
+    say(`Round ${round}. ${human ? (setup.mode === 'duel' ? `${snap.sides[side].name}'s turn` : 'Your turn') : `${snap.sides[side].name} aims`}`);
     if (turnCount > 1) void autosave(side, round);
   }
 
@@ -408,8 +500,10 @@ export function battleScreen(app: App, route: Route): Screen {
     ended = true;
     const res = snap.result;
     app.lastResult = res;
-    void clearBattle();
+    // Progress first, then drop the save, then the results: closing the tab in between loses nothing.
+    void (res ? app.recordResult(setup, res) : Promise.resolve()).catch(() => undefined).then(() => clearBattle());
     play(res && res.winner === 0 ? 'win' : setup.mode === 'duel' ? 'win' : 'lose');
+    if (res) say(res.winner === 0 || setup.mode === 'duel' ? `${snap.sides[res.winner === 1 ? 1 : 0].name} wins` : 'You lost');
     setTimeout(() => { if (alive) app.go({ to: 'results', setup }); }, app.settings.reduceMotion ? 600 : 1500);
   }
 
@@ -430,6 +524,14 @@ export function battleScreen(app: App, route: Route): Screen {
     clearTimeout(padT);
     padT = window.setTimeout(() => { padOpen = false; }, 4000);
   }
+  // DOM writes only when a value changed: each write dirties layout, and the HUD runs every frame.
+  const memo = new WeakMap<HTMLElement, Record<string, string>>();
+  const changed = (el: HTMLElement, k: string, v: string) => { let m = memo.get(el); if (!m) memo.set(el, (m = {})); if (m[k] === v) return false; m[k] = v; return true; };
+  const setText = (el: HTMLElement, v: string) => { if (changed(el, 't', v)) el.textContent = v; };
+  const setData = (el: HTMLElement, k: string, v: string) => { if (changed(el, `d${k}`, v)) el.dataset[k] = v; };
+  const setHidden = (el: HTMLElement, v: boolean) => { if (changed(el, 'h', String(v))) el.hidden = v; };
+  const setClass = (el: HTMLElement, c: string, on: boolean) => { if (changed(el, `c${c}`, String(on))) el.classList.toggle(c, on); };
+  const setStyle = (el: HTMLElement, k: string, v: string) => { if (changed(el, `s${k}`, v)) el.style.setProperty(k, v); };
   let hudKey = '';
   function updateHud(now: number): void {
     const s = snap;
@@ -437,16 +539,16 @@ export function battleScreen(app: App, route: Route): Screen {
     const me = youSide();
     const human = s.sides[hd.active].human || setup.mode === 'yard';
     const plan = s.phase === 'plan' && human;
-    hud.classList.toggle('aiming', drag?.mode === 'aim');
-    hud.classList.toggle('flight', s.phase === 'flight' || s.phase === 'resolve' || s.phase === 'rival' || !human);
-    hud.dataset.phase = s.phase;
-    hud.dataset.active = String(hd.active);
+    setClass(hud, 'aiming', drag?.mode === 'aim');
+    setClass(hud, 'flight', s.phase === 'flight' || s.phase === 'resolve' || s.phase === 'rival' || !human);
+    setData(hud, 'phase', s.phase);
+    setData(hud, 'active', String(hd.active));
     // top strip
     for (const side of [0, 1] as Side[]) {
       const k = s.kettles.find((x) => x.side === side);
       const pct = k ? Math.round((100 * k.hp) / k.maxHp) : 0;
-      kettleEl[side].textContent = `♨ ${pct}%`;
-      kettleEl[side].dataset.state = pct <= 25 ? 'critical' : pct <= 50 ? 'hurt' : 'full';
+      setText(kettleEl[side], `♨ ${pct}%`);
+      setData(kettleEl[side], 'state', pct <= 25 ? 'critical' : pct <= 50 ? 'hurt' : 'full');
       const crew = s.hobs.filter((x) => x.side === side);
       const pk = crew.map((c) => `${c.id}:${c.hp}:${c.state}`).join(',');
       if (pipsEl[side].dataset.k !== pk) {
@@ -459,22 +561,24 @@ export function battleScreen(app: App, route: Route): Screen {
       }
     }
     const sq = s.squall;
-    roundEl.textContent = sq.on ? `Squall ${sq.on} of 3` : `Round ${s.round}/${s.roundCap}${sq.warn ? `  Squall in ${sq.warn}` : ''}`;
-    roundEl.classList.toggle('squall', !!sq.on);
+    const fat = s.fatigue?.[0] || s.fatigue?.[1];
+    setText(roundEl, sq.on ? `Squall ${sq.on} of 3` : `Round ${s.round}/${s.roundCap}${sq.warn ? `  Squall in ${sq.warn}` : ''}${fat ? ', Fatigue' : ''}`);
+    setClass(roundEl, 'squall', !!sq.on);
     const arrow = (w: number) => (w === 0 ? '• 0' : `${w > 0 ? '→' : '←'} ${Math.abs(w)}`);
-    windEl.textContent = `${arrow(s.wind)}   ⇢ ${Math.abs(s.forecast)}`;
-    windEl.title = `Wind ${s.wind}, next ${s.forecast}`;
-    top.dataset.active = String(hd.active);
+    setText(windEl, `${arrow(s.wind)}   ⇢ ${Math.abs(s.forecast)}`);
+    if (changed(windEl, 'title', `${s.wind}/${s.forecast}`)) windEl.title = `Wind ${s.wind}, next ${s.forecast}`;
+    setData(top, 'active', String(hd.active));
 
     // crew
     const crew = s.hobs.filter((x) => x.side === me);
     const ck = crew.map((c) => `${c.id}:${c.hp}:${c.state}:${c.rest}`).join(',') + `|${hd.hob}|${plan}|${sprites.ready}`;
     if (ck !== hudKey) {
       hudKey = ck;
+      rectsDirty = true;
       hobsEl.replaceChildren(...crew.map((c) => {
         const pu = sprites.url(`portrait_${hobSpriteName(c.def ?? c.id, c.cls)}_${me === 0 ? 'blue' : 'orange'}`);
         const b = btn(h('span', { class: 'face' }, pu ? h('img', { src: pu, alt: '' }) : CLASS_ICON[c.cls]), () => { send({ cmd: 'pick_hob', id: c.id }); }, `hob ${c.id === hd.hob ? 'on' : ''} ${c.state}`, {
-          'aria-label': `${c.name}, ${c.cls}, ${c.hp} HP${c.state === 'rest' ? ', needs a rest' : ''}`,
+          'aria-label': `${c.name}, ${c.cls}, ${c.hp} HP${c.state === 'rest' ? ', needs a rest' : c.state === 'dug' ? ', Loophole buried' : ''}`,
           style: `--c:${CLASS_COLOR[c.cls]};--f:${Math.round((360 * c.hp) / c.maxHp)}deg`,
           'data-hob': c.id,
           disabled: c.state === 'bonked' || !plan,
@@ -483,60 +587,68 @@ export function battleScreen(app: App, route: Route): Screen {
         return b;
       }));
     }
-    // tray
-    const tk = hd.shots.map((x) => `${x.id}:${x.uses}:${x.ready}`).join(',') + `|${hd.shot}|${plan}|${sprites.ready}`;
+    // tray: shots, then Doodads (each Doodad is an Action, used from its card)
+    const tk = hd.shots.map((x) => `${x.id}:${x.uses}:${x.ready}:${x.weight}`).join(',') + `|${hd.doodads.map((d) => d.id).join(',')}|${hd.shot}|${plan}|${sprites.ready}`;
     if (trayEl.dataset.k !== tk) {
       trayEl.dataset.k = tk;
-      trayEl.replaceChildren(...hd.shots.map((c, i) => {
+      rectsDirty = true;
+      const shotBtns = hd.shots.map((c, i) => {
         const ic = c.icon ? sprites.url(`icon_${c.icon}`) : undefined;
         const b = btn(h('span', { class: 'nm' }, ic ? h('img', { src: ic, alt: '', class: 'ico' }) : '', c.name), () => send({ cmd: 'pick_shot', id: c.id }), `chip shot ${c.id === hd.shot ? 'on' : ''} ${c.ready ? '' : 'off'}`, {
-          'aria-label': `${c.name}${c.uses >= 0 ? `, ${c.uses} left` : ''}${c.ready ? '' : ', not ready'}`,
+          'aria-label': `${c.name}${c.uses >= 0 ? `, ${c.uses} left` : ''}, ${['Light', 'Medium', 'Heavy'][c.weight]}${c.ready ? '' : `, not ready${c.why ? `: ${c.why}` : ''}`}`,
           'data-key': String(i + 1), disabled: !plan,
         });
         if (c.uses >= 0) b.append(h('em', { class: 'uses' }, String(c.uses)));
-        if (c.weight) b.append(h('i', { class: 'cogs' }, '⚙'.repeat(c.weight)));
+        if (c.weight) b.append(h('i', { class: 'cogs', 'aria-hidden': 'true' }, '⚙'.repeat(c.weight)));
         if (c.best && c.kind === 'shell') b.append(h('i', { class: 'best', style: `--c:${CLASS_COLOR[c.best]}` }, CLASS_ICON[c.best]));
         b.addEventListener('contextmenu', (e) => { e.preventDefault(); shellCard(c.name, c.weight, c.best); });
         return b;
-      }));
+      });
+      const doodadBtns = hd.doodads.map((d) => {
+        const ic = sprites.url(`icon_${d.id}`);
+        return btn(h('span', { class: 'nm' }, ic ? h('img', { src: ic, alt: '', class: 'ico' }) : '', d.name), () => doodadCard(d), 'chip shot doodad', {
+          'aria-label': `${d.name}, Doodad. ${d.card}`, 'data-doodad': d.id, disabled: !plan,
+        });
+      });
+      trayEl.replaceChildren(...shotBtns, ...doodadBtns);
     }
-    // walk
-    walkEl.hidden = !hd.canWalk && !(plan && setup.mode !== 'campaign');
-    (steamBar.children[0] as HTMLElement).style.width = `${hd.steam}%`;
-    (steamBar.children[1] as HTMLElement).textContent = `S ${hd.steam}`;
+    // walk and Steam (the bar is a share of this side's starting Steam, not of 100)
+    setHidden(walkEl, !hd.canWalk && !(plan && setup.mode !== 'campaign'));
+    const pct = Math.max(0, Math.min(100, (100 * hd.steam) / Math.max(1, hd.steamMax)));
+    setStyle(steamBar.children[0] as HTMLElement, 'width', `${pct.toFixed(1)}%`);
+    setText(steamBar.children[1] as HTMLElement, `S ${hd.steam}`);
     // readout
     const a = hd.aim;
-    readout.textContent = a && a.power > 0 ? `${(a.angle / 10).toFixed(1)}° | ${a.power}` : '--';
-    pad.hidden = !(plan && (padOpen || padAlways()));
-    // fire
+    setText(readout, a && a.power > 0 ? `${(a.angle / 10).toFixed(1)}° | ${a.power}` : '--');
+    setHidden(pad, !(plan && (padOpen || padAlways())));
+    // fire: FIRE, SHOVE OFF on a buried Loophole, PASS when nothing else is legal, 2x / 1x in Resolve
     const fs = hd.fire;
-    fire.dataset.state = fs;
-    fire.textContent = fs === 'fast' ? (fast ? '1x' : '2x') : 'FIRE';
-    fire.hidden = fs === 'flight' || (!human && fs !== 'fast');
-    reframe.hidden = !(manual || topManual || wideLook);
+    setData(fire, 'state', fs);
+    setText(fire, fs === 'fast' ? (fast ? '1x' : '2x') : fs === 'dug' ? 'SHOVE OFF' : fs === 'pass' ? 'PASS' : 'FIRE');
+    if (changed(fire, 'aria', fs + fast)) fire.setAttribute('aria-label', fs === 'fast' ? (fast ? 'Normal speed' : 'Double speed') : fs === 'dug' ? 'Shove Off: clear the buried Loophole' : fs === 'pass' ? 'Pass the turn' : 'Fire');
+    setHidden(fire, fs === 'flight' || (!human && fs !== 'fast'));
+    setHidden(reframe, !(manual || topManual || wideLook));
     // onboarding prompts (1-1)
     updatePrompt(now, plan);
   }
 
   function hint(id: string, text: string, target: HTMLElement | null, showHand = false): void {
-    if (app.progress.hints.includes(id)) { prompt.hidden = true; hand.hidden = true; return; }
-    prompt.textContent = text;
-    prompt.hidden = false;
-    prompt.dataset.hint = id;
+    if (app.progress.hints.includes(id)) { setHidden(prompt, true); setHidden(hand, true); return; }
+    setText(prompt, text);
+    setHidden(prompt, false);
+    setData(prompt, 'hint', id);
     if (target) {
-      const b = target.getBoundingClientRect();
-      prompt.style.left = `${clamp(b.left + b.width / 2, 70, W - 70)}px`;
-      prompt.style.top = `${Math.max(8, b.top - 44)}px`;
+      const b = rectOf(target);
+      setStyle(prompt, 'left', `${clamp(b.x + b.w / 2, 70, W - 70)}px`);
+      setStyle(prompt, 'top', `${Math.max(8, b.y - 44)}px`);
     }
-    hand.hidden = !showHand;
+    setHidden(hand, !showHand);
   }
   function doneHint(id: string): void {
     if (!app.progress.hints.includes(id)) { app.progress.hints.push(id); void app.saveProgress(); }
   }
   function updatePrompt(_now: number, plan: boolean): void {
-    prompt.hidden = true;
-    hand.hidden = true;
-    if (!plan || setup.level !== '1-1' || paused) return;
+    if (!plan || setup.level !== '1-1' || paused) { setHidden(prompt, true); setHidden(hand, true); return; }
     if (!app.progress.hints.includes('drag')) {
       const r0 = layout === 'tall' ? rectOf(lensBottom) : clearRect();
       const [hx, hy] = (() => {
@@ -544,13 +656,13 @@ export function battleScreen(app: App, route: Route): Screen {
         const l = lensRects().find((x) => x.id === 'bottom' || x.id === 'wide')!;
         return hb ? toScreen(l.rect, l.cam, hb.x, hb.y) : [r0.x + r0.w * 0.3, r0.y + r0.h * 0.6];
       })();
-      hand.style.left = `${hx}px`;
-      hand.style.top = `${hy}px`;
-      prompt.style.left = `${clamp(hx + 60, 70, W - 70)}px`;
-      prompt.style.top = `${Math.max(8, hy - 90)}px`;
-      prompt.textContent = 'Drag to aim';
-      prompt.hidden = false;
-      hand.hidden = false;
+      setStyle(hand, 'left', `${hx}px`);
+      setStyle(hand, 'top', `${hy}px`);
+      setStyle(prompt, 'left', `${clamp(hx + 60, 70, W - 70)}px`);
+      setStyle(prompt, 'top', `${Math.max(8, hy - 90)}px`);
+      setText(prompt, 'Drag to aim');
+      setHidden(prompt, false);
+      setHidden(hand, false);
       return;
     }
     if (!app.progress.hints.includes('fire') && snap.hud.fire === 'ready') { hint('fire', 'Fire!', fire); return; }
@@ -559,16 +671,37 @@ export function battleScreen(app: App, route: Route): Screen {
       const l = lensRects().find((x) => x.id === 'top' || x.id === 'wide');
       if (p && l) {
         const [px, py] = toScreen(l.rect, l.cam, p.x, p.y);
-        prompt.style.left = `${clamp(px, 70, W - 70)}px`;
-        prompt.style.top = `${Math.max(8, py - 70)}px`;
-        prompt.textContent = 'Tap the pin';
-        prompt.hidden = false;
+        setStyle(prompt, 'left', `${clamp(px, 70, W - 70)}px`);
+        setStyle(prompt, 'top', `${Math.max(8, py - 70)}px`);
+        setText(prompt, 'Tap the pin');
+        setHidden(prompt, false);
+        setHidden(hand, true);
+        return;
       }
     }
+    setHidden(prompt, true);
+    setHidden(hand, true);
   }
 
   // ---------- input: aim drag, pan, pinch, taps ----------
   let drag: Gesture | null = null;
+  // Lean Lines (07 §3.11): hold still on a block to see what would fall if it broke. Core query only.
+  let lean: { side: Side; c: number; r: number; falls: Set<string> } | null = null;
+  let leanT = 0;
+  function tryLean(g: Gesture): void {
+    if (drag !== g || (g.mode !== 'maybe-aim' && g.mode !== 'maybe-pan') || dist(g) >= 8) return;
+    const l = lensAt(g.x0, g.y0);
+    if (!l || l.id === 'strip') return;
+    const [wx, wy] = toWorld(l.rect, l.cam, g.x0, g.y0);
+    const b = snap.blocks.find((q) => wx >= q.x && wx < q.x + q.size && wy >= q.y && wy < q.y + q.size);
+    if (!b) return;
+    const falls = core.leanLines(b.side, b.c, b.r);
+    lean = { side: b.side, c: b.c, r: b.r, falls: new Set(falls.map(([c, r]) => `${c},${r}`)) };
+    g.mode = 'lean';
+    showBanner(falls.length ? `${falls.length} ${falls.length === 1 ? 'block falls' : 'blocks fall'} with it` : 'Nothing else falls', 'paper');
+    say(falls.length ? `If that block breaks, ${falls.length} more fall` : 'If that block breaks, nothing else falls');
+    play('tap');
+  }
   const pointers = new Map<number, { x: number; y: number }>();
   let pinch: { d0: number; z0: number; lens: LensId } | null = null;
   let lastDragEnd = 0;
@@ -586,7 +719,7 @@ export function battleScreen(app: App, route: Route): Screen {
     try { canvas.setPointerCapture(e.pointerId); } catch { /* ok */ }
     if (pointers.size >= 3) return;
     if (pointers.size === 2) {
-      if (drag?.mode === 'aim') endDrag(true);
+      if (drag?.mode === 'aim' || drag?.mode === 'lean') endDrag(true);
       const [p1, p2] = [...pointers.values()];
       const l = lensAt(p1.x, p1.y);
       pinch = { d0: Math.hypot(p1.x - p2.x, p1.y - p2.y), z0: l?.id === 'top' ? zoomTop : zoomWide, lens: l?.id ?? 'wide' };
@@ -600,6 +733,9 @@ export function battleScreen(app: App, route: Route): Screen {
     if (l.id === 'strip') { drag = { ...base, mode: 'strip' }; return; }
     if ((l.id === 'wide' || l.id === 'bottom') && canAim()) drag = { ...base, mode: 'maybe-aim', prevAim: snap.hud.aim ? { ...snap.hud.aim } : undefined };
     else drag = base;
+    const g = drag;
+    clearTimeout(leanT);
+    leanT = window.setTimeout(() => tryLean(g), 450);
   });
 
   canvas.addEventListener('pointermove', (e) => {
@@ -618,6 +754,8 @@ export function battleScreen(app: App, route: Route): Screen {
     if (!drag || drag.id !== e.pointerId) return;
     drag.x = e.clientX;
     drag.y = e.clientY;
+    if (drag.mode === 'lean') return;
+    if (dist(drag) >= 8) clearTimeout(leanT);
     if (drag.mode === 'maybe-aim' && dist(drag) >= 8) {
       drag.mode = 'aim';
       doneHint('drag');
@@ -639,8 +777,7 @@ export function battleScreen(app: App, route: Route): Screen {
     if (deg < 0) deg = deg < -90 ? 180 : 0;
     const angle = Math.round(deg * 2) * 5;
     const power = clamp(Math.round((Math.hypot(dx, dy) / (0.4 * Math.min(W, H))) * 100), 0, 100);
-    const a = snap.hud.aim;
-    if (!a || a.angle !== angle || a.power !== power) send({ cmd: 'aim', angle, power });
+    pendingAim = { angle, power }; // sent once per frame by flushAim
     // edge help: slide the anchor away from a near edge while power is under 100
     if (power < 100) {
       const m = 12;
@@ -649,18 +786,23 @@ export function battleScreen(app: App, route: Route): Screen {
     }
   }
 
-  function endDrag(cancel: boolean): void {
+  /** cancel true: put the old aim back. false: a lift (Quick Fire may fire). 'keep': keep the aim, never fire. */
+  function endDrag(cancel: boolean | 'keep'): void {
+    clearTimeout(leanT);
     if (!drag) return;
     const g = drag;
     drag = null;
+    if (g.mode === 'lean') { lean = null; return; }
     if (g.mode === 'aim') {
       lastDragEnd = performance.now();
-      if (cancel || dist(g) < 12) {
+      if (cancel === true || dist(g) < 12) {
+        pendingAim = null;
         if (g.prevAim) send({ cmd: 'aim', angle: g.prevAim.angle, power: g.prevAim.power });
         return;
       }
+      flushAim();
       padNudge();
-      if (app.settings.quickFire && !cancel) doFire(true);
+      if (app.settings.quickFire && cancel === false) doFire(true);
     }
   }
 
@@ -677,7 +819,8 @@ export function battleScreen(app: App, route: Route): Screen {
     if (pointers.size < 2) pinch = null;
     if (!drag || drag.id !== e.pointerId) return;
     const g = drag;
-    if (g.mode === 'aim') { endDrag(false); return; }
+    if (g.mode === 'aim' || g.mode === 'lean') { endDrag(false); return; }
+    clearTimeout(leanT);
     drag = null;
     if (g.mode === 'strip') {
       const now = performance.now();
@@ -687,9 +830,10 @@ export function battleScreen(app: App, route: Route): Screen {
     }
     if (g.mode === 'maybe-aim' || g.mode === 'maybe-pan') tapAt(e.clientX, e.clientY);
   });
-  const lose = () => { if (drag?.mode === 'aim') endDrag(true); drag = null; pinch = null; pointers.clear(); stopWalk(); };
+  const lose = () => { if (drag?.mode === 'aim' || drag?.mode === 'lean') endDrag(true); clearTimeout(leanT); drag = null; pinch = null; pointers.clear(); stopWalk(); };
   canvas.addEventListener('pointercancel', lose);
-  canvas.addEventListener('lostpointercapture', (e) => { if (drag?.id === e.pointerId && drag.mode === 'aim') endDrag(false); });
+  // Losing the pointer is not a lift: keep the aim, never Quick Fire.
+  canvas.addEventListener('lostpointercapture', (e) => { if (drag?.id === e.pointerId && (drag.mode === 'aim' || drag.mode === 'lean')) endDrag('keep'); });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -744,16 +888,31 @@ export function battleScreen(app: App, route: Route): Screen {
   }
 
   // ---------- fire, walk, keys ----------
+  const afterAction = () => { padOpen = false; recallIdx = 0; manual = false; topManual = false; wideLook = false; };
   function doFire(fromDrag = false): void {
     unlockAudio();
     if (snap.hud.fire === 'fast') { fast = !fast; send({ cmd: 'fast', on: fast }); return; }
     if (!fromDrag && performance.now() - lastDragEnd < 150) return;
     if (!canAim()) return;
-    if (send({ cmd: 'fire' })) { doneHint('fire'); padOpen = false; recallIdx = 0; manual = false; topManual = false; wideLook = false; }
+    flushAim();
+    if (snap.hud.fire === 'dug') {
+      // A buried Loophole: Fire becomes Shove Off (Steam, no Action); then the Hob can fire.
+      if (send({ cmd: 'shove_off' })) play('walk');
+      else showBanner(lastRefusal === 'not_enough_steam' ? 'Not enough Steam to Shove Off' : 'Cannot Shove Off now', 'paper');
+      return;
+    }
+    if (snap.hud.fire === 'pass') { if (send({ cmd: 'pass' })) afterAction(); return; }
+    if (send({ cmd: 'fire' })) { doneHint('fire'); afterAction(); }
   }
   fire.addEventListener('click', (e) => { e.preventDefault(); doFire(); });
-  // Resolve speed-up: a tap anywhere during Resolve also speeds up (07 §2.8).
-  root.addEventListener('pointerdown', () => { if (snap.phase === 'resolve' && !fast) { fast = true; } }, true);
+  // Resolve speed-up: a tap anywhere during Resolve also speeds up (07 §2.8). Not on the 2x key
+  // itself: that would set 2x here and its click would turn it straight off again.
+  root.addEventListener('pointerdown', (e) => {
+    if (fire.contains(e.target as Node)) return;
+    if (snap.phase === 'resolve' && !fast) fast = true;
+  }, true);
+  // Audio unlock on a real user action for iOS (touchend / pointerup / keydown count, pointerdown may not).
+  for (const ev of ['pointerup', 'touchend', 'keydown']) root.addEventListener(ev, () => unlockAudio(), { capture: true, passive: true });
 
   let walkHeld: -1 | 0 | 1 = 0;
   let walkMinT = 0;
@@ -774,8 +933,9 @@ export function battleScreen(app: App, route: Route): Screen {
     if (handoffOpen || (e.target as HTMLElement)?.tagName === 'INPUT') return;
     const a = snap.hud.aim ?? { angle: 450, power: 50 };
     const k = e.key;
-    if (k === 'Escape' || k === 'p' || k === 'P') { paused ? closePause() : openPause(); e.preventDefault(); return; }
-    if (paused) return;
+    if (crashed) return;
+    if (k === 'Escape' || k === 'p' || k === 'P') { if (overlay.firstChild && !paused) { closeCards(); e.preventDefault(); return; } paused ? closePause() : openPause(); e.preventDefault(); return; }
+    if (paused || overlay.firstChild) return;
     if (k === 'ArrowLeft' || k === 'ArrowRight') {
       const step = e.shiftKey ? 1 : 10;
       send({ cmd: 'aim', angle: clamp(a.angle + (k === 'ArrowLeft' ? step : -step), 0, 1800), power: a.power });
@@ -811,13 +971,36 @@ export function battleScreen(app: App, route: Route): Screen {
   window.addEventListener('keyup', onKeyUp);
 
   // ---------- cards: pause, hand-off, shell ----------
-  function card(cls: string, ...kids: (Node | string)[]): HTMLElement {
-    const c = h('div', { class: `card ${cls}`, role: 'dialog', 'aria-modal': 'true' }, ...kids);
+  // A card is modal for real: everything else in the battle is inert while it is up (no Tab to
+  // Pause behind the hand-off card), Tab cycles inside it, and focus goes back where it was.
+  let focusBack: HTMLElement | null = null;
+  function card(cls: string, labelId: string, ...kids: (Node | string)[]): HTMLElement {
+    if (!overlay.firstChild) focusBack = document.activeElement as HTMLElement | null;
+    const c = h('div', { class: `card ${cls}`, role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': labelId }, ...kids);
     const scrim = h('div', { class: 'scrim' }, c);
     overlay.replaceChildren(scrim);
+    for (const el of [canvas, ...Array.from(hud.children)]) if (el !== overlay) (el as HTMLElement).inert = true;
+    // The tall layout nests the HUD parts; keep the overlay itself live.
+    overlay.inert = false;
+    c.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const f = [...c.querySelectorAll<HTMLElement>('button:not([disabled]), input, [tabindex="0"]')];
+      if (!f.length) return;
+      const i = f.indexOf(document.activeElement as HTMLElement);
+      const n = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i + 1) % f.length;
+      f[n].focus();
+      e.preventDefault();
+      e.stopPropagation();
+    });
     return scrim;
   }
-  function closeCards(): void { overlay.replaceChildren(); }
+  function closeCards(): void {
+    overlay.replaceChildren();
+    for (const el of [canvas, ...Array.from(hud.children)]) (el as HTMLElement).inert = false;
+    const back = focusBack;
+    focusBack = null;
+    if (back && back.isConnected && !back.inert) back.focus({ preventScroll: true });
+  }
 
   function openPause(): void {
     if (ended) return;
@@ -825,12 +1008,16 @@ export function battleScreen(app: App, route: Route): Screen {
     lose();
     const lvl = setup.level ? app.levels().find((l) => l.id === setup.level) : undefined;
     const goals = lvl ? h('ul', { class: 'goals' }, ...lvl.goals.map((g) => h('li', {}, g))) : '';
-    const giveUp = setup.mode === 'duel' ? btn('Give up', () => { closePause(); send({ cmd: 'give_up' }); }, 'secondary') : '';
-    card('pause-card',
-      h('h2', {}, 'Paused'),
+    // Give up only where the core has the command (the real core does not yet).
+    const giveUp = setup.mode === 'duel' && core.features.giveUp ? btn('Give up', () => { closePause(); send({ cmd: 'give_up' }); }, 'secondary') : '';
+    // Pass is always on offer on your turn, so no turn can lock.
+    const pass = snap.hud.canPass ? btn('Pass turn', () => { closePause(); flushAim(); if (send({ cmd: 'pass' })) afterAction(); }, 'secondary', { 'data-testid': 'pass' }) : '';
+    card('pause-card', 'pause-h',
+      h('h2', { id: 'pause-h' }, 'Paused'),
       goals,
       h('p', { class: 'small' }, lvl ? 'Win by Clean Sweep or Kettle Pop.' : ''),
       btn('Resume', () => closePause(), 'primary', { 'data-autofocus': true }),
+      pass,
       btn('Retry', () => { closePause(); void clearBattle(); app.go({ to: 'battle', setup }); }, 'secondary'),
       btn('Settings', () => {
         const data = core.saveBattle();
@@ -859,11 +1046,11 @@ export function battleScreen(app: App, route: Route): Screen {
       last = performance.now();
     }, 'primary big', { 'data-autofocus': true, 'data-testid': 'ready' });
     const hits = turnHits;
-    card(`handoff side${side}`,
+    card(`handoff side${side}`, 'handoff-h',
       h('p', { class: 'lastshot' }, hits.who ? `${hits.who} hit: ${hits.blocks} blocks, ${Math.round(hits.dmg)} damage` : 'New turn'),
-      h('div', { class: `crest ${side ? 'diamond' : 'round'}` }, '⚑'),
+      h('div', { class: `crest ${side ? 'diamond' : 'round'}`, 'aria-hidden': 'true' }, '⚑'),
       h('p', {}, 'Pass the device to'),
-      h('h2', { class: 'who' }, name.toUpperCase()),
+      h('h2', { class: 'who', id: 'handoff-h' }, name.toUpperCase()),
       help !== 'none' ? h('p', { class: 'helpmark' }, `Help: ${help === 'some' ? 'Some +' : 'Lots ++'}`) : '',
       h('p', { class: 'small' }, `♨ ${pct}%  ${crew.map((c) => CLASS_ICON[c.cls]).join(' ')}  Round ${round}/${snap.roundCap}`),
       ready,
@@ -873,8 +1060,8 @@ export function battleScreen(app: App, route: Route): Screen {
   }
 
   function shellCard(name: string, weight: number, best?: string): void {
-    const sc = card('shell-card',
-      h('h3', {}, name),
+    const sc = card('shell-card', 'shell-h',
+      h('h3', { id: 'shell-h' }, name),
       h('p', {}, `Weight: ${['Light', 'Medium', 'Heavy'][weight]}`),
       best ? h('p', {}, `Best with: ${best}`) : '',
       h('p', { class: 'small' }, 'Any Hob can fire it.'),
@@ -883,24 +1070,63 @@ export function battleScreen(app: App, route: Route): Screen {
     sc.addEventListener('click', (e) => { if (e.target === sc) closeCards(); });
   }
 
+  /** A Doodad is the turn's Action. Mend Bucket mends the most hurt blocks; Pot Lid asks which room. */
+  function doodadCard(d: { id: string; name: string; card: string }): void {
+    if (!canAim()) return;
+    const use = (room?: string) => {
+      closeCards();
+      flushAim();
+      if (send({ cmd: 'doodad', id: d.id, room })) { afterAction(); play('sheet'); }
+      else showBanner(`${d.name}: cannot use it now`, 'paper');
+    };
+    const rooms = snap.rooms.filter((rm) => rm.side === snap.hud.active && rm.intact && !rm.lid);
+    const k = snap.kettles.find((x) => x.side === snap.hud.active);
+    const choices = d.id === 'pot_lid'
+      ? [...(k && !k.lid ? [btn('Kettle Room', () => use('kettle'), 'primary', { 'data-autofocus': true })] : []),
+        ...rooms.map((rm) => btn(`Nook ${rm.id + 1}`, () => use(`nook:${rm.id}`), 'secondary'))]
+      : [btn(`Use ${d.name}`, () => use(), 'primary', { 'data-autofocus': true, 'data-testid': 'use-doodad' })];
+    const sc = card('shell-card doodad-card', 'doodad-h',
+      h('h3', { id: 'doodad-h' }, d.name),
+      h('p', {}, d.card),
+      h('p', { class: 'small' }, 'Using it is your Action for this turn.'),
+      ...choices,
+      btn('Close', () => closeCards(), 'secondary'),
+    );
+    sc.addEventListener('click', (e) => { if (e.target === sc) closeCards(); });
+    sc.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+  }
+
   // ---------- start ----------
   relayout();
   for (const e of snap.events) if (e.t === 'turn') turnCount++;
   if (turnCount === 0 && snap.phase !== 'over') turnCount = 1;
   snap.events = snap.events.filter((e) => e.t !== 'turn');
   if (snap.phase === 'plan' && setup.mode !== 'yard') showBanner(setup.mode === 'duel' ? `${snap.sides[snap.hud.active].name}'s turn` : 'Your turn', snap.hud.active === 0 ? 'blue' : 'orange');
+  hud.append(liveEl);
   raf = requestAnimationFrame(frame);
   root.dataset.core = core.name;
   root.dataset.testid = 'battle';
+  // A resumed Couch Duel shows the hand-off card first, as the saved turn did.
+  if (r.resume && r.handoff && setup.mode === 'duel' && setup.seats !== 'one' && snap.phase === 'plan') openHandoff(snap.hud.active, snap.round);
 
-  // For tests and debugging: a read-only view of the latest snapshot.
-  (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, layout: () => layout, core: core.name };
+  // For tests and debugging only (dev, or ?debug in the URL): a read-only view of the latest snapshot.
+  if (DEBUG) (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, layout: () => layout, core: core.name };
 
   return {
     el: root,
     relayout,
+    // Back in a fight opens Pause (or closes a card); it never leaves the fight unsaved.
+    onBack: () => {
+      if (crashed || ended) return false;
+      if (overlay.firstChild && !paused) closeCards();
+      else if (paused) closePause();
+      else openPause();
+      return true;
+    },
     destroy: () => {
       alive = false;
+      clearTimeout(leanT);
+      clearTimeout(liveT);
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKeyUp);

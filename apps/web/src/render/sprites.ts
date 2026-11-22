@@ -86,7 +86,8 @@ function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
     const i = new Image();
     i.decoding = 'async';
-    i.onload = () => res(i);
+    // Decode before the first frame needs it, so the battle does not pay for two 2048 px pages mid draw.
+    i.onload = () => { (i.decode ? i.decode() : Promise.resolve()).then(() => res(i), () => res(i)); };
     i.onerror = () => rej(new Error(`image ${src}`));
     i.src = src;
   });

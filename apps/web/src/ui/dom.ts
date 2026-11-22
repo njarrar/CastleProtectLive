@@ -42,7 +42,8 @@ export function repeatKey(label: Child, step: () => void, cls = '', extra: Attrs
   let timer = 0;
   let repeated = false;
   let started = 0;
-  const stop = () => { clearTimeout(timer); timer = 0; };
+  // The window blur listener lives only while a key is held, so nothing is left behind.
+  const stop = () => { clearTimeout(timer); timer = 0; window.removeEventListener('blur', stop); };
   const loop = () => {
     repeated = true;
     step();
@@ -55,6 +56,7 @@ export function repeatKey(label: Child, step: () => void, cls = '', extra: Attrs
     started = performance.now();
     stop();
     timer = window.setTimeout(loop, 350);
+    window.addEventListener('blur', stop);
   });
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture']) b.addEventListener(ev, stop);
   b.addEventListener('click', (e) => {
@@ -63,7 +65,6 @@ export function repeatKey(label: Child, step: () => void, cls = '', extra: Attrs
     if (!repeated) step();
     repeated = false;
   });
-  window.addEventListener('blur', stop);
   return b;
 }
 

@@ -7,10 +7,12 @@ import type { Blueprint, BlueprintCell } from '../core/types';
 import { sprites } from '../render/sprites';
 import { btn, h } from '../ui/dom';
 import { yardSetup } from './home';
+import { RULES } from '../core/rules';
 
 type Tool = BlueprintCell['kind'] | 'erase';
-const COLS = 8;
-const ROWS = 10;
+const COLS = RULES.workshop.cols;
+const ROWS = RULES.workshop.rows;
+const MAX_NOOKS = RULES.workshop.max_nooks;
 
 export function workshopScreen(app: App): Screen {
   const fresh = () => structuredClone(app.progress.blueprint ?? app.core.defaultBlueprint());
@@ -43,8 +45,8 @@ export function workshopScreen(app: App): Screen {
       if (tool === 'kettle') bp.cells = bp.cells.filter((x) => x.kind !== 'kettle');
       else {
         const used = new Set(bp.cells.filter((x) => x.kind === 'nook').map((x) => x.room));
-        room = [1, 2, 3, 4, 5].find((n) => !used.has(n));
-        if (!room) { undo.pop(); status.textContent = 'Five Nooks at most.'; return; }
+        room = Array.from({ length: MAX_NOOKS }, (_, i) => i + 1).find((n) => !used.has(n));
+        if (!room) { undo.pop(); status.textContent = `${MAX_NOOKS} Nooks at most.`; return; }
       }
       const box = [[c, r], [c + 1, r], [c, r + 1], [c + 1, r + 1]];
       if (bp.cells.some((x) => (x.kind === 'nook' || x.kind === 'kettle') && box.some(([a, b]) => a === x.col && b === x.row))) { undo.pop(); return; }
@@ -61,6 +63,20 @@ export function workshopScreen(app: App): Screen {
     paint();
   }
 
+  // Keyboard: arrow keys move, Enter or Space places the current tool (one roving tab stop).
+  const cursor: [number, number] = [0, 0];
+  gridEl.addEventListener('keydown', (e) => {
+    const mv: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
+    if (mv[e.key]) {
+      cursor[0] = Math.max(0, Math.min(COLS - 1, cursor[0] + mv[e.key][0]));
+      cursor[1] = Math.max(0, Math.min(ROWS - 1, cursor[1] + mv[e.key][1]));
+      paint();
+      e.preventDefault();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      apply(cursor[0], cursor[1]);
+      e.preventDefault();
+    }
+  });
   let painting = false;
   let lastCell = '';
   function paint(): void {
@@ -68,19 +84,25 @@ export function workshopScreen(app: App): Screen {
     const check = app.core.checkBlueprint(trim(bp));
     const minC = Math.min(COLS, ...bp.cells.map((x) => x.col));
     const bad = new Set(check.problems.map((p) => key(p.col + minC, p.row)));
+    const hadFocus = gridEl.contains(document.activeElement);
     gridEl.replaceChildren();
     for (let r = ROWS - 1; r >= 0; r--) {
+      const row = h('div', { class: 'gridrow', role: 'row' });
       for (let c = 0; c < COLS; c++) {
         const cell = cellAt(c, r);
         const img = cell && cell.kind !== 'nook' && cell.kind !== 'kettle' ? sprites.url(`block_${cell.kind}_fresh`) : undefined;
+        const on = c === cursor[0] && r === cursor[1];
         const el = h('div', {
           class: `cell ${cell ? cell.kind : 'empty'} ${bad.has(key(c, r)) && cell ? 'bad' : ''}`,
-          role: 'gridcell', 'data-c': c, 'data-r': r, 'aria-label': `Column ${c + 1}, row ${r + 1}${cell ? `, ${cell.kind}` : ''}`,
+          role: 'gridcell', 'data-c': c, 'data-r': r, tabindex: on ? 0 : -1,
+          'aria-label': `Column ${c + 1}, row ${r + 1}${cell ? `, ${cell.kind}` : ', empty'}`,
           style: img ? `background-image:url(${img})` : undefined,
         }, cell?.kind === 'nook' ? String(cell.room ?? 'N') : cell?.kind === 'kettle' ? '♨' : '');
-        gridEl.append(el);
+        row.append(el);
       }
+      gridEl.append(row);
     }
+    if (hadFocus) gridEl.querySelector<HTMLElement>('[tabindex="0"]')?.focus();
     gridEl.append(...Array.from({ length: COLS }, () => h('div', { class: 'cell footing-row', 'aria-hidden': 'true' })));
     const why = [...new Set(check.problems.map((p) => p.why))];
     status.textContent = `Blocks ${check.blocks}/${check.budget}   Cost ${check.cost}   ${check.ok ? 'Ready' : why.join('. ')}`;
@@ -97,6 +119,7 @@ export function workshopScreen(app: App): Screen {
     const c = cellFromEvent(e);
     if (!c) return;
     painting = true;
+    cursor[0] = c[0]; cursor[1] = c[1];
     lastCell = key(...c);
     apply(...c);
     try { gridEl.setPointerCapture(e.pointerId); } catch { /* ok */ }
@@ -146,7 +169,7 @@ export function workshopScreen(app: App): Screen {
     palette,
     h('footer', { class: 'pinned' },
       btn('Revert', () => { snapshotState(); bp = fresh(); bp.cols = COLS; bp.rows = ROWS; paint(); }, 'secondary'),
-      btn('Test Yard', () => { if (dirty) save(); const s = yardSetup(app); const tb = trim(bp); tb.rowsText = blueprintToRows(tb); delete tb.id; s.sides[0].blueprint = tb; app.go({ to: 'battle', setup: s }); }, 'team'),
+      btn('Test Yard', () => { if (dirty) save(); const tb = trim(bp); tb.rowsText = blueprintToRows(tb); delete tb.id; app.go({ to: 'battle', setup: yardSetup(app, tb) }); }, 'team'),
       saveBtn,
     ),
   );
