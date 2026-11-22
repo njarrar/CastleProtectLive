@@ -764,6 +764,12 @@
                   "string",
                   "null"
                 ]
+              },
+              "text": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             }
           }
@@ -860,6 +866,42 @@
               ]
             }
           }
+        },
+        "fire": {
+          "type": "object",
+          "required": [
+            "ready",
+            "why"
+          ],
+          "properties": {
+            "ready": {
+              "type": "boolean"
+            },
+            "why": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "text": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "fatigue": {
+          "type": "boolean"
+        },
+        "fatigue_round": {
+          "type": "integer"
+        },
+        "fatigue_in": {
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       }
     },
@@ -959,7 +1001,18 @@
               "pass",
               "win",
               "column",
-              "fatigue"
+              "fatigue",
+              "fatigue_warning",
+              "shot_switch",
+              "relight",
+              "boss_phase",
+              "roller",
+              "roller_move",
+              "roller_stop",
+              "shears",
+              "shears_open",
+              "shears_snip",
+              "shears_jam"
             ]
           },
           "tick": {
@@ -1052,6 +1105,9 @@
                   },
                   "best_streak": {
                     "type": "integer"
+                  },
+                  "best_shot": {
+                    "$ref": "#/$defs/best_shot"
                   }
                 }
               }
@@ -1087,6 +1143,9 @@
                   "type": "integer"
                 }
               }
+            },
+            "best_shot": {
+              "$ref": "#/$defs/best_shot"
             }
           }
         }
@@ -1121,6 +1180,60 @@
           "type": "integer"
         }
       }
+    }
+  },
+  "$defs": {
+    "best_shot": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "side",
+            "hob",
+            "shot",
+            "dmg",
+            "round"
+          ],
+          "properties": {
+            "side": {
+              "type": "integer"
+            },
+            "hob": {
+              "type": "integer"
+            },
+            "hob_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "shot": {
+              "type": "string"
+            },
+            "shot_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "angle": {
+              "type": "integer"
+            },
+            "power": {
+              "type": "integer"
+            },
+            "round": {
+              "type": "integer"
+            },
+            "dmg": {
+              "type": "integer"
+            }
+          }
+        }
+      ]
     }
   }
 }

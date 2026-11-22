@@ -7,10 +7,16 @@
   "commands": [
     {
       "can_fire": true,
-      "ok": true
+      "ok": true,
+      "ready": true,
+      "shot": "plain",
+      "why": null
     },
     {
-      "ok": true
+      "ok": true,
+      "ready": true,
+      "text": null,
+      "why": null
     },
     {
       "angle": 450,

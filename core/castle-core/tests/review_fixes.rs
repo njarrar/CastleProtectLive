@@ -309,7 +309,7 @@ fn h4_the_terrain_hash_is_incremental_and_exact() {
 }
 
 #[test]
-fn m1_a_fatigue_collapse_that_pops_a_kettle_ends_the_fight() {
+fn m1_a_fatigue_collapse_stops_short_of_popping_a_kettle() {
     let mut b = battle(
         r#"{"level":"d1","mode":"couch","first_turn":0,"rummage":{"pool":0,"picks":0},"sides":[{"blueprint":"bp_home_3_cobble","crew":["marge"]},{"kit":"kit_oak"}]}"#,
         5,
@@ -328,11 +328,13 @@ fn m1_a_fatigue_collapse_that_pops_a_kettle_ends_the_fight() {
     assert_eq!(b.side, 1);
     cmd(&mut b, json!({"cmd": "pass"}));
     b.run_until_plan(1000);
-    assert_eq!(
-        b.phase,
-        Phase::Ended,
-        "the round 10 collapse popped the kettle"
-    );
+    // QA playtest 1, M2: Fatigue only weakens support. The roof still falls
+    // on the kettle, but Fatigue alone never pops it or ends the fight.
+    assert_eq!(b.phase, Phase::Plan, "the fight goes on");
+    assert_eq!(b.castles[0].kettle_hp, 1, "the crush stops at 1 HP");
+    // the next real blow is what pops it
+    b.castles[0].kettle_hp = 0;
+    assert!(b.check_win());
     let r = b.result.as_ref().unwrap();
     assert_eq!((r.winner, r.how.as_str()), (1, "kettle_pop"));
 }

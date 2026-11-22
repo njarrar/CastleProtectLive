@@ -105,6 +105,33 @@
         },
         "index": {
           "type": "integer"
+        },
+        "shot": {
+          "type": "string"
+        },
+        "hob": {
+          "type": "integer"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "why": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ready_shot": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     }

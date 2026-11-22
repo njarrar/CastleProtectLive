@@ -502,6 +502,13 @@ pub struct SideSetup {
     /// Shells lent for this level only: in hand from the start, no draft.
     #[serde(default)]
     pub loose_shells: Vec<String>,
+    /// Knack uses per Hob of this side in this level, 0 to 2 (default 2).
+    #[serde(default)]
+    pub knack_uses: Option<i32>,
+    /// Hob HP of this side in this level, percent of each Hob's HP, 50 to
+    /// 200 (default 100). Region 1 Rivals send green crews.
+    #[serde(default)]
+    pub hp_pct: Option<i32>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

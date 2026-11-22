@@ -226,9 +226,30 @@ impl Battle {
                     } else {
                         Err("not_planning")
                     };
-                    json!({"shot": w, "id": self.shot_for(hob, w), "ready": r.is_ok(), "why": r.err()})
+                    json!({"shot": w, "id": self.shot_for(hob, w), "ready": r.is_ok(), "why": r.err(),
+                           "text": r.err().map(|why| self.unready_text(hob, w, why))})
                 })
                 .collect()
+        };
+        // the Fire button: lit only when the selected shot can fire now
+        let fire = {
+            let hob = self.sel[s].hob;
+            let w = self.sel[s].shot.clone();
+            let r = if matches!(self.phase, Phase::Plan) && !self.acted {
+                self.shot_ready(self.side, hob, &w)
+            } else {
+                Err("not_planning")
+            };
+            json!({"ready": r.is_ok(), "why": r.err(), "text": r.err().map(|why| self.unready_text(hob, &w, why))})
+        };
+        let fatigue_in = if self.castles[0].fatigue
+            || self.volley > 0
+            || self.mode == "test_yard"
+            || self.round >= crate::battle::FATIGUE_ROUND
+        {
+            Value::Null
+        } else {
+            json!(crate::battle::FATIGUE_ROUND - self.round)
         };
         let hud = json!({
             "turn": self.turn, "round": self.round, "round_cap": self.rules.round_cap, "side": self.side,
@@ -246,6 +267,10 @@ impl Battle {
             "steam_max": self.steam_max,
             "shove_off_cost": crate::battle::SHOVE_OFF,
             "shots": shots,
+            "fire": fire,
+            "fatigue": self.castles[0].fatigue,
+            "fatigue_round": crate::battle::FATIGUE_ROUND,
+            "fatigue_in": fatigue_in,
             "handicap": [handicap(0), handicap(1)],
             "volley": if self.volley > 0 { json!({"actions": self.volley, "left": self.actions_left}) } else { Value::Null },
             "boss": boss,
@@ -260,10 +285,22 @@ impl Battle {
             Value::Null
         };
         let events = std::mem::take(&mut self.events);
+        let best = |side: usize| -> Value {
+            match &self.stats[side].best_shot {
+                None => Value::Null,
+                Some(b) => {
+                    let hob = self.hobs.get(b.hob as usize);
+                    json!({"side": side, "hob": b.hob, "hob_name": hob.map(|h| h.name.clone()),
+                           "shot": b.shot, "shot_name": self.content.shot(&b.shot).map(|d| d.name.clone()),
+                           "angle": b.angle, "power": b.power, "round": b.round, "dmg": b.dmg})
+                }
+            }
+        };
         let stats = |side: usize| -> Value {
             let st = &self.stats[side];
             json!({"shots": st.shots, "hits": st.hits, "blocks_dropped": st.blocks_dropped, "bonks": st.bonks,
-                   "blocks_lost": st.blocks_lost, "kettle_lost": st.kettle_lost, "hobs_lost": st.own_bonked, "best_streak": st.best_streak})
+                   "blocks_lost": st.blocks_lost, "kettle_lost": st.kettle_lost, "hobs_lost": st.own_bonked, "best_streak": st.best_streak,
+                   "best_shot": best(side)})
         };
         json!({
             "tick": self.tick, "phase": self.phase.name(), "side": self.side, "awaiting": awaiting, "full": true,
@@ -279,6 +316,7 @@ impl Battle {
                 "pennants_new": r.pennants_new, "buttons": r.buttons,
                 "score": [self.stats[0].score, self.stats[1].score],
                 "stats": [stats(0), stats(1)],
+                "best_shot": best(r.winner as usize),
                 "broke": r.broke,
             })),
             "last_ai": self.last_ai,

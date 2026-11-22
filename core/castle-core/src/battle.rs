@@ -126,6 +126,24 @@ pub struct ShotCtx {
     /// Siege Score Skill Factor, percent.
     pub skill_pct: i32,
     pub big_drop_sent: bool,
+    /// Damage this shot dealt to the other side (blocks, Hobs, kettle).
+    pub enemy_dmg: i64,
+    /// Aim of the shot, for the best shot record.
+    pub angle: i32,
+    pub power: i32,
+    /// Shot stats were already counted (the battle ended mid shot).
+    pub counted: bool,
+}
+
+/// The shot that dealt the most damage to the other side, per side.
+#[derive(Clone, Debug, Default)]
+pub struct BestShot {
+    pub hob: i32,
+    pub shot: String,
+    pub angle: i32,
+    pub power: i32,
+    pub round: i32,
+    pub dmg: i64,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -151,6 +169,8 @@ pub struct SideStats {
     pub taken: Vec<(String, i32, i64)>,
     /// The last enemy shot that hurt this side: (shot id, Hob or -1, round).
     pub last_blow: Option<(String, i32, i32)>,
+    /// This side's shot that dealt the most damage to the other side.
+    pub best_shot: Option<BestShot>,
 }
 
 #[derive(Clone, Debug)]
@@ -260,6 +280,24 @@ pub struct Setup {
     /// What the save holds for this level, for the Buttons reward.
     #[serde(default)]
     pub progress: Option<Progress>,
+    /// Which try at this fight this is: 0 (default) for the first, 1 for
+    /// the first Retry and so on. Mixed into the seed so a Retry is a new
+    /// fight with the same rules. Ignored in `daily` (one fight per date).
+    #[serde(default)]
+    pub attempt: Option<i64>,
+}
+
+/// The seed a battle runs on: the app's seed, mixed with the try number
+/// unless this is the first try or the Daily Dust-up.
+pub fn battle_seed(seed: u64, mode: &str, attempt: i64) -> u64 {
+    if attempt == 0 || mode == "daily" {
+        return seed;
+    }
+    let mut h = crate::hash::StateHasher::default();
+    h.str("attempt");
+    h.i64(seed as i64);
+    h.i64(attempt);
+    h.finish()
 }
 
 #[derive(Clone, Debug)]
@@ -333,6 +371,10 @@ pub struct Battle {
     pub help: [String; 2],
     pub progress: Progress,
     pub boss: BossState,
+    /// Set only while the round 10 Fatigue collapse runs: falls and crush
+    /// then stop at 1 HP, so Fatigue alone never pops a kettle or Bonks a
+    /// Hob. Never set between calls, so it is not part of the hash.
+    pub soft_falls: bool,
 }
 
 fn ok() -> Value {
@@ -521,6 +563,17 @@ impl Battle {
                 n
             }
         };
+        let attempt = setup.attempt.unwrap_or(0);
+        if !(0..=1_000_000).contains(&attempt) {
+            return Err("attempt must be 0 to 1000000".into());
+        }
+        let seed = battle_seed(seed, &mode, attempt);
+        let test_yard = mode == "test_yard";
+        if test_yard {
+            // Test Yard: endless shots, no round cap, no Squall
+            rules.squall = false;
+            rules.cap_win = None;
+        }
         let mut rng = Streams::new(seed);
         let shot_ix: BTreeMap<String, usize> = content
             .shots
@@ -593,6 +646,12 @@ impl Battle {
                 }
                 crew.truncate(n as usize);
             }
+            if test_yard && s == 1 {
+                // the Dummy side: Straw Stuffers in every seat, never a crew
+                // the player could be handed
+                let n = crew.len().max(1);
+                crew = vec!["straw_stuffer".into(); n];
+            }
             if crew.len() > 5 {
                 return Err(format!("side {s} has more than 5 Hobs"));
             }
@@ -653,6 +712,14 @@ impl Battle {
                 .map(|x| terrain.surface(x))
                 .min()
                 .unwrap_or(level.height);
+            let knack_uses = ls.knack_uses.unwrap_or(2);
+            if !(0..=2).contains(&knack_uses) {
+                return Err(format!("level {} knack_uses must be 0 to 2", level.id));
+            }
+            let hp_pct = ls.hp_pct.unwrap_or(100);
+            if !(50..=200).contains(&hp_pct) {
+                return Err(format!("level {} hp_pct must be 50 to 200", level.id));
+            }
             for (i, hid) in crew.iter().enumerate() {
                 let hd = content.hob(hid).ok_or(format!("unknown hob {hid}"))?;
                 let plain = match &hd.passive {
@@ -669,14 +736,14 @@ impl Battle {
                     def: hd.id.clone(),
                     name: hd.name.clone(),
                     class: hd.class.clone(),
-                    hp: hd.hp,
-                    max: hd.hp,
+                    hp: hd.hp * hp_pct / 100,
+                    max: hd.hp * hp_pct / 100,
                     nook: Some(i as u8),
                     free: (0, 0),
                     state: HobState::Seated,
                     rest: 0,
                     extra_rest: false,
-                    knack_uses: if hd.knack.is_some() { 2 } else { 0 },
+                    knack_uses: if hd.knack.is_some() { knack_uses } else { 0 },
                     angle: if s == 0 { 450 } else { 1350 },
                     power: 60,
                     plain,
@@ -743,6 +810,8 @@ impl Battle {
                 }
             }
         };
+        // Test Yard: the player always fires first; the Dummy side only passes
+        let first_side = if test_yard { 0 } else { first_side };
         // weather fronts: fixed ones first, then random in range; enough for the cap plus squall
         let total_fronts = (rules.round_cap + 6) / rules.wind.front_rounds.max(1) + 2;
         let mut fronts = rules.wind.fronts.clone();
@@ -826,6 +895,7 @@ impl Battle {
             root_round: 0,
             snap_full: true,
             snap_aim: false,
+            soft_falls: false,
             popped: [false; 2],
             volley,
             actions_left: [volley; 2],
@@ -1158,30 +1228,60 @@ impl Battle {
                 self.sel[s] = sel_default(h.id);
             }
         }
-        // a stale shot (Trick Shell spent, Knack used up) falls back to plain
-        let hob = self.sel[s].hob as usize;
-        let valid = match self.sel[s].shot.as_str() {
-            "plain" => true,
-            "knack" => self
-                .hobs
-                .get(hob)
-                .is_some_and(|h| h.knack.is_some() && h.knack_uses > 0),
-            t => self.hands[s].iter().any(|x| x == t),
-        };
-        if !valid {
-            self.sel[s].shot = "plain".into();
+        // Test Yard: endless uses and no Rest for the player's crew
+        if self.mode == "test_yard" {
+            for h in self.hobs.iter_mut().filter(|h| h.side == side) {
+                h.rest = 0;
+                h.extra_rest = false;
+                if h.knack.is_some() {
+                    h.knack_uses = 2;
+                }
+            }
         }
-        // Test Yard: a side of dummies only (the Straw Stuffer) passes itself
+        // a picked shot that cannot fire this turn (Rest, Knack used up,
+        // Trick Shell spent) switches to the Plain Shot, so Fire is never
+        // lit for a shot that would be refused
+        self.fallback_to_plain(side, "turn_start");
+        // Test Yard: the Dummy side (side 1, or a side of dummies only)
+        // never gets a turn; it passes itself
         if self.mode == "test_yard"
-            && !self
-                .hobs
-                .iter()
-                .any(|h| h.side == side && h.alive() && !h.dummy)
+            && (side == 1
+                || !self
+                    .hobs
+                    .iter()
+                    .any(|h| h.side == side && h.alive() && !h.dummy))
         {
             self.acted = true;
             self.ev(json!({"t": "pass", "side": side, "why": "dummy"}));
             self.phase = Phase::Settle(1);
         }
+    }
+
+    /// If the selected shot of `side` cannot fire now but the Plain Shot can,
+    /// select the Plain Shot and say so with a `shot_switch` event.
+    pub fn fallback_to_plain(&mut self, side: u8, when: &str) -> bool {
+        let s = side as usize;
+        let hob = self.sel[s].hob;
+        let from = self.sel[s].shot.clone();
+        if from == "plain" {
+            return false;
+        }
+        let Err(why) = self.shot_ready(side, hob, &from) else {
+            return false;
+        };
+        let stale = match from.as_str() {
+            "knack" => self
+                .hobs
+                .get(hob as usize)
+                .is_none_or(|h| h.knack.is_none()),
+            t => !self.hands[s].iter().any(|x| x == t),
+        };
+        if !stale && self.shot_ready(side, hob, "plain").is_err() {
+            return false;
+        }
+        self.sel[s].shot = "plain".into();
+        self.ev(json!({"t": "shot_switch", "side": side, "hob": hob, "from": from, "to": "plain", "why": why, "when": when}));
+        true
     }
 
     /// Volley Points: a Bonked Hob puffs back at half HP in the lowest free
@@ -1513,7 +1613,11 @@ impl Battle {
                     return;
                 }
             }
-            if !self.rules.squall && self.round >= self.rules.round_cap && self.volley == 0 {
+            if !self.rules.squall
+                && self.round >= self.rules.round_cap
+                && self.volley == 0
+                && self.mode != "test_yard"
+            {
                 let winner = match self.rules.cap_win {
                     Some(w) => w.min(1),
                     None => {
@@ -1539,7 +1643,8 @@ impl Battle {
             }
             self.round += 1;
             self.round_start();
-            // a Fatigue collapse can pop a kettle or Bonk the last Hob
+            // the Fatigue collapse stops at 1 HP, so it never ends a fight by
+            // itself; this guards any other round start rule
             if self.check_win() {
                 return;
             }
@@ -1548,14 +1653,24 @@ impl Battle {
     }
 
     fn round_start(&mut self) {
-        if self.round >= FATIGUE_ROUND && !self.castles[0].fatigue {
+        if self.round == FATIGUE_ROUND - 1 && self.volley == 0 && self.mode != "test_yard" {
+            self.ev(json!({"t": "fatigue_warning", "round": FATIGUE_ROUND, "text": "Fatigue next round: hurt blocks hold less"}));
+        }
+        if self.round >= FATIGUE_ROUND && !self.castles[0].fatigue && self.mode != "test_yard" {
             for cs in self.castles.iter_mut() {
                 cs.fatigue = true;
             }
             self.ev(json!({"t": "fatigue", "round": self.round}));
+            // Fatigue only weakens support. Blocks that no longer stand fall
+            // now, with the normal collapse, break and drop events, but the
+            // fall and crush stop at 1 HP: Fatigue alone never pops a kettle
+            // or Bonks a Hob.
+            self.cur = None;
+            self.soft_falls = true;
             for s in 0..2u8 {
                 self.resolve_collapse(s);
             }
+            self.soft_falls = false;
             self.refresh_hob_states();
             self.update_buried();
         }
@@ -1673,7 +1788,7 @@ impl Battle {
         if self.phase == Phase::Ended {
             return true;
         }
-        if self.volley > 0 {
+        if self.volley > 0 || self.mode == "test_yard" {
             return false;
         }
         let mut lost = [false; 2];
@@ -1711,7 +1826,14 @@ impl Battle {
             lost[1] = false;
         }
         if lost[0] && lost[1] {
-            let pre = self.cur.as_ref().map(|c| c.pre_total).unwrap_or([0, 0]);
+            // both sides fell to one blow (not a Squall hit, which squall_hit
+            // judges): more total HP before the blow wins, and the result
+            // names how the loser fell, never the Squall
+            let pre = self
+                .cur
+                .as_ref()
+                .map(|c| c.pre_total)
+                .unwrap_or([self.total_hp(0), self.total_hp(1)]);
             let w = if pre[0] > pre[1] {
                 0
             } else if pre[1] > pre[0] {
@@ -1719,7 +1841,8 @@ impl Battle {
             } else {
                 1 - self.first_side
             };
-            self.end_battle(w, "double_pop");
+            let how = how[1 - w as usize];
+            self.end_battle(w, how);
             return true;
         }
         for s in 0..2 {
@@ -1734,6 +1857,9 @@ impl Battle {
     pub fn end_battle(&mut self, winner: u8, how: &str) {
         if self.phase == Phase::Ended {
             return;
+        }
+        if matches!(self.phase, Phase::Resolve | Phase::Settle(_)) {
+            self.count_shot();
         }
         self.actors.clear();
         self.phase = Phase::Ended;
@@ -2269,6 +2395,44 @@ impl Battle {
         Ok(())
     }
 
+    /// Plain words for a shot that cannot fire, for the Fire button and a
+    /// refused `fire`.
+    pub fn unready_text(&self, hob: u8, which: &str, why: &str) -> String {
+        let name = self
+            .hobs
+            .get(hob as usize)
+            .map(|h| h.name.clone())
+            .unwrap_or_else(|| "This Hob".into());
+        let shot = self
+            .shot_for(hob, which)
+            .and_then(|id| self.content.shot(&id).map(|d| d.name.clone()))
+            .unwrap_or_else(|| which.to_string());
+        match why {
+            "resting_plain_only" => format!("{name} needs a rest: Plain Shot only"),
+            "resting" => format!("{name} needs a rest this turn"),
+            "buried" => format!("{name}'s Loophole is buried: Shove Off to clear it"),
+            "no_knack_uses" => format!("{shot} is used up"),
+            "not_in_hand" => format!("{shot} is not in your hand"),
+            "no_heavy_first_turn" => format!("{shot} is Heavy: not on the first turn"),
+            "no_actions_left" => "No Actions left".into(),
+            "not_planning" => "Not your turn".into(),
+            "hob_cannot_fire" => format!("{name} cannot fire"),
+            _ => format!("{shot} cannot fire now"),
+        }
+    }
+
+    /// A refused `fire`: the reason key, plain words, and the shot the app
+    /// can switch to (the Plain Shot) when that one is ready.
+    fn refusal(&self, side: u8, hob: u8, which: &str, why: &str) -> Value {
+        let ready = if which != "plain" && self.shot_ready(side, hob, "plain").is_ok() {
+            json!("plain")
+        } else {
+            Value::Null
+        };
+        json!({"ok": false, "reason": why, "detail": self.unready_text(hob, which, why),
+               "shot": which, "hob": hob, "ready_shot": ready})
+    }
+
     fn fire(&mut self, dial: Option<String>, target: Option<(i32, i32)>) -> Value {
         if self.phase != Phase::Plan {
             return err("not_planning");
@@ -2280,7 +2444,7 @@ impl Battle {
         let s = side as usize;
         let sel = self.sel[s].clone();
         if let Err(why) = self.shot_ready(side, sel.hob, &sel.shot) {
-            return err(why);
+            return self.refusal(side, sel.hob, &sel.shot, why);
         }
         let Some(shot_id) = self.shot_for(sel.hob, &sel.shot) else {
             return err("no_shot");
@@ -2320,18 +2484,26 @@ impl Battle {
         }
         let is_match =
             def.kind == ShotKind::Trick && def.match_class.as_deref() == Some(h.class.as_str());
-        // pay
+        // pay (the Test Yard has endless uses and no Rest)
+        let yard = self.mode == "test_yard";
         match sel.shot.as_str() {
             "plain" => {}
+            "knack" if yard => {}
             "knack" => self.hobs[sel.hob as usize].knack_uses -= 1,
             t => {
-                if let Some(p) = self.hands[s].iter().position(|x| x == t) {
-                    self.hands[s].remove(p);
+                if !yard {
+                    if let Some(p) = self.hands[s].iter().position(|x| x == t) {
+                        self.hands[s].remove(p);
+                    }
                 }
                 self.stats[s].tricks_used += 1;
             }
         }
-        let rest = if is_match { 0 } else { def.weight.rest() };
+        let rest = if is_match || yard {
+            0
+        } else {
+            def.weight.rest()
+        };
         {
             // firing never lowers Rest: a resting Hob's Plain Shot keeps its cog
             let hm = &mut self.hobs[sel.hob as usize];
@@ -2347,6 +2519,8 @@ impl Battle {
         }
         let (angle, power) = (h.angle, h.power);
         if let Some(c) = self.cur.as_mut() {
+            c.angle = angle;
+            c.power = power;
             if is_match {
                 c.bonus_pct += 10;
             }
@@ -2796,9 +2970,58 @@ impl Battle {
     }
 
     fn finish_shot(&mut self) {
-        // stats and pennant tracking
+        self.count_shot();
+        // keep the last two ghosts per Hob
+        let mut keep: Vec<Ghost> = vec![];
+        for g in self.ghosts.iter().rev() {
+            if keep
+                .iter()
+                .filter(|k| k.side == g.side && k.hob == g.hob)
+                .count()
+                < 2
+            {
+                keep.push(g.clone());
+            }
+        }
+        keep.reverse();
+        self.ghosts = keep;
+        self.first_shot_done[self.side as usize] = true;
+        self.cur = None;
+        if !self.check_win() {
+            self.end_turn();
+        }
+    }
+
+    /// Stats and pennant tracking for the shot in flight, once. Runs when
+    /// the shot settles, or from `end_battle` when the shot ends the fight
+    /// (so the winning blow counts as a hit and can be the best shot).
+    fn count_shot(&mut self) {
+        if let Some(c) = self.cur.as_mut() {
+            if c.counted {
+                return;
+            }
+            c.counted = true;
+        }
         if let Some(c) = self.cur.clone() {
             let s = c.side as usize;
+            if c.enemy_dmg > 0 {
+                if let (Some(h), Some(shot)) = (c.hob, c.shot.clone()) {
+                    if self.stats[s]
+                        .best_shot
+                        .as_ref()
+                        .is_none_or(|b| c.enemy_dmg > b.dmg)
+                    {
+                        self.stats[s].best_shot = Some(BestShot {
+                            hob: h as i32,
+                            shot,
+                            angle: c.angle,
+                            power: c.power,
+                            round: self.round,
+                            dmg: c.enemy_dmg,
+                        });
+                    }
+                }
+            }
             if c.hit_enemy {
                 self.stats[s].streak += 1;
                 self.stats[s].hits += 1;
@@ -2823,25 +3046,6 @@ impl Battle {
             if let Some(pin) = c.pin {
                 self.ai_mem[s].last_pin = Some(pin);
             }
-        }
-        // keep the last two ghosts per Hob
-        let mut keep: Vec<Ghost> = vec![];
-        for g in self.ghosts.iter().rev() {
-            if keep
-                .iter()
-                .filter(|k| k.side == g.side && k.hob == g.hob)
-                .count()
-                < 2
-            {
-                keep.push(g.clone());
-            }
-        }
-        keep.reverse();
-        self.ghosts = keep;
-        self.first_shot_done[self.side as usize] = true;
-        self.cur = None;
-        if !self.check_win() {
-            self.end_turn();
         }
     }
 
@@ -2963,7 +3167,12 @@ impl Battle {
                 if self.sel[s].shot == "knack" && self.hobs[hob as usize].knack.is_none() {
                     self.sel[s].shot = "plain".into();
                 }
-                json!({"ok": true, "can_fire": self.can_fire_hob(self.side, hob)})
+                // a picked shot this Hob cannot fire switches to the Plain Shot
+                self.fallback_to_plain(self.side, "pick_hob");
+                let shot = self.sel[s].shot.clone();
+                let r = self.shot_ready(self.side, hob, &shot);
+                json!({"ok": true, "can_fire": self.can_fire_hob(self.side, hob), "shot": shot,
+                       "ready": r.is_ok(), "why": r.err()})
             }
             "pick_shot" => {
                 if self.phase != Phase::Plan || self.acted {
@@ -2978,7 +3187,12 @@ impl Battle {
                     return Err(err("bad_shot"));
                 }
                 self.sel[s].shot = shot.into();
-                ok()
+                // the pick stands even when the shot cannot fire now, so the
+                // chip can show why; Fire stays grey until it can
+                let hob = self.sel[s].hob;
+                let r = self.shot_ready(self.side, hob, shot);
+                json!({"ok": true, "ready": r.is_ok(), "why": r.err(),
+                       "text": r.err().map(|w| self.unready_text(hob, shot, w))})
             }
             "aim" => {
                 if self.phase != Phase::Plan || self.acted {

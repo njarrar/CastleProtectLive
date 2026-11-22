@@ -87,6 +87,7 @@
       "marge",
       "quill",
       "jax",
+      "grub",
       "bobbin"
     ],
     "crew_size": 4,
@@ -102,7 +103,9 @@
       "rake_hand",
       "mower_minder"
     ],
-    "aim": 2
+    "aim": 2,
+    "knack_uses": 1,
+    "hp_pct": 70
   },
   "rules": {
     "round_cap": 14,

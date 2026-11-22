@@ -1,8 +1,10 @@
 # Castle Protect core API (v0.2)
 
-Rules version 2 (`cp_version().rules`). What changed from v0.1 is listed in
+Rules version 3 (`cp_version().rules`). What changed from v0.1 is listed in
 "Changes in v0.2" at the end of this file and in the Fixes section of
-`docs/review/code/core-review-1.md`.
+`docs/review/code/core-review-1.md`. What changed for QA playtest 1 is in
+"Changes for QA playtest 1" at the end, and in the "Core fixes" section of
+`docs/qa/playtest-1/REPORT.md`.
 
 The core owns every game rule. Apps send commands as JSON and read frame
 snapshots as JSON. Same calls on all three platforms:
@@ -16,7 +18,7 @@ snapshots as JSON. Same calls on all three platforms:
 | `void cp_free_string(char*)` | (not needed) | Free any string the C ABI returned |
 | `void cp_free(CpGame*)` | `game.free()` | Free the battle |
 | `char* cp_last_error(CpGame*)` | `last_error()` / `cp_last_error()` | The last refusal reply (JSON) or panic text for that handle; with NULL, this thread's last `cp_new` error. NULL when there is none |
-| `char* cp_version(void)` | `cp_version()` | `{"sim":"0.2.0","rules":2,"tick_hz":120}` |
+| `char* cp_version(void)` | `cp_version()` | `{"sim":"0.2.0","rules":3,"tick_hz":120}` |
 | `char* cp_golden_hashes(void)` | `golden_hashes()` | Golden replay hashes, one `name hash` line each |
 | `uint64_t cp_daily_seed(const char* date)` | `daily_seed(date)` | Daily Dust-up seed from the local date text (`2026-11-22`) and the rules version |
 | | `default_content()` | The built in content bundle as JSON |
@@ -104,14 +106,15 @@ object whose keys match the content files:
   "rummage": {"pool": 6, "picks": 2, "source": []},
   "puff_up": true,
   "volley": null,
-  "progress": {"cleared": false, "pennants": [false, false, false], "daily_paid": false}
+  "progress": {"cleared": false, "pennants": [false, false, false], "daily_paid": false},
+  "attempt": 0
 }
 ```
 
 | Field | Meaning |
 |---|---|
 | `level` | Required. A level id from content: `1-1` to `1-10`, `d1`, `d2` |
-| `mode` | `campaign` (default for campaign levels), `skirmish` (default for `d*`), `couch` (both sides human, no AI), `test_yard` (`set_wind`; a side of dummies passes itself), `daily` (Daily Dust-up: a Skirmish that pays the Daily reward) |
+| `mode` | `campaign` (default for campaign levels), `skirmish` (default for `d*`), `couch` (both sides human, no AI), `test_yard` (see "Test Yard" below), `daily` (Daily Dust-up: a Skirmish that pays the Daily reward) |
 | `sides[i].control` | `human` or `ai`. Default: side 0 human, side 1 AI; in `couch` both human |
 | `sides[i].preset` | AI preset: `cozy`, `fair` (default), `stubborn` |
 | `sides[i].crew` | Hob ids, seated in Nook 1, 2, … in order. Default: the level's crew (side 0 cut to the level's crew size) |
@@ -124,6 +127,7 @@ object whose keys match the content files:
 | `sides[i].crew_size` | Crew size handicap 1 to 5: seat only the first n Hobs |
 | `volley` | Volley Points: Actions per side (6, 10 or 14; 1 to 30 accepted). Only `skirmish`, `daily`, `couch`. No round cap and no Squall; see "Volley Points" |
 | `progress` | What the save holds for this level: `cleared`, `pennants` (3 bools), `daily_paid`. Used only for `result.buttons` |
+| `attempt` | Which try at this fight: `0` (default) the first, `1` the first Retry, and so on (0 to 1000000). The core mixes it into the seed, so a Retry with the same seed is a new fight (new fronts, Squall side, draft pool and AI rolls) under the same rules. Ignored in `daily`: the Daily Dust-up stays one fight per date. Apps: keep one seed per level and count tries; send the count here. Save and `resume` with the same setup (attempt included) |
 | `first_turn` | `0`, `1` or `"coin"`. Default: level rule (campaign: player; skirmish: coin) |
 | `round_cap`, `squall`, `wind`, `rummage`, `puff_up` | Overrides of the level rules (`round_cap` 1 to 40, wind -10 to 10, rummage pool 0 to 20 and picks 0 to 10) |
 
@@ -159,13 +163,13 @@ draft commands, which act for `draft.next` unless `side` is given.
 
 | Command | Fields | Effect |
 |---|---|---|
-| `pick_hob` | `hob` (Hob id) | Select the Hob that will act. Reply has `can_fire` |
-| `pick_shot` | `shot`: `"plain"`, `"knack"` or a Trick Shell id in hand | Select the shot |
+| `pick_hob` | `hob` (Hob id) | Select the Hob that will act. If the picked shot cannot fire for this Hob (Rest, Knack used up) but its Plain Shot can, the pick switches to `"plain"` (`shot_switch` event). Reply has `can_fire`, `shot` (the picked shot now), `ready` and `why` |
+| `pick_shot` | `shot`: `"plain"`, `"knack"` or a Trick Shell id in hand | Select the shot. The pick stands even when the shot cannot fire now, so the chip can say why. Reply has `ready`, `why` (the refusal `fire` would give) and `text` (plain words, e.g. "Marge Dumpling needs a rest: Plain Shot only") |
 | `aim` | `angle`, `power` (either may be left out) | Set the selected Hob's aim. Aim is kept per Hob between turns. An `aim` does not force a full snapshot: the next lean snapshot carries `aim` and `preview`. A run of `aim` commands is one log entry |
 | `recall` | `ghost` (index among this side's ghosts) | `plan` only. Restore that ghost's Hob, angle and power once; then the pin fades |
 | `walk` | `dx` (cells, + right, - left) | Walk before the Action. 1 Steam per 4 cells, x2 uphill, x3 in mud, at most 40 Steam per turn. A step climbs at most 16 cells and drops at most 64; a drop over 48 is a Thump (10 to every block and Hob) and ends the walk. The height is found from the fort's base, so dirt on the roof is not ground. Reply has `moved`, `steam` |
 | `shove_off` | `hob` | Pay 15 Steam (`hud.shove_off_cost`) to clear a buried Loophole. No Action spent. Only diggable ground counts as burial (Rock and Bedrock never bury a Loophole); refused with `not_buried` if nothing would clear |
-| `fire` | optional `dial` (`"puff_up"`, `"rebuild"`, `"hops3"`), optional `target: [c, r]` | The Action: fire the selected Hob's selected shot. `target` aims a Mendglob at a block of your own fort (no arc). A dial trigger replaces the plain one (Barn Raising `puff_up` re-inflates, it does not also rebuild). A self shot that would do nothing is refused before anything is paid (`nothing_to_mend`, `no_one_to_puff_up`, `bad_target`). Phase becomes `resolve` |
+| `fire` | optional `dial` (`"puff_up"`, `"rebuild"`, `"hops3"`), optional `target: [c, r]` | The Action: fire the selected Hob's selected shot. A shot that cannot fire is refused with nothing spent: `{"ok":false,"reason":"resting_plain_only","detail":"Marge Dumpling needs a rest: Plain Shot only","shot":"knack","hob":0,"ready_shot":"plain"}` (`ready_shot` is `"plain"` when the Plain Shot would fire, else null). Never ignore it: show `detail`, or switch to `ready_shot`. `target` aims a Mendglob at a block of your own fort (no arc). A dial trigger replaces the plain one (Barn Raising `puff_up` re-inflates, it does not also rebuild). A self shot that would do nothing is refused before anything is paid (`nothing_to_mend`, `no_one_to_puff_up`, `bad_target`). Phase becomes `resolve` |
 | `doodad` | `doodad`, plus `targets: [[c, r], …]` (Mend Bucket, default: most hurt blocks) or `room: "kettle" \| "nook:N"` (Pot Lid) | The Action: use a Doodad. A Mend Bucket with nothing hurt to mend is refused (`nothing_to_mend`) and not spent |
 | `pass` | | Spend the Action doing nothing |
 | `ai_turn` | optional `preset` | Let the AI play this side's turn now (Walk, Shove Off, shot or Doodad), or in `draft` make this side's pick. Apps call it when `awaiting` is `"ai"`, after the think pose. Reply has `commands` (what the AI did) and `results`. The log keeps `{"cmd":"ai_turn"}` itself, not the commands: replaying it reruns the AI on the same state, memory and random stream |
@@ -290,7 +294,11 @@ the Nook index; Hobs refer to it). `box` and `loophole` are world boxes
 Weather Front changes. `lid`: Pot Lid. `shimmer`: blocks at the end of
 their reach. `held`: blocks Hetty's Ridgepole holds up. `fatigue`: true from
 round 10; then a block below full HP is `battered` and reaches one block
-less to the side (Cobble 1 becomes 0, wood 2 becomes 1). `root`: the boss
+less to the side (Cobble 1 becomes 0, wood 2 becomes 1). Blocks that no
+longer stand fall at that round start with the normal `collapse` (with
+`why: "fatigue"`), `break`, `hit` and `drop` events, so apps play it like
+any collapse. Those falls stop at 1 HP: Fatigue alone never pops a kettle,
+never Bonks a Hob and never ends a fight. `root`: the boss
 weak spot block.
 
 ### hobs[]
@@ -352,7 +360,9 @@ order.
 | `puff_up` | Per side, whether Puff Up is still available |
 | `steam_max` | `[side0, side1]` Steam at the start (the bar's 100%; the second side starts with +20) |
 | `shove_off_cost` | Steam a Shove Off costs (15) |
-| `shots` | Shot chips for the selected Hob of the side on turn: `[{"shot": "plain" \| "knack" \| shell id, "id": shot id, "ready": bool, "why": reason \| null}]`. `why` is what `fire` would refuse with (`resting_plain_only`, `no_knack_uses`, `no_heavy_first_turn`, `buried`, `resting`, `no_actions_left`, `not_planning`, …) |
+| `shots` | Shot chips for the selected Hob of the side on turn: `[{"shot": "plain" \| "knack" \| shell id, "id": shot id, "ready": bool, "why": reason \| null, "text": words \| null}]`. Every chip with `ready: false` has a `why` (what `fire` would refuse with: `resting_plain_only`, `no_knack_uses`, `no_heavy_first_turn`, `buried`, `resting`, `no_actions_left`, `not_planning`, …) and a `text` to show |
+| `fire` | The Fire button: `{"ready": bool, "why": reason \| null, "text": words \| null}` for the selected shot. Light Fire only when `ready` is true; otherwise grey it and show `text` |
+| `fatigue`, `fatigue_round`, `fatigue_in` | Fatigue is on (from round 10); the round it starts (10); rounds until it starts (2, 1) or null once on (and in Volley Points and the Test Yard). Show "Fatigue next round" when `fatigue_in` is 1 |
 | `handicap` | Per side `{"help", "steam", "preview_pct", "crew"}`: show them openly (Couch Duel house rule 6) |
 | `volley` | null, or `{"actions": n, "left": [a, b]}` ("Shots left 7/10") |
 | `boss` | null, or on a Grand Fort with phases: `{"phase": 1..3, "roller": prop or null, "roller_done", "shears": prop or null, "cut": [x0, y0, x1, y1] or null, "jam": n}`. `cut` is the red cut line, shown one boss turn before the snip |
@@ -405,13 +415,15 @@ Every event has `t` (type) and `tick`. Positions are world cells.
 | `grudge`, `clatter` | `hob` | Passives switched on |
 | `regrow` | `side`, `c`, `r` | Boss hedge regrows |
 | `column` | `side`, `c`, `r` | Lid Lifter blast up a column |
-| `fatigue` | `round` | Fatigue starts (round 10): battered blocks lose side reach |
+| `fatigue_warning` | `round`, `text` | One round before Fatigue (round 9 start): "Fatigue next round" |
+| `fatigue` | `round` | Fatigue starts (round 10): battered blocks lose side reach. The collapse it causes follows as `collapse` events with `why: "fatigue"` |
+| `shot_switch` | `side`, `hob`, `from`, `to` (`"plain"`), `why`, `when` (`turn_start`, `pick_hob`) | The picked shot could not fire (Rest, Knack used up, shell spent), so the pick moved to the Plain Shot |
 | `miss` | `x`, `y` | A shell left the map |
 | `pass` | `side` | |
 | `win` | `winner`, `how`, `round`, `pennants` | Battle over |
 
 `how`: `clean_sweep`, `kettle_pop`, `squall` (a Squall hit popped one
-kettle), `double_pop`, `rescue`, `round_cap` (1-1: Sir Pudge dozes off; 1-7:
+kettle), `double_pop` (only a Squall hit that popped both kettles), `rescue`, `round_cap` (1-1: Sir Pudge dozes off; 1-7:
 the cap ran out before the rescue, the rival wins), `total_hp` (cap with no
 Squall), `give_up`, `volley_points`, `captive_bonked` (Rescue lost).
 
@@ -437,6 +449,12 @@ blocks lost to a Thump (`why: "thump"`) or a Squall (`why: "squall"`).
            "kettle_lost": 300, "blocks_lost": 11, "hobs_bonked": 1}}
 ```
 
+- `stats[i].best_shot` and `best_shot`: the shot of side `i` that dealt the
+  most damage to the other side, `{"side", "hob", "hob_name", "shot",
+  "shot_name", "angle", "power", "round", "dmg"}` or null. `best_shot` is
+  the winner's (`stats[winner].best_shot`): use it for "Best shot" on a
+  results screen, never a shot of the losing side. The blow that ends the
+  fight counts (in `hits` too).
 - `pennants_new`: Pennants earned now that `progress.pennants` did not hold.
 - `buttons`: what the player (side 0) earns, design 5.2, numbers from
   `content/app.json` `rewards`: campaign first clear 200 (Grand Fort 500)
@@ -451,6 +469,17 @@ blocks lost to a Thump (`why: "thump"`) or a Squall (`why: "squall"`).
   three shots that did the most damage (`shot` may also be `squall`,
   `ground` for falls with no shot, `prop` for a Tick-Tock Crock, `shears`),
   and what it lost.
+
+## Test Yard
+
+`mode: "test_yard"`. Side 0 is the player; side 1 is the Dummy side. Side
+1's crew is always Straw Stuffers (one per seat of its crew), whatever the
+setup says, and its turn passes itself (`pass` event with `why: "dummy"`)
+during a one tick `settle`, so `awaiting` is never `human` for side 1: the
+player never gets the Dummy's turn. Side 0 always fires first. Shots have
+endless uses: Knacks and Trick Shells are not spent and no Hob rests. No
+round cap, no Squall, no Fatigue, and no win: the yard ends only on
+`give_up`. `set_wind` works only here.
 
 ## Volley Points
 
@@ -511,7 +540,10 @@ power for each Hob and shot with real sim probes, runs the best candidates
 through the real sim on a cloned battle, scores them, then adds aim error
 from its own random stream. The error starts at the preset's sigma (Cozy
 5°/10, Fair 3°/6, Stubborn 1.5°/3 power points, scaled by the Rival's aim
-grade) and narrows each shot at the same target. Work is counted in units
+grade: 1 is 220%, 2 is 160%, 3 is 100%, 4 is 85%, 5 is 70%) and narrows
+each shot at the same target. Grades 1 and 2 also correct more slowly
+(45% and 70% of the preset's correction), so a Region 1 "Aim 1 of 5"
+Rival plays as a weak shooter. Work is counted in units
 (one actor tick): Cozy 60k, Fair 120k, Stubborn 180k per turn (`ai.rs`
 `tuning()` is the one source). Aims are solved breadth first: every Hob and
 flight gets a rough aim at each target in turn before any is refined, the
@@ -534,3 +566,32 @@ list with reasons. In short: panic safety and errors in both bindings;
 `buttons`, `score`, `stats`, `broke`; new `how` values and events;
 `validate_blueprint` returns `cost`, `used`, `budget` and `cells`; the 1-10
 roller and shears; Rescue rules; rules version 2.
+
+## Changes for QA playtest 1 (rules version 3)
+
+From `docs/qa/playtest-1/REPORT.md` (bugs M1, M2, M4, M6, m1). Rules version
+3: old saves from rules version 2 do not resume.
+
+- **Fatigue (M2).** The round 10 collapse now stops at 1 HP: it never pops
+  a kettle, Bonks a Hob or ends a fight. It plays as normal `collapse`
+  events (`why: "fatigue"`). New `fatigue_warning` event at round 9 and
+  `hud.fatigue`, `hud.fatigue_round`, `hud.fatigue_in`. Two sides falling
+  to one blow outside the Squall no longer end as `double_pop`: the result
+  names how the loser fell (`kettle_pop`, `clean_sweep`).
+- **Rest turn (M1).** At turn start (and on `pick_hob`) a picked shot that
+  cannot fire switches to the Plain Shot, with a `shot_switch` event.
+  `hud.fire` says whether Fire may be lit; every unready chip in
+  `hud.shots` has `why` and `text`. A refused `fire` has `detail` (plain
+  words), `shot`, `hob` and `ready_shot`. `pick_shot` and `pick_hob`
+  replies carry `ready` and `why`.
+- **Test Yard (M4).** Side 1 is always the Dummy side and passes itself;
+  endless shots, no Rest, no cap, no Squall, no Fatigue, no win.
+- **Best shot (m1).** `result.stats[i].best_shot` per side and
+  `result.best_shot` (the winner's). The winning blow now counts in the
+  shot stats.
+- **Retry (M6).** Setup `attempt` mixes the try number into the seed
+  (not in `daily`).
+- **Balance (M6).** Rival aim grades 1 and 2 aim wider and correct more
+  slowly. New level content fields `player`/`rival` `knack_uses` (0 to 2)
+  and `hp_pct` (50 to 200). Region 1 levels retuned; 1-7 cage bars 80 HP.
+  Measured with `cargo run --release -p castle-core --example winrate`.

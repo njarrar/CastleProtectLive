@@ -913,6 +913,12 @@ impl Battle {
 
     /// Damage that is not shot damage (crush, falls, Thump): no clamps.
     pub(crate) fn hurt_hob_raw(&mut self, h: u8, dmg: i32, why: &str) {
+        // the Fatigue collapse never Bonks a Hob by itself
+        let dmg = if self.soft_falls {
+            dmg.min(self.hobs[h as usize].hp - 1)
+        } else {
+            dmg
+        };
         if dmg <= 0 || !self.hobs[h as usize].alive() {
             return;
         }
@@ -1072,6 +1078,11 @@ impl Battle {
         };
         let round = self.round;
         let enemy = self.cur.as_ref().is_some_and(|c| c.side != victim);
+        if enemy {
+            if let Some(c) = self.cur.as_mut() {
+                c.enemy_dmg += d as i64;
+            }
+        }
         let st = &mut self.stats[victim as usize];
         if enemy {
             st.last_blow = Some((shot.clone(), hob, round));
@@ -1185,6 +1196,12 @@ impl Battle {
     }
 
     fn apply_kettle(&mut self, shooter: u8, side: u8, d: i32, why: &str) {
+        // the Fatigue collapse never pops a kettle by itself
+        let d = if self.soft_falls {
+            d.min(self.castles[side as usize].kettle_hp - 1)
+        } else {
+            d
+        };
         if d <= 0 {
             return;
         }
@@ -1458,9 +1475,12 @@ impl Battle {
                     let i = self.castles[s].idx(c, r);
                     self.castles[s].slots[i] = Slot::Empty;
                 }
-                self.ev(
-                    json!({"t": "collapse", "side": side, "blocks": blocks_json, "falls": falls}),
-                );
+                let mut ev =
+                    json!({"t": "collapse", "side": side, "blocks": blocks_json, "falls": falls});
+                if self.soft_falls {
+                    ev["why"] = json!("fatigue");
+                }
+                self.ev(ev);
                 total += chunk.len() as i32;
                 self.stats[s].blocks_lost += chunk.len() as i32;
                 // crush what lies under each column

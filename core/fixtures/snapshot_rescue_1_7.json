@@ -1293,7 +1293,7 @@
   ],
   "full": true,
   "ghosts": [],
-  "hash": "a5ec23f846d2ea05",
+  "hash": "70f281f8c21f26cb",
   "hobs": [
     {
       "aim": {
@@ -1541,6 +1541,14 @@
       [],
       []
     ],
+    "fatigue": false,
+    "fatigue_in": 9,
+    "fatigue_round": 10,
+    "fire": {
+      "ready": true,
+      "text": null,
+      "why": null
+    },
     "forecast": 0,
     "front_rounds_left": 3,
     "handicap": [
@@ -1595,12 +1603,14 @@
         "id": "clodpot",
         "ready": true,
         "shot": "plain",
+        "text": null,
         "why": null
       },
       {
         "id": "grand_dumpling",
         "ready": true,
         "shot": "knack",
+        "text": null,
         "why": null
       }
     ],
@@ -1775,10 +1785,10 @@
   ],
   "props": [
     {
-      "hp": 50,
+      "hp": 80,
       "id": 1,
       "kind": "cage_bar",
-      "max": 50,
+      "max": 80,
       "shot": null,
       "side": 2,
       "tag": "cage",
@@ -1786,10 +1796,10 @@
       "y": 284
     },
     {
-      "hp": 50,
+      "hp": 80,
       "id": 2,
       "kind": "cage_bar",
-      "max": 50,
+      "max": 80,
       "shot": null,
       "side": 2,
       "tag": "cage",
@@ -1797,10 +1807,10 @@
       "y": 265
     },
     {
-      "hp": 50,
+      "hp": 80,
       "id": 3,
       "kind": "cage_bar",
-      "max": 50,
+      "max": 80,
       "shot": null,
       "side": 2,
       "tag": "cage",

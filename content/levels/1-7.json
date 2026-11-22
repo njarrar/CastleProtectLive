@@ -112,20 +112,20 @@
     {
       "kind": "cage_bar",
       "x": 1182,
-      "hp": 50,
+      "hp": 80,
       "tag": "cage"
     },
     {
       "kind": "cage_bar",
       "x": 1200,
       "lift": 14,
-      "hp": 50,
+      "hp": 80,
       "tag": "cage"
     },
     {
       "kind": "cage_bar",
       "x": 1218,
-      "hp": 50,
+      "hp": 80,
       "tag": "cage"
     },
     {

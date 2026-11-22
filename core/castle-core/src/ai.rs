@@ -105,12 +105,24 @@ pub fn tuning(p: Preset) -> Tuning {
     }
 }
 
+/// Aim error scale per Rival aim grade, percent of the preset's sigma.
 fn grade_pct(g: i32) -> i32 {
     match g {
-        1 => 140,
-        2 => 120,
+        1 => 220,
+        2 => 160,
         4 => 85,
         5 => 70,
+        _ => 100,
+    }
+}
+
+/// How fast a Rival corrects from its last Pin, percent of the preset's
+/// correction. A grade 1 or 2 Rival (Region 1) finds its range slowly, so
+/// "Aim 1 of 5" plays as a weak shooter, not only a wide first shot.
+fn grade_correct_pct(g: i32) -> i32 {
+    match g {
+        1 => 45,
+        2 => 70,
         _ => 100,
     }
 }
@@ -859,7 +871,8 @@ fn apply_error(b: &mut Battle, side: u8, c: &Cand, t: &Tuning) -> (i32, i32) {
     if def.flight.kind == FlightKind::SelfTarget {
         return (c.angle, c.power);
     }
-    let g = grade_pct(b.aim_grade[s]);
+    let b_grade = b.aim_grade[s];
+    let g = grade_pct(b_grade);
     let sa = (t.angle_sigma * g / 100) as i64;
     let sp = (t.power_sigma * g / 100) as i64;
     let fa = (t.angle_floor * g / 100) as i64;
@@ -878,7 +891,7 @@ fn apply_error(b: &mut Battle, side: u8, c: &Cand, t: &Tuning) -> (i32, i32) {
             (nrm(rng, sa * k / 100), nrm(rng, sp * k / 100))
         }
         Some(&(_, oa, op)) => {
-            let cpct = rng.range(t.c_low, t.c_high) as i64;
+            let cpct = (rng.range(t.c_low, t.c_high) * grade_correct_pct(b_grade) / 100) as i64;
             (
                 oa as i64 * (100 - cpct) / 100 + nrm(rng, fa),
                 op as i64 * (100 - cpct) / 100 + nrm(rng, fp),

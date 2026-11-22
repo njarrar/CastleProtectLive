@@ -75,7 +75,8 @@
       "pebble_pitcher",
       "rake_hand"
     ],
-    "aim": 2
+    "aim": 2,
+    "hp_pct": 85
   },
   "rules": {
     "round_cap": 15,

@@ -171,6 +171,24 @@
           "items": {
             "type": "string"
           }
+        },
+        "knack_uses": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Knack uses per Hob of this side in this level (default 2). Lets an early Rival hold back."
+        },
+        "hp_pct": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 50,
+          "maximum": 200,
+          "description": "Hob HP of this side in this level, percent of each Hob's own HP (default 100)."
         }
       }
     },
@@ -225,6 +243,24 @@
           "items": {
             "type": "string"
           }
+        },
+        "knack_uses": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Knack uses per Hob of this side in this level (default 2). Lets an early Rival hold back."
+        },
+        "hp_pct": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 50,
+          "maximum": 200,
+          "description": "Hob HP of this side in this level, percent of each Hob's own HP (default 100)."
         }
       }
     },

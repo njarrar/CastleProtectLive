@@ -54,9 +54,9 @@
       "marge",
       "quill",
       "jax",
-      "hetty",
       "grub",
-      "bobbin"
+      "bobbin",
+      "hetty"
     ],
     "crew_size": 4,
     "blueprint": "bp_home_4"

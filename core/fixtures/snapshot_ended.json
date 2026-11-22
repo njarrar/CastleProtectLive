@@ -2259,6 +2259,14 @@
         "pot_lid"
       ]
     ],
+    "fatigue": false,
+    "fatigue_in": 9,
+    "fatigue_round": 10,
+    "fire": {
+      "ready": false,
+      "text": "Not your turn",
+      "why": "not_planning"
+    },
     "forecast": -3,
     "front_rounds_left": 3,
     "handicap": [
@@ -2344,24 +2352,28 @@
         "id": "clodpot",
         "ready": false,
         "shot": "plain",
+        "text": "Not your turn",
         "why": "not_planning"
       },
       {
         "id": "tick_tock_crock",
         "ready": false,
         "shot": "knack",
+        "text": "Not your turn",
         "why": "not_planning"
       },
       {
         "id": "lid_lifter",
         "ready": false,
         "shot": "lid_lifter",
+        "text": "Not your turn",
         "why": "not_planning"
       },
       {
         "id": "mole_mail",
         "ready": false,
         "shot": "mole_mail",
+        "text": "Not your turn",
         "why": "not_planning"
       }
     ],
@@ -2395,6 +2407,17 @@
   "preview": [],
   "props": [],
   "result": {
+    "best_shot": {
+      "angle": 440,
+      "dmg": 29,
+      "hob": 0,
+      "hob_name": "Marge Dumpling",
+      "power": 78,
+      "round": 1,
+      "shot": "clodpot",
+      "shot_name": "Clodpot",
+      "side": 0
+    },
     "broke": {
       "blocks_lost": 0,
       "hobs_bonked": 0,
@@ -2429,6 +2452,17 @@
     ],
     "stats": [
       {
+        "best_shot": {
+          "angle": 440,
+          "dmg": 29,
+          "hob": 0,
+          "hob_name": "Marge Dumpling",
+          "power": 78,
+          "round": 1,
+          "shot": "clodpot",
+          "shot_name": "Clodpot",
+          "side": 0
+        },
         "best_streak": 1,
         "blocks_dropped": 0,
         "blocks_lost": 0,
@@ -2439,6 +2473,7 @@
         "shots": 1
       },
       {
+        "best_shot": null,
         "best_streak": 0,
         "blocks_dropped": 0,
         "blocks_lost": 0,

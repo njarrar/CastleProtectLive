@@ -1146,6 +1146,14 @@
       [],
       []
     ],
+    "fatigue": false,
+    "fatigue_in": 9,
+    "fatigue_round": 10,
+    "fire": {
+      "ready": true,
+      "text": null,
+      "why": null
+    },
     "forecast": 0,
     "front_rounds_left": 3,
     "handicap": [
@@ -1197,12 +1205,14 @@
         "id": "clodpot",
         "ready": true,
         "shot": "plain",
+        "text": null,
         "why": null
       },
       {
         "id": "grand_dumpling",
         "ready": true,
         "shot": "knack",
+        "text": null,
         "why": null
       }
     ],

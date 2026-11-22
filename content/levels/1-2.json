@@ -61,7 +61,9 @@
       "pebble_pitcher",
       "hedge_snipper"
     ],
-    "aim": 1
+    "aim": 1,
+    "knack_uses": 0,
+    "hp_pct": 55
   },
   "rules": {
     "round_cap": 10,
