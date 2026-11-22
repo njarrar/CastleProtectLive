@@ -26,7 +26,10 @@ export function settingsScreen(app: App, route: Route): Screen {
         row('Rotation', seg([['follow', 'Follow device'], ['wide', 'Stay wide'], ['tall', 'Stay tall']], s.rotation, (v) => void app.setSettings({ rotation: v }), 'Rotation')),
         toggle('Rival turns at 2x', s.rivalFast, (v) => void app.setSettings({ rivalFast: v })),
       ),
-      section('Access', toggle('Reduce motion', s.reduceMotion, (v) => void app.setSettings({ reduceMotion: v }))),
+      section('Access',
+        toggle('Reduce motion', s.reduceMotion, (v) => void app.setSettings({ reduceMotion: v })),
+        row('Screen shake', seg([['100', '100%'], ['50', '50%'], ['0', 'Off']], String(s.reduceShake), (v) => void app.setSettings({ reduceShake: Number(v) as 100 | 50 | 0 }), 'Screen shake')),
+      ),
       section('Save',
         h('p', { class: 'small' }, 'Your game saves on this device after every turn.'),
         h('div', { class: 'field-row' }, resetIn, btn('Reset progress', async () => {

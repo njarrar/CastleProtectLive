@@ -1,13 +1,16 @@
 // The battle screen: canvas lenses, HUD in both layouts, aim input, camera, hand-off card.
 // It never decides an outcome. It sends commands to the core and draws its snapshots.
 import type { App, Route, Screen } from '../app';
-import { play, unlockAudio } from '../audio/sfx';
+import { bark, cue, loop, musicLayers, play, setMusic, slowmoAudio, stopLoops, unlockAudio } from '../audio/sfx';
 import type { BattleSetup, Command, PinView, Side, Snapshot } from '../core/types';
 import { SaveError, TICK_HZ } from '../core/types';
 import { clearBattle, dropBattleSave, saveBattle } from '../save/db';
 import { DEBUG } from '../ui/fatal';
 import { CLASS_COLOR, CLASS_ICON, btn, h, repeatKey } from '../ui/dom';
-import { type Cam, type Rect, drawLens, drawStrip, newFx, stepFx, toScreen, toWorld } from '../render/draw';
+import { type DrawOpts, drawLens, drawStrip } from '../render/draw';
+import { type Cam, type Rect, toScreen, toWorld } from '../render/view';
+import { Feel } from '../render/feel';
+import { firePress, handoffFlip, turnBanner } from '../ui/motion';
 import { TerrainLayer } from '../render/terrain';
 import { hobSpriteName, sprites } from '../render/sprites';
 
@@ -47,7 +50,14 @@ export function battleScreen(app: App, route: Route): Screen {
   const terr = new TerrainLayer();
   terr.apply(snap.terrain);
   sprites.whenLoaded(() => { const t = sprites.texture('terrain_soil'); if (t) terr.setSoil(t); });
-  const fx = newFx();
+  const feel = new Feel();
+  feel.terr = terr;
+  feel.sound = cue;
+  feel.bark = bark;
+  setMusic('battle');
+  // Shell positions carried on between ticks: [id, x, y] per shell (no allocation per frame).
+  const shellBuf = new Float64Array(3 * 16);
+  let nShell = 0;
   const canvas = h('canvas', { class: 'field', 'aria-label': 'Battle field' });
   const ctx = canvas.getContext('2d')!;
   const root = h('div', { class: 'battle' }, canvas);
@@ -203,12 +213,113 @@ export function battleScreen(app: App, route: Route): Screen {
     const dy = full.y + full.h / 2 - (part.y + part.h / 2);
     return { cx: c.cx + dx / c.s, cy: c.cy - dy / c.s, s: c.s };
   }
-  function ease(c: Cam, t: Cam, dt: number, cut: boolean): void {
-    const k = cut || snapCams ? 1 : 1 - Math.exp(-dt * 5);
+  function ease(c: Cam, t: Cam, dt: number, cut: boolean, rate = 5): void {
+    const k = cut || snapCams ? 1 : 1 - Math.exp(-dt * rate);
     c.cx += (t.cx - c.cx) * k;
     c.cy += (t.cy - c.cy) * k;
     c.s += (t.s - c.s) * k;
   }
+
+  // ---------- Wide camera (07 §3.5) ----------
+  // Blocks never draw under 8 px (zoom floor): on a phone the play view frames your fort plus
+  // the arc toward the target, follows the shell with a dead zone, holds on the impact for
+  // 0.6 s, widens to show the collapse settle, then eases to the next side's frame.
+  const FLOOR = 0.5;
+  const ZMAX = 1.25;
+  let wideRate = 5;
+  let wideCut = false;
+  let rmFrame: 'from' | 'to' = 'from';
+  const camT: Cam = { cx: 0, cy: 0, s: 1 };
+  /** Plan frame for a side: both forts when they fit at the floor, else this fort and the way to the other. */
+  function planFrame(cr: Rect, side: Side, out: Cam): Cam {
+    const f = snap.forts;
+    const fa = f[side], fo = f[other(side)];
+    const x0 = Math.min(fa.x, fo.x) - 60, x1 = Math.max(fa.x + fa.w, fo.x + fo.w) + 60;
+    const y0 = Math.min(fa.y, fo.y) - 30, y1 = Math.max(fa.y + fa.h, fo.y + fo.h) + 170;
+    const both = Math.min(cr.w / (x1 - x0), cr.h / (y1 - y0));
+    const dir = fo.x > fa.x ? 1 : -1;
+    if (both >= FLOOR) {
+      out.s = Math.min(both, ZMAX);
+      // 55/45 toward the rival (07 §3.5); a Couch Duel stays centred.
+      out.cx = (x0 + x1) / 2 + (setup.mode === 'duel' ? 0 : dir * (x1 - x0) * 0.05);
+    } else {
+      out.s = clamp(Math.min(cr.h / (fa.h + 230), (cr.w * 0.42) / (fa.w + 80)), FLOOR, 0.8);
+      const half = cr.w / 2 / out.s;
+      out.cx = dir > 0 ? fa.x - 50 + half : fa.x + fa.w + 50 - half;
+    }
+    groundY(cr, Math.min(fa.y, fo.y), out);
+    return out;
+  }
+  /** Spare height goes to the sky, not the soil: the ground under the forts sits near the bottom. */
+  function groundY(cr: Rect, base: number, out: Cam): void { out.cy = base + cr.h / 2 / out.s - 40 / out.s; }
+  /** The hit fort with room for its collapse. */
+  function settleFrame(cr: Rect, x: number, out: Cam): Cam {
+    const f = snap.forts;
+    const fo = Math.abs(f[0].x + f[0].w / 2 - x) < Math.abs(f[1].x + f[1].w / 2 - x) ? f[0] : f[1];
+    out.s = clamp(Math.min(cr.w / (fo.w + 360), cr.h / (fo.h + 200)), FLOOR, 1);
+    out.cx = (fo.x + fo.w / 2 + x) / 2;
+    groundY(cr, fo.y, out);
+    return out;
+  }
+  let shellVX = 0, shellVY = 0;
+  function wideTarget(cr: Rect, _now: number, rm: boolean): Cam | null {
+    const sh = snap.shells[0];
+    const t = camT;
+    const sinceHit = feel.time - feel.impactAt;
+    if (sh) {
+      const sx0 = nShell ? shellBuf[1] : sh.x, sy0 = nShell ? shellBuf[2] : sh.y;
+      manual = false;
+      const fromSide = snap.hud.active;
+      if (rm) {
+        // Reduce motion: a wide fixed frame per half of the flight, joined by cuts.
+        const mid = (snap.forts[0].x + snap.forts[0].w / 2 + snap.forts[1].x + snap.forts[1].w / 2) / 2;
+        const half = (sx0 - mid) * (snap.forts[fromSide].x < mid ? 1 : -1) > 0 ? 'to' : 'from';
+        if (half !== rmFrame) { rmFrame = half; wideCut = true; }
+        return planFrame(cr, half === 'to' ? other(fromSide) : fromSide, t);
+      }
+      planFrame(cr, fromSide, t);
+      // Follow with lookahead; the middle 30% is a dead zone; never under the floor.
+      const s = Math.max(FLOOR, Math.min(t.s, 0.9));
+      const lookX = sx0 + shellVX * 0.35, lookY = sy0 + shellVY * 0.2;
+      const dz = (0.15 * cr.w) / s;
+      const prev = (camWide.cx - (0 - (cr.x + cr.w / 2 - W / 2)) / camWide.s);
+      let cx = camFollowX ?? prev;
+      if (lookX > cx + dz) cx = lookX - dz; else if (lookX < cx - dz) cx = lookX + dz;
+      camFollowX = cx;
+      t.s = s;
+      t.cx = cx;
+      groundY(cr, Math.min(snap.forts[0].y, snap.forts[1].y), t);
+      // A high shell pulls the frame up so it stays in the top 80%.
+      const top = t.cy + (cr.h / 2) / s;
+      if (lookY > top - (0.2 * cr.h) / s) t.cy += lookY - (top - (0.2 * cr.h) / s);
+      wideRate = 7;
+    } else if (sinceHit < 600) {
+      // Impact: hold on the hit.
+      camFollowX = null;
+      t.cx = feel.impactX; t.s = clamp(camWide.s, FLOOR, ZMAX);
+      groundY(cr, Math.min(snap.forts[0].y, snap.forts[1].y), t);
+      wideRate = 6;
+    } else if (feel.col.busy || feel.time < feel.collapseUntil || (snap.phase === 'resolve' && sinceHit < 2500)) {
+      settleFrame(cr, feel.impactX, t);
+      wideRate = 3;
+    } else {
+      camFollowX = null;
+      rmFrame = 'from';
+      if (manual) return null;
+      planFrame(cr, snap.hud.active, t);
+      wideRate = 6;
+    }
+    // Slow-mo push-in (Kettle Pop, Clean Sweep, Threaded!); none with Reduce motion.
+    if (feel.juice.focusOn && !rm) {
+      t.s = Math.min(1.6, t.s * feel.juice.focusZoom);
+      t.cx = feel.juice.focusX;
+      t.cy = Math.max(feel.juice.focusY, t.cy - (cr.h * 0.25) / t.s);
+      wideRate = 8;
+    }
+    t.s *= zoomWide;
+    return t;
+  }
+  let camFollowX: number | null = null;
 
   function updateCams(dt: number, now: number): void {
     const f = snap.forts;
@@ -219,27 +330,10 @@ export function battleScreen(app: App, route: Route): Screen {
     const full: Rect = { x: 0, y: 0, w: W, h: H };
     if (layout === 'wide') {
       const cr = clearRect();
-      let t: Cam;
-      const bx0 = Math.min(f[0].x, f[1].x) - 140, bx1 = Math.max(f[0].x + f[0].w, f[1].x + f[1].w) + 140;
-      const by0 = Math.min(f[0].y, f[1].y) - 60, by1 = Math.max(f[0].y + f[0].h, f[1].y + f[1].h) + 220;
-      if (following && lastShell && !rm) {
-        const [sx, sy] = lastShell;
-        t = frameBox(cr, Math.min(bx0, sx - 200), Math.max(bx1, sx + 200), by0, Math.max(by1, sy + 120), 0.15, 2);
-        t.s = Math.min(t.s, frameBox(cr, bx0, bx1, by0, by1, 0.15, 2).s);
-      } else if (following && rm) {
-        t = frameBox(cr, 0, terr.w || snap.terrain.width, 0, terr.h || snap.terrain.height, 0.1, 2);
-      } else {
-        t = frameBox(cr, bx0, bx1, by0, by1, 0.15, 2);
-        const bias = (snap.hud.active === 0 ? 1 : -1) * (bx1 - bx0) * 0.05;
-        t.cx += bias * (setup.mode === 'duel' ? 0 : 1);
-      }
-      // Spare height goes to the sky, not the soil: keep the ground under the forts near the bottom.
-      const base = Math.min(f[0].y, f[1].y);
-      if (!(following && rm)) t.cy = Math.max(t.cy, base + cr.h / 2 / t.s - 36 / t.s);
-      if (manual && !following) return;
-      if (following) manual = false;
-      t.s *= zoomWide;
-      ease(camWide, toFull(full, cr, t), dt, rm);
+      const t = wideTarget(cr, now, rm);
+      if (!t) return;
+      ease(camWide, toFull(full, cr, t), dt, rm || wideCut, wideRate);
+      wideCut = false;
       return;
     }
     // Tall: Bottom lens on your fort, Top lens on the target fort; joined in flight.
@@ -271,15 +365,17 @@ export function battleScreen(app: App, route: Route): Screen {
   }
   let wasJoined = false;
 
-  function lensRects(): { id: LensId; rect: Rect; cam: Cam }[] {
-    if (layout === 'wide') return [{ id: 'wide', rect: { x: 0, y: 0, w: W, h: H }, cam: camWide }];
-    const rt = rectOf(lensTop), rb = rectOf(lensBottom), rs = rectOf(strip);
-    if (joined) return [{ id: 'joined', rect: { x: rt.x, y: rt.y, w: rt.w, h: rb.y + rb.h - rt.y }, cam: camJoin }];
-    return [
-      { id: 'top', rect: rt, cam: camTop },
-      { id: 'strip', rect: rs, cam: camTop },
-      { id: 'bottom', rect: rb, cam: camBottom },
-    ];
+  // The lens list is rebuilt in place each frame (no new arrays or rects in the frame loop).
+  type Lens = { id: LensId; rect: Rect; cam: Cam };
+  const LW: Lens[] = [{ id: 'wide', rect: z(), cam: camWide }];
+  const LJ: Lens[] = [{ id: 'joined', rect: z(), cam: camJoin }];
+  const LT: Lens[] = [{ id: 'top', rect: rc.top, cam: camTop }, { id: 'strip', rect: rc.strip, cam: camTop }, { id: 'bottom', rect: rc.bottom, cam: camBottom }];
+  function lensRects(): Lens[] {
+    if (layout === 'wide') { const r0 = LW[0].rect; r0.w = W; r0.h = H; return LW; }
+    const rt = rectOf(lensTop), rb = rectOf(lensBottom);
+    LT[0].rect = rt; LT[1].rect = rectOf(strip); LT[2].rect = rb;
+    if (joined) { const r0 = LJ[0].rect; r0.x = rt.x; r0.y = rt.y; r0.w = rt.w; r0.h = rb.y + rb.h - rt.y; return LJ; }
+    return LT;
   }
 
   // ---------- commands ----------
@@ -308,7 +404,6 @@ export function battleScreen(app: App, route: Route): Screen {
   let alive = true;
   let ended = false;
   let turnHits = { blocks: 0, dmg: 0, who: '' };
-  let firstDrop = true;
   let missCount = 0;
   let handoffOpen = false;
   let paused = false;
@@ -330,10 +425,22 @@ export function battleScreen(app: App, route: Route): Screen {
     last = now;
     readRects();
     flushAim();
-    if (!paused && !handoffOpen) {
+    // Hit stop and slow motion scale view time; the fixed-step sim is stepped in view time,
+    // so it freezes and slows with the view and its ticks never change (07 §6.1, §6.4).
+    const running = !paused && !handoffOpen;
+    const calm = snap.phase === 'plan' || drag?.mode === 'aim';
+    const lw = lensRects()[0];
+    feel.reduceMotion = app.settings.reduceMotion;
+    feel.juice.shakeScale = app.settings.reduceShake / 100;
+    feel.juice.fast = fast;
+    feel.you = youSide();
+    const vs = feel.update(running ? dt * 1000 : 0, snap, calm, lw.cam.cx, lw.cam.cy, lw.rect.w / lw.cam.s, shellBuf, nShell);
+    slowmoAudio(feel.juice.slowing !== null);
+    sounds();
+    if (running) {
       // "Rival turns at 2x" speeds up the whole Rival turn: think pose and flight.
       const rivalTurn = !snap.sides[snap.hud.active].human && setup.mode !== 'yard';
-      acc += dt * TICK_HZ * (fast ? 2 : 1) * (rivalTurn && app.settings.rivalFast ? 2 : 1);
+      acc += dt * vs * TICK_HZ * (fast ? 2 : 1) * (rivalTurn && app.settings.rivalFast ? 2 : 1);
       const n = Math.floor(acc);
       acc -= n;
       if (n > 0) {
@@ -349,7 +456,7 @@ export function battleScreen(app: App, route: Route): Screen {
     terr.apply(snap.terrain);
     snap.terrain.chunks = [];
     handleEvents(now);
-    stepFx(fx, dt);
+    carryShells();
     updateCams(dt, now);
     snapCams = false;
     render(now);
@@ -371,6 +478,43 @@ export function battleScreen(app: App, route: Route): Screen {
     );
   }
 
+  /** Loops and music layers from what the snapshot shows (assets/audio/README.md). */
+  function sounds(): void {
+    let lowK = 1;
+    for (const k of snap.kettles) if (k.hp > 0) lowK = Math.min(lowK, k.hp / k.maxHp);
+    // A Heartkettle at 50% or less whistles, higher as HP drops (up to 3 semitones).
+    loop('ket_whistle_loop', lowK <= 0.5 && !ended ? 0.8 : 0, Math.round((0.5 - Math.min(0.5, lowK)) * 6));
+    loop('wx_wind_loop', ended ? 0 : Math.min(1, Math.abs(snap.wind) / 10) * 0.7);
+    loop('wx_squall_loop', snap.squall.on && !ended ? Math.min(1, 0.5 + 0.15 * snap.squall.on) : 0);
+    const sh = snap.shells[0];
+    loop('fly_whistle_loop', sh && !paused ? 0.5 : 0, sh ? Math.round(clamp((sh.y - snap.forts[0].y) / 60 - 7, -7, 7)) : 0);
+    let fewest = 9;
+    for (let side = 0; side < 2; side++) {
+      let n = 0;
+      for (const hb of snap.hobs) if (hb.side === side && hb.state !== 'bonked') n++;
+      fewest = Math.min(fewest, n);
+    }
+    const sq = snap.squall;
+    musicLayers(lowK <= 0.5 || fewest <= 2 || (sq.warn > 0 && sq.warn <= 3), fewest <= 1 || lowK <= 0.25 || sq.on > 0);
+  }
+
+  /** Between ticks the shell is carried on by the part of a tick that has passed (smooth on 90 and 144 Hz). */
+  function carryShells(): void {
+    nShell = Math.min(16, snap.shells.length);
+    const k = paused || handoffOpen ? 0 : Math.min(1, acc) / Math.max(1, lastN);
+    for (let i = 0; i < nShell; i++) {
+      const sh = snap.shells[i];
+      const p = prevShell.get(sh.id);
+      shellBuf[i * 3] = sh.id;
+      shellBuf[i * 3 + 1] = p ? sh.x + (sh.x - p[0]) * k : sh.x;
+      shellBuf[i * 3 + 2] = p ? sh.y + (sh.y - p[1]) * k : sh.y;
+      if (i === 0 && p) { shellVX = ((sh.x - p[0]) / Math.max(1, lastN)) * TICK_HZ; shellVY = ((sh.y - p[1]) / Math.max(1, lastN)) * TICK_HZ; }
+    }
+  }
+  const opts: DrawOpts = { you: 0, seeThrough: -1, showPreview: false, time: 0, reduceMotion: false, shells: shellBuf, nShells: 0 };
+  const stripRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  const stripLenses: { rect: Rect; cam: Cam }[] = [{ rect: rc.top, cam: camTop }, { rect: rc.bottom, cam: camBottom }];
+
   function render(now: number): void {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#9ED8EC';
@@ -379,23 +523,17 @@ export function battleScreen(app: App, route: Route): Screen {
     const human = snap.sides[snap.hud.active].human || setup.mode === 'yard';
     const plan = snap.phase === 'plan' && human;
     const lenses = lensRects();
-    // Between ticks the shell is carried on by the part of a tick that has passed (smooth on 90 and 144 Hz).
-    const view = snap.shells.length && !paused && !handoffOpen ? { ...snap, shells: snap.shells.map((sh) => {
-      const p = prevShell.get(sh.id);
-      if (!p) return sh;
-      const k = Math.min(1, acc) / Math.max(1, lastN);
-      return { ...sh, x: sh.x + (sh.x - p[0]) * k, y: sh.y + (sh.y - p[1]) * k };
-    }) } : snap;
+    opts.you = me; opts.seeThrough = plan ? snap.hud.active : -1; opts.pickedHob = plan ? snap.hud.hob : undefined;
+    opts.showPreview = plan; opts.time = (now - startT) / 1000; opts.reduceMotion = app.settings.reduceMotion; opts.lean = lean ?? undefined;
+    opts.nShells = nShell;
     for (const l of lenses) {
       if (l.id === 'strip') continue;
-      drawLens(ctx, l.rect, l.cam, view, terr, fx, {
-        you: me, seeThrough: plan ? snap.hud.active : -1, pickedHob: plan ? snap.hud.hob : undefined,
-        showPreview: plan, time: (now - startT) / 1000, reduceMotion: app.settings.reduceMotion, lean: lean ?? undefined,
-      });
+      drawLens(ctx, l.rect, l.cam, snap, terr, feel, opts);
     }
     if (layout === 'tall') {
-      const rs = joined ? { ...rc.strip, y: rc.bottom.y + rc.bottom.h - 34 } : rc.strip;
-      drawStrip(ctx, rs, snap, terr, joined ? [{ rect: lenses[0].rect, cam: camJoin }] : [{ rect: rectOf(lensTop), cam: camTop }, { rect: rectOf(lensBottom), cam: camBottom }], me);
+      if (joined) { stripRect.x = rc.strip.x; stripRect.w = rc.strip.w; stripRect.h = rc.strip.h; stripRect.y = rc.bottom.y + rc.bottom.h - 34; stripLenses[0].rect = lenses[0].rect; stripLenses[0].cam = camJoin; }
+      else { stripLenses[0].rect = rc.top; stripLenses[0].cam = camTop; stripLenses[1].rect = rc.bottom; }
+      drawStrip(ctx, joined ? stripRect : rc.strip, snap, terr, stripLenses, joined ? 1 : 2, me);
     }
     if (drag && drag.mode === 'aim') {
       ctx.save();
@@ -412,58 +550,34 @@ export function battleScreen(app: App, route: Route): Screen {
     }
   }
 
-  // ---------- events -> sound, effects, banners, save ----------
+  // ---------- events -> feel (effects, numbers, shake, sound), banners, save ----------
   function handleEvents(now: number): void {
-    const rm = app.settings.reduceMotion;
+    const l = lensRects()[0];
+    const vw = l.rect.w / l.cam.s;
     for (const e of snap.events) {
+      feel.onEvent(e, snap, l.cam.cx, vw);
       switch (e.t) {
-        case 'fire': play('fire'); setTimeout(() => play('whoosh'), 80); turnHits = { blocks: 0, dmg: 0, who: snap.sides[e.side].name }; say(`${snap.sides[e.side].name} fired`); break;
+        case 'fire': turnHits = { blocks: 0, dmg: 0, who: snap.sides[e.side].name }; say(`${snap.sides[e.side].name} fired`); break;
         case 'note':
-          if (e.x !== undefined && e.y !== undefined) fx.texts.push({ x: e.x, y: e.y + 30, text: e.text, life: 1.4, max: 1.4, big: false, color: '#FFF4DE' });
-          else showBanner(e.text, 'slate');
+          if (e.x === undefined || e.y === undefined) showBanner(e.text, 'slate');
           if (e.sound) play(e.sound as Parameters<typeof play>[0]);
           if (e.status) say(e.text);
           break;
         case 'hit':
           if (e.dmg > 0) say(`Hit ${e.what}, ${e.dmg} damage`); else say('Missed');
-          if (e.dmg > 0) {
-            fx.texts.push({ x: e.x, y: e.y, text: String(e.dmg), life: 1.2, max: 1.2, big: e.dmg > 50, color: '#FFF4DE' });
-            fx.booms.push({ x: e.x, y: e.y - 12, t: 0, size: e.dmg > 60 ? 'large' : e.dmg > 30 ? 'medium' : 'small' });
-            if (!rm) fx.shake = Math.min(12, fx.shake + e.dmg / 8);
-            turnHits.dmg += e.dmg;
-            play('hit');
-          } else {
-            play('thud');
-            missCount++;
-            fx.booms.push({ x: e.x, y: e.y, t: 0, size: 'small' });
-          }
-          if (!rm) for (let i = 0; i < 10; i++) fx.parts.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 220, vy: Math.random() * 240, life: 0.7, max: 0.7, color: e.what === 'ground' ? '#9A6440' : '#FFF1D0', size: 4 });
+          if (e.dmg > 0) turnHits.dmg += e.dmg; else missCount++;
           break;
-        case 'break':
-          turnHits.blocks++;
-          play('break');
-          if (!rm) for (let i = 0; i < 6; i++) fx.parts.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 260, vy: Math.random() * 260, life: 0.9, max: 0.9, color: matColor(e.mat), size: 5 });
-          break;
-        case 'fall':
-          if (e.count >= 6 && firstDrop) { firstDrop = false; fx.texts.push({ x: e.x, y: e.y + 30, text: 'Drop!', life: 1.4, max: 1.4, big: true, color: '#FFC23D' }); }
-          play('thud');
-          break;
-        case 'bonk':
-          fx.texts.push({ x: e.x, y: e.y + 40, text: 'Bonk!', life: 1.4, max: 1.4, big: true, color: '#FFD23F' });
-          play('bonk');
-          break;
-        case 'boom':
-          fx.booms.push({ x: e.x, y: e.y, t: 0, size: e.r > 40 ? 'large' : e.r > 22 ? 'medium' : 'small' });
-          if (!rm) fx.shake = Math.min(12, fx.shake + e.r / 6);
-          break;
-        case 'kettle_pop': play('pop'); say(`${snap.sides[e.side].name}'s kettle popped`); fx.texts.push({ x: snap.forts[e.side].x + snap.forts[e.side].w / 2, y: snap.forts[e.side].y + 80, text: 'Kettle Pop!', life: 2, max: 2, big: true, color: '#4FE3C1' }); break;
+        case 'break': turnHits.blocks++; break;
+        case 'collapse': turnHits.blocks += e.blocks.length; break;
+        case 'kettle_pop': say(`${snap.sides[e.side].name}'s kettle popped`); break;
         case 'squall_warn': if (e.left === 3) showBanner('Squall in 3', 'slate'); break;
-        case 'squall': if (e.n === 1) { showBanner('Sudden Squall', 'slate'); play('squall'); } break;
+        case 'squall': if (e.n === 1) showBanner('Sudden Squall', 'slate'); break;
         case 'turn': onTurn(e.side, e.round, now); break;
         case 'end': onEnd(); break;
       }
     }
-    snap.events = [];
+    if (snap.events.length) feel.endBatch();
+    snap.events.length = 0;
   }
 
   let turnCount = 0;
@@ -473,12 +587,12 @@ export function battleScreen(app: App, route: Route): Screen {
     padOpen = false;
     const human = snap.sides[side].human || setup.mode === 'yard';
     if (setup.mode === 'duel') {
-      showBanner(`${snap.sides[side].name}'s turn`, side === 0 ? 'blue' : 'orange');
+      showTurnBanner(`${snap.sides[side].name}'s turn`, side === 0 ? 'blue' : 'orange');
       play(side === 0 ? 'turn' : 'turn2');
       if (turnCount > 1 && setup.seats !== 'one') openHandoff(side, round);
     } else if (setup.mode !== 'yard') {
-      if (human) { showBanner('Your turn', 'blue'); play('turn'); }
-      else showBanner(`${snap.sides[side].name} aims`, 'orange');
+      if (human) { showTurnBanner('Your turn', 'blue'); play('turn'); }
+      else showTurnBanner(`${snap.sides[side].name} aims`, 'orange');
     }
     say(`Round ${round}. ${human ? (setup.mode === 'duel' ? `${snap.sides[side].name}'s turn` : 'Your turn') : `${snap.sides[side].name} aims`}`);
     if (turnCount > 1) void autosave(side, round);
@@ -507,15 +621,24 @@ export function battleScreen(app: App, route: Route): Screen {
     void (res ? app.recordResult(setup, res) : Promise.resolve()).catch(() => undefined).then(() => clearBattle());
     play(res && res.winner === 0 ? 'win' : setup.mode === 'duel' ? 'win' : 'lose');
     if (res) say(res.winner === 0 || setup.mode === 'duel' ? `${snap.sides[res.winner === 1 ? 1 : 0].name} wins` : 'You lost');
-    setTimeout(() => { if (alive) app.go({ to: 'results', setup }); }, app.settings.reduceMotion ? 600 : 1500);
+    // A battle-ending slow motion (Kettle Pop, Clean Sweep) plays out before the results.
+    setTimeout(() => { if (alive) app.go({ to: 'results', setup }); }, (app.settings.reduceMotion ? 600 : 1500) + feel.juice.slowRemaining * 2);
   }
 
   let bannerT = 0;
   function showBanner(text: string, tone: string): void {
+    banner.getAnimations().forEach((a) => a.cancel());
     banner.textContent = text;
     banner.className = `banner show ${tone}`;
     clearTimeout(bannerT);
     bannerT = window.setTimeout(() => banner.classList.remove('show'), 1200);
+  }
+  /** The turn banner slides in, holds and slides out (animations.json data.turn_banner); it fades with Reduce motion. */
+  function showTurnBanner(text: string, tone: string): void {
+    clearTimeout(bannerT);
+    banner.textContent = text;
+    banner.className = `banner show slide ${tone}`;
+    turnBanner(banner, app.settings.reduceMotion, () => banner.classList.remove('show', 'slide'));
   }
 
   // ---------- HUD update ----------
@@ -894,7 +1017,7 @@ export function battleScreen(app: App, route: Route): Screen {
   const afterAction = () => { padOpen = false; recallIdx = 0; manual = false; topManual = false; wideLook = false; };
   function doFire(fromDrag = false): void {
     unlockAudio();
-    if (snap.hud.fire === 'fast') { fast = !fast; send({ cmd: 'fast', on: fast }); return; }
+    if (snap.hud.fire === 'fast') { fast = !fast; if (fast) feel.juice.cancelSlow(); send({ cmd: 'fast', on: fast }); return; }
     if (!fromDrag && performance.now() - lastDragEnd < 150) return;
     if (!canAim()) return;
     flushAim();
@@ -905,14 +1028,14 @@ export function battleScreen(app: App, route: Route): Screen {
       return;
     }
     if (snap.hud.fire === 'pass') { if (send({ cmd: 'pass' })) afterAction(); return; }
-    if (send({ cmd: 'fire' })) { doneHint('fire'); afterAction(); }
+    if (send({ cmd: 'fire' })) { doneHint('fire'); afterAction(); firePress(fire); play('fire_press'); }
   }
   fire.addEventListener('click', (e) => { e.preventDefault(); doFire(); });
   // Resolve speed-up: a tap anywhere during Resolve also speeds up (07 §2.8). Not on the 2x key
   // itself: that would set 2x here and its click would turn it straight off again.
   root.addEventListener('pointerdown', (e) => {
     if (fire.contains(e.target as Node)) return;
-    if (snap.phase === 'resolve' && !fast) fast = true;
+    if (snap.phase === 'resolve' && !fast) { fast = true; feel.juice.cancelSlow(); }
   }, true);
   // Audio unlock on a real user action for iOS (touchend / pointerup / keydown count, pointerdown may not).
   for (const ev of ['pointerup', 'touchend', 'keydown']) root.addEventListener(ev, () => unlockAudio(), { capture: true, passive: true });
@@ -1059,6 +1182,7 @@ export function battleScreen(app: App, route: Route): Screen {
       ready,
     );
     play('sheet');
+    handoffFlip(overlay.querySelector('.handoff') as HTMLElement, side, app.settings.reduceMotion);
     setTimeout(() => ready.focus(), 0);
   }
 
@@ -1104,16 +1228,17 @@ export function battleScreen(app: App, route: Route): Screen {
   for (const e of snap.events) if (e.t === 'turn') turnCount++;
   if (turnCount === 0 && snap.phase !== 'over') turnCount = 1;
   snap.events = snap.events.filter((e) => e.t !== 'turn');
-  if (snap.phase === 'plan' && setup.mode !== 'yard') showBanner(setup.mode === 'duel' ? `${snap.sides[snap.hud.active].name}'s turn` : 'Your turn', snap.hud.active === 0 ? 'blue' : 'orange');
+  if (snap.phase === 'plan' && setup.mode !== 'yard') showTurnBanner(setup.mode === 'duel' ? `${snap.sides[snap.hud.active].name}'s turn` : 'Your turn', snap.hud.active === 0 ? 'blue' : 'orange');
   hud.append(liveEl);
   raf = requestAnimationFrame(frame);
+  sprites.upgrade();
   root.dataset.core = core.name;
   root.dataset.testid = 'battle';
   // A resumed Couch Duel shows the hand-off card first, as the saved turn did.
   if (r.resume && r.handoff && setup.mode === 'duel' && setup.seats !== 'one' && snap.phase === 'plan') openHandoff(snap.hud.active, snap.round);
 
   // For tests and debugging only (dev, or ?debug in the URL): a read-only view of the latest snapshot.
-  if (DEBUG) (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, layout: () => layout, core: core.name };
+  if (DEBUG) (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, layout: () => layout, core: core.name, cam: () => ({ ...camWide }), feel: () => ({ fx: feel.fx.live, collapse: feel.col.busy, slow: feel.juice.slowing, trauma: feel.juice.trauma }) };
 
   return {
     el: root,
@@ -1131,6 +1256,8 @@ export function battleScreen(app: App, route: Route): Screen {
       clearTimeout(leanT);
       clearTimeout(liveT);
       cancelAnimationFrame(raf);
+      stopLoops();
+      slowmoAudio(false);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', lose);
@@ -1148,6 +1275,3 @@ function merge(prev: Snapshot, next: Snapshot): Snapshot {
 }
 
 function clamp(v: number, a: number, b: number): number { return Math.max(a, Math.min(b, v)); }
-function matColor(m: string): string {
-  return ({ wicker: '#E3B565', timber: '#B9733A', cobble: '#A9A39A', footing: '#5A4A42', brassbound: '#6B7A86' } as Record<string, string>)[m] ?? '#B9733A';
-}

@@ -3331,6 +3331,8 @@ impl Battle {
                 hs.i32(o.2);
             }
             hs.i32(m.own_walked as i32);
+            hs.i32(m.walks);
+            hs.i32(m.last_hob.map(|h| h as i32).unwrap_or(-1));
             hs.i32(m.target_walked);
             hs.i32(m.last_wind.unwrap_or(-99));
             let lp = m.last_pin.unwrap_or((-1, -1));

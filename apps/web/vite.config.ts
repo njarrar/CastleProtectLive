@@ -88,12 +88,17 @@ export default defineConfig({
         // First load and offline play need the @1x art only. The @2x pages (high-DPI screens,
         // loaded after the game starts) are cached the first time they are fetched.
         globPatterns: ['**/*.{js,css,html,svg,png,webp,json,wasm,woff2,ogg,opus,mp3,m4a}'],
-        globIgnores: ['**/art/atlas/castle@2x-*.{webp,png}', '**/art/sprites/bg_*@2x.*'],
+        // Sound (5 MB in two formats) is cached as it is first played, one format per device.
+        globIgnores: ['**/art/atlas/castle@2x-*.{webp,png}', '**/art/sprites/bg_*@2x.*', '**/art/audio/**'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         runtimeCaching: [{
           urlPattern: ({ url }) => /\/art\/(atlas\/castle@2x-|sprites\/bg_\w+@2x)/.test(url.pathname),
           handler: 'CacheFirst',
           options: { cacheName: 'castle-art-2x', expiration: { maxEntries: 16 } },
+        }, {
+          urlPattern: ({ url }) => /\/art\/audio\//.test(url.pathname),
+          handler: 'CacheFirst',
+          options: { cacheName: 'castle-audio', expiration: { maxEntries: 200 } },
         }],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,

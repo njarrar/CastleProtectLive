@@ -123,7 +123,18 @@ pub struct AiMemory {
     pub target_walked: i32,
     pub last_wind: Option<i32>,
     pub last_pin: Option<(i32, i32)>,
+    /// Walks taken this battle (a walk that finds nothing must not repeat
+    /// turn after turn).
+    pub walks: i32,
+    /// The Hob that fired last turn (the AI likes to spread shots round its
+    /// crew, as a player does).
+    pub last_hob: Option<u8>,
 }
+
+/// Most walks the AI takes in a battle when no shot pays.
+const MAX_AI_WALKS: i32 = 2;
+/// Score charged for firing the same Hob two turns running.
+const SAME_HOB_COST: i64 = 60;
 
 #[derive(Clone, Debug)]
 struct Cand {
@@ -256,12 +267,12 @@ const KNACK_COST: i64 = 30;
 const TRICK_COST_PCT: i64 = 100;
 const REST_COST: i64 = 20;
 /// Extra weight on damage that brings a Hob close to a Bonk (focus fire).
-const FOCUS_PCT: i64 = 100;
+const FOCUS_PCT: i64 = 200;
 /// Weight on enemy block HP lost (opens walls toward the kettle).
-const BLOCK_WEIGHT: i64 = 2;
+const BLOCK_WEIGHT: i64 = 1;
 /// Weight on kettle HP and on the Kettle Room walls (the win path).
 const KETTLE_WEIGHT: i64 = 30;
-const KETTLE_WALL_WEIGHT: i64 = 6;
+const KETTLE_WALL_WEIGHT: i64 = 3;
 
 /// Targets: enemy Hobs, the kettle, and the weakest block by Lean Lines.
 fn targets(k: &Battle, side: u8, units: &mut i64) -> Vec<(i32, i32, i32)> {
@@ -346,7 +357,9 @@ fn quick_solve(
     let mut p: i32 = 60;
     let mut best: Option<(i32, i32)> = None;
     let mut tried: Vec<i32> = vec![];
-    for _ in 0..4 {
+    // a power bracket: short shots raise `lo`, long ones lower `hi`
+    let (mut lo, mut hi) = (1, 100);
+    for _ in 0..5 {
         if *units > budget || tried.contains(&p) {
             break;
         }
@@ -362,12 +375,21 @@ fn quick_solve(
             break;
         }
         let reach = ((end.0 - lx) * front) as i64;
+        if reach < want {
+            lo = lo.max(p + 1);
+        } else {
+            hi = hi.min(p - 1);
+        }
+        if lo > hi {
+            break;
+        }
         let np = if reach <= 4 {
             p + 30
         } else {
             (p as i64 * isqrt((want * 10_000 / reach) as u64) as i64 / 100) as i32
         };
-        p = np.clamp(5, 100);
+        // stay inside the bracket; bisect when the estimate leaves it
+        p = if np >= lo && np <= hi { np } else { (lo + hi) / 2 };
     }
     best
 }
@@ -390,7 +412,7 @@ fn angles_for(kind: i32, front: i32, first: bool) -> Vec<i32> {
         (2, true) | (3, true) => &[250],
         (2, false) | (3, false) => &[150, 400],
         (_, true) => &[450],
-        (_, false) => &[300, 620],
+        (_, false) => &[300, 620, 760],
     };
     base.iter()
         .map(|&a| if front > 0 { a } else { 1800 - a })
@@ -739,6 +761,9 @@ fn plan_turn_with(
         }
         let mut c2 = c.clone();
         c2.score = sc / n;
+        if b.ai_mem[s].last_hob == Some(c.hob) {
+            c2.score -= SAME_HOB_COST;
+        }
         scored.push(c2);
     }
     scored.sort_by(|a, b| {
@@ -749,6 +774,11 @@ fn plan_turn_with(
             .then(a.shot.cmp(&b.shot))
     });
 
+    if std::env::var("AI_DEBUG").is_ok() {
+        eprintln!("AIDBG side {side} round {} targets {:?}", k.round, tg);
+        for r in rough.iter().take(6) { eprintln!("AIDBG rough hob {} key {} a {} p {} miss {}", r.hob, r.key, r.angle, r.power, r.miss); }
+        for c in scored.iter().take(4) { eprintln!("AIDBG scored hob {} {} key {} a {} p {} miss {} score {}", c.hob, c.shot, c.target, c.angle, c.power, c.miss, c.score); }
+    }
     // Doodads: mend when walls are hurt and no shot pays more
     let best_score = scored.first().map(|c| c.score).unwrap_or(-1);
     if let Some(cmd) = doodad_choice(&k, side, best_score, preset) {
@@ -759,6 +789,7 @@ fn plan_turn_with(
     // nothing worth firing: walk toward the rival and try once more (with
     // half the budget, so a walk never doubles the think time)
     if allow_walk
+        && b.ai_mem[s].walks < MAX_AI_WALKS
         && best_score <= 0
         && k.castles[s].steam >= 20
         && k.castles[s].steam_turn == 0
@@ -769,6 +800,7 @@ fn plan_turn_with(
         if k.command(&cmd)["ok"] == json!(true) {
             out.push(cmd);
             b.ai_mem[s].own_walked = true;
+            b.ai_mem[s].walks += 1;
             let mut tmp = k.clone();
             tmp.castles[s].steam = 0;
             tmp.ai_mem[s] = b.ai_mem[s].clone();
@@ -791,6 +823,7 @@ fn plan_turn_with(
     if let Some(d) = &choice.dial {
         fire["dial"] = json!(d);
     }
+    b.ai_mem[s].last_hob = Some(choice.hob);
     out.push(json!({"cmd": "pick_hob", "hob": choice.hob}));
     out.push(json!({"cmd": "pick_shot", "shot": choice.shot}));
     if b.content.shots[choice.shot_ix].flight.kind != FlightKind::SelfTarget {

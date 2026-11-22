@@ -279,3 +279,59 @@ Not rule breaks today, but each is a number the core should own:
 5. H8, then H1 (aim feel first, then the Rival's turn).
 6. H6, M9 (the field tells the truth).
 7. The medium items by screen, then the low ones.
+
+---
+
+## Fixes
+
+Fixed on branch `castle-protect-plan` and proven on the public CI (`ios` workflow,
+GitHub Actions, macOS runner, real core linked). Paths are relative to `apps/ios/CastleProtect/`.
+
+| Id | Status | What was done |
+|---|---|---|
+| C1 | Fixed | `RepeatButton` (`UI/Theme.swift`) now runs its loop through a `Repeater` and tracks the press with `@GestureState`. The repeat stops when the finger lifts, when the system cancels the touch, on `onDisappear`, on any `scenePhase` change and when the button is disabled. Every action now returns whether it was accepted, and a refused action ends the repeat. `BattleSession.stop()` (new battle, Map, Retry) makes every later action refuse, so a stale repeat can never reach the next battle. Test: `SessionGuardTests.testHeldWalkStopsWhenPausedOrCancelled`. |
+| C2 | Fixed | `CoreProp` decodes `props[]` (`id, side, kind, tag, x, y, hp, max, shot`). `PropView` reaches the view model with y flipped, and `LensLayer` draws cage bars, the captive (Hetty's sprite) and shell props (Crock, turnip) from a pooled node set, faded by HP and hidden when broken. Tests: `DecodeTests.testPropsDecodeAndFlip`, and `RealCoreTests.testRescueLevelHasProps` starts 1-7 on the real core. |
+| H1 | Fixed | New `Core/CoreHost.swift`: one serial queue owns the core handle and makes every bridge call. `ai_turn` runs on it in the background after the think pose and the resume replay runs on it with `async`/`await`. While either runs, `isBusy` is true, no frame is read and every action is refused, so the main thread keeps drawing, Pause stays live, and nothing waits on the queue. |
+| H2 | Fixed | A Pass key sits by Fire (Wide) and by Walk (Tall). Fire turns into Shove Off (15 Steam) when the selected Hob is dug in. The Doodads in hand (`hud.doodads`) show as chips in the tray: pick one and Fire becomes Use, which sends `doodad` with the core's default targets (Mend Bucket: most hurt blocks; Pot Lid: the Kettle Room). A refusal now shows a short banner (`BattleSession.refusalText`) as well as the buzz. Tests: `testBuriedHobHasAWayOut`, `testDoodadIsUsedByFire`. Not done: the Puff Up dial and the Mendglob target on a block. |
+| H3 | Fixed | `BattleSession.canAct` (human's Plan step, not paused, not stopped, core not busy) guards fire, Pass, Shove Off, Doodads, aim, nudge, Recall, Walk, picks and the Aim Drag. Draft picks have `canDraft`. HUD clusters also get `.disabled`, so VoiceOver, Switch Control and Full Keyboard Access see them as dimmed. Test: `testActionsAreGuarded`. Asking the core to refuse turn commands while `awaiting` is `ai` is left to the core team. |
+| H4 | Fixed | A battle save now holds the rules version, the sim version and the state hash next to the log. `CoreGame.load` refuses a save from other rules (or from before this check) and a replay that lands on another hash, and says which (`LoadResult`). `SaveData.resumeInProgress` is written to disk before the replay and cleared after; if it is still set at launch the battle save is dropped with a plain notice. The notice texts are now about loading, not saving. Tests: `testSaveFromOtherRulesIsRefused`, `testReplayWithAnotherHashIsRefused`, `testMultiTurnReplayMatchesTheHash` (real core, several turns with Walk and Recall, compares the hash), `testResumeFlagRoundTrips`. AI memory not being in the log is a core item (core review H5). |
+| H5 | Fixed | `BattleSession` calls `onResult` in the frame the result arrives. `AppModel.recordResult` stores Pennants, the duel score and clears the battle save at once and flushes the store. The 1.2 s task only changes the screen and is cancelled by `stop()`. Test: `testResultIsRecordedAtOnce`. |
+| H6 | Fixed | `TerrainGrid` (`Core/CoreModels.swift`) keeps the real cell grid from the base64 chunks, with a version per chunk. `TerrainTextures` turns a changed chunk into one `SKTexture` (one byte per cell through a material palette: Loam, Clay, Rock, Bedrock, Mud, Water, grass on top), shared by every lens, and `LensLayer` keeps one sprite per chunk and swaps only changed textures. All-air chunks have no sprite. Tunnels, overhangs and materials now show as the sim has them. The height line is kept only for the camera. Tests: `testTerrainGridChunks`, `testLeanSnapshotWithTerrainChunk`, and `testRealCoreWhenLinked` checks the grid reaches the frame. |
+| H7 | Fixed | `scripts/core-module.sh` exits 1 in Release when the XCFramework or its slice is missing. `Core/CoreBridge.swift` has `#error` when `!DEBUG && !canImport(CastleCoreFFI)`, and only Debug builds may pick the stand-in. CI adds "Build Release for device (unsigned)" (`-sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO`) and checks it linked the device slice. |
+| H8 | Fixed | The battle clock is a `CADisplayLink` (`FrameClock`) owned by the session: one step per display frame. A frame is read only when a command was sent, shells fly or settle, or slow work finished, so Plan is idle. A lean snapshot updates only shells, phase and tick and keeps the built forts and HUD. Drag aim is sent at most every 66 ms and always on release. The band has its own `DragModel`, so a touch move no longer re-runs the HUD. The renderer draws only when the frame, layout or colours changed, or on the 4 per second idle pose step. Test: `testPlanStepReadsNoFrameWhenIdle`. |
+| M1 | Partly | Draws only on change (H8), palettes cached per colour set. Frame names are still built per block per draw; the crop node cost was not measured. |
+| M2 | Partly | One aim per 66 ms during a drag (H8), and the core now folds runs of `aim` in its log. The pack step still runs on the main actor. |
+| M3 | Not fixed | Help and Volley Points still need the core's setup fields (see the core review fixes); the options were left as they are. |
+| M4 | Fixed | `Theme.scaled` follows the system text size (capped at 1.4x), adds 1.2x with Large text, and keeps a 12 pt floor. The root no longer pins `dynamicTypeSize`; it caps it at accessibility2. Tray chips use 12 pt text and the tray scrolls when it does not fit. |
+| M5 | Partly | Each shot is spoken in one line with the next turn ("Hit for 45 damage, 1 Bonked."), kettle pops and the result are spoken, and the field's hint changes when VoiceOver runs. Not done: an adjustable readout and key commands for iPad keyboards. |
+| M6 | Partly | Interruptions, media services reset (graph rebuilt) and engine configuration changes are observed. The session is released on background and made active on resume. A sound file in the wrong format now logs a warning. Not done: preloading off the main thread and format conversion. |
+| M7 | Partly | The engine is started when a battle opens, one player per kind is cached, reset and stopped handlers drop stale players, patterns are capped at 4 per 100 ms, and a hit on the player's Hob plays `hobHit`. Not done: following the System Haptics switch and blast size from `r`. |
+| M8 | Fixed | The assembler clears `preview` and `aim` when the active side is not human and during the hand-off card. Test: `testRivalAimIsHidden`. |
+| M9 | Partly | `battered` and `root` are decoded; battered blocks get a slate tint, the boss weak spot a gold one, shimmer a pale one. Not done: lid, flap, ghost lines, damage numbers, Lean Lines on long press. |
+| M10 | Partly | The iPad scale needs a window of 600 pt on its short side (Split View and Slide Over use the phone sizes). System edge gestures are deferred on the battle view. The rotation setting is hidden on iPad. Not done: Pencil palm rejection. |
+| M11 | Fixed (no checksum) | A newer `schema` is never written over (the store refuses writes). A damaged `progress` makes the file count as damaged, so the backup is read. Two damaged files are kept as `save.damaged.json`. Stale temp files are cleared at launch. Not done: a checksum and write coalescing. Tests: `SaveSafetyTests`. |
+| M12 | Partly | CI runs `nm -u` on the Release device binary and fails if a required reason API is called without its category in `PrivacyInfo.xcprivacy`. Music, Voices, Subtitles and the Take Back footer are hidden. Not done: copying fixtures in Debug only and trimming the art copy. |
+| M13 | Fixed | A NULL or `phase: none` snapshot, or a `panic` refusal, sets `CoreGame.fault`. The session stops and the app leaves to the map with "This fight hit a snag", keeping the last autosave for Carry on. Test: `testDeadCoreRaisesAFault`. |
+| L1 | Fixed | The clock task is gone (display link); the end task is kept and cancelled in `stop()`. |
+| L2 | Fixed | `TerrainGrid.apply` refuses bad sizes, short data and maps over 8192 cells a side. |
+| L3 | Fixed | `CoreHost` is the one owner; nothing else calls the bridge. |
+| L4 | Fixed | The draft `ai_turn` path is removed. |
+| L5 | Fixed | A refused Recall buzzes and shows why; the R key is 44 x 44 pt. |
+| L6 | Partly | Shells turn to `rot`, the follow camera frames every shell, Reduce motion is seeded from the system on first run. Not done: camera easing. |
+| L7 | Not fixed | Art still loads on first use. |
+| L8 | Not fixed | Needs a C ABI call for the content names. |
+| L9 | Partly | Every `how` has its own headline, and Buttons come from the result. The other numbers still live in Swift. |
+| L10 | Partly | The core module script copies only on change. Sound and Voices default to 85 and 80. The app switch autosaves once. Other UX gaps not done. |
+
+### Test gaps
+
+| Area | Status |
+|---|---|
+| Stuck input, turn guard, session | Added (`SessionGuardTests`) |
+| Props and rescue, soft lock | Added (`testRescueLevelHasProps`, `testBuriedHobHasAWayOut`) |
+| Real core replay, golden hashes | Added (`testMultiTurnReplayMatchesTheHash`, `testGoldenHashesMatch` against `core/castle-core/tests/golden/expected.txt`); CI requires both to pass, not skip |
+| Save | Added: rules mismatch, other hash, newer schema, damaged progress, both damaged, resume flag |
+| Result | Added (`testResultIsRecordedAtOnce`) |
+| Decode | Added: props, lean with terrain chunks, bad chunk sizes, `phase: none` |
+| Build | Added: Release device build and privacy check in CI |
+| Layout, lifecycle, performance, accessibility audit, iPad run | Not added |

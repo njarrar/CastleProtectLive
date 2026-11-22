@@ -3,6 +3,7 @@ import type { App, Route, Screen } from '../app';
 import { play } from '../audio/sfx';
 import type { ResultView, Side } from '../core/types';
 import { btn, h } from '../ui/dom';
+import { clipCanvas } from '../ui/motion';
 
 export function resultsScreen(app: App, route: Route): Screen {
   const r = route as Extract<Route, { to: 'results' }>;
@@ -25,7 +26,7 @@ export function resultsScreen(app: App, route: Route): Screen {
       h('h1', {}, title),
       h('p', { class: 'small' }, `${lvl ? `${lvl.id} ${lvl.name}` : ''}${res.round ? `, Round ${res.round}` : ''}`),
       pens,
-      h('p', { class: 'score' }, `Buttons +${res.buttons}`),
+      h('p', { class: 'score' }, clipCanvas('ui_button_coin_spin', 1, { still: app.settings.reduceMotion, cls: 'clip coin' }) ?? '', `Buttons +${res.buttons}`),
       res.bestShot && win ? h('p', { class: 'small' }, `Best shot: ${res.bestShot.hob}, ${(res.bestShot.angle / 10).toFixed(1)} / ${res.bestShot.power}, ${res.bestShot.dmg} dmg`) : '',
       !win && res.cause ? h('p', { class: 'cause' }, `"${res.cause}"`) : '',
       h('div', { class: 'row-btns' },
@@ -40,11 +41,22 @@ export function resultsScreen(app: App, route: Route): Screen {
   const stamps = [...pens.children] as HTMLElement[];
   const timers: number[] = [];
   const instant = app.settings.reduceMotion;
+  // An earned Pennant plays ui_pennant_earn (its ding is the stamp sound), then holds ui_pennant.
+  const stamp = (s: HTMLElement, i: number, quick: boolean) => {
+    s.classList.add('in');
+    const icon = s.querySelector('i');
+    if (!icon || s.dataset.stamped) return;
+    s.dataset.stamped = '1';
+    if (!res.pennants[i]) return;
+    const cv = clipCanvas('ui_pennant_earn', 2, { still: quick, reverse: quick, sink: (ev) => { if (ev === 'ding') play('pennant'); }, cls: 'clip pen' });
+    if (cv) icon.replaceWith(cv);
+    else if (!quick) play('pennant');
+  };
   stamps.forEach((s, i) => {
-    if (instant) { s.classList.add('in'); return; }
-    timers.push(window.setTimeout(() => { s.classList.add('in'); if (res.pennants[i]) play('pennant'); }, 400 + i * 500));
+    if (instant) { stamp(s, i, true); return; }
+    timers.push(window.setTimeout(() => stamp(s, i, false), 400 + i * 500));
   });
-  el.addEventListener('pointerdown', () => { timers.forEach(clearTimeout); stamps.forEach((s) => s.classList.add('in')); }, { once: true });
+  el.addEventListener('pointerdown', () => { timers.forEach(clearTimeout); stamps.forEach((s, i) => stamp(s, i, true)); }, { once: true });
   return { el, destroy: () => timers.forEach(clearTimeout) };
 }
 

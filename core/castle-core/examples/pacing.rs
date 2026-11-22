@@ -18,7 +18,7 @@ fn main() {
     let levels: Vec<String> = content
         .levels
         .iter()
-        .filter(|l| matches!(l.kind.as_str(), "siege" | "skirmish" | "grand_fort"))
+        .filter(|l| matches!(l.kind.as_str(), "siege" | "skirmish"))
         .filter(|l| l.rules.squall)
         .map(|l| l.id.clone())
         .collect();
@@ -47,11 +47,13 @@ fn main() {
                 b.command(&json!({"cmd": "end_draft"}));
             }
             if b.phase == Phase::Plan {
+                let side = b.side;
+                let able = b.hobs.iter().filter(|h| h.side == side && b.can_fire_hob(side, h.id)).count();
                 let t = Instant::now();
                 let r = b.command(&json!({"cmd": "ai_turn"}));
                 think.push(t.elapsed().as_micros());
                 for c in r["commands"].as_array().unwrap() {
-                    if c["cmd"] == "pick_hob" {
+                    if c["cmd"] == "pick_hob" && able >= 2 {
                         let h = c["hob"].as_u64().unwrap() as u8;
                         *per_hob.entry((b.hobs[h as usize].side, h)).or_insert(0) += 1;
                     }
@@ -75,6 +77,9 @@ fn main() {
         }
         let r = b.result.as_ref().expect("ended");
         *rounds.entry(r.round).or_insert(0) += 1;
+        if std::env::var("PACING_VERBOSE").is_ok() {
+            println!("{lvl} seed {} round {} {}", 7000 + i, r.round, r.how);
+        }
         *hows.entry(r.how.clone()).or_insert(0) += 1;
         if b.squall_round() > 0 || r.how == "squall" || r.how == "double_pop" {
             squall += 1;
@@ -102,7 +107,7 @@ fn main() {
     println!("median round {}, rounds 7 to 11: {}%, reached the Squall: {}%", sorted[sorted.len() / 2], in_band * 100 / total, squall * 100 / total as usize);
     println!("ends: {hows:?}");
     hob_max_share.sort();
-    println!("busiest Hob share per side: median {}%, over 60%: {lock_sides} of {sides} sides", hob_max_share.get(hob_max_share.len() / 2).copied().unwrap_or(0));
+    println!("busiest Hob share per side (turns with 2+ Hobs able): median {}%, over 60%: {lock_sides} of {sides} sides", hob_max_share.get(hob_max_share.len() / 2).copied().unwrap_or(0));
     let sides_n = 2 * total as i64;
     println!("per side at the end: kettle lost {}, blocks lost {}, Hobs Bonked {}", kettle_lost / sides_n, blocks_lost / sides_n, hobs_lost * 10 / sides_n);
     println!("hit rate: {}% of {shots_all} shots", hits_all * 100 / shots_all.max(1));

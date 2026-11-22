@@ -1,0 +1,523 @@
+{
+ "version": 1,
+ "about": "Hob-speak barks and their subtitles. Made by tools/audio-gen/build.py. The sound is gibberish; the subtitle is the line. Pick a subtitle at random with no repeats",
+ "rules": {
+  "gap_s": 1.5,
+  "per_side_per_turn_step": 1,
+  "subtitle_show_s": "1.5 + 0.06 per letter, at least 2"
+ },
+ "events": {
+  "picked": {
+   "trigger": "Command pick_hob, your Hob",
+   "anim": "hob_<id>_<side>_aim (start)",
+   "chance": 0.4
+  },
+  "fire": {
+   "trigger": "Core event fire, the shooter",
+   "anim": "hob_<id>_<side>_fire:release",
+   "chance": 0.4
+  },
+  "hit_lands": {
+   "trigger": "Core event hit, target hob: the shooter barks",
+   "anim": "hob_<id>_<side>_cheer:jump",
+   "chance": 0.4
+  },
+  "takes_hit": {
+   "trigger": "Core event hit, target hob: the target barks. Also drop (Tumbled)",
+   "anim": "hob_<id>_<side>_hit:flash",
+   "chance": 0.4
+  },
+  "bonked": {
+   "trigger": "Core event bonk, the target",
+   "anim": "hob_<id>_<side>_bonked (frame 0)",
+   "chance": 1.0
+  },
+  "win": {
+   "trigger": "Core event win, the winning crew",
+   "anim": "hob_<id>_<side>_cheer:jump",
+   "chance": 1.0
+  }
+ },
+ "hobs": {
+  "marge": {
+   "class": "lobber",
+   "voice": "Low, round, slow. Warm cook.",
+   "barks": {
+    "picked": {
+     "sound": "bark_marge_picked",
+     "hob_speak": "bo mum",
+     "subtitles": [
+      "Kettle's on.",
+      "Ready, love.",
+      "Apron on."
+     ]
+    },
+    "fire": {
+     "sound": "bark_marge_fire",
+     "hob_speak": "hoop",
+     "subtitles": [
+      "In the oven it goes.",
+      "Mind the crust!",
+      "Hot pot coming."
+     ]
+    },
+    "hit_lands": {
+     "sound": "bark_marge_hit_lands",
+     "hob_speak": "wub bo",
+     "subtitles": [
+      "That rose nicely.",
+      "Done to a turn.",
+      "Golden brown."
+     ]
+    },
+    "takes_hit": {
+     "sound": "bark_marge_takes_hit",
+     "hob_speak": "oof",
+     "subtitles": [
+      "Oof. My good apron.",
+      "Oh, my hat!",
+      "Who slammed the door?"
+     ]
+    },
+    "bonked": {
+     "sound": "bark_marge_bonked",
+     "hob_speak": "mum hoo",
+     "subtitles": [
+      "Save me a slice...",
+      "Just a little nap...",
+      "Night night..."
+     ]
+    },
+    "win": {
+     "sound": "bark_marge_win",
+     "hob_speak": "bo bim bo",
+     "subtitles": [
+      "Pudding for all!",
+      "Lumpy forever!",
+      "Seconds, anyone?"
+     ]
+    }
+   }
+  },
+  "thumper": {
+   "class": "lobber",
+   "voice": "Lowest of the Lobbers, creaky and shaky. Grumpy grandad.",
+   "barks": {
+    "picked": {
+     "sound": "bark_thumper_picked",
+     "hob_speak": "hem",
+     "subtitles": [
+      "Eh? Speak up!",
+      "Me? Fine.",
+      "Hmph. Go on, then."
+     ]
+    },
+    "fire": {
+     "sound": "bark_thumper_fire",
+     "hob_speak": "hup",
+     "subtitles": [
+      "Back in my day we threw harder.",
+      "Hup!",
+      "Mind out."
+     ]
+    },
+    "hit_lands": {
+     "sound": "bark_thumper_hit_lands",
+     "hob_speak": "ha nok",
+     "subtitles": [
+      "Hmph. Not bad.",
+      "Still got it.",
+      "Hear that? I did."
+     ]
+    },
+    "takes_hit": {
+     "sound": "bark_thumper_takes_hit",
+     "hob_speak": "oof wub",
+     "subtitles": [
+      "I felt that in my knees.",
+      "My whiskers!",
+      "Right. Now I'm cross."
+     ]
+    },
+    "bonked": {
+     "sound": "bark_thumper_bonked",
+     "hob_speak": "hoo mum",
+     "subtitles": [
+      "Wake me for tea...",
+      "Forty winks...",
+      "Bah. Night..."
+     ]
+    },
+    "win": {
+     "sound": "bark_thumper_win",
+     "hob_speak": "ha ha nok",
+     "subtitles": [
+      "Told you. The old way.",
+      "Hmph. Good.",
+      "Lumpy forever. Eh?"
+     ]
+    }
+   }
+  },
+  "quill": {
+   "class": "zinger",
+   "voice": "High, clipped, quick. Fussy and exact.",
+   "barks": {
+    "picked": {
+     "sound": "bark_quill_picked",
+     "hob_speak": "pip",
+     "subtitles": [
+      "Measure twice.",
+      "Ready. Exactly.",
+      "Pins in."
+     ]
+    },
+    "fire": {
+     "sound": "bark_quill_fire",
+     "hob_speak": "tat",
+     "subtitles": [
+      "Hold still, please.",
+      "One stitch.",
+      "Straight line."
+     ]
+    },
+    "hit_lands": {
+     "sound": "bark_quill_hit_lands",
+     "hob_speak": "pip pip",
+     "subtitles": [
+      "Neat.",
+      "Threaded.",
+      "On the mark."
+     ]
+    },
+    "takes_hit": {
+     "sound": "bark_quill_takes_hit",
+     "hob_speak": "tik",
+     "subtitles": [
+      "Tsk. A tear.",
+      "My pins!",
+      "Crooked!"
+     ]
+    },
+    "bonked": {
+     "sound": "bark_quill_bonked",
+     "hob_speak": "pip fen",
+     "subtitles": [
+      "Oh. A loose thread...",
+      "Hem me in...",
+      "Unpicked..."
+     ]
+    },
+    "win": {
+     "sound": "bark_quill_win",
+     "hob_speak": "tat pip bim",
+     "subtitles": [
+      "Neat and tidy. Our tidy.",
+      "Not a stitch out.",
+      "Lumpy, but exact."
+     ]
+    }
+   }
+  },
+  "jax": {
+   "class": "scatterjack",
+   "voice": "Fast, bright, stutters. Market showman.",
+   "barks": {
+    "picked": {
+     "sound": "bark_jax_picked",
+     "hob_speak": "ta ta tat",
+     "subtitles": [
+      "Step right up!",
+      "Roll up, roll up!",
+      "Show time!"
+     ]
+    },
+    "fire": {
+     "sound": "bark_jax_fire",
+     "hob_speak": "ha tat",
+     "subtitles": [
+      "A little spice!",
+      "Fresh ground!",
+      "One for the crowd!"
+     ]
+    },
+    "hit_lands": {
+     "sound": "bark_jax_hit_lands",
+     "hob_speak": "bo bo bim",
+     "subtitles": [
+      "Sold!",
+      "And the crowd goes wild!",
+      "Who wants more?"
+     ]
+    },
+    "takes_hit": {
+     "sound": "bark_jax_takes_hit",
+     "hob_speak": "ha ha oof",
+     "subtitles": [
+      "Achoo! Who threw that?",
+      "No refunds!",
+      "Mind the stall!"
+     ]
+    },
+    "bonked": {
+     "sound": "bark_jax_bonked",
+     "hob_speak": "wub wub hoo",
+     "subtitles": [
+      "Stall's shut...",
+      "Back after lunch...",
+      "Sold... out..."
+     ]
+    },
+    "win": {
+     "sound": "bark_jax_win",
+     "hob_speak": "ta ta gla bim",
+     "subtitles": [
+      "Sold! Sold! Sold!",
+      "Best show in Brickabrac!",
+      "Encore!"
+     ]
+    }
+   }
+  },
+  "nan": {
+   "class": "scatterjack",
+   "voice": "High, thin, quavery, a bit nasal. Sharp granny.",
+   "barks": {
+    "picked": {
+     "sound": "bark_nan_picked",
+     "hob_speak": "nok nok",
+     "subtitles": [
+      "Eat up, dear.",
+      "Coming, dear.",
+      "Ladle's ready."
+     ]
+    },
+    "fire": {
+     "sound": "bark_nan_fire",
+     "hob_speak": "tat tat",
+     "subtitles": [
+      "Wash these after!",
+      "Catch, dear.",
+      "Mind the pans."
+     ]
+    },
+    "hit_lands": {
+     "sound": "bark_nan_hit_lands",
+     "hob_speak": "ha nok",
+     "subtitles": [
+      "Told you so.",
+      "Dinner bell! Get them, dears!",
+      "That'll teach them."
+     ]
+    },
+    "takes_hit": {
+     "sound": "bark_nan_takes_hit",
+     "hob_speak": "pip pip tat",
+     "subtitles": [
+      "Mind my pots!",
+      "Rude, dear.",
+      "My best pan!"
+     ]
+    },
+    "bonked": {
+     "sound": "bark_nan_bonked",
+     "hob_speak": "fen hoo",
+     "subtitles": [
+      "Wake me for supper...",
+      "Nan needs a sit...",
+      "Lids on, dears..."
+     ]
+    },
+    "win": {
+     "sound": "bark_nan_win",
+     "hob_speak": "nok nok ha",
+     "subtitles": [
+      "Told you so, dears.",
+      "Now wash up!",
+      "Supper's on me."
+     ]
+    }
+   }
+  },
+  "grub": {
+   "class": "delver",
+   "voice": "Very low, muffled, gravelly mumble.",
+   "barks": {
+    "picked": {
+     "sound": "bark_grub_picked",
+     "hob_speak": "mum",
+     "subtitles": [
+      "Mm.",
+      "Mm. Digging.",
+      "Heh."
+     ]
+    },
+    "fire": {
+     "sound": "bark_grub_fire",
+     "hob_speak": "wub",
+     "subtitles": [
+      "Down we go.",
+      "Mm. Dig.",
+      "Hole."
+     ]
+    },
+    "hit_lands": {
+     "sound": "bark_grub_hit_lands",
+     "hob_speak": "hem nok",
+     "subtitles": [
+      "Heh. Hole.",
+      "Mm. Good.",
+      "Got one."
+     ]
+    },
+    "takes_hit": {
+     "sound": "bark_grub_takes_hit",
+     "hob_speak": "mumf",
+     "subtitles": [
+      "Mmf.",
+      "Mm. Ow.",
+      "My hat."
+     ]
+    },
+    "bonked": {
+     "sound": "bark_grub_bonked",
+     "hob_speak": "mum mum",
+     "subtitles": [
+      "Mm. Nap.",
+      "Dark. Nice...",
+      "Mmm..."
+     ]
+    },
+    "win": {
+     "sound": "bark_grub_win",
+     "hob_speak": "hem hem mum",
+     "subtitles": [
+      "Mm. Behind me.",
+      "Heh. Heh.",
+      "Good hole."
+     ]
+    }
+   }
+  },
+  "bobbin": {
+   "class": "boinker",
+   "voice": "Sing-song, always rising. Bouncy cobbler.",
+   "barks": {
+    "picked": {
+     "sound": "bark_bobbin_picked",
+     "hob_speak": "bo ing",
+     "subtitles": [
+      "Best foot forward!",
+      "Laces tied!",
+      "Hop to it!"
+     ]
+    },
+    "fire": {
+     "sound": "bark_bobbin_fire",
+     "hob_speak": "hoop la",
+     "subtitles": [
+      "Boing!",
+      "Off the toe!",
+      "Up and over!"
+     ]
+    },
+    "hit_lands": {
+     "sound": "bark_bobbin_hit_lands",
+     "hob_speak": "bim bo bim",
+     "subtitles": [
+      "Right in the laces.",
+      "Heel and toe!",
+      "Bounced it!"
+     ]
+    },
+    "takes_hit": {
+     "sound": "bark_bobbin_takes_hit",
+     "hob_speak": "wub oof",
+     "subtitles": [
+      "Mind the boots!",
+      "Whoops-a-daisy!",
+      "My laces!"
+     ]
+    },
+    "bonked": {
+     "sound": "bark_bobbin_bonked",
+     "hob_speak": "bo bo hoo",
+     "subtitles": [
+      "Feet up...",
+      "Just resting my soles...",
+      "Boing... zzz..."
+     ]
+    },
+    "win": {
+     "sound": "bark_bobbin_win",
+     "hob_speak": "gla bim bo bim",
+     "subtitles": [
+      "Sole survivor!",
+      "Three cheers and a hop!",
+      "Lumpy forever!"
+     ]
+    }
+   }
+  },
+  "hetty": {
+   "class": "patcher",
+   "voice": "Warm hum in the nose, steady. Bossy teacher.",
+   "barks": {
+    "picked": {
+     "sound": "bark_hetty_picked",
+     "hob_speak": "mum tat",
+     "subtitles": [
+      "Sit up straight.",
+      "Ready. Pay attention.",
+      "Trowel out."
+     ]
+    },
+    "fire": {
+     "sound": "bark_hetty_fire",
+     "hob_speak": "nok",
+     "subtitles": [
+      "Do it again, properly.",
+      "Watch and learn.",
+      "Eyes front."
+     ]
+    },
+    "hit_lands": {
+     "sound": "bark_hetty_hit_lands",
+     "hob_speak": "mum bim",
+     "subtitles": [
+      "Full marks.",
+      "Gold star.",
+      "That is how it is done."
+     ]
+    },
+    "takes_hit": {
+     "sound": "bark_hetty_takes_hit",
+     "hob_speak": "hem tat",
+     "subtitles": [
+      "Who did that?",
+      "See me after.",
+      "Mind the mortar!"
+     ]
+    },
+    "bonked": {
+     "sound": "bark_hetty_bonked",
+     "hob_speak": "hoo mum",
+     "subtitles": [
+      "Class dismissed...",
+      "Mark my place...",
+      "Nobody moves..."
+     ]
+    },
+    "win": {
+     "sound": "bark_hetty_win",
+     "hob_speak": "mum gla fen",
+     "subtitles": [
+      "Full marks, everyone.",
+      "Top of the class!",
+      "The roof stays."
+     ]
+    }
+   }
+  }
+ }
+}

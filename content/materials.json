@@ -74,8 +74,8 @@
       "glyph": "t",
       "hp": 50,
       "cost": 15,
-      "side_support": 2,
-      "crush_pct": 100,
+      "side_support": 1,
+      "crush_pct": 200,
       "mult": {
         "blast": 100,
         "pierce": 100,
@@ -91,7 +91,7 @@
       "hp": 80,
       "cost": 35,
       "side_support": 1,
-      "crush_pct": 200,
+      "crush_pct": 300,
       "mult": {
         "blast": 80,
         "pierce": 60,
@@ -123,14 +123,14 @@
     "pierce": 150,
     "dig": 50,
     "fire": 100,
-    "crush": 100
+    "crush": 200
   },
   "kettle": {
-    "blast": 100,
+    "blast": 50,
     "pierce": 100,
     "dig": 0,
     "fire": 0,
     "crush": 50
   },
-  "cover_pct": 50
+  "cover_pct": 75
 }

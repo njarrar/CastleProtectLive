@@ -166,6 +166,8 @@ export interface ShellView {
   vy: number;
   kind: string; // sprite id of the shell in flight (shell_<kind>)
   side: Side;
+  /** Trail look by damage type (view only). */
+  trail?: 'blast' | 'pierce' | 'dig' | 'fire' | 'mend';
 }
 
 export interface PinView {
@@ -194,18 +196,26 @@ export interface ShotChip {
   why?: string; // short reason when not ready
 }
 
+/** One block of a falling chunk, as it stood before the fall (view coords, bottom-left). */
+export interface FallingBlockView { x: number; y: number; c: number; r: number; mat: string; hp: number; maxHp: number; fall: number }
+
 export type BattleEvent =
   | { t: 'turn'; side: Side; round: number }
-  | { t: 'fire'; side: Side; x: number; y: number; kind: string }
-  | { t: 'hit'; x: number; y: number; dmg: number; what: 'block' | 'hob' | 'kettle' | 'ground' }
-  | { t: 'break'; x: number; y: number; mat: Material }
+  | { t: 'fire'; side: Side; x: number; y: number; kind: string; hob?: string; weight?: number }
+  | { t: 'hit'; x: number; y: number; dmg: number; what: 'block' | 'hob' | 'kettle' | 'ground'; hob?: string; side?: Side; mat?: Material; dtype?: string }
+  | { t: 'break'; x: number; y: number; mat: Material; side?: Side }
   | { t: 'fall'; count: number; x: number; y: number }
+  | { t: 'collapse'; side: Side; lean: -1 | 1; blocks: FallingBlockView[] }
   | { t: 'bonk'; hob: string; x: number; y: number }
   | { t: 'kettle_pop'; side: Side }
-  | { t: 'boom'; x: number; y: number; r: number }
+  | { t: 'boom'; x: number; y: number; r: number; dtype?: string }
   | { t: 'squall'; n: number }
   | { t: 'squall_warn'; left: number }
   | { t: 'note'; text: string; x?: number; y?: number; sound?: string; status?: boolean }
+  | { t: 'threaded'; x: number; y: number }
+  | { t: 'thump'; side: Side }
+  /** A Hob animation cue from a core event: tumble, land, dig (Shove Off), nextdoor (a Passive acts). */
+  | { t: 'hob'; hob: string; act: 'tumble' | 'land' | 'dig' | 'nextdoor' | 'cheer' }
   | { t: 'end'; winner: Side | -1; how: string };
 
 export interface DraftChip {

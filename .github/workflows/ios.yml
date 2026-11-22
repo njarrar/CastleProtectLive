@@ -174,7 +174,8 @@ jobs:
       # real core, so this proves the device slice links and the stand-in
       # cannot ship.
       - name: Build Release for device (unsigned)
-        if: steps.check.outputs.core == 'true'
+        # Runs even when a test failed, so one run reports every problem.
+        if: ${{ !cancelled() && steps.check.outputs.core == 'true' }}
         working-directory: apps/ios
         run: |
           set -o pipefail
@@ -193,7 +194,8 @@ jobs:
       # Rust std included, imports, and fail when a category is used but not
       # declared in PrivacyInfo.xcprivacy.
       - name: Check the privacy manifest against the binary
-        if: steps.check.outputs.core == 'true'
+        # Runs even when a test failed, so one run reports every problem.
+        if: ${{ !cancelled() && steps.check.outputs.core == 'true' }}
         working-directory: apps/ios
         run: |
           app="build/DerivedData/Build/Products/Release-iphoneos/CastleProtect.app"

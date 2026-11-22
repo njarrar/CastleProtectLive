@@ -1,5 +1,5 @@
 import type { BattleSetup, CoreApi, LevelInfo, ResultView } from './core/types';
-import { setVolume } from './audio/sfx';
+import { setMusic, setVolume } from './audio/sfx';
 import {
   askPersist, loadBattleSave, loadProgress, loadSettings, saveProgress, saveSettings, type Progress, type Settings,
 } from './save/db';
@@ -115,6 +115,8 @@ export class App {
     if (r.to === 'map' || r.to === 'title') this.back = [];
     this.route = r;
     this.cur = s;
+    // The map theme under menus, the Region 1 layers in a fight (started by the battle), a sting on results.
+    if (r.to !== 'battle') setMusic(r.to === 'results' ? '' : 'map');
     this.root.replaceChildren(s.el);
     document.documentElement.dataset.screen = r.to;
     const focus = s.el.querySelector<HTMLElement>('[data-autofocus]');

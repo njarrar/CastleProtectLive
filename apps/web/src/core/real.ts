@@ -10,7 +10,7 @@ import type {
 import type {
   BattleEvent, BattleSetup, Blueprint, BlueprintCheck, BlockView, Command, CommandResult, CoreApi,
   DraftView, HobClass, HobInfo, HobView, KettleView, LevelInfo, Material, PinView, PropView, ResultView, RoomView,
-  ShotChip, Side, SideStats, Snapshot,
+  ShellView, ShotChip, Side, SideStats, Snapshot,
 } from './types';
 import { SaveError, TICK_HZ } from './types';
 
@@ -332,9 +332,10 @@ export class RealCore implements CoreApi {
         this.shotDmg = 0;
         const h = s.hobs.find((q) => q.id === n('hob'));
         this.shotBy = { side, hob: h?.name.split(' ')[0] ?? '', round: s.hud.round, angle: n('angle'), power: n('power') };
-        return [{ t: 'fire', side, x, y: y + 10, kind: String(e.shot) }];
+        const def = this.bundle.shots.find((q) => q.id === String(e.shot));
+        return [{ t: 'fire', side, x, y: y + 10, kind: String(e.shot), hob: String(n('hob')), weight: weightOf(def?.weight) }];
       }
-      case 'explode': return [{ t: 'boom', x: n('x'), y: H - n('y'), r: n('r') }];
+      case 'explode': return [{ t: 'boom', x: n('x'), y: H - n('y'), r: n('r'), dtype: e.type ? String(e.type) : undefined }];
       case 'miss': return [{ t: 'hit', x: n('x'), y: H - n('y'), dmg: 0, what: 'ground' }];
       case 'hit': {
         const dmg = n('dmg');
@@ -345,13 +346,19 @@ export class RealCore implements CoreApi {
         if (this.shotBy && e.why !== 'crush' && e.why !== 'fall' && n('side') !== this.shotBy.side) this.stats[this.shotBy.side].hits++;
         const out: BattleEvent[] = [];
         if (e.threaded) out.push(...note('Threaded!', undefined, 'bonk'));
-        if (tgt === 'hob') { const p = hobAt(n('hob')); if (p) out.push({ t: 'hit', x: p[0], y: p[1] + 26, dmg, what: 'hob' }); return out; }
+        const dtype = e.type ? String(e.type) : e.why === 'crush' || e.why === 'fall' ? 'crush' : undefined;
+        if (tgt === 'hob') { const p = hobAt(n('hob')); if (p) out.push({ t: 'hit', x: p[0], y: p[1] + 26, dmg, what: 'hob', hob: String(n('hob')), side: n('side') as Side, dtype }); return out; }
         if (tgt === 'kettle') {
           const k = (this.castleBefore(n('side')) ?? s.castles[n('side')])?.kettle;
-          if (k) out.push({ t: 'hit', x: (k.box[0] + k.box[2]) / 2, y: H - k.box[1] + 8, dmg, what: 'kettle' });
+          if (k) out.push({ t: 'hit', x: (k.box[0] + k.box[2]) / 2, y: H - k.box[1] + 8, dmg, what: 'kettle', side: n('side') as Side, dtype });
           return out;
         }
-        if (tgt === 'block') { const p = slotAt(n('side'), n('c'), n('r')); if (p) out.push({ t: 'hit', x: p[0], y: p[1] + 8, dmg, what: 'block' }); return out; }
+        if (tgt === 'block') {
+          const p = slotAt(n('side'), n('c'), n('r'));
+          const mat = this.castleBefore(n('side'))?.blocks.find((b) => b.c === n('c') && b.r === n('r'))?.mat as Material | undefined;
+          if (p) out.push({ t: 'hit', x: p[0], y: p[1] + 8, dmg, what: 'block', side: n('side') as Side, mat, dtype });
+          return out;
+        }
         if (tgt === 'prop') {
           const pr = s.props.find((p) => p.id === n('id')) ?? s.props.find((p) => p.kind === e.kind);
           if (pr) out.push({ t: 'hit', x: pr.x, y: H - pr.y + 12, dmg, what: 'block' });
@@ -365,13 +372,27 @@ export class RealCore implements CoreApi {
         const p = slotAt(side, n('c'), n('r'));
         const mat = (this.castleBefore(side)?.blocks.find((b) => b.c === n('c') && b.r === n('r'))?.mat ?? 'timber') as Material;
         if (this.shotBy && side !== this.shotBy.side) this.stats[this.shotBy.side].blocks++;
-        return p ? [{ t: 'break', x: p[0], y: p[1], mat }] : [];
+        return p ? [{ t: 'break', x: p[0], y: p[1], mat, side: side as Side }] : [];
       }
       case 'collapse': {
+        // The chunk as it stood, for the collapse show: where each block was, how far its
+        // column falls, and which way it tips (toward the side with nothing next to it).
+        const side = n('side');
         const blocks = (e.blocks as [number, number, string][]) ?? [];
-        if (!blocks.length) return [];
-        const p = slotAt(n('side'), blocks[0][0], blocks[0][1]);
-        return p ? [{ t: 'fall', count: blocks.length, x: p[0], y: p[1] }] : [];
+        const before = this.castleBefore(side) ?? s.castles[side];
+        if (!blocks.length || !before) return [];
+        const fall = new Map(((e.falls as [number, number][]) ?? []).map(([c, d]) => [c, d]));
+        const after = new Set((s.castles[side]?.blocks ?? []).map((b) => `${b.c},${b.r}`));
+        let c0 = 1e9, c1 = -1e9, r0 = 1e9;
+        for (const [c, r] of blocks) { c0 = Math.min(c0, c); c1 = Math.max(c1, c); r0 = Math.min(r0, r); }
+        const heldL = after.has(`${c0 - 1},${r0}`) || after.has(`${c0},${r0 - 1}`) && !after.has(`${c1},${r0 - 1}`);
+        const heldR = after.has(`${c1 + 1},${r0}`) || after.has(`${c1},${r0 - 1}`) && !after.has(`${c0},${r0 - 1}`);
+        const lean: -1 | 1 = heldL && !heldR ? 1 : heldR && !heldL ? -1 : (c0 + c1) / 2 < before.cols / 2 ? -1 : 1;
+        const out = blocks.map(([c, r, mat]) => {
+          const b = before.blocks.find((q) => q.c === c && q.r === r);
+          return { x: before.x + 16 * c, y: H - before.base_y + 16 * r, c, r, mat: mat || b?.mat || 'timber', hp: b?.hp ?? 1, maxHp: b?.max ?? 1, fall: fall.get(c) ?? 16 };
+        });
+        return [{ t: 'collapse', side: side as Side, lean, blocks: out }];
       }
       case 'big_drop': {
         if (!e.callout) return [];
@@ -385,12 +406,12 @@ export class RealCore implements CoreApi {
       case 'squall_round': return [{ t: 'squall', n: n('n') }];
       case 'win': return [{ t: 'end', winner: n('winner') as Side, how: HOW[String(e.how)] ?? String(e.how) }];
       // Everything else gets a short line, and a floating word where it has a place.
-      case 'threaded': return note('Threaded!', hobAt(n('hob')), 'bonk');
+      case 'threaded': { const p = hobAt(n('hob')); return [...note('Threaded!', p, 'bonk'), ...(p ? [{ t: 'threaded' as const, x: p[0], y: p[1] }] : [])]; }
       case 'front': return note(`New Weather Front: wind ${n('wind')}`, undefined, 'squall');
-      case 'drop': return note(e.state === 'tumbled' ? 'Tumble!' : 'Drop!', hobAt(n('hob')), 'thud');
-      case 'climb': return note('Climbed back in', hobAt(n('hob')));
+      case 'drop': return [...note(e.state === 'tumbled' ? 'Tumble!' : 'Drop!', hobAt(n('hob')), 'thud'), { t: 'hob', hob: String(n('hob')), act: 'tumble' }];
+      case 'climb': return [...note('Climbed back in', hobAt(n('hob'))), { t: 'hob', hob: String(n('hob')), act: 'land' }];
       case 'castle_drop': return note('The fort sank', fortMid(n('side')), 'thud');
-      case 'thump': return note('Thump!', fortMid(n('side')), 'thud');
+      case 'thump': return [...note('Thump!', fortMid(n('side')), 'thud'), { t: 'thump', side: n('side') as Side }];
       case 'mend': return note('Mended', fortMid(n('side')), 'pennant');
       case 'rebuild': return note('Rebuilt', fortMid(n('side')), 'pennant');
       case 'puff_up': return note('Puffed up!', hobAt(n('hob')), 'pop');
@@ -401,11 +422,26 @@ export class RealCore implements CoreApi {
       case 'lid_block': return note('Bounced off the lid!', [n('x'), H - n('y')], 'thud');
       case 'lid': return note('Pot Lid on', fortMid(n('side')), 'sheet');
       case 'buried': return note('Loophole buried', hobAt(n('hob')), 'thud');
-      case 'dug_out': case 'shove_off': return note('Shoved off', hobAt(n('hob')), 'walk');
+      case 'dug_out': case 'shove_off': return [...note('Shoved off', hobAt(n('hob')), 'walk'), { t: 'hob', hob: String(n('hob')), act: 'dig' }];
+      // Passives that act on their own: the next door glow (Old Grudge, Clatter Call).
+      case 'grudge': case 'clatter': return [{ t: 'hob', hob: String(n('hob')), act: 'nextdoor' }];
       case 'prop_break': return note(e.kind === 'cage_bar' ? 'A bar broke!' : 'Broke!', [n('x'), H - n('y')], 'break');
       case 'regrow': return note('The hedge grew back', slotAt(n('side'), n('c'), n('r')));
       default: return [];
     }
+  }
+
+  private trails = new Map<string, ShellView['trail']>();
+  /** The trail look for a shot, from its content (flight kind and damage type). View only. */
+  private trailOf(id: string): ShellView['trail'] {
+    let t = this.trails.get(id);
+    if (t) return t;
+    const d = this.bundle.shots.find((q) => q.id === id) as { flight?: { kind?: string }; triggers?: unknown } | undefined;
+    const js = JSON.stringify(d?.triggers ?? '');
+    const dt = /"dtype":"(\w+)"/.exec(js)?.[1];
+    t = d?.flight?.kind === 'dig' ? 'dig' : /"op":"(heal|mend|repair)/.test(js) ? 'mend' : dt === 'fire' ? 'fire' : dt === 'pierce' || d?.flight?.kind === 'beam' ? 'pierce' : 'blast';
+    this.trails.set(id, t);
+    return t;
   }
 
   private view(): ViewCache {
@@ -485,7 +521,7 @@ export class RealCore implements CoreApi {
     const v = this.view();
     const shells = s.shells.map(([id, x, y, rot, shot]) => {
       const a = (rot / 10) * (Math.PI / 180);
-      return { id, x, y: H - y, vx: Math.cos(a) * 400, vy: Math.sin(a) * 400, kind: shot, side: active };
+      return { id, x, y: H - y, vx: Math.cos(a) * 400, vy: Math.sin(a) * 400, kind: shot, side: active, trail: this.trailOf(shot) };
     });
     const sel = s.hobs.find((h) => h.id === hud.selected.hob && h.side === active);
     const plan = s.phase === 'plan';

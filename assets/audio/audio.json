@@ -1,0 +1,4068 @@
+{
+ "version": 1,
+ "about": "Castle Protect v0.1 audio. Made by tools/audio-gen/build.py. Do not edit by hand. See assets/audio/README.md",
+ "fields": {
+  "files": "Paths from assets/audio. ogg is Opus (web, Android). m4a is AAC (iOS, old Safari)",
+  "duration": "Seconds. samples and sample_rate give the exact length: loop over samples 0 to samples, and trim any padding the decoder adds",
+  "loop": "true: loops with no seam. repeat_gap_s, if set: wait that long between plays",
+  "layer": "Music layer: base, stir or peril. Layers with the same sync.group are the same length and must start on the same sample",
+  "volume": "Play gain 0 to 1, before the bus sliders. The files are already set to their mix level",
+  "bus": "Mix bus. See buses",
+  "pitch_var_semitones": "Shift each play at random by up to this much, up or down",
+  "trigger": "game: the core event (core/API.md) or UI moment that plays it. anim: the animation event in assets/animations.json as name:event; the sound starts on that frame",
+  "lufs_peak": "Loudness and peak of the source before encoding"
+ },
+ "mix": {
+  "target_lufs": -16,
+  "peak_ceiling_db": -1,
+  "buses": {
+   "music": {
+    "parent": "master",
+    "slider": "Music",
+    "default": 70
+   },
+   "ui": {
+    "parent": "sfx",
+    "slider": "Sound",
+    "default": 85
+   },
+   "launch": {
+    "parent": "sfx",
+    "slider": "Sound",
+    "default": 85
+   },
+   "flight": {
+    "parent": "sfx",
+    "slider": "Sound",
+    "default": 85
+   },
+   "impact": {
+    "parent": "sfx",
+    "slider": "Sound",
+    "default": 85,
+    "ducks_music_db": -6
+   },
+   "material": {
+    "parent": "sfx",
+    "slider": "Sound",
+    "default": 85
+   },
+   "kettle": {
+    "parent": "sfx",
+    "slider": "Sound",
+    "default": 85,
+    "never_stolen": true
+   },
+   "hob": {
+    "parent": "sfx",
+    "slider": "Sound",
+    "default": 85
+   },
+   "world": {
+    "parent": "sfx",
+    "slider": "Sound",
+    "default": 85,
+    "ducked_by_voice_db": -4
+   },
+   "voice": {
+    "parent": "master",
+    "slider": "Voices",
+    "default": 80,
+    "ducks_music_db": -3
+   }
+  },
+  "rules": [
+   "Music sits 8 dB under the loudest impact",
+   "An impact ducks music 6 dB (30 ms attack, 400 ms release). hit_blast_tiny does not duck",
+   "A bark ducks music 3 dB and world loops 4 dB",
+   "At most 16 voices, 3 of one sound within 50 ms",
+   "One bark per side per turn step, 1.5 s between barks",
+   "No sound before the Play tap on first launch"
+  ]
+ },
+ "music_layers": {
+  "base": "Always in battle",
+  "stir": "Kettle at 50% or less, or 2 Hobs or fewer on a side, or Squall within 3 rounds",
+  "peril": "Last Hob, or kettle at 25% or less, or Sudden Squall",
+  "fade": "On bar lines, over one bar"
+ },
+ "shot_launch": {
+  "clodpot": "launch_lob",
+  "hatpin": "launch_bolt",
+  "gravel_sneeze": "launch_fan",
+  "extra_shake": "launch_fan",
+  "nibbler": "launch_dig",
+  "bouncebean": "launch_bounce",
+  "mendglob": "launch_glob",
+  "grand_dumpling": "launch_lob",
+  "sunspear": "launch_beam",
+  "pepper_rain": "launch_fan",
+  "burrowbomb": "launch_dig",
+  "rolypoly": "launch_roll",
+  "barn_raising": null,
+  "tick_tock_crock": "launch_heavy",
+  "pan_parade": "launch_fan",
+  "pudding_bomb": "launch_lob",
+  "lid_lifter": "launch_lob",
+  "marble_sack": "launch_lob",
+  "nosy_goose": "launch_lob",
+  "mole_mail": "launch_dig",
+  "old_turnip": "launch_bounce",
+  "rubber_radish": "launch_bounce",
+  "sod_sack": "launch_lob"
+ },
+ "material_sounds": {
+  "wicker": {
+   "hit": "mat_wicker_hit",
+   "brk": "mat_wicker_break"
+  },
+  "timber": {
+   "hit": "mat_timber_hit",
+   "brk": "mat_timber_break"
+  },
+  "cobble": {
+   "hit": "mat_cobble_hit",
+   "brk": "mat_cobble_break"
+  },
+  "footing": {
+   "hit": "mat_footing_hit",
+   "brk": null
+  }
+ },
+ "blast_sounds": {
+  "tiny": "hit_blast_tiny",
+  "small": "hit_blast_small",
+  "medium": "hit_blast_medium",
+  "large": "hit_blast_large",
+  "huge": "hit_blast_huge"
+ },
+ "totals": {
+  "sounds": 140,
+  "ogg_bytes": 2744039,
+  "m4a_bytes": 2798287,
+  "all_bytes": 5542326,
+  "budget_bytes": 8388608,
+  "seconds": 342.3
+ },
+ "sounds": [
+  {
+   "id": "mus_map",
+   "kind": "music",
+   "files": {
+    "ogg": "music/mus_map.ogg",
+    "m4a": "music/mus_map.m4a"
+   },
+   "duration": 41.739,
+   "samples": 2003478,
+   "sample_rate": 48000,
+   "channels": 2,
+   "loop": true,
+   "layer": null,
+   "bus": "music",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "sync": {
+    "group": "mus_map",
+    "bpm": 92,
+    "meter": "6/8",
+    "key": "G major",
+    "bars": 32,
+    "bar_s": 1.304348
+   },
+   "trigger": {
+    "game": "Map, menus, pre-battle screen. Plays quietly after a loss",
+    "anim": null
+   },
+   "lufs": -21.0,
+   "peak_db": -10.0,
+   "bytes": {
+    "ogg": 434957,
+    "m4a": 386454
+   }
+  },
+  {
+   "id": "mus_r1_base",
+   "kind": "music",
+   "files": {
+    "ogg": "music/mus_r1_base.ogg",
+    "m4a": "music/mus_r1_base.m4a"
+   },
+   "duration": 71.111,
+   "samples": 3413333,
+   "sample_rate": 48000,
+   "channels": 2,
+   "loop": true,
+   "layer": "base",
+   "bus": "music",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "sync": {
+    "group": "mus_r1",
+    "bpm": 108,
+    "meter": "2/4",
+    "key": "G major",
+    "bars": 64,
+    "bar_s": 1.111111
+   },
+   "trigger": {
+    "game": "Always in a Region 1 battle. Start all three layers at once, mute Stir and Peril",
+    "anim": null
+   },
+   "lufs": -23.0,
+   "peak_db": -11.2,
+   "bytes": {
+    "ogg": 699352,
+    "m4a": 663633
+   }
+  },
+  {
+   "id": "mus_r1_peril",
+   "kind": "music",
+   "files": {
+    "ogg": "music/mus_r1_peril.ogg",
+    "m4a": "music/mus_r1_peril.m4a"
+   },
+   "duration": 71.111,
+   "samples": 3413333,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": true,
+   "layer": "peril",
+   "bus": "music",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "sync": {
+    "group": "mus_r1",
+    "bpm": 108,
+    "meter": "2/4",
+    "key": "G major",
+    "bars": 64,
+    "bar_s": 1.111111
+   },
+   "trigger": {
+    "game": "Fade in on a bar line when a side is on its last Hob, a Heartkettle is at 25% or less, or the Squall has started (core event squall_round)",
+    "anim": null
+   },
+   "lufs": -25.0,
+   "peak_db": -10.2,
+   "bytes": {
+    "ogg": 480140,
+    "m4a": 448935
+   }
+  },
+  {
+   "id": "mus_r1_stir",
+   "kind": "music",
+   "files": {
+    "ogg": "music/mus_r1_stir.ogg",
+    "m4a": "music/mus_r1_stir.m4a"
+   },
+   "duration": 71.111,
+   "samples": 3413333,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": true,
+   "layer": "stir",
+   "bus": "music",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "sync": {
+    "group": "mus_r1",
+    "bpm": 108,
+    "meter": "2/4",
+    "key": "G major",
+    "bars": 64,
+    "bar_s": 1.111111
+   },
+   "trigger": {
+    "game": "Fade in on a bar line when a Heartkettle is at 50% or less, a side has 2 Hobs or fewer, or the Squall is within 3 rounds (core event squall_warning)",
+    "anim": null
+   },
+   "lufs": -22.0,
+   "peak_db": -9.6,
+   "bytes": {
+    "ogg": 549016,
+    "m4a": 444502
+   }
+  },
+  {
+   "id": "mus_title_jingle",
+   "kind": "sting",
+   "files": {
+    "ogg": "music/mus_title_jingle.ogg",
+    "m4a": "music/mus_title_jingle.m4a"
+   },
+   "duration": 4.528,
+   "samples": 217358,
+   "sample_rate": 48000,
+   "channels": 2,
+   "loop": false,
+   "layer": null,
+   "bus": "music",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Once, on the Play tap of the First Run card (no sound before that tap)",
+    "anim": null
+   },
+   "lufs": -17.0,
+   "peak_db": -6.4,
+   "bytes": {
+    "ogg": 46890,
+    "m4a": 42641
+   }
+  },
+  {
+   "id": "sting_lose",
+   "kind": "sting",
+   "files": {
+    "ogg": "music/sting_lose.ogg",
+    "m4a": "music/sting_lose.m4a"
+   },
+   "duration": 2.106,
+   "samples": 101083,
+   "sample_rate": 48000,
+   "channels": 2,
+   "loop": false,
+   "layer": null,
+   "bus": "music",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Core event win, the player lost. Then the map theme, quietly",
+    "anim": null
+   },
+   "lufs": -18.0,
+   "peak_db": -7.7,
+   "bytes": {
+    "ogg": 17638,
+    "m4a": 20471
+   }
+  },
+  {
+   "id": "sting_win",
+   "kind": "sting",
+   "files": {
+    "ogg": "music/sting_win.ogg",
+    "m4a": "music/sting_win.m4a"
+   },
+   "duration": 2.07,
+   "samples": 99356,
+   "sample_rate": 48000,
+   "channels": 2,
+   "loop": false,
+   "layer": null,
+   "bus": "music",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Core event win, the player won. Stop the layers on the next beat, then play",
+    "anim": "hob_<id>_<side>_cheer:jump"
+   },
+   "lufs": -16.0,
+   "peak_db": -6.5,
+   "bytes": {
+    "ogg": 23842,
+    "m4a": 19900
+   }
+  },
+  {
+   "id": "aim_band_stretch",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/aim_band_stretch.ogg",
+    "m4a": "sfx/aim_band_stretch.m4a"
+   },
+   "duration": 1.0,
+   "samples": 48000,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": true,
+   "layer": null,
+   "bus": "ui",
+   "volume": 0.6,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "While dragging. Pitch 0 to +12 semitones with power 0 to 100",
+    "anim": null
+   },
+   "lufs": -27.0,
+   "peak_db": -15.0,
+   "bytes": {
+    "ogg": 8616,
+    "m4a": 9375
+   }
+  },
+  {
+   "id": "aim_drag_start",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/aim_drag_start.ogg",
+    "m4a": "sfx/aim_drag_start.m4a"
+   },
+   "duration": 0.14,
+   "samples": 6720,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Aim Drag starts, band appears",
+    "anim": null
+   },
+   "lufs": -24.0,
+   "peak_db": -12.6,
+   "bytes": {
+    "ogg": 1145,
+    "m4a": 2260
+   }
+  },
+  {
+   "id": "aim_limit",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/aim_limit.ogg",
+    "m4a": "sfx/aim_limit.m4a"
+   },
+   "duration": 0.06,
+   "samples": 2880,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Aim or power at its limit",
+    "anim": null
+   },
+   "lufs": -24.0,
+   "peak_db": -9.8,
+   "bytes": {
+    "ogg": 933,
+    "m4a": 1597
+   }
+  },
+  {
+   "id": "aim_pin_drop",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/aim_pin_drop.ogg",
+    "m4a": "sfx/aim_pin_drop.m4a"
+   },
+   "duration": 0.254,
+   "samples": 12192,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "A Pin lands",
+    "anim": "fx_pin_p1_drop:stick, fx_pin_p2_drop:stick"
+   },
+   "lufs": -21.0,
+   "peak_db": -3.6,
+   "bytes": {
+    "ogg": 1643,
+    "m4a": 3222
+   }
+  },
+  {
+   "id": "aim_recall",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/aim_recall.ogg",
+    "m4a": "sfx/aim_recall.m4a"
+   },
+   "duration": 0.23,
+   "samples": 11040,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Recall snaps to a Ghost",
+    "anim": null
+   },
+   "lufs": -23.0,
+   "peak_db": -14.5,
+   "bytes": {
+    "ogg": 2151,
+    "m4a": 3087
+   }
+  },
+  {
+   "id": "aim_set",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/aim_set.ogg",
+    "m4a": "sfx/aim_set.m4a"
+   },
+   "duration": 0.104,
+   "samples": 4992,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Finger up, aim set. Play 5 semitones down for a cancel",
+    "anim": null
+   },
+   "lufs": -23.0,
+   "peak_db": -7.0,
+   "bytes": {
+    "ogg": 1296,
+    "m4a": 1937
+   }
+  },
+  {
+   "id": "aim_tick",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/aim_tick.ogg",
+    "m4a": "sfx/aim_tick.m4a"
+   },
+   "duration": 0.03,
+   "samples": 1440,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Fine Tune step. Angle at pitch 0, power 5 semitones down",
+    "anim": null
+   },
+   "lufs": -25.0,
+   "peak_db": -11.8,
+   "bytes": {
+    "ogg": 619,
+    "m4a": 1294
+   }
+  },
+  {
+   "id": "cas_loophole_flap",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/cas_loophole_flap.ogg",
+    "m4a": "sfx/cas_loophole_flap.m4a"
+   },
+   "duration": 0.206,
+   "samples": 9884,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "world",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Loophole Flap drops (core event threaded). Reverse for the lift at event front",
+    "anim": "loophole_flap_blue_close, loophole_flap_orange_close (start)"
+   },
+   "note": "The slap is 70 ms in. Start with the animation",
+   "lufs": -19.4,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 1452,
+    "m4a": 2904
+   }
+  },
+  {
+   "id": "cas_steam",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/cas_steam.ogg",
+    "m4a": "sfx/cas_steam.m4a"
+   },
+   "duration": 0.55,
+   "samples": 26386,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "world",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Steam puff: walk ends, kettle vent",
+    "anim": "fx_kettle_steam (each loop, 1 in 3)"
+   },
+   "lufs": -23.0,
+   "peak_db": -7.6,
+   "bytes": {
+    "ogg": 3342,
+    "m4a": 5610
+   }
+  },
+  {
+   "id": "cas_step",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/cas_step.ogg",
+    "m4a": "sfx/cas_step.m4a"
+   },
+   "duration": 0.256,
+   "samples": 12291,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "world",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.5,
+   "trigger": {
+    "game": "Core event walk: each Stomper step",
+    "anim": "stomper_blue_walk:stomp, stomper_orange_walk:stomp"
+   },
+   "lufs": -18.9,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 2291,
+    "m4a": 3191
+   }
+  },
+  {
+   "id": "cas_thump",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/cas_thump.ogg",
+    "m4a": "sfx/cas_thump.m4a"
+   },
+   "duration": 0.496,
+   "samples": 23816,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core events castle_drop and thump",
+    "anim": null
+   },
+   "lufs": -14.1,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 4229,
+    "m4a": 5269
+   }
+  },
+  {
+   "id": "col_chunk_fall",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/col_chunk_fall.ogg",
+    "m4a": "sfx/col_chunk_fall.m4a"
+   },
+   "duration": 0.5,
+   "samples": 24000,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event collapse: while the chunk is in the air",
+    "anim": "fx_chunk_<mat>"
+   },
+   "lufs": -20.0,
+   "peak_db": -7.4,
+   "bytes": {
+    "ogg": 3163,
+    "m4a": 5275
+   }
+  },
+  {
+   "id": "col_chunk_land",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/col_chunk_land.ogg",
+    "m4a": "sfx/col_chunk_land.m4a"
+   },
+   "duration": 1.372,
+   "samples": 65847,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Collapse rumble: the chunk lands. Volume by block count (1 block 0.5, 6 or more 1.0)",
+    "anim": "data.collapse.land"
+   },
+   "lufs": -14.7,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 10853,
+    "m4a": 12602
+   }
+  },
+  {
+   "id": "col_crack",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/col_crack.ogg",
+    "m4a": "sfx/col_crack.m4a"
+   },
+   "duration": 0.094,
+   "samples": 4523,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "A block drops a damage state (fresh, scuffed, battered)",
+    "anim": "fx_crack_<mat> (last frame)"
+   },
+   "lufs": -18.9,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 689,
+    "m4a": 1946
+   }
+  },
+  {
+   "id": "col_creak",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/col_creak.ogg",
+    "m4a": "sfx/col_creak.m4a"
+   },
+   "duration": 0.497,
+   "samples": 23863,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Core event collapse: play 0.3 s before the chunk falls",
+    "anim": "fx_crack_<mat> (start)"
+   },
+   "lufs": -17.0,
+   "peak_db": -3.8,
+   "bytes": {
+    "ogg": 3013,
+    "m4a": 5337
+   }
+  },
+  {
+   "id": "col_debris_patter",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/col_debris_patter.ogg",
+    "m4a": "sfx/col_debris_patter.m4a"
+   },
+   "duration": 0.913,
+   "samples": 43819,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Debris after a break or a landing",
+    "anim": "fx_rubble_<mat> (after)"
+   },
+   "lufs": -22.3,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 5778,
+    "m4a": 8883
+   }
+  },
+  {
+   "id": "col_dust_settle",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/col_dust_settle.ogg",
+    "m4a": "sfx/col_dust_settle.m4a"
+   },
+   "duration": 0.727,
+   "samples": 34914,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 0.8,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Dust cloud",
+    "anim": "fx_dustcloud"
+   },
+   "lufs": -26.0,
+   "peak_db": -11.8,
+   "bytes": {
+    "ogg": 4505,
+    "m4a": 7078
+   }
+  },
+  {
+   "id": "doo_mend_bucket_slosh",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/doo_mend_bucket_slosh.ogg",
+    "m4a": "sfx/doo_mend_bucket_slosh.m4a"
+   },
+   "duration": 0.606,
+   "samples": 29104,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "world",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Mend Bucket used (core event mend from the Doodad)",
+    "anim": null
+   },
+   "lufs": -19.0,
+   "peak_db": -4.6,
+   "bytes": {
+    "ogg": 4085,
+    "m4a": 6147
+   }
+  },
+  {
+   "id": "doo_pot_lid_clang",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/doo_pot_lid_clang.ogg",
+    "m4a": "sfx/doo_pot_lid_clang.m4a"
+   },
+   "duration": 0.894,
+   "samples": 42898,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core events lid (set) and lid_block (a shell bounces off)",
+    "anim": "pot_lid_raise:up"
+   },
+   "lufs": -18.8,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 6278,
+    "m4a": 8439
+   }
+  },
+  {
+   "id": "fly_bounce_hop",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/fly_bounce_hop.ogg",
+    "m4a": "sfx/fly_bounce_hop.m4a"
+   },
+   "duration": 0.18,
+   "samples": 8640,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "flight",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Each hop of a bouncer",
+    "anim": null
+   },
+   "lufs": -19.0,
+   "peak_db": -6.4,
+   "bytes": {
+    "ogg": 1621,
+    "m4a": 2659
+   }
+  },
+  {
+   "id": "fly_fast_zip",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/fly_fast_zip.ogg",
+    "m4a": "sfx/fly_fast_zip.m4a"
+   },
+   "duration": 0.26,
+   "samples": 12480,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "flight",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "A bolt or beam passes the middle of the field",
+    "anim": "fx_trail_pierce"
+   },
+   "lufs": -21.0,
+   "peak_db": -6.7,
+   "bytes": {
+    "ogg": 2071,
+    "m4a": 3150
+   }
+  },
+  {
+   "id": "fly_roll_loop",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/fly_roll_loop.ogg",
+    "m4a": "sfx/fly_roll_loop.m4a"
+   },
+   "duration": 1.0,
+   "samples": 48000,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": true,
+   "layer": null,
+   "bus": "flight",
+   "volume": 0.7,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "While a roller is on the ground",
+    "anim": null
+   },
+   "lufs": -24.0,
+   "peak_db": -11.6,
+   "bytes": {
+    "ogg": 6087,
+    "m4a": 9218
+   }
+  },
+  {
+   "id": "fly_split",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/fly_split.ogg",
+    "m4a": "sfx/fly_split.m4a"
+   },
+   "duration": 0.2,
+   "samples": 9600,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "flight",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event split",
+    "anim": null
+   },
+   "lufs": -20.0,
+   "peak_db": -8.2,
+   "bytes": {
+    "ogg": 1334,
+    "m4a": 2862
+   }
+  },
+  {
+   "id": "fly_whistle_loop",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/fly_whistle_loop.ogg",
+    "m4a": "sfx/fly_whistle_loop.m4a"
+   },
+   "duration": 1.0,
+   "samples": 48000,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": true,
+   "layer": null,
+   "bus": "flight",
+   "volume": 0.5,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "While an arc shell flies. Pitch -7 to +7 semitones with height",
+    "anim": "fx_trail_blast"
+   },
+   "lufs": -27.0,
+   "peak_db": -21.0,
+   "bytes": {
+    "ogg": 6519,
+    "m4a": 9248
+   }
+  },
+  {
+   "id": "gnd_mound_grow",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/gnd_mound_grow.ogg",
+    "m4a": "sfx/gnd_mound_grow.m4a"
+   },
+   "duration": 0.41,
+   "samples": 19662,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event mound (Sod Sack)",
+    "anim": null
+   },
+   "lufs": -18.0,
+   "peak_db": -3.3,
+   "bytes": {
+    "ogg": 2551,
+    "m4a": 4386
+   }
+  },
+  {
+   "id": "hit_blast_huge",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hit_blast_huge.ogg",
+    "m4a": "sfx/hit_blast_huge.m4a"
+   },
+   "duration": 1.566,
+   "samples": 75172,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event explode, band huge",
+    "anim": null
+   },
+   "lufs": -16.2,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 9285,
+    "m4a": 14097
+   }
+  },
+  {
+   "id": "hit_blast_large",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hit_blast_large.ogg",
+    "m4a": "sfx/hit_blast_large.m4a"
+   },
+   "duration": 1.009,
+   "samples": 48443,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event explode, band large",
+    "anim": null
+   },
+   "lufs": -15.2,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 6174,
+    "m4a": 9542
+   }
+  },
+  {
+   "id": "hit_blast_medium",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hit_blast_medium.ogg",
+    "m4a": "sfx/hit_blast_medium.m4a"
+   },
+   "duration": 0.601,
+   "samples": 28854,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.5,
+   "trigger": {
+    "game": "Core event explode, band medium",
+    "anim": null
+   },
+   "lufs": -15.1,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 3733,
+    "m4a": 5916
+   }
+  },
+  {
+   "id": "hit_blast_small",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hit_blast_small.ogg",
+    "m4a": "sfx/hit_blast_small.m4a"
+   },
+   "duration": 0.35,
+   "samples": 16800,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Core event explode, band small",
+    "anim": null
+   },
+   "lufs": -16.0,
+   "peak_db": -3.7,
+   "bytes": {
+    "ogg": 2182,
+    "m4a": 4093
+   }
+  },
+  {
+   "id": "hit_blast_tiny",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hit_blast_tiny.ogg",
+    "m4a": "sfx/hit_blast_tiny.m4a"
+   },
+   "duration": 0.2,
+   "samples": 9600,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Core event explode, band tiny",
+    "anim": null
+   },
+   "lufs": -18.0,
+   "peak_db": -5.9,
+   "bytes": {
+    "ogg": 1348,
+    "m4a": 2868
+   }
+  },
+  {
+   "id": "hit_dig_carve",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hit_dig_carve.ogg",
+    "m4a": "sfx/hit_dig_carve.m4a"
+   },
+   "duration": 0.43,
+   "samples": 20633,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event carve",
+    "anim": "fx_trail_dig"
+   },
+   "lufs": -16.1,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 2697,
+    "m4a": 4565
+   }
+  },
+  {
+   "id": "hit_mend_fizz",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hit_mend_fizz.ogg",
+    "m4a": "sfx/hit_mend_fizz.m4a"
+   },
+   "duration": 0.33,
+   "samples": 15840,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "A mend bubble pops on a block",
+    "anim": "fx_fizz_pop:pop"
+   },
+   "lufs": -20.0,
+   "peak_db": -8.6,
+   "bytes": {
+    "ogg": 2916,
+    "m4a": 3880
+   }
+  },
+  {
+   "id": "hit_miss_thud",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hit_miss_thud.ogg",
+    "m4a": "sfx/hit_miss_thud.m4a"
+   },
+   "duration": 0.239,
+   "samples": 11492,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "A shell hits plain ground, no damage",
+    "anim": "fx_impact_dirt:flash"
+   },
+   "lufs": -18.6,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 1537,
+    "m4a": 3040
+   }
+  },
+  {
+   "id": "hit_pierce",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hit_pierce.ogg",
+    "m4a": "sfx/hit_pierce.m4a"
+   },
+   "duration": 0.168,
+   "samples": 8050,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event explode, type pierce, and event threaded",
+    "anim": null
+   },
+   "lufs": -16.9,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 1765,
+    "m4a": 2437
+   }
+  },
+  {
+   "id": "hit_water_splash",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hit_water_splash.ogg",
+    "m4a": "sfx/hit_water_splash.m4a"
+   },
+   "duration": 0.601,
+   "samples": 28856,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "A shell or block lands in water",
+    "anim": "fx_splash:plop"
+   },
+   "lufs": -17.3,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 3694,
+    "m4a": 5905
+   }
+  },
+  {
+   "id": "hob_balloon_float",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hob_balloon_float.ogg",
+    "m4a": "sfx/hob_balloon_float.m4a"
+   },
+   "duration": 1.2,
+   "samples": 57600,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "hob",
+   "volume": 1.0,
+   "pitch_var_semitones": 1,
+   "trigger": {
+    "game": "Snooze Balloon drifts off",
+    "anim": "hob_<id>_<side>_bonked:lift"
+   },
+   "lufs": -22.0,
+   "peak_db": -11.4,
+   "bytes": {
+    "ogg": 7956,
+    "m4a": 10960
+   }
+  },
+  {
+   "id": "hob_balloon_inflate",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hob_balloon_inflate.ogg",
+    "m4a": "sfx/hob_balloon_inflate.m4a"
+   },
+   "duration": 0.45,
+   "samples": 21600,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "hob",
+   "volume": 1.0,
+   "pitch_var_semitones": 1,
+   "trigger": {
+    "game": "Snooze Balloon puffs up",
+    "anim": "hob_<id>_<side>_bonked:inflate"
+   },
+   "note": "0.44 s long: it ends as the lift frame shows",
+   "lufs": -18.0,
+   "peak_db": -5.2,
+   "bytes": {
+    "ogg": 3031,
+    "m4a": 4739
+   }
+  },
+  {
+   "id": "hob_bonk",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hob_bonk.ogg",
+    "m4a": "sfx/hob_bonk.m4a"
+   },
+   "duration": 0.7,
+   "samples": 33600,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "hob",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Core event bonk",
+    "anim": "hob_<id>_<side>_bonked (frame 0)"
+   },
+   "lufs": -15.1,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 7375,
+    "m4a": 7157
+   }
+  },
+  {
+   "id": "hob_cheer",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hob_cheer.ogg",
+    "m4a": "sfx/hob_cheer.m4a"
+   },
+   "duration": 1.4,
+   "samples": 67203,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "hob",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event win: the winning crew. Also a Bonk on the Rival side, 1 time in 3",
+    "anim": "hob_<id>_<side>_cheer:jump"
+   },
+   "lufs": -17.0,
+   "peak_db": -3.1,
+   "bytes": {
+    "ogg": 8597,
+    "m4a": 12636
+   }
+  },
+  {
+   "id": "hob_hit_boing",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hob_hit_boing.ogg",
+    "m4a": "sfx/hob_hit_boing.m4a"
+   },
+   "duration": 0.31,
+   "samples": 14880,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "hob",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Core event hit, target hob",
+    "anim": "hob_<id>_<side>_hit:flash"
+   },
+   "lufs": -17.0,
+   "peak_db": -3.1,
+   "bytes": {
+    "ogg": 1986,
+    "m4a": 3681
+   }
+  },
+  {
+   "id": "hob_land_thud",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hob_land_thud.ogg",
+    "m4a": "sfx/hob_land_thud.m4a"
+   },
+   "duration": 0.16,
+   "samples": 7680,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "hob",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "A Hob lands after a drop, or after a cheer jump",
+    "anim": "hob_<id>_<side>_land:thud, hob_<id>_<side>_cheer:land"
+   },
+   "lufs": -19.0,
+   "peak_db": -3.5,
+   "bytes": {
+    "ogg": 1139,
+    "m4a": 2475
+   }
+  },
+  {
+   "id": "hob_shove_dig",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hob_shove_dig.ogg",
+    "m4a": "sfx/hob_shove_dig.m4a"
+   },
+   "duration": 0.387,
+   "samples": 18588,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "hob",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event shove_off and dug_out",
+    "anim": "hob_<id>_<side>_dig:clear"
+   },
+   "lufs": -18.1,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 2255,
+    "m4a": 4352
+   }
+  },
+  {
+   "id": "hob_tumble_roll",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hob_tumble_roll.ogg",
+    "m4a": "sfx/hob_tumble_roll.m4a"
+   },
+   "duration": 0.6,
+   "samples": 28800,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "hob",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event drop, state tumbled or dropped",
+    "anim": "hob_<id>_<side>_tumble:fall"
+   },
+   "lufs": -19.0,
+   "peak_db": -4.7,
+   "bytes": {
+    "ogg": 3925,
+    "m4a": 6015
+   }
+  },
+  {
+   "id": "ket_crack",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ket_crack.ogg",
+    "m4a": "sfx/ket_crack.m4a"
+   },
+   "duration": 0.24,
+   "samples": 11520,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "kettle",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Core event kettle_pop, first beat",
+    "anim": "kettle_pop:crack"
+   },
+   "lufs": -17.5,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 1749,
+    "m4a": 3244
+   }
+  },
+  {
+   "id": "ket_hit",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ket_hit.ogg",
+    "m4a": "sfx/ket_hit.m4a"
+   },
+   "duration": 1.068,
+   "samples": 51241,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "kettle",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event hit, target kettle",
+    "anim": null
+   },
+   "lufs": -16.4,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 8459,
+    "m4a": 9914
+   }
+  },
+  {
+   "id": "ket_patch",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ket_patch.ogg",
+    "m4a": "sfx/ket_patch.m4a"
+   },
+   "duration": 0.47,
+   "samples": 22560,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "kettle",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core events mend and rebuild: a repair lands",
+    "anim": "fx_trail_mend (end)"
+   },
+   "lufs": -19.0,
+   "peak_db": -5.6,
+   "bytes": {
+    "ogg": 2886,
+    "m4a": 4938
+   }
+  },
+  {
+   "id": "ket_pop",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ket_pop.ogg",
+    "m4a": "sfx/ket_pop.m4a"
+   },
+   "duration": 1.702,
+   "samples": 81692,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "kettle",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Core event kettle_pop",
+    "anim": "kettle_pop:pop"
+   },
+   "note": "Lid bang at 0, then the steam scream. In slow motion drop it 3 semitones with the music",
+   "lufs": -14.6,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 10771,
+    "m4a": 15069
+   }
+  },
+  {
+   "id": "ket_sit_down",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ket_sit_down.ogg",
+    "m4a": "sfx/ket_sit_down.m4a"
+   },
+   "duration": 1.081,
+   "samples": 51902,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "kettle",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "The fort folds and sits",
+    "anim": "kettle_pop:sit"
+   },
+   "note": "The seat thump is 0.42 s in",
+   "lufs": -17.0,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 6944,
+    "m4a": 10059
+   }
+  },
+  {
+   "id": "ket_whistle_loop",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ket_whistle_loop.ogg",
+    "m4a": "sfx/ket_whistle_loop.m4a"
+   },
+   "duration": 1.34,
+   "samples": 64320,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": true,
+   "layer": null,
+   "bus": "kettle",
+   "volume": 0.7,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "A Heartkettle at 50% or less. Pitch up to +3 semitones as HP falls",
+    "anim": null
+   },
+   "note": "Not a tight loop: play, wait 4 s, play again. Caption [kettle whistling]",
+   "repeat_gap_s": 4.0,
+   "lufs": -22.0,
+   "peak_db": -15.8,
+   "bytes": {
+    "ogg": 9229,
+    "m4a": 12096
+   }
+  },
+  {
+   "id": "launch_beam",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/launch_beam.ogg",
+    "m4a": "sfx/launch_beam.m4a"
+   },
+   "duration": 0.9,
+   "samples": 43200,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "launch",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event fire, shot group beam",
+    "anim": "hob_<id>_<side>_fire:release"
+   },
+   "note": "The whine is 0.4 s, then the bright line. Hold the beam draw until 0.4 s",
+   "lufs": -18.0,
+   "peak_db": -9.0,
+   "bytes": {
+    "ogg": 6541,
+    "m4a": 8121
+   }
+  },
+  {
+   "id": "launch_bolt",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/launch_bolt.ogg",
+    "m4a": "sfx/launch_bolt.m4a"
+   },
+   "duration": 0.3,
+   "samples": 14400,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "launch",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event fire, shot group bolt",
+    "anim": "hob_<id>_<side>_fire:release"
+   },
+   "lufs": -17.2,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 1953,
+    "m4a": 3555
+   }
+  },
+  {
+   "id": "launch_bounce",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/launch_bounce.ogg",
+    "m4a": "sfx/launch_bounce.m4a"
+   },
+   "duration": 0.3,
+   "samples": 14400,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "launch",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event fire, shot group bounce",
+    "anim": "hob_<id>_<side>_fire:release"
+   },
+   "lufs": -17.1,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 2398,
+    "m4a": 3515
+   }
+  },
+  {
+   "id": "launch_dig",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/launch_dig.ogg",
+    "m4a": "sfx/launch_dig.m4a"
+   },
+   "duration": 0.32,
+   "samples": 15360,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "launch",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event fire, shot group dig",
+    "anim": "hob_<id>_<side>_fire:release"
+   },
+   "lufs": -17.4,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 2086,
+    "m4a": 3803
+   }
+  },
+  {
+   "id": "launch_fan",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/launch_fan.ogg",
+    "m4a": "sfx/launch_fan.m4a"
+   },
+   "duration": 0.23,
+   "samples": 11040,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "launch",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event fire, shot group fan",
+    "anim": "hob_<id>_<side>_fire:release"
+   },
+   "lufs": -17.0,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 2471,
+    "m4a": 3049
+   }
+  },
+  {
+   "id": "launch_glob",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/launch_glob.ogg",
+    "m4a": "sfx/launch_glob.m4a"
+   },
+   "duration": 0.13,
+   "samples": 6240,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "launch",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event fire, shot group glob",
+    "anim": "hob_<id>_<side>_fire:release"
+   },
+   "lufs": -18.0,
+   "peak_db": -8.3,
+   "bytes": {
+    "ogg": 1178,
+    "m4a": 2115
+   }
+  },
+  {
+   "id": "launch_heavy",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/launch_heavy.ogg",
+    "m4a": "sfx/launch_heavy.m4a"
+   },
+   "duration": 0.9,
+   "samples": 43200,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "launch",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event fire, shot group heavy",
+    "anim": "hob_<id>_<side>_fire:release"
+   },
+   "lufs": -15.3,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 5672,
+    "m4a": 8478
+   }
+  },
+  {
+   "id": "launch_lob",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/launch_lob.ogg",
+    "m4a": "sfx/launch_lob.m4a"
+   },
+   "duration": 0.34,
+   "samples": 16320,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "launch",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event fire, shot group lob",
+    "anim": "hob_<id>_<side>_fire:release"
+   },
+   "lufs": -18.1,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 2336,
+    "m4a": 3828
+   }
+  },
+  {
+   "id": "launch_roll",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/launch_roll.ogg",
+    "m4a": "sfx/launch_roll.m4a"
+   },
+   "duration": 0.48,
+   "samples": 23040,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "launch",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event fire, shot group roll",
+    "anim": "hob_<id>_<side>_fire:release"
+   },
+   "lufs": -19.7,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 3258,
+    "m4a": 5091
+   }
+  },
+  {
+   "id": "mat_cobble_break",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/mat_cobble_break.ogg",
+    "m4a": "sfx/mat_cobble_break.m4a"
+   },
+   "duration": 0.529,
+   "samples": 25414,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Core event break, Cobble",
+    "anim": "fx_rubble_cobble"
+   },
+   "lufs": -15.7,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 3711,
+    "m4a": 5456
+   }
+  },
+  {
+   "id": "mat_cobble_hit",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/mat_cobble_hit.ogg",
+    "m4a": "sfx/mat_cobble_hit.m4a"
+   },
+   "duration": 0.089,
+   "samples": 4288,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Core event hit, target block, Cobble",
+    "anim": "fx_impact_cobble:flash"
+   },
+   "lufs": -18.5,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 643,
+    "m4a": 1814
+   }
+  },
+  {
+   "id": "mat_footing_hit",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/mat_footing_hit.ogg",
+    "m4a": "sfx/mat_footing_hit.m4a"
+   },
+   "duration": 0.2,
+   "samples": 9600,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 1,
+   "trigger": {
+    "game": "Core event hit, target block, Footing",
+    "anim": "fx_impact_footing:flash"
+   },
+   "lufs": -17.2,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 1690,
+    "m4a": 2893
+   }
+  },
+  {
+   "id": "mat_timber_break",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/mat_timber_break.ogg",
+    "m4a": "sfx/mat_timber_break.m4a"
+   },
+   "duration": 0.443,
+   "samples": 21285,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Core event break, Timber",
+    "anim": "fx_rubble_timber"
+   },
+   "lufs": -16.9,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 4691,
+    "m4a": 4849
+   }
+  },
+  {
+   "id": "mat_timber_hit",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/mat_timber_hit.ogg",
+    "m4a": "sfx/mat_timber_hit.m4a"
+   },
+   "duration": 0.18,
+   "samples": 8640,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Core event hit, target block, Timber",
+    "anim": "fx_impact_timber:flash"
+   },
+   "lufs": -17.1,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 1837,
+    "m4a": 2703
+   }
+  },
+  {
+   "id": "mat_wicker_break",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/mat_wicker_break.ogg",
+    "m4a": "sfx/mat_wicker_break.m4a"
+   },
+   "duration": 0.374,
+   "samples": 17949,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Core event break, Wicker",
+    "anim": "fx_rubble_wicker"
+   },
+   "lufs": -18.2,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 2429,
+    "m4a": 4212
+   }
+  },
+  {
+   "id": "mat_wicker_hit",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/mat_wicker_hit.ogg",
+    "m4a": "sfx/mat_wicker_hit.m4a"
+   },
+   "duration": 0.088,
+   "samples": 4221,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "material",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Core event hit, target block, Wicker",
+    "anim": "fx_impact_wicker:flash"
+   },
+   "lufs": -18.0,
+   "peak_db": -4.2,
+   "bytes": {
+    "ogg": 684,
+    "m4a": 1883
+   }
+  },
+  {
+   "id": "meta_block_place",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/meta_block_place.ogg",
+    "m4a": "sfx/meta_block_place.m4a"
+   },
+   "duration": 0.12,
+   "samples": 5760,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 2,
+   "trigger": {
+    "game": "Workshop block placed. Reverse for erase",
+    "anim": null
+   },
+   "lufs": -20.0,
+   "peak_db": -3.8,
+   "bytes": {
+    "ogg": 835,
+    "m4a": 2153
+   }
+  },
+  {
+   "id": "meta_pennant_stamp",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/meta_pennant_stamp.ogg",
+    "m4a": "sfx/meta_pennant_stamp.m4a"
+   },
+   "duration": 0.763,
+   "samples": 36647,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "A Pennant is earned on Results",
+    "anim": "ui_pennant_earn:ding"
+   },
+   "note": "Play 2 semitones higher for each next Pennant",
+   "lufs": -17.0,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 7138,
+    "m4a": 7407
+   }
+  },
+  {
+   "id": "turn_hob_pick",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/turn_hob_pick.ogg",
+    "m4a": "sfx/turn_hob_pick.m4a"
+   },
+   "duration": 0.1,
+   "samples": 4800,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Command pick_hob",
+    "anim": null
+   },
+   "lufs": -23.0,
+   "peak_db": -16.1,
+   "bytes": {
+    "ogg": 910,
+    "m4a": 1921
+   }
+  },
+  {
+   "id": "turn_yours",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/turn_yours.ogg",
+    "m4a": "sfx/turn_yours.m4a"
+   },
+   "duration": 1.046,
+   "samples": 50200,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Core event turn_start. Pitch 0 for side 0 or Player 1, 2 semitones down for the Rival or Player 2",
+    "anim": null
+   },
+   "lufs": -20.0,
+   "peak_db": -6.4,
+   "bytes": {
+    "ogg": 7746,
+    "m4a": 9744
+   }
+  },
+  {
+   "id": "ui_back",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_back.ogg",
+    "m4a": "sfx/ui_back.m4a"
+   },
+   "duration": 0.19,
+   "samples": 9120,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Back and close",
+    "anim": null
+   },
+   "lufs": -23.0,
+   "peak_db": -7.3,
+   "bytes": {
+    "ogg": 1175,
+    "m4a": 2689
+   }
+  },
+  {
+   "id": "ui_buttons_tick",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_buttons_tick.ogg",
+    "m4a": "sfx/ui_buttons_tick.m4a"
+   },
+   "duration": 0.275,
+   "samples": 13200,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Coin: Buttons counting up on Results, coin lands in the purse",
+    "anim": "ui_button_coin_spin (end of the flight)"
+   },
+   "lufs": -22.0,
+   "peak_db": -8.7,
+   "bytes": {
+    "ogg": 2959,
+    "m4a": 3335
+   }
+  },
+  {
+   "id": "ui_card_flip",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_card_flip.ogg",
+    "m4a": "sfx/ui_card_flip.m4a"
+   },
+   "duration": 0.1,
+   "samples": 4797,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Shell card or draft chip turns (core event draft_start)",
+    "anim": null
+   },
+   "lufs": -23.0,
+   "peak_db": -10.8,
+   "bytes": {
+    "ogg": 764,
+    "m4a": 1972
+   }
+  },
+  {
+   "id": "ui_card_take",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_card_take.ogg",
+    "m4a": "sfx/ui_card_take.m4a"
+   },
+   "duration": 0.22,
+   "samples": 10560,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Core event draft_pick. Play 3 semitones down when the Rival picks",
+    "anim": null
+   },
+   "lufs": -22.0,
+   "peak_db": -9.4,
+   "bytes": {
+    "ogg": 1380,
+    "m4a": 2921
+   }
+  },
+  {
+   "id": "ui_confirm",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_confirm.ogg",
+    "m4a": "sfx/ui_confirm.m4a"
+   },
+   "duration": 0.375,
+   "samples": 18000,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Main button on a card: Play, Fight, Retry, Start",
+    "anim": null
+   },
+   "lufs": -22.0,
+   "peak_db": -10.3,
+   "bytes": {
+    "ogg": 3735,
+    "m4a": 4253
+   }
+  },
+  {
+   "id": "ui_denied",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_denied.ogg",
+    "m4a": "sfx/ui_denied.m4a"
+   },
+   "duration": 0.21,
+   "samples": 10080,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Dim key, locked thing, Fire while dug in",
+    "anim": null
+   },
+   "lufs": -22.0,
+   "peak_db": -5.5,
+   "bytes": {
+    "ogg": 1844,
+    "m4a": 2865
+   }
+  },
+  {
+   "id": "ui_fire_press",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_fire_press.ogg",
+    "m4a": "sfx/ui_fire_press.m4a"
+   },
+   "duration": 0.17,
+   "samples": 8160,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Fire button goes down",
+    "anim": "ui_fire_press:fire"
+   },
+   "lufs": -18.2,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 1491,
+    "m4a": 2493
+   }
+  },
+  {
+   "id": "ui_handoff_flip",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_handoff_flip.ogg",
+    "m4a": "sfx/ui_handoff_flip.m4a"
+   },
+   "duration": 0.32,
+   "samples": 15360,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Couch Duel hand-off card turns over",
+    "anim": "ui_handoff_flip:swap"
+   },
+   "note": "Starts 190 ms before the snap. Start it with the animation, the snap lands on swap",
+   "lufs": -21.0,
+   "peak_db": -7.6,
+   "bytes": {
+    "ogg": 2121,
+    "m4a": 3686
+   }
+  },
+  {
+   "id": "ui_sheet_open",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_sheet_open.ogg",
+    "m4a": "sfx/ui_sheet_open.m4a"
+   },
+   "duration": 0.24,
+   "samples": 11520,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "A sheet slides up. Play in reverse when it closes",
+    "anim": null
+   },
+   "lufs": -25.0,
+   "peak_db": -12.8,
+   "bytes": {
+    "ogg": 1654,
+    "m4a": 3065
+   }
+  },
+  {
+   "id": "ui_slider_tick",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_slider_tick.ogg",
+    "m4a": "sfx/ui_slider_tick.m4a"
+   },
+   "duration": 0.025,
+   "samples": 1200,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0.5,
+   "trigger": {
+    "game": "Each slider step",
+    "anim": null
+   },
+   "lufs": -24.0,
+   "peak_db": -11.4,
+   "bytes": {
+    "ogg": 621,
+    "m4a": 1214
+   }
+  },
+  {
+   "id": "ui_tap",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_tap.ogg",
+    "m4a": "sfx/ui_tap.m4a"
+   },
+   "duration": 0.07,
+   "samples": 3360,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0.5,
+   "trigger": {
+    "game": "Any button. Dock and tab changes: play 3 semitones up",
+    "anim": null
+   },
+   "lufs": -22.0,
+   "peak_db": -7.4,
+   "bytes": {
+    "ogg": 498,
+    "m4a": 1743
+   }
+  },
+  {
+   "id": "ui_toggle_on",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/ui_toggle_on.ogg",
+    "m4a": "sfx/ui_toggle_on.m4a"
+   },
+   "duration": 0.132,
+   "samples": 6336,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "ui",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Switch on. Play 4 semitones down for off",
+    "anim": null
+   },
+   "lufs": -23.0,
+   "peak_db": -11.2,
+   "bytes": {
+    "ogg": 785,
+    "m4a": 2227
+   }
+  },
+  {
+   "id": "wx_squall_bell",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/wx_squall_bell.ogg",
+    "m4a": "sfx/wx_squall_bell.m4a"
+   },
+   "duration": 1.798,
+   "samples": 86301,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "world",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Core event squall_warning (\"Squall in 3\", 2, 1)",
+    "anim": null
+   },
+   "note": "Caption [storm in 3 rounds]",
+   "lufs": -17.0,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 13131,
+    "m4a": 15868
+   }
+  },
+  {
+   "id": "wx_squall_loop",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/wx_squall_loop.ogg",
+    "m4a": "sfx/wx_squall_loop.m4a"
+   },
+   "duration": 4.0,
+   "samples": 192000,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": true,
+   "layer": null,
+   "bus": "world",
+   "volume": 0.6,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Squall wind and rain. Starts at core event squall_round, +3 dB each Squall round, ducks under impacts",
+    "anim": "fx_squall"
+   },
+   "note": "Caption [squall]",
+   "lufs": -24.0,
+   "peak_db": -9.7,
+   "bytes": {
+    "ogg": 23089,
+    "m4a": 33993
+   }
+  },
+  {
+   "id": "wx_wind_loop",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/wx_wind_loop.ogg",
+    "m4a": "sfx/wx_wind_loop.m4a"
+   },
+   "duration": 4.0,
+   "samples": 192000,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": true,
+   "layer": null,
+   "bus": "world",
+   "volume": 0.5,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Wind bed all battle. Volume = wind / 10",
+    "anim": "fx_wind_leaf"
+   },
+   "lufs": -28.0,
+   "peak_db": -14.2,
+   "bytes": {
+    "ogg": 23037,
+    "m4a": 33983
+   }
+  },
+  {
+   "id": "wx_wind_shift",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/wx_wind_shift.ogg",
+    "m4a": "sfx/wx_wind_shift.m4a"
+   },
+   "duration": 0.9,
+   "samples": 43200,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "world",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "trigger": {
+    "game": "Core event front",
+    "anim": null
+   },
+   "lufs": -21.0,
+   "peak_db": -7.5,
+   "bytes": {
+    "ogg": 5817,
+    "m4a": 8420
+   }
+  },
+  {
+   "id": "bark_bobbin_bonked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_bobbin_bonked.ogg",
+    "m4a": "barks/bark_bobbin_bonked.m4a"
+   },
+   "duration": 0.781,
+   "samples": 37506,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "bobbin",
+   "event": "bonked",
+   "trigger": {
+    "game": "Core event bonk, the target",
+    "anim": "hob_bobbin_<side>_bonked (frame 0)"
+   },
+   "lufs": -18.0,
+   "peak_db": -8.0,
+   "bytes": {
+    "ogg": 4690,
+    "m4a": 7022
+   }
+  },
+  {
+   "id": "bark_bobbin_fire",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_bobbin_fire.ogg",
+    "m4a": "barks/bark_bobbin_fire.m4a"
+   },
+   "duration": 0.497,
+   "samples": 23871,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "bobbin",
+   "event": "fire",
+   "trigger": {
+    "game": "Core event fire, the shooter",
+    "anim": "hob_bobbin_<side>_fire:release"
+   },
+   "lufs": -18.0,
+   "peak_db": -8.4,
+   "bytes": {
+    "ogg": 2470,
+    "m4a": 4831
+   }
+  },
+  {
+   "id": "bark_bobbin_hit_lands",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_bobbin_hit_lands.ogg",
+    "m4a": "barks/bark_bobbin_hit_lands.m4a"
+   },
+   "duration": 0.687,
+   "samples": 32993,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "bobbin",
+   "event": "hit_lands",
+   "trigger": {
+    "game": "Core event hit, target hob: the shooter barks",
+    "anim": "hob_bobbin_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -8.2,
+   "bytes": {
+    "ogg": 3900,
+    "m4a": 6130
+   }
+  },
+  {
+   "id": "bark_bobbin_picked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_bobbin_picked.ogg",
+    "m4a": "barks/bark_bobbin_picked.m4a"
+   },
+   "duration": 0.537,
+   "samples": 25781,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "bobbin",
+   "event": "picked",
+   "trigger": {
+    "game": "Command pick_hob, your Hob",
+    "anim": "hob_bobbin_<side>_aim (start)"
+   },
+   "lufs": -18.0,
+   "peak_db": -6.9,
+   "bytes": {
+    "ogg": 2666,
+    "m4a": 5017
+   }
+  },
+  {
+   "id": "bark_bobbin_takes_hit",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_bobbin_takes_hit.ogg",
+    "m4a": "barks/bark_bobbin_takes_hit.m4a"
+   },
+   "duration": 0.535,
+   "samples": 25699,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "bobbin",
+   "event": "takes_hit",
+   "trigger": {
+    "game": "Core event hit, target hob: the target barks. Also drop (Tumbled)",
+    "anim": "hob_bobbin_<side>_hit:flash"
+   },
+   "lufs": -18.0,
+   "peak_db": -8.6,
+   "bytes": {
+    "ogg": 2624,
+    "m4a": 5102
+   }
+  },
+  {
+   "id": "bark_bobbin_win",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_bobbin_win.ogg",
+    "m4a": "barks/bark_bobbin_win.m4a"
+   },
+   "duration": 0.855,
+   "samples": 41055,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "bobbin",
+   "event": "win",
+   "trigger": {
+    "game": "Core event win, the winning crew",
+    "anim": "hob_bobbin_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -6.4,
+   "bytes": {
+    "ogg": 4251,
+    "m4a": 7413
+   }
+  },
+  {
+   "id": "bark_grub_bonked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_grub_bonked.ogg",
+    "m4a": "barks/bark_grub_bonked.m4a"
+   },
+   "duration": 0.862,
+   "samples": 41371,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "grub",
+   "event": "bonked",
+   "trigger": {
+    "game": "Core event bonk, the target",
+    "anim": "hob_grub_<side>_bonked (frame 0)"
+   },
+   "lufs": -18.0,
+   "peak_db": -4.2,
+   "bytes": {
+    "ogg": 4468,
+    "m4a": 7347
+   }
+  },
+  {
+   "id": "bark_grub_fire",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_grub_fire.ogg",
+    "m4a": "barks/bark_grub_fire.m4a"
+   },
+   "duration": 0.392,
+   "samples": 18815,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "grub",
+   "event": "fire",
+   "trigger": {
+    "game": "Core event fire, the shooter",
+    "anim": "hob_grub_<side>_fire:release"
+   },
+   "lufs": -18.0,
+   "peak_db": -4.7,
+   "bytes": {
+    "ogg": 2087,
+    "m4a": 3909
+   }
+  },
+  {
+   "id": "bark_grub_hit_lands",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_grub_hit_lands.ogg",
+    "m4a": "barks/bark_grub_hit_lands.m4a"
+   },
+   "duration": 0.689,
+   "samples": 33083,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "grub",
+   "event": "hit_lands",
+   "trigger": {
+    "game": "Core event hit, target hob: the shooter barks",
+    "anim": "hob_grub_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -3.2,
+   "bytes": {
+    "ogg": 4058,
+    "m4a": 6148
+   }
+  },
+  {
+   "id": "bark_grub_picked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_grub_picked.ogg",
+    "m4a": "barks/bark_grub_picked.m4a"
+   },
+   "duration": 0.471,
+   "samples": 22614,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "grub",
+   "event": "picked",
+   "trigger": {
+    "game": "Command pick_hob, your Hob",
+    "anim": "hob_grub_<side>_aim (start)"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.0,
+   "bytes": {
+    "ogg": 2507,
+    "m4a": 4360
+   }
+  },
+  {
+   "id": "bark_grub_takes_hit",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_grub_takes_hit.ogg",
+    "m4a": "barks/bark_grub_takes_hit.m4a"
+   },
+   "duration": 0.521,
+   "samples": 25027,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "grub",
+   "event": "takes_hit",
+   "trigger": {
+    "game": "Core event hit, target hob: the target barks. Also drop (Tumbled)",
+    "anim": "hob_grub_<side>_hit:flash"
+   },
+   "lufs": -18.0,
+   "peak_db": -4.5,
+   "bytes": {
+    "ogg": 2852,
+    "m4a": 4904
+   }
+  },
+  {
+   "id": "bark_grub_win",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_grub_win.ogg",
+    "m4a": "barks/bark_grub_win.m4a"
+   },
+   "duration": 0.927,
+   "samples": 44483,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "grub",
+   "event": "win",
+   "trigger": {
+    "game": "Core event win, the winning crew",
+    "anim": "hob_grub_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -4.7,
+   "bytes": {
+    "ogg": 4775,
+    "m4a": 7812
+   }
+  },
+  {
+   "id": "bark_hetty_bonked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_hetty_bonked.ogg",
+    "m4a": "barks/bark_hetty_bonked.m4a"
+   },
+   "duration": 0.848,
+   "samples": 40724,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "hetty",
+   "event": "bonked",
+   "trigger": {
+    "game": "Core event bonk, the target",
+    "anim": "hob_hetty_<side>_bonked (frame 0)"
+   },
+   "lufs": -18.0,
+   "peak_db": -8.6,
+   "bytes": {
+    "ogg": 4198,
+    "m4a": 7535
+   }
+  },
+  {
+   "id": "bark_hetty_fire",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_hetty_fire.ogg",
+    "m4a": "barks/bark_hetty_fire.m4a"
+   },
+   "duration": 0.37,
+   "samples": 17754,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "hetty",
+   "event": "fire",
+   "trigger": {
+    "game": "Core event fire, the shooter",
+    "anim": "hob_hetty_<side>_fire:release"
+   },
+   "lufs": -18.0,
+   "peak_db": -6.1,
+   "bytes": {
+    "ogg": 1797,
+    "m4a": 3803
+   }
+  },
+  {
+   "id": "bark_hetty_hit_lands",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_hetty_hit_lands.ogg",
+    "m4a": "barks/bark_hetty_hit_lands.m4a"
+   },
+   "duration": 0.709,
+   "samples": 34010,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "hetty",
+   "event": "hit_lands",
+   "trigger": {
+    "game": "Core event hit, target hob: the shooter barks",
+    "anim": "hob_hetty_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -9.4,
+   "bytes": {
+    "ogg": 3527,
+    "m4a": 6377
+   }
+  },
+  {
+   "id": "bark_hetty_picked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_hetty_picked.ogg",
+    "m4a": "barks/bark_hetty_picked.m4a"
+   },
+   "duration": 0.648,
+   "samples": 31089,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "hetty",
+   "event": "picked",
+   "trigger": {
+    "game": "Command pick_hob, your Hob",
+    "anim": "hob_hetty_<side>_aim (start)"
+   },
+   "lufs": -18.0,
+   "peak_db": -6.9,
+   "bytes": {
+    "ogg": 3511,
+    "m4a": 5995
+   }
+  },
+  {
+   "id": "bark_hetty_takes_hit",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_hetty_takes_hit.ogg",
+    "m4a": "barks/bark_hetty_takes_hit.m4a"
+   },
+   "duration": 0.623,
+   "samples": 29915,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "hetty",
+   "event": "takes_hit",
+   "trigger": {
+    "game": "Core event hit, target hob: the target barks. Also drop (Tumbled)",
+    "anim": "hob_hetty_<side>_hit:flash"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.8,
+   "bytes": {
+    "ogg": 3160,
+    "m4a": 5853
+   }
+  },
+  {
+   "id": "bark_hetty_win",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_hetty_win.ogg",
+    "m4a": "barks/bark_hetty_win.m4a"
+   },
+   "duration": 0.885,
+   "samples": 42463,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "hetty",
+   "event": "win",
+   "trigger": {
+    "game": "Core event win, the winning crew",
+    "anim": "hob_hetty_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -8.0,
+   "bytes": {
+    "ogg": 4703,
+    "m4a": 7718
+   }
+  },
+  {
+   "id": "bark_jax_bonked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_jax_bonked.ogg",
+    "m4a": "barks/bark_jax_bonked.m4a"
+   },
+   "duration": 0.735,
+   "samples": 35275,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "jax",
+   "event": "bonked",
+   "trigger": {
+    "game": "Core event bonk, the target",
+    "anim": "hob_jax_<side>_bonked (frame 0)"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.4,
+   "bytes": {
+    "ogg": 3398,
+    "m4a": 6664
+   }
+  },
+  {
+   "id": "bark_jax_fire",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_jax_fire.ogg",
+    "m4a": "barks/bark_jax_fire.m4a"
+   },
+   "duration": 0.387,
+   "samples": 18556,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "jax",
+   "event": "fire",
+   "trigger": {
+    "game": "Core event fire, the shooter",
+    "anim": "hob_jax_<side>_fire:release"
+   },
+   "lufs": -18.0,
+   "peak_db": -4.9,
+   "bytes": {
+    "ogg": 2028,
+    "m4a": 3932
+   }
+  },
+  {
+   "id": "bark_jax_hit_lands",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_jax_hit_lands.ogg",
+    "m4a": "barks/bark_jax_hit_lands.m4a"
+   },
+   "duration": 0.486,
+   "samples": 23336,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "jax",
+   "event": "hit_lands",
+   "trigger": {
+    "game": "Core event hit, target hob: the shooter barks",
+    "anim": "hob_jax_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -7.4,
+   "bytes": {
+    "ogg": 2467,
+    "m4a": 4739
+   }
+  },
+  {
+   "id": "bark_jax_picked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_jax_picked.ogg",
+    "m4a": "barks/bark_jax_picked.m4a"
+   },
+   "duration": 0.52,
+   "samples": 24950,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "jax",
+   "event": "picked",
+   "trigger": {
+    "game": "Command pick_hob, your Hob",
+    "anim": "hob_jax_<side>_aim (start)"
+   },
+   "lufs": -18.0,
+   "peak_db": -4.6,
+   "bytes": {
+    "ogg": 2682,
+    "m4a": 5045
+   }
+  },
+  {
+   "id": "bark_jax_takes_hit",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_jax_takes_hit.ogg",
+    "m4a": "barks/bark_jax_takes_hit.m4a"
+   },
+   "duration": 0.437,
+   "samples": 20992,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "jax",
+   "event": "takes_hit",
+   "trigger": {
+    "game": "Core event hit, target hob: the target barks. Also drop (Tumbled)",
+    "anim": "hob_jax_<side>_hit:flash"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.7,
+   "bytes": {
+    "ogg": 2302,
+    "m4a": 4354
+   }
+  },
+  {
+   "id": "bark_jax_win",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_jax_win.ogg",
+    "m4a": "barks/bark_jax_win.m4a"
+   },
+   "duration": 0.725,
+   "samples": 34799,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "jax",
+   "event": "win",
+   "trigger": {
+    "game": "Core event win, the winning crew",
+    "anim": "hob_jax_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -6.5,
+   "bytes": {
+    "ogg": 3614,
+    "m4a": 6438
+   }
+  },
+  {
+   "id": "bark_marge_bonked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_marge_bonked.ogg",
+    "m4a": "barks/bark_marge_bonked.m4a"
+   },
+   "duration": 0.864,
+   "samples": 41473,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "marge",
+   "event": "bonked",
+   "trigger": {
+    "game": "Core event bonk, the target",
+    "anim": "hob_marge_<side>_bonked (frame 0)"
+   },
+   "lufs": -18.0,
+   "peak_db": -6.9,
+   "bytes": {
+    "ogg": 4501,
+    "m4a": 7735
+   }
+  },
+  {
+   "id": "bark_marge_fire",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_marge_fire.ogg",
+    "m4a": "barks/bark_marge_fire.m4a"
+   },
+   "duration": 0.433,
+   "samples": 20767,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "marge",
+   "event": "fire",
+   "trigger": {
+    "game": "Core event fire, the shooter",
+    "anim": "hob_marge_<side>_fire:release"
+   },
+   "lufs": -18.0,
+   "peak_db": -7.6,
+   "bytes": {
+    "ogg": 2099,
+    "m4a": 4386
+   }
+  },
+  {
+   "id": "bark_marge_hit_lands",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_marge_hit_lands.ogg",
+    "m4a": "barks/bark_marge_hit_lands.m4a"
+   },
+   "duration": 0.709,
+   "samples": 34011,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "marge",
+   "event": "hit_lands",
+   "trigger": {
+    "game": "Core event hit, target hob: the shooter barks",
+    "anim": "hob_marge_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -8.3,
+   "bytes": {
+    "ogg": 3337,
+    "m4a": 6433
+   }
+  },
+  {
+   "id": "bark_marge_picked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_marge_picked.ogg",
+    "m4a": "barks/bark_marge_picked.m4a"
+   },
+   "duration": 0.655,
+   "samples": 31443,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "marge",
+   "event": "picked",
+   "trigger": {
+    "game": "Command pick_hob, your Hob",
+    "anim": "hob_marge_<side>_aim (start)"
+   },
+   "lufs": -18.0,
+   "peak_db": -8.5,
+   "bytes": {
+    "ogg": 3130,
+    "m4a": 6090
+   }
+  },
+  {
+   "id": "bark_marge_takes_hit",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_marge_takes_hit.ogg",
+    "m4a": "barks/bark_marge_takes_hit.m4a"
+   },
+   "duration": 0.442,
+   "samples": 21229,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "marge",
+   "event": "takes_hit",
+   "trigger": {
+    "game": "Core event hit, target hob: the target barks. Also drop (Tumbled)",
+    "anim": "hob_marge_<side>_hit:flash"
+   },
+   "lufs": -18.0,
+   "peak_db": -8.3,
+   "bytes": {
+    "ogg": 2210,
+    "m4a": 4414
+   }
+  },
+  {
+   "id": "bark_marge_win",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_marge_win.ogg",
+    "m4a": "barks/bark_marge_win.m4a"
+   },
+   "duration": 0.865,
+   "samples": 41501,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "marge",
+   "event": "win",
+   "trigger": {
+    "game": "Core event win, the winning crew",
+    "anim": "hob_marge_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -7.9,
+   "bytes": {
+    "ogg": 4834,
+    "m4a": 7703
+   }
+  },
+  {
+   "id": "bark_nan_bonked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_nan_bonked.ogg",
+    "m4a": "barks/bark_nan_bonked.m4a"
+   },
+   "duration": 0.582,
+   "samples": 27946,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "nan",
+   "event": "bonked",
+   "trigger": {
+    "game": "Core event bonk, the target",
+    "anim": "hob_nan_<side>_bonked (frame 0)"
+   },
+   "lufs": -18.0,
+   "peak_db": -7.8,
+   "bytes": {
+    "ogg": 2706,
+    "m4a": 5494
+   }
+  },
+  {
+   "id": "bark_nan_fire",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_nan_fire.ogg",
+    "m4a": "barks/bark_nan_fire.m4a"
+   },
+   "duration": 0.453,
+   "samples": 21730,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "nan",
+   "event": "fire",
+   "trigger": {
+    "game": "Core event fire, the shooter",
+    "anim": "hob_nan_<side>_fire:release"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.3,
+   "bytes": {
+    "ogg": 2370,
+    "m4a": 4381
+   }
+  },
+  {
+   "id": "bark_nan_hit_lands",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_nan_hit_lands.ogg",
+    "m4a": "barks/bark_nan_hit_lands.m4a"
+   },
+   "duration": 0.438,
+   "samples": 21045,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "nan",
+   "event": "hit_lands",
+   "trigger": {
+    "game": "Core event hit, target hob: the shooter barks",
+    "anim": "hob_nan_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -7.2,
+   "bytes": {
+    "ogg": 2270,
+    "m4a": 4379
+   }
+  },
+  {
+   "id": "bark_nan_picked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_nan_picked.ogg",
+    "m4a": "barks/bark_nan_picked.m4a"
+   },
+   "duration": 0.481,
+   "samples": 23108,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "nan",
+   "event": "picked",
+   "trigger": {
+    "game": "Command pick_hob, your Hob",
+    "anim": "hob_nan_<side>_aim (start)"
+   },
+   "lufs": -18.0,
+   "peak_db": -7.0,
+   "bytes": {
+    "ogg": 2444,
+    "m4a": 4662
+   }
+  },
+  {
+   "id": "bark_nan_takes_hit",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_nan_takes_hit.ogg",
+    "m4a": "barks/bark_nan_takes_hit.m4a"
+   },
+   "duration": 0.651,
+   "samples": 31240,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "nan",
+   "event": "takes_hit",
+   "trigger": {
+    "game": "Core event hit, target hob: the target barks. Also drop (Tumbled)",
+    "anim": "hob_nan_<side>_hit:flash"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.2,
+   "bytes": {
+    "ogg": 3473,
+    "m4a": 6068
+   }
+  },
+  {
+   "id": "bark_nan_win",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_nan_win.ogg",
+    "m4a": "barks/bark_nan_win.m4a"
+   },
+   "duration": 0.693,
+   "samples": 33285,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "nan",
+   "event": "win",
+   "trigger": {
+    "game": "Core event win, the winning crew",
+    "anim": "hob_nan_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -7.7,
+   "bytes": {
+    "ogg": 3527,
+    "m4a": 6162
+   }
+  },
+  {
+   "id": "bark_quill_bonked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_quill_bonked.ogg",
+    "m4a": "barks/bark_quill_bonked.m4a"
+   },
+   "duration": 0.594,
+   "samples": 28511,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "quill",
+   "event": "bonked",
+   "trigger": {
+    "game": "Core event bonk, the target",
+    "anim": "hob_quill_<side>_bonked (frame 0)"
+   },
+   "lufs": -18.0,
+   "peak_db": -7.1,
+   "bytes": {
+    "ogg": 2988,
+    "m4a": 5504
+   }
+  },
+  {
+   "id": "bark_quill_fire",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_quill_fire.ogg",
+    "m4a": "barks/bark_quill_fire.m4a"
+   },
+   "duration": 0.294,
+   "samples": 14103,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "quill",
+   "event": "fire",
+   "trigger": {
+    "game": "Core event fire, the shooter",
+    "anim": "hob_quill_<side>_fire:release"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.0,
+   "bytes": {
+    "ogg": 1629,
+    "m4a": 3222
+   }
+  },
+  {
+   "id": "bark_quill_hit_lands",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_quill_hit_lands.ogg",
+    "m4a": "barks/bark_quill_hit_lands.m4a"
+   },
+   "duration": 0.497,
+   "samples": 23866,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "quill",
+   "event": "hit_lands",
+   "trigger": {
+    "game": "Core event hit, target hob: the shooter barks",
+    "anim": "hob_quill_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -6.4,
+   "bytes": {
+    "ogg": 2842,
+    "m4a": 4747
+   }
+  },
+  {
+   "id": "bark_quill_picked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_quill_picked.ogg",
+    "m4a": "barks/bark_quill_picked.m4a"
+   },
+   "duration": 0.301,
+   "samples": 14449,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "quill",
+   "event": "picked",
+   "trigger": {
+    "game": "Command pick_hob, your Hob",
+    "anim": "hob_quill_<side>_aim (start)"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.4,
+   "bytes": {
+    "ogg": 1614,
+    "m4a": 3307
+   }
+  },
+  {
+   "id": "bark_quill_takes_hit",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_quill_takes_hit.ogg",
+    "m4a": "barks/bark_quill_takes_hit.m4a"
+   },
+   "duration": 0.296,
+   "samples": 14222,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "quill",
+   "event": "takes_hit",
+   "trigger": {
+    "game": "Core event hit, target hob: the target barks. Also drop (Tumbled)",
+    "anim": "hob_quill_<side>_hit:flash"
+   },
+   "lufs": -18.0,
+   "peak_db": -6.6,
+   "bytes": {
+    "ogg": 1606,
+    "m4a": 3207
+   }
+  },
+  {
+   "id": "bark_quill_win",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_quill_win.ogg",
+    "m4a": "barks/bark_quill_win.m4a"
+   },
+   "duration": 0.713,
+   "samples": 34204,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "quill",
+   "event": "win",
+   "trigger": {
+    "game": "Core event win, the winning crew",
+    "anim": "hob_quill_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.8,
+   "bytes": {
+    "ogg": 3755,
+    "m4a": 6374
+   }
+  },
+  {
+   "id": "bark_thumper_bonked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_thumper_bonked.ogg",
+    "m4a": "barks/bark_thumper_bonked.m4a"
+   },
+   "duration": 0.838,
+   "samples": 40231,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "thumper",
+   "event": "bonked",
+   "trigger": {
+    "game": "Core event bonk, the target",
+    "anim": "hob_thumper_<side>_bonked (frame 0)"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.0,
+   "bytes": {
+    "ogg": 3996,
+    "m4a": 7490
+   }
+  },
+  {
+   "id": "bark_thumper_fire",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_thumper_fire.ogg",
+    "m4a": "barks/bark_thumper_fire.m4a"
+   },
+   "duration": 0.415,
+   "samples": 19920,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "thumper",
+   "event": "fire",
+   "trigger": {
+    "game": "Core event fire, the shooter",
+    "anim": "hob_thumper_<side>_fire:release"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.1,
+   "bytes": {
+    "ogg": 2178,
+    "m4a": 4169
+   }
+  },
+  {
+   "id": "bark_thumper_hit_lands",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_thumper_hit_lands.ogg",
+    "m4a": "barks/bark_thumper_hit_lands.m4a"
+   },
+   "duration": 0.658,
+   "samples": 31587,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "thumper",
+   "event": "hit_lands",
+   "trigger": {
+    "game": "Core event hit, target hob: the shooter barks",
+    "anim": "hob_thumper_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.1,
+   "bytes": {
+    "ogg": 3337,
+    "m4a": 6060
+   }
+  },
+  {
+   "id": "bark_thumper_picked",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_thumper_picked.ogg",
+    "m4a": "barks/bark_thumper_picked.m4a"
+   },
+   "duration": 0.531,
+   "samples": 25502,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "thumper",
+   "event": "picked",
+   "trigger": {
+    "game": "Command pick_hob, your Hob",
+    "anim": "hob_thumper_<side>_aim (start)"
+   },
+   "lufs": -18.0,
+   "peak_db": -3.7,
+   "bytes": {
+    "ogg": 2574,
+    "m4a": 5132
+   }
+  },
+  {
+   "id": "bark_thumper_takes_hit",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_thumper_takes_hit.ogg",
+    "m4a": "barks/bark_thumper_takes_hit.m4a"
+   },
+   "duration": 0.727,
+   "samples": 34910,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "thumper",
+   "event": "takes_hit",
+   "trigger": {
+    "game": "Core event hit, target hob: the target barks. Also drop (Tumbled)",
+    "anim": "hob_thumper_<side>_hit:flash"
+   },
+   "lufs": -18.0,
+   "peak_db": -5.5,
+   "bytes": {
+    "ogg": 3579,
+    "m4a": 6574
+   }
+  },
+  {
+   "id": "bark_thumper_win",
+   "kind": "bark",
+   "files": {
+    "ogg": "barks/bark_thumper_win.ogg",
+    "m4a": "barks/bark_thumper_win.m4a"
+   },
+   "duration": 0.859,
+   "samples": 41213,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "voice",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.0,
+   "hob": "thumper",
+   "event": "win",
+   "trigger": {
+    "game": "Core event win, the winning crew",
+    "anim": "hob_thumper_<side>_cheer:jump"
+   },
+   "lufs": -18.0,
+   "peak_db": -4.4,
+   "bytes": {
+    "ogg": 4265,
+    "m4a": 7639
+   }
+  }
+ ]
+}

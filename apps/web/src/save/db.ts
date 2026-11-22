@@ -11,6 +11,8 @@ export interface Settings {
   difficulty: Difficulty;
   windOff: boolean;
   reduceMotion: boolean;
+  /** Screen shake strength, percent: 100, 50 or 0 (07 §6.2). */
+  reduceShake: 100 | 50 | 0;
   quickFire: boolean;
   dragMode: 'pull' | 'point';
   rotation: 'follow' | 'wide' | 'tall';
@@ -50,6 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
   difficulty: 'fair',
   windOff: false,
   reduceMotion: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches,
+  reduceShake: 100,
   quickFire: false,
   dragMode: 'pull',
   rotation: 'follow',
@@ -189,6 +192,7 @@ export function migrateSettings(raw: unknown): Settings {
     difficulty: oneOf(raw.difficulty, ['cozy', 'fair', 'stubborn'] as const, d.difficulty),
     windOff: bool(raw.windOff, d.windOff),
     reduceMotion: bool(raw.reduceMotion, d.reduceMotion),
+    reduceShake: raw.reduceShake === 50 ? 50 : raw.reduceShake === 0 ? 0 : 100,
     quickFire: bool(raw.quickFire, d.quickFire),
     dragMode: oneOf(raw.dragMode, ['pull', 'point'] as const, d.dragMode),
     rotation: oneOf(raw.rotation, ['follow', 'wide', 'tall'] as const, d.rotation),

@@ -373,3 +373,8 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .grid .gridrow { display: contents; }
 .grid .cell:focus-visible { outline: 3px solid var(--gold-dark); outline-offset: 1px; z-index: 1; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* UI motion clips (ui/motion.ts) */
+.clip { display: inline-block; vertical-align: middle; pointer-events: none; }
+.score .clip.coin { margin-right: 6px; }
+.handoff .clip.flip { justify-self: center; }

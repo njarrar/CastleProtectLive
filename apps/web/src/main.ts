@@ -10,12 +10,16 @@ import { duelScreen, skirmishScreen } from './screens/setup';
 import { settingsScreen } from './screens/settings';
 import { workshopScreen } from './screens/workshop';
 import { sprites } from './render/sprites';
+import { anims } from './render/anim';
+import { loadAudio } from './audio/sfx';
 import { DEBUG, fatalScreen } from './ui/fatal';
 
 async function boot(): Promise<void> {
   const root = document.getElementById('app')!;
   const app = new App(root);
-  const [core] = await Promise.all([loadCore(), sprites.load(import.meta.env.BASE_URL)]);
+  const base = import.meta.env.BASE_URL;
+  const [core] = await Promise.all([loadCore(), sprites.load(base), anims.load(base)]);
+  void loadAudio(base);
   await app.init(core);
   app.register('title', (a) => titleScreen(a));
   app.register('map', mapScreen);
