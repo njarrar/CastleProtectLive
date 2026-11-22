@@ -30,6 +30,7 @@ env:
 
 jobs:
   apk:
+    if: github.repository == 'njarrar/CastleProtectLive'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

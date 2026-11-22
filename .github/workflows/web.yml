@@ -46,6 +46,7 @@ env:
 
 jobs:
   build:
+    if: github.repository == 'njarrar/CastleProtectLive'
     # Pinned: ubuntu-latest moved to 26.04, which Playwright 1.52 cannot install browsers on.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -173,6 +174,7 @@ jobs:
   deploy:
     needs: build
     if: >-
+      github.repository == 'njarrar/CastleProtectLive' &&
       needs.build.outputs.built == 'true' && github.event_name != 'pull_request' &&
       (github.ref == 'refs/heads/castle-protect-plan' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest

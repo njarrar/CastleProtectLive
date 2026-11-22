@@ -35,6 +35,7 @@ env:
 
 jobs:
   simulator:
+    if: github.repository == 'njarrar/CastleProtectLive'
     runs-on: macos-latest
     timeout-minutes: 60
     steps:

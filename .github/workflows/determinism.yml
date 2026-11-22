@@ -33,6 +33,7 @@ env:
 
 jobs:
   native:
+    if: github.repository == 'njarrar/CastleProtectLive'
     name: golden (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -77,6 +78,7 @@ jobs:
           if-no-files-found: ignore
 
   wasm:
+    if: github.repository == 'njarrar/CastleProtectLive'
     name: golden (wasm under node)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -127,6 +129,7 @@ jobs:
           if-no-files-found: ignore
 
   compare:
+    if: github.repository == 'njarrar/CastleProtectLive'
     needs: [native, wasm]
     runs-on: ubuntu-latest
     timeout-minutes: 5
