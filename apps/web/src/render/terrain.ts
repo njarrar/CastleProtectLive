@@ -22,6 +22,8 @@ export class TerrainLayer {
   dirty = true;
   /** Bumped on every repaint (the lens background cache keys on it). */
   rev = 0;
+  /** The canvas rect each repaint touched, by rev (x0, y0, x1, y1 in canvas px, y down), newest last. */
+  readonly dirtyLog: { rev: number; x0: number; y0: number; x1: number; y1: number }[] = [];
   /** Column tops for the Field Strip silhouette. */
   tops = new Int16Array(0);
 
@@ -118,5 +120,27 @@ export class TerrainLayer {
     this.ctx.putImageData(img, 0, 0, x0, H - y1, x1 - x0, y1 - y0);
     this.dirty = true;
     this.rev++;
+    this.dirtyLog.push({ rev: this.rev, x0, y0: H - y1, x1, y1: H - y0 });
+    if (this.dirtyLog.length > 32) this.dirtyLog.shift();
+  }
+
+  /** The rects painted after `rev` up to now, or null when the log no longer reaches back that far. */
+  dirtySince(rev: number): readonly { x0: number; y0: number; x1: number; y1: number }[] | null {
+    const log = this.dirtyLog;
+    if (!log.length || log[0].rev > rev + 1) return null;
+    let i = log.length;
+    while (i > 0 && log[i - 1].rev > rev) i--;
+    return log.slice(i);
+  }
+
+  /** Give the canvas memory back (the screen is gone). */
+  free(): void {
+    this.canvas.width = 0;
+    this.canvas.height = 0;
+    this.img = undefined;
+    this.mask = new Uint8Array(0);
+    this.w = 0;
+    this.h = 0;
+    this.dirtyLog.length = 0;
   }
 }

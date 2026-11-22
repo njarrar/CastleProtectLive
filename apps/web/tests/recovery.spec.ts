@@ -129,7 +129,7 @@ async function playToSave(page: Page): Promise<{ core: string; label: string }> 
   return (await idbGet(page, 'battle')) as { core: string; label: string };
 }
 
-test('a real save resumes, and a save whose state hash does not match is put aside', async ({ page }) => {
+test('a real save resumes, and a save whose state hash does not match still loads with a note', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   const save = await playToSave(page);
@@ -143,9 +143,17 @@ test('a real save resumes, and a save whose state hash does not match is put asi
   await expect(page.locator('.battle')).toBeVisible();
   await expect(page.locator('.notice')).toHaveCount(0);
 
-  // Same save with a wrong hash: it replays to a state that does not match, so it is refused.
+  // Same save with a wrong hash: the log replays with no refusal, so the fight loads (never put
+  // aside) and the player gets a note that it replayed a little differently.
   await idbPut(page, 'battle', { ...save, core: JSON.stringify({ ...core, hash: '0000000000000000' }) });
   await page.goto('./?debug=3');
+  await page.getByTestId('resume').click();
+  await expect(page.locator('.battle')).toBeVisible();
+  await expect(page.locator('.notice')).toContainText('replayed a little differently');
+  expect(await idbGet(page, 'battle')).toBeTruthy();
+  // A log the core refuses is a broken save: that one is put aside.
+  await idbPut(page, 'battle', { ...save, core: JSON.stringify({ ...core, log: [{ cmd: 'fire' }, { cmd: 'fire' }, { cmd: 'nonsense' }] }) });
+  await page.goto('./?debug=4');
   await page.getByTestId('resume').click();
   await expect(page.locator('.notice')).toContainText('no longer replays');
   await expect(page.locator('.screen.map')).toBeVisible();

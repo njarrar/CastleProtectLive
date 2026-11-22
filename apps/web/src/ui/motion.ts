@@ -19,7 +19,8 @@ function tick(now: number): void {
     if (!l.el.isConnected) { live.splice(i, 1); continue; }
     if (!l.still) l.p.step(dt, l.sink);
     paint(l);
-    if (l.p.done) { live.splice(i, 1); l.done?.(); }
+    // A still clip is painted once (sprites loaded) and leaves the ticker: no repaint every frame.
+    if (l.p.done || (l.still && sprites.ready)) { live.splice(i, 1); if (l.p.done) l.done?.(); }
   }
   raf = live.length ? requestAnimationFrame(tick) : 0;
 }

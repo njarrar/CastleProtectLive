@@ -7,7 +7,7 @@ import { type Cam, type Rect, sx, sy } from './view';
 
 const INK = '#2B1E2E';
 
-/** 06 §7 budgets: Mid tier is 120 particles on screen. Debris over the cap is dropped. */
+/** 06 §7 budgets: Mid tier is 120 particles on screen (plus 20 for trails). Debris over the cap is dropped. */
 export const FX_CAP = 140;
 
 export class SpriteFx {
@@ -53,7 +53,12 @@ export class DmgNum {
   life = 700;
   color = '#FFF4DE';
   font = '';
+  /** Words only: a side shift in screen px, found by the layout so the word never sits on a number or a kettle. */
+  ox = 0;
 }
+
+/** Screen boxes of the numbers this frame (x0, y0, x1, y1), and of things words must keep off. */
+const BOX = new Float64Array(4 * 32);
 
 const TYPE_COLOR: Record<DmgType, string> = {
   blast: '#FFF4DE', pierce: '#FFF2A6', dig: '#D9B27C', fire: '#E0392B', crush: '#C9C3BA', heal: '#7BD36A', frost: '#BFE6FF', zap: '#B48CFF',
@@ -69,6 +74,8 @@ export function bandSize(dmg: number): number {
 export class FxPool {
   readonly items: SpriteFx[] = [];
   readonly nums: DmgNum[] = [];
+  /** The last drawn screen boxes of words and numbers (for tests): [kind, x0, y0, x1, y1]. Reused. */
+  readonly lastWords: number[][] = [];
   live = 0;
   wind = 0;
   constructor(n = FX_CAP, nn = 24) {
@@ -139,7 +146,7 @@ export class FxPool {
     const n = this.freeNum(3);
     if (!n) return;
     n.active = true; n.key = ''; n.x = x; n.y = y; n.val = 0; n.str = text; n.size = size; n.font = font(size);
-    n.type = 'blast'; n.kind = 3; n.age = 0; n.bump = 999; n.dir = 0; n.burst = burst; n.life = life; n.color = color;
+    n.type = 'blast'; n.kind = 3; n.age = 0; n.bump = 999; n.dir = 0; n.burst = burst; n.life = life; n.color = color; n.ox = 0;
   }
 
   /** 07 §6.3 cap: 12 numbers on screen; the oldest block numbers drop first, Hob and kettle numbers never. */
@@ -159,6 +166,7 @@ export class FxPool {
 
   /** Advance by view ms. */
   step(dt: number): void {
+    this.lastWords.length = 0;
     const s = dt / 1000;
     let live = 0;
     for (let i = 0; i < this.items.length; i++) {
@@ -216,42 +224,104 @@ export class FxPool {
     ctx.globalAlpha = 1;
   }
 
-  /** Damage numbers and words, in screen space over the field (never shaken with it). */
-  drawNums(ctx: CanvasRenderingContext2D, r: Rect, c: Cam): void {
+  /**
+   * Damage numbers and words, in screen space over the field (never shaken with it). Words are
+   * laid out in screen px: anchored in the world, then pushed sideways off any number and off the
+   * `avoid` boxes (kettles, world cells as x, y, w, h). Words are drawn first, numbers on top.
+   */
+  drawNums(ctx: CanvasRenderingContext2D, r: Rect, c: Cam, avoid?: readonly { room?: { x: number; y: number; w: number; h: number } }[]): void {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
+    // Boxes: the numbers as drawn this frame, then the avoid boxes.
+    let nb = 0;
     for (const n of this.nums) {
-      if (!n.active) continue;
-      const word = n.kind === 3;
-      const t = n.age;
-      // Pop to 120% in 80 ms, settle; a merge bumps it again. Drift 24 pt up (and to the side) over 700 ms.
-      let k = t < 80 ? 0.6 + 0.6 * (t / 80) : t < 160 ? 1.2 - 0.2 * ((t - 80) / 80) : 1;
-      if (n.bump < 120) k += 0.25 * (1 - n.bump / 120);
-      const drift = Math.min(1, t / (word ? 1000 : 700));
-      const x = sx(r, c, n.x) + n.dir * 10 * drift;
-      const y = sy(r, c, n.y) - (word ? 16 : 24) * drift;
-      if (x < r.x - 60 || x > r.x + r.w + 60 || y < r.y - 40 || y > r.y + r.h + 40) continue;
-      const fadeFrom = n.life - (word ? 300 : 200);
-      ctx.globalAlpha = t > fadeFrom ? Math.max(0, (n.life - t) / (n.life - fadeFrom)) : 1;
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(k, k);
-      if (n.burst) burst(ctx, n.size * (word ? 0.55 + 0.11 * n.str.length : 1.2));
+      if (!n.active || n.kind === 3 || nb >= 24) continue;
+      const k = scaleOf(n);
+      const drift = Math.min(1, n.age / 700);
+      const x = sx(r, c, n.x) + n.dir * 10 * drift, y = sy(r, c, n.y) - 24 * drift;
       ctx.font = n.font;
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = INK;
-      const tx = word ? 0 : n.size * 0.45;
-      if (!word) typeIcon(ctx, n.type, -measure(ctx, n) / 2 - n.size * 0.1, 0, n.size * 0.42);
-      ctx.strokeText(n.str, tx, 0);
-      ctx.fillStyle = n.color;
-      ctx.fillText(n.str, tx, 0);
-      if (n.type === 'heal' && !word) { ctx.strokeText('+', tx - measure(ctx, n) / 2 - n.size * 0.25, 0); ctx.fillText('+', tx - measure(ctx, n) / 2 - n.size * 0.25, 0); }
-      ctx.restore();
+      const hw = (measure(ctx, n) / 2 + n.size * 0.6) * k, hh = n.size * 0.6 * k;
+      BOX[nb * 4] = x - hw; BOX[nb * 4 + 1] = y - hh; BOX[nb * 4 + 2] = x + hw; BOX[nb * 4 + 3] = y + hh;
+      nb++;
+    }
+    if (avoid) {
+      for (const k of avoid) {
+        if (nb >= 32) break;
+        const a = k.room;
+        if (!a) continue;
+        const x0 = sx(r, c, a.x), x1 = sx(r, c, a.x + a.w), y0 = sy(r, c, a.y + a.h), y1 = sy(r, c, a.y);
+        BOX[nb * 4] = Math.min(x0, x1); BOX[nb * 4 + 1] = Math.min(y0, y1); BOX[nb * 4 + 2] = Math.max(x0, x1); BOX[nb * 4 + 3] = Math.max(y0, y1);
+        nb++;
+      }
+    }
+    for (let pass = 0; pass < 2; pass++) {
+      const words = pass === 0;
+      for (const n of this.nums) {
+        if (!n.active || (n.kind === 3) !== words) continue;
+        const t = n.age;
+        // Pop to 120% in 80 ms, settle; a merge bumps it again. Drift 24 pt up (and to the side) over 700 ms.
+        const k = scaleOf(n);
+        const drift = Math.min(1, t / (words ? 1000 : 700));
+        let x = sx(r, c, n.x) + n.dir * 10 * drift;
+        const y = sy(r, c, n.y) - (words ? 16 : 24) * drift;
+        if (x < r.x - 60 || x > r.x + r.w + 60 || y < r.y - 40 || y > r.y + r.h + 40) continue;
+        ctx.font = n.font;
+        if (words) {
+          // Half size of the word as drawn (with its burst), then step sideways until it is clear.
+          const hw = Math.max(measure(ctx, n) / 2 + 4, n.burst ? n.size * (0.55 + 0.11 * n.str.length) * 1.3 : 0) * k;
+          const hh = (n.burst ? n.size * 0.9 : n.size * 0.6) * k;
+          for (let tries = 0; tries < 6; tries++) {
+            const cx = x + n.ox;
+            let hit = -1;
+            for (let i = 0; i < nb; i++) {
+              if (cx + hw > BOX[i * 4] && cx - hw < BOX[i * 4 + 2] && y + hh > BOX[i * 4 + 1] && y - hh < BOX[i * 4 + 3]) { hit = i; break; }
+            }
+            if (hit < 0) break;
+            // Away from the box's centre, by just enough (plus a 6 px gap); the shift is kept, so the word never jumps back.
+            const bx = (BOX[hit * 4] + BOX[hit * 4 + 2]) / 2;
+            n.ox += cx <= bx ? BOX[hit * 4] - (cx + hw) - 6 : BOX[hit * 4 + 2] - (cx - hw) + 6;
+          }
+          x += n.ox;
+          // Keep the whole word inside the lens (a subtitle near the edge is not cut off).
+          x = Math.max(r.x + hw + 2, Math.min(r.x + r.w - hw - 2, x));
+        }
+        if (DEBUG_BOXES) recordBox(this.lastWords, n, x, y, ctx);
+        const fadeFrom = n.life - (words ? 300 : 200);
+        ctx.globalAlpha = t > fadeFrom ? Math.max(0, (n.life - t) / (n.life - fadeFrom)) : 1;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(k, k);
+        if (n.burst) burst(ctx, n.size * (words ? 0.55 + 0.11 * n.str.length : 1.2));
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = INK;
+        const tx = words ? 0 : n.size * 0.45;
+        if (!words) typeIcon(ctx, n.type, -measure(ctx, n) / 2 - n.size * 0.1, 0, n.size * 0.42);
+        ctx.strokeText(n.str, tx, 0);
+        ctx.fillStyle = n.color;
+        ctx.fillText(n.str, tx, 0);
+        if (n.type === 'heal' && !words) { ctx.strokeText('+', tx - measure(ctx, n) / 2 - n.size * 0.25, 0); ctx.fillText('+', tx - measure(ctx, n) / 2 - n.size * 0.25, 0); }
+        ctx.restore();
+      }
     }
     ctx.globalAlpha = 1;
     ctx.textBaseline = 'alphabetic';
   }
+}
+
+const DEBUG_BOXES = typeof location !== 'undefined' && /[?&]debug/.test(location.search);
+function recordBox(out: number[][], n: DmgNum, x: number, y: number, ctx: CanvasRenderingContext2D): void {
+  const k = scaleOf(n);
+  const hw = n.kind === 3 ? Math.max(measure(ctx, n) / 2 + 4, n.burst ? n.size * (0.55 + 0.11 * n.str.length) * 1.3 : 0) * k : (measure(ctx, n) / 2 + n.size * 0.6) * k;
+  const hh = (n.kind === 3 && n.burst ? n.size * 0.9 : n.size * 0.6) * k;
+  out.push([n.kind, x - hw, y - hh, x + hw, y + hh]);
+}
+
+function scaleOf(n: DmgNum): number {
+  const t = n.age;
+  let k = t < 80 ? 0.6 + 0.6 * (t / 80) : t < 160 ? 1.2 - 0.2 * ((t - 80) / 80) : 1;
+  if (n.bump < 120) k += 0.25 * (1 - n.bump / 120);
+  return k;
 }
 
 // measureText allocates a TextMetrics; numbers change rarely, so cache the width per string.

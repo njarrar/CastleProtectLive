@@ -7,6 +7,11 @@
 // - Backgrounds go out at @1x and @2x (the app loads @2x later, and only on high-DPI screens).
 // - assets/audio/ (if the sound pass has made it) is copied with its audio.json.
 //
+// - Files the service worker caches at runtime (atlas page images, backgrounds, sounds) get the
+//   first 10 hex digits of their content hash in the name, and the JSON that names them (page
+//   JSON, bg.json, audio.json) is precached with a revision. So an art or sound update reaches a
+//   returning player, and a page's frame rects always come with the image they were cut for.
+//
 // Converted images are cached by content hash in node_modules/.cache/castle-art, so a
 // rebuild with no art change costs a few file copies. Run alone: node scripts/build-art.mjs
 import { createHash } from 'node:crypto';
@@ -39,6 +44,18 @@ async function toWebp(src, dest) {
   return true;
 }
 
+/** name.ext -> name.<hash10>.ext, from the file's bytes. */
+function hashedName(file, name) {
+  const h = createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 10);
+  return name.replace(/(\.[a-z0-9]+)$/i, `.${h}$1`);
+}
+/** Copy (or rename) to a content-hashed name in `dir`; returns the new base name. */
+function hashInto(file, dir, name) {
+  const out = hashedName(file, name);
+  copyFileSync(file, join(dir, out));
+  return out;
+}
+
 export async function buildArt(src, dest, log = console.log) {
   rmSync(dest, { recursive: true, force: true });
   if (!src || !existsSync(src)) { log('[castle] no art assets found, skipping'); return { webp: false }; }
@@ -61,29 +78,48 @@ export async function buildArt(src, dest, log = console.log) {
       const page = JSON.parse(readFileSync(join(src, 'atlas', pj), 'utf8'));
       const png = join(src, 'atlas', page.image);
       const name = page.image.replace(/\.png$/, '.webp');
-      if (await toWebp(png, join(dest, 'atlas', name))) page.image = name;
-      else { webp = false; copyFileSync(png, join(dest, 'atlas', page.image)); }
+      const tmp = join(dest, 'atlas', `.tmp-${name}`);
+      let made = name;
+      if (await toWebp(png, tmp)) made = name;
+      else { webp = false; copyFileSync(png, tmp); made = page.image; }
+      page.image = hashInto(tmp, join(dest, 'atlas'), made);
+      rmSync(tmp);
       writeFileSync(join(dest, 'atlas', pj), JSON.stringify(page));
     }
   }
   const spr = join(src, 'sprites');
+  const bg = {};
   for (const f of readdirSync(spr)) {
     if (/^bg_\w+(@2x)?\.png$/.test(f)) {
-      if (!(await toWebp(join(spr, f), join(dest, 'sprites', f.replace(/\.png$/, '.webp'))))) copyFileSync(join(spr, f), join(dest, 'sprites', f));
+      const wname = f.replace(/\.png$/, '.webp');
+      const tmp = join(dest, 'sprites', `.tmp-${wname}`);
+      const made = (await toWebp(join(spr, f), tmp)) ? wname : (copyFileSync(join(spr, f), tmp), f);
+      bg[f.replace(/\.png$/, '')] = `sprites/${hashInto(tmp, join(dest, 'sprites'), made)}`;
+      rmSync(tmp);
     } else if (/^(terrain_\w+|app_icon-(192|512))\.png$/.test(f)) copyFileSync(join(spr, f), join(dest, 'sprites', f));
   }
-  // Sound pass output, if it exists: audio.json plus its files.
+  // Background name -> hashed file, for the app (precached, so it always names files that exist).
+  writeFileSync(join(dest, 'bg.json'), JSON.stringify(bg));
+  // Sound pass output, if it exists: audio.json plus its files, the files under hashed names.
   const au = join(src, 'audio');
   if (existsSync(au) && statSync(au).isDirectory()) {
-    const copy = (from, to) => {
+    const renamed = new Map();
+    const copy = (from, to, rel) => {
       mkdirSync(to, { recursive: true });
       for (const f of readdirSync(from)) {
         const p = join(from, f);
-        if (statSync(p).isDirectory()) copy(p, join(to, f));
-        else if (/\.(json|ogg|opus|mp3|m4a|aac|webm|wav)$/i.test(f) && !/^(README|\.)/.test(f)) copyFileSync(p, join(to, f));
+        if (statSync(p).isDirectory()) copy(p, join(to, f), `${rel}${f}/`);
+        else if (/\.json$/i.test(f)) copyFileSync(p, join(to, f));
+        else if (/\.(ogg|opus|mp3|m4a|aac|webm|wav)$/i.test(f) && !/^(README|\.)/.test(f)) renamed.set(`${rel}${f}`, `${rel}${hashInto(p, to, f)}`);
       }
     };
-    copy(au, join(dest, 'audio'));
+    copy(au, join(dest, 'audio'), '');
+    const mp = join(dest, 'audio', 'audio.json');
+    if (existsSync(mp)) {
+      const man = JSON.parse(readFileSync(mp, 'utf8'));
+      for (const snd of man.sounds ?? []) for (const k of Object.keys(snd.files ?? {})) snd.files[k] = renamed.get(snd.files[k]) ?? snd.files[k];
+      writeFileSync(mp, JSON.stringify(man));
+    }
   }
   log(`[castle] built art from ${src}${webp ? ' (atlas as WebP)' : ' (no sharp: atlas as PNG)'}`);
   return { webp };

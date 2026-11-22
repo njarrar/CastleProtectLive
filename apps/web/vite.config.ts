@@ -56,7 +56,8 @@ function castleCopy(): Plugin {
     // Only what the web build draws, with the atlas pages as WebP (scripts/build-art.mjs).
     await buildArt(artCandidates.find((p) => existsSync(p)), resolve(here, 'public/art'));
   };
-  return { name: 'castle-copy', config: (_c, env) => run(env.command) };
+  // `vite preview` serves dist as built: it must not wipe and rebuild public/core and public/art.
+  return { name: 'castle-copy', config: (_c, env) => (env.isPreview ? undefined : run(env.command)) };
 }
 
 export default defineConfig({
@@ -74,7 +75,8 @@ export default defineConfig({
         description: 'Build a fort, aim a shot, pop the kettle.',
         theme_color: '#FFC23D',
         background_color: '#9ED8EC',
-        display: 'fullscreen',
+        // iOS has no fullscreen display mode; standalone works on both.
+        display: 'standalone',
         orientation: 'any',
         start_url: '.',
         icons: [
@@ -89,16 +91,22 @@ export default defineConfig({
         // loaded after the game starts) are cached the first time they are fetched.
         globPatterns: ['**/*.{js,css,html,svg,png,webp,json,wasm,woff2,ogg,opus,mp3,m4a}'],
         // Sound (5 MB in two formats) is cached as it is first played, one format per device.
-        globIgnores: ['**/art/atlas/castle@2x-*.{webp,png}', '**/art/sprites/bg_*@2x.*', '**/art/audio/**'],
+        // The JSON that names those files (page JSON, bg.json, audio.json, barks.json) IS
+        // precached with a revision, and the files have a content hash in their names
+        // (scripts/build-art.mjs), so CacheFirst never serves a stale image or sound.
+        globIgnores: ['**/art/atlas/castle@2x-*.{webp,png}', '**/art/sprites/bg_*@2x.*', '**/art/audio/**/*.{ogg,opus,mp3,m4a,aac,webm,wav}'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // Take control on the first visit (no old worker to wait for), so the sounds and @2x art
+        // of the first session are cached. An update still waits for the Update tap (prompt mode).
+        clientsClaim: true,
         runtimeCaching: [{
           urlPattern: ({ url }) => /\/art\/(atlas\/castle@2x-|sprites\/bg_\w+@2x)/.test(url.pathname),
           handler: 'CacheFirst',
-          options: { cacheName: 'castle-art-2x', expiration: { maxEntries: 16 } },
+          options: { cacheName: 'castle-art-2x', expiration: { maxEntries: 16, purgeOnQuotaError: true } },
         }, {
-          urlPattern: ({ url }) => /\/art\/audio\//.test(url.pathname),
+          urlPattern: ({ url }) => /\/art\/audio\/.+\.(ogg|opus|mp3|m4a|aac|webm|wav)$/.test(url.pathname),
           handler: 'CacheFirst',
-          options: { cacheName: 'castle-audio', expiration: { maxEntries: 200 } },
+          options: { cacheName: 'castle-audio', expiration: { maxEntries: 200, purgeOnQuotaError: true } },
         }],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,

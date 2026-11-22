@@ -11,7 +11,7 @@ import { settingsScreen } from './screens/settings';
 import { workshopScreen } from './screens/workshop';
 import { sprites } from './render/sprites';
 import { anims } from './render/anim';
-import { loadAudio } from './audio/sfx';
+import { audioDebug, loadAudio, unlockAudio, warmOfflineCache } from './audio/sfx';
 import { DEBUG, fatalScreen } from './ui/fatal';
 
 async function boot(): Promise<void> {
@@ -20,6 +20,8 @@ async function boot(): Promise<void> {
   const base = import.meta.env.BASE_URL;
   const [core] = await Promise.all([loadCore(), sprites.load(base), anims.load(base)]);
   void loadAudio(base);
+  // Sound starts on the first real gesture anywhere (the map and the Workshop too, not only Play).
+  for (const ev of ['pointerup', 'keydown', 'touchend']) window.addEventListener(ev, () => unlockAudio(), { capture: true, passive: true });
   await app.init(core);
   app.register('title', (a) => titleScreen(a));
   app.register('map', mapScreen);
@@ -51,7 +53,7 @@ async function boot(): Promise<void> {
   window.addEventListener('hashchange', () => { if (app.route.to !== 'battle') app.go(route()); });
   document.documentElement.dataset.ready = 'true';
   document.documentElement.dataset.core = core.name;
-  if (DEBUG) (window as unknown as { castleApp?: App }).castleApp = app;
+  if (DEBUG) Object.assign(window as unknown as object, { castleApp: app, castleAudio: audioDebug });
 
   if ('serviceWorker' in navigator && import.meta.env.PROD) {
     // registerType 'prompt': a new version waits until the player taps Update on the title or map.
@@ -61,7 +63,14 @@ async function boot(): Promise<void> {
         app.pendingUpdate = () => { void updateSW(true); };
         app.showUpdateChip();
       },
+      // An installed app can stay open for days: look for a new version every hour.
+      onRegisteredSW(_url, reg) {
+        if (reg) setInterval(() => { if (navigator.onLine) void reg.update().catch(() => undefined); }, 60 * 60 * 1000);
+      },
     });
+    // The first visit: once the worker takes control (clientsClaim), the sounds fetched before it
+    // are fetched again through it, so they are cached for an offline launch.
+    navigator.serviceWorker.addEventListener('controllerchange', () => warmOfflineCache());
   }
 }
 

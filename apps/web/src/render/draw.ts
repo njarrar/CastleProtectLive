@@ -84,6 +84,33 @@ class ScaledCopy {
     this.src = src; this.rev = rev; this.w = w; this.h = h;
     return this.canvas;
   }
+
+  /**
+   * The terrain copy: after a crater only the painted rects are scaled again, at once, not the
+   * whole map three frames later. A size change, or a gap in the terrain's log, rebuilds it all.
+   */
+  getTerrain(t: TerrainLayer, w: number, h: number, smooth: boolean): HTMLCanvasElement | null {
+    const rw = Math.round(w), rh = Math.round(h);
+    if (this.src === t.canvas && rw === this.w && rh === this.h && t.rev !== this.rev) {
+      const rects = t.dirtySince(this.rev);
+      if (rects) {
+        const kx = rw / t.w, ky = rh / t.h;
+        this.c.imageSmoothingEnabled = smooth;
+        for (const q of rects) {
+          const x0 = Math.max(0, q.x0 - 1), y0 = Math.max(0, q.y0 - 1), x1 = Math.min(t.w, q.x1 + 1), y1 = Math.min(t.h, q.y1 + 1);
+          const dx0 = Math.floor(x0 * kx), dy0 = Math.floor(y0 * ky), dx1 = Math.ceil(x1 * kx), dy1 = Math.ceil(y1 * ky);
+          if (dx1 <= dx0 || dy1 <= dy0) continue;
+          this.c.clearRect(dx0, dy0, dx1 - dx0, dy1 - dy0);
+          this.c.drawImage(t.canvas, dx0 / kx, dy0 / ky, (dx1 - dx0) / kx, (dy1 - dy0) / ky, dx0, dy0, dx1 - dx0, dy1 - dy0);
+        }
+        this.rev = t.rev;
+        return this.canvas;
+      }
+    }
+    return this.get(t.canvas, t.rev, w, h, smooth);
+  }
+
+  free(): void { this.canvas.width = 0; this.canvas.height = 0; this.src = null; this.psrc = null; this.w = 0; this.h = 0; }
 }
 
 /**
@@ -114,6 +141,12 @@ export class LensCache {
     if (++this.stillFrames < 2) return 0;
     return 2;
   }
+  /** Give every canvas back (the battle screen is gone). */
+  free(): void {
+    this.sky.free(); this.hills[0].free(); this.hills[1].free(); this.terr.free();
+    this.canvas.width = 0; this.canvas.height = 0;
+    this.valid = false;
+  }
   build(r: Rect, dpr: number): CanvasRenderingContext2D {
     const w = Math.max(1, Math.round(r.w * dpr)), h = Math.max(1, Math.round(r.h * dpr));
     if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
@@ -136,8 +169,8 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
   const st = !shaking && cache ? cache.state(r, cam, terr.rev, sprites.scale, o.dpr, o.reduceMotion) : 0;
   if (st === 2) { const c = cache!.build(r, o.dpr); backdrop(c, r, cam, cache, o); terrainLayer(c, r, cam, terr, o.dpr, cache); }
   if (st) {
-    // With the CSS sky the cached backdrop is transparent where the sky shows, so wipe the lens
-    // first; otherwise last frame's aim preview and drag line stay on screen and pile up.
+    // The CSS sky shows through: the lens must be cleared first, or every frame's preview and
+    // drag line pile up under a backdrop cache that has transparent sky.
     if (o.cssSky) ctx.clearRect(r.x, r.y, r.w, r.h);
     ctx.drawImage(cache!.canvas, r.x, r.y, r.w, r.h);
     clouds(ctx, r, cam, snap, terr, o);
@@ -268,7 +301,7 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
   ctx.beginPath();
   ctx.rect(r.x, r.y, r.w, r.h);
   ctx.clip();
-  feel.fx.drawNums(ctx, r, cam);
+  feel.fx.drawNums(ctx, r, cam, snap.kettles);
   ctx.restore();
   if (o.label) {
     ctx.save();
@@ -345,7 +378,7 @@ function terrainLayer(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, terr: Te
     ctx.imageSmoothingEnabled = cam.s < 1;
     if (ex > x0 && ey > y0) {
       const k = cam.s * dpr;
-      const pre = lc?.terr.get(terr.canvas, terr.rev, terr.w * k, terr.h * k, cam.s < 1);
+      const pre = lc?.terr.getTerrain(terr, terr.w * k, terr.h * k, cam.s < 1);
       if (pre) ctx.drawImage(pre, x0 * k, y0 * k, (ex - x0) * k, (ey - y0) * k, sx(r, cam, x0), sy(r, cam, terr.h - y0), (ex - x0) * cam.s, (ey - y0) * cam.s);
       else ctx.drawImage(terr.canvas, x0, y0, ex - x0, ey - y0, sx(r, cam, x0), sy(r, cam, terr.h - y0), (ex - x0) * cam.s, (ey - y0) * cam.s);
     }

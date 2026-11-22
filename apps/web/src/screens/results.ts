@@ -84,7 +84,7 @@ function versusResults(app: App, setup: Extract<Route, { to: 'results' }>['setup
   const el = h('main', { class: 'screen results duel' },
     h('div', { class: 'sheet' },
       h('h1', { class: w >= 0 ? `side${w}` : '' }, title),
-      h('p', { class: 'small' }, `${resultTitle(res, true).replace(/!$/, '')}${w >= 0 && duel ? helpMark(w as Side) && ` (Help${helpMark(w as Side)})` : ''}`),
+      h('p', { class: 'small' }, `${resultTitle(res, true, w >= 0 ? names[w === 0 ? 1 : 0] : undefined).replace(/!$/, '')}${w >= 0 && duel ? helpMark(w as Side) && ` (Help${helpMark(w as Side)})` : ''}`),
       h('div', { class: 'stats' }, col(order[0]), col(order[1])),
       res.bestShot ? h('p', { class: 'small' }, `Best shot: ${names[res.bestShot.side]}, Round ${res.bestShot.round}, ${res.bestShot.dmg} dmg`) : '',
       duel ? h('p', { class: 'tonight' }, `Tonight: ${names[0]} ${app.duelScore[0]} : ${app.duelScore[1]} ${names[1]}`) : '',
@@ -106,10 +106,12 @@ export function resultTitle(res: ResultView, win: boolean, rival = 'The Rival'):
     return ({
       clean_sweep: 'Clean Sweep!', kettle_pop: 'Kettle Pop!', squall: 'Squall Pop!', double_pop: 'Double Pop!',
       rescue: 'Rescued!', round_cap: `${rival} dozed off!`, total_hp: 'Won on points!',
+      give_up: `${rival} gave up!`, volley_points: 'Won on Volley Points!', captive_bonked: 'Captive Bonked: you win!',
     } as Record<string, string>)[k] ?? `${res.how}!`;
   }
   return ({
     clean_sweep: 'Swept', kettle_pop: 'Kettle popped', squall: 'Squalled', double_pop: 'Double Pop',
     rescue: 'Rescue failed', round_cap: 'Out of rounds', total_hp: 'Lost on points',
+    give_up: 'You gave up', volley_points: 'Lost on Volley Points', captive_bonked: 'Captive Bonked',
   } as Record<string, string>)[k] ?? 'Flattened';
 }

@@ -157,7 +157,7 @@ async function loadSize(dpr) {
   await page.getByTestId('play').click();
   await page.waitForTimeout(6000);
   const all = [...seen.values()].reduce((a, b) => a + b, 0);
-  const atlas2x = [...seen.keys()].filter((u) => /castle@2x-\d\.webp/.test(u)).length;
+  const atlas2x = [...seen.keys()].filter((u) => /castle@2x-\d\.(\w+\.)?webp/.test(u)).length;
   await ctx.close();
   return { dpr, boot_mb: +(boot / 1048576).toFixed(2), after_first_battle_mb: +(all / 1048576).toFixed(2), atlas2x_pages: atlas2x };
 }

@@ -28,6 +28,8 @@ class SpriteBank {
   private waiters: (() => void)[] = [];
   private root = '';
   private upgrading = false;
+  /** Background name (bg_x, bg_x@2x) -> file with its content hash, from bg.json. */
+  private bg: Record<string, string> = {};
 
   async load(base: string): Promise<void> {
     this.root = `${base}art/`;
@@ -36,9 +38,10 @@ class SpriteBank {
         getJson<Record<string, [number, number, number, number]>>(`${this.root}sprites.json`),
       ]);
       for (const k in meta) { const m = meta[k]; this.meta.set(k, { w: m[0], h: m[1], ax: m[2], ay: m[3] }); }
+      this.bg = await getJson<Record<string, string>>(`${this.root}bg.json`).catch(() => ({}));
       await this.loadScale(1);
       await Promise.all([
-        ...BG.map(async (t) => { const i = await loadTex(`${this.root}sprites/${t}`); if (i) { this.textures.set(t, await pix(i)); this.texUrls.set(t, i.src); } }),
+        ...BG.map(async (t) => { const i = await this.loadBg(t); if (i) { this.textures.set(t, await pix(i)); this.texUrls.set(t, i.src); } }),
         ...TILES.map(async (t) => { try { this.textures.set(t, await pix(await loadImg(`${this.root}sprites/${t}.png`))); } catch { /* optional */ } }),
       ]);
       this.ready = this.frames.size > 0;
@@ -61,11 +64,20 @@ class SpriteBank {
       void (async () => {
         try {
           await this.loadScale(2);
-          for (const t of BG) { const i = await loadTex(`${this.root}sprites/${t}@2x`); if (i) { this.textures.set(t, await pix(i)); this.texUrls.set(t, i.src); } }
+          for (const t of BG) { const i = await this.loadBg(`${t}@2x`); if (i) { this.textures.set(t, await pix(i)); this.texUrls.set(t, i.src); } }
           this.urls.clear();
-        } catch (e) { console.info('[castle] @2x art not loaded:', (e as Error).message); }
+        } catch (e) {
+          console.info('[castle] @2x art not loaded:', (e as Error).message);
+          this.upgrading = false; // try again at the next fight
+        }
       })();
     });
+  }
+
+  private async loadBg(name: string): Promise<HTMLImageElement | undefined> {
+    const f = this.bg[name];
+    if (f) { try { return await loadImg(`${this.root}${f}`); } catch { return undefined; } }
+    return loadTex(`${this.root}sprites/${name}`);
   }
 
   private async loadScale(scale: 1 | 2): Promise<void> {
@@ -74,11 +86,21 @@ class SpriteBank {
     const one = async (p: string) => {
       const page = await getJson<Page>(`${this.root}atlas/${p}`);
       const img = await pix(await loadImg(`${this.root}atlas/${page.image}`));
-      for (const name in page.frames) { const f = page.frames[name]; this.frames.set(name, { img, x: f.x, y: f.y, w: f.w, h: f.h, scale: page.scale }); }
+      for (const name in page.frames) {
+        const f = page.frames[name];
+        const old = this.frames.get(name);
+        if (old && old.img !== img) replaced.add(old.img);
+        this.frames.set(name, { img, x: f.x, y: f.y, w: f.w, h: f.h, scale: page.scale });
+      }
     };
+    const replaced = new Set<Pix>();
     if (scale === 1) await Promise.all(list.pages.map(one));
     else for (const p of list.pages) await one(p);
     this.scale = scale;
+    // An @1x page no frame points at any more is closed (its decoded pixels freed).
+    const used = new Set<Pix>();
+    for (const f of this.frames.values()) used.add(f.img);
+    for (const img of replaced) if (!used.has(img) && 'close' in img) (img as ImageBitmap).close();
   }
 
   whenLoaded(f: () => void): void { if (this.ready) f(); else this.waiters.push(f); }

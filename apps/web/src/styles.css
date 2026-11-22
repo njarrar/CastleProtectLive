@@ -27,7 +27,8 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--sky); color: var(--ink); font-family: var(--body); font-weight: 600; -webkit-tap-highlight-color: transparent; }
-body { overscroll-behavior: none; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+body { overscroll-behavior: none; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+img, canvas, .btn { -webkit-touch-callout: none; }
 #app { position: fixed; inset: 0; }
 .boot { display: grid; place-items: center; height: 100%; font: 700 32px var(--title); }
 h1, h2, h3 { font-family: var(--title); margin: 0; }
@@ -201,7 +202,7 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .workshop { display: grid; grid-template-rows: auto 1fr auto auto; }
 .ws-body { display: grid; place-items: center; gap: 8px; }
 .gridwrap { background: var(--parch); border: 4px solid var(--ink); border-radius: 14px; padding: 10px; }
-.grid { --cell: min(40px, 8.5vw, calc((100vh - 330px) / 11)); display: grid; grid-template-columns: repeat(8, var(--cell)); grid-auto-rows: var(--cell); gap: 2px; touch-action: none; }
+.grid { --cell: min(40px, 8.5vw, calc((100dvh - 330px) / 11)); display: grid; grid-template-columns: repeat(8, var(--cell)); grid-auto-rows: var(--cell); gap: 2px; touch-action: none; }
 .cell { border: 1px dashed rgba(43,30,46,0.3); border-radius: 4px; display: grid; place-items: center; font-family: var(--title); background-size: cover; image-rendering: auto; }
 .cell.wicker { background-color: #E3B565; } .cell.timber { background-color: #B9733A; } .cell.cobble { background-color: #A9A39A; }
 .cell.wicker, .cell.timber, .cell.cobble { border: 2px solid var(--ink); }
@@ -356,7 +357,11 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 .hud.tall .topstrip .pips.side0 { grid-area: p0; justify-self: start; }
 .hud.tall .topstrip .wind { grid-area: wd; justify-self: center; }
 .hud.tall .topstrip .pips.side1 { grid-area: p1; justify-self: end; }
-.hud.tall .topstrip .savetick { position: absolute; right: calc(var(--sar) + 4px); bottom: 2px; }
+.hud.tall .topstrip .savetick { position: absolute; left: 50%; right: auto; bottom: -18px; transform: translateX(-50%); }
+/* Joined flight lens: the canvas draws one lens through the strip, so its DOM borders go, and the
+   floats (Pause, aim cluster) sit above the strip drawn at the lens foot. */
+.hud.tall.joined .strip { border-color: transparent; }
+.hud.tall.joined .floats-l, .hud.tall.joined .floats-r { bottom: 52px; }
 .hud.tall .topstrip .pips { flex-wrap: nowrap; }
 .hud.tall .topstrip .pip { width: 16px; height: 16px; }
 .hud.tall .topstrip .kettle, .hud.tall .topstrip .round { font-size: 14px; padding: 1px 8px; }
@@ -367,7 +372,7 @@ input:not([type]) , input.name { border: 2px solid var(--ink); border-radius: 10
 /* Notices, update chip, error screen, Workshop rows, screen reader text */
 .notice { position: fixed; left: 50%; bottom: calc(var(--sab, 0px) + 16px); transform: translateX(-50%); z-index: 100; max-width: min(92vw, 520px); background: var(--ink); color: #fff; border-radius: 14px; padding: 10px 16px; font: 600 15px var(--body, system-ui); text-align: center; }
 .update-chip { position: fixed; right: calc(var(--sar, 0px) + 12px); bottom: calc(var(--sab, 0px) + 12px); z-index: 90; display: flex; gap: 10px; align-items: center; background: var(--paper); border: 3px solid var(--ink); border-radius: 999px; padding: 4px 4px 4px 14px; font: 700 15px var(--title); }
-.screen.fatal { display: grid; place-items: center; min-height: 100vh; padding: 16px; background: var(--sky, #9ED8EC); }
+.screen.fatal { display: grid; place-items: center; min-height: 100vh; min-height: 100dvh; padding: 16px; background: var(--sky, #9ED8EC); }
 .screen.fatal .sheet { max-width: 420px; display: grid; gap: 12px; text-align: center; }
 .warn { background: #FFF0C2; border: 2px solid var(--ink); border-radius: 12px; padding: 8px 12px; font-size: 14px; }
 .grid .gridrow { display: contents; }

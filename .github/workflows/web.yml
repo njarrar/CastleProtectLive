@@ -98,7 +98,15 @@ jobs:
 
       - name: Build castle-wasm
         if: steps.check.outputs.wasm == 'true'
-        run: scripts/build-wasm.sh --target web
+        run: |
+          scripts/build-wasm.sh --target web
+          # build-wasm.sh keeps the plain wasm when wasm-opt is missing or too old, with a note on
+          # stderr only. Print the size and warn here, so a 1.3 MB build never ships unnoticed.
+          size=$(stat -c %s core/castle-wasm/pkg/castle_wasm_bg.wasm)
+          echo "castle_wasm_bg.wasm: $size bytes"
+          if [ "$size" -gt 1000000 ]; then
+            echo "::warning title=Wasm not optimized::castle_wasm_bg.wasm is $size bytes; wasm-opt did not run or did not shrink it."
+          fi
 
       - name: Cache npm
         if: steps.check.outputs.web == 'true'
@@ -123,22 +131,18 @@ jobs:
         working-directory: apps/web
         run: npm run build
 
-      - name: Playwright smoke test
+      # Desktop Chromium plus two phones: iPhone 15 portrait (WebKit) and Pixel 7 landscape
+      # (Chromium). See apps/web/playwright.config.ts.
+      - name: Playwright tests (desktop and phones)
         if: steps.check.outputs.web == 'true'
         working-directory: apps/web
         run: |
           if [ -z "$(ls playwright.config.* 2>/dev/null)" ]; then
-            echo "::notice::No playwright.config in apps/web, skipping smoke test."
+            echo "::notice::No playwright.config in apps/web, skipping the tests."
             exit 0
           fi
-          npx playwright install --with-deps chromium
-          if npm pkg get scripts.test:e2e | grep -q '"'; then
-            npm run test:e2e
-          elif grep -Eq "name:[[:space:]]*['\"]chromium['\"]" playwright.config.*; then
-            npx playwright test --project=chromium
-          else
-            npx playwright test
-          fi
+          npx playwright install --with-deps chromium webkit
+          npx playwright test
 
       - name: Upload Playwright report
         if: failure() && steps.check.outputs.web == 'true'
