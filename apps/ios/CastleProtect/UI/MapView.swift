@@ -204,7 +204,9 @@ private struct PreBattleContent: View {
                     Text(level.id == "skirmish" || level.id == "duel" ? level.name : "\(level.id)  \(level.name)")
                         .font(Theme.title(24)).foregroundStyle(Theme.ink)
                         .accessibilityAddTraits(.isHeader)
-                    Text("\(level.kind.replacingOccurrences(of: "_", with: " ").capitalized). Round cap \(level.roundCap), then the Squall")
+                    Text(hud.isVolley
+                         ? "\(level.kind.replacingOccurrences(of: "_", with: " ").capitalized). \(level.roundCap) shots each, most damage wins"
+                         : "\(level.kind.replacingOccurrences(of: "_", with: " ").capitalized). Round cap \(level.roundCap), then the Squall")
                         .font(Theme.label(14)).foregroundStyle(Theme.inkSoft)
                 }
                 Spacer()

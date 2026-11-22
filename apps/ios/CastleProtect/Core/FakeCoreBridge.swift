@@ -197,7 +197,12 @@ final class FakeCoreBridge: CoreBridge {
             aim["power"] = p
             hobs[i]["aim"] = aim
             current["hobs"] = hobs
-            queue.append(quiet(current))
+            // Like the real core (core/API.md, `snapshot_aim_lean.json`): an `aim` gives a lean
+            // snapshot carrying only the new aim and the preview, not a full frame.
+            var frame = lean(of: current)
+            frame["aim"] = ["side": hobs[i]["side"] as? Int ?? 0, "hob": sel, "angle": a, "power": p] as [String: Any]
+            frame["preview"] = current["preview"] ?? [[Int]]()
+            queue.append(frame)
         }
         return (a, p)
     }

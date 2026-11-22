@@ -6,9 +6,10 @@ import Foundation
 /// the view model. Also saves a battle as its setup plus the core's command
 /// log, and resumes by replaying that log (the core is deterministic).
 ///
-/// The core handle lives on `CoreHost`'s serial queue. `ai_turn` and the
-/// resume replay run there off the main thread; while they run, `isBusy` is
-/// true and this class makes no other core call.
+/// The core handle lives on `CoreHost`'s one core thread: every call, the
+/// quick ones too, runs there (core/API.md). `ai_turn` and the resume replay
+/// run there off the main thread; while they run, `isBusy` is true and this
+/// class makes no other core call.
 ///
 /// The Couch Duel hand-off card is app state (the core has no Ready command):
 /// it shows at each turn start in a duel with Side by side seats.
@@ -52,6 +53,13 @@ final class CoreGame {
     static let maxRecoveries = 2
     /// Set after a dead handle was rebuilt; the session shows a short line once and clears it.
     var recoveredNotice = false
+    /// The reply of the last `ai_turn`, read back on the main thread (review 2, M2).
+    private let aiReply = LockedValue<String?>(nil)
+    /// `ai_turn` refusals in a row; after `maxAiRefusals` the fight stops with a notice.
+    private(set) var aiRefusals = 0
+    static let maxAiRefusals = 3
+    /// Bumps on every `start`, so a slow load can tell another battle began meanwhile (review 2, M1).
+    private(set) var startCount = 0
 
     init(bridge: any CoreBridge, catalog: ContentCatalog) {
         let host = CoreHost(bridge: bridge)
@@ -81,6 +89,9 @@ final class CoreGame {
         }
         self.setup = setup
         isRunning = true
+        startCount += 1
+        aiRefusals = 0
+        _ = aiReply.take(reset: nil)
         assembler.reset()
         resetClock()
         recoveryLog = "[]"
@@ -206,6 +217,8 @@ final class CoreGame {
     /// asks the AI to play, off the main thread, once its think pose is over.
     func advance(milliseconds ms: Int) {
         guard isRunning, ms > 0, !isBusy else { return }
+        readAiReply()
+        guard isRunning, aiRefusals < Self.maxAiRefusals else { return }
         guard !holdTurns else { return }
         if lastPhase == "plan", lastAwaiting == "ai", handoffTo == nil {
             thinkElapsed += ms
@@ -213,7 +226,8 @@ final class CoreGame {
                 thinkElapsed = 0
                 dirty = true
                 let json = CoreCommand.aiTurn().jsonString()
-                host.background { bridge in _ = bridge.command(json) }
+                let box = aiReply
+                host.background { bridge in box.set(bridge.command(json)) }
             }
             return
         }
@@ -234,6 +248,26 @@ final class CoreGame {
         }
     }
 
+    /// Reads what the last `ai_turn` said. A dead handle is rebuilt; any other refusal is
+    /// tried again on the next think, and after `maxAiRefusals` in a row the fight stops
+    /// with a notice instead of sitting on "Rival aims" for good.
+    private func readAiReply() {
+        guard let text = aiReply.take(reset: nil) else { return }
+        let reply = CoreReply.decode(text)
+        if reply.ok {
+            aiRefusals = 0
+            return
+        }
+        if reply.isDeadHandle {
+            recover()
+            return
+        }
+        aiRefusals += 1
+        if aiRefusals >= Self.maxAiRefusals {
+            fault = "The Rival could not take its turn (\(reply.reason ?? "refused"))."
+        }
+    }
+
     /// The newest frame only when something can have changed: a command was
     /// sent, shells fly or settle, or slow work just finished. Nil otherwise,
     /// and while the core queue is busy.
@@ -247,6 +281,8 @@ final class CoreGame {
     /// the core sent nothing readable (then `fault` is set).
     func frame() -> BattleSnapshot? {
         guard isRunning, !isBusy else { return nil }
+        readAiReply()
+        if aiRefusals >= Self.maxAiRefusals { return nil }
         dirty = false
         let text = host.sync { $0.snapshot() }
         guard var raw = CoreSnapshot.decode(text) else {
@@ -310,6 +346,8 @@ final class CoreGame {
         case rulesChanged
         /// The core refused a command of the replay, or the replay ended elsewhere.
         case replayFailed(String)
+        /// Another battle started while the replay ran; the save is untouched.
+        case superseded
     }
 
     /// The battle in play as bytes the app stores unread: the setup, the core's
@@ -339,9 +377,12 @@ final class CoreGame {
         guard let saved = Self.header(data) else { return .damaged }
         guard saved.rules == rulesVersion else { return .rulesChanged }
         guard start(saved.setup) == nil else { return .replayFailed("setup") }
+        let ticket = startCount
         let log = saved.log
         let expected = saved.hash
         let outcome = await host.run { bridge in CoreGame.resume(bridge, log: log, expectHash: expected) }
+        // Another battle started while the replay ran: this load is stale, touch nothing (review 2, M1).
+        guard ticket == startCount else { return .superseded }
         if let failure = outcome {
             end()
             return .replayFailed(failure)

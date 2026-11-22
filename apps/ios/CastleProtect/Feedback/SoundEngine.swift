@@ -1,4 +1,5 @@
 import AVFoundation
+import os
 
 /// One sound from assets/audio/audio.json.
 struct SoundEntry: Equatable, Sendable {
@@ -81,7 +82,8 @@ final class SoundManifest: @unchecked Sendable {
         }
         var launch: [String: String] = [:]
         for (k, v) in root["shot_launch"] as? [String: Any] ?? [:] {
-            if let v = v as? String { launch[k] = v }
+            // `null` means the shot has no launch sound (L4): kept as "", which plays nothing.
+            if let v = v as? String { launch[k] = v } else if v is NSNull { launch[k] = "" }
         }
         var blast: [String: String] = [:]
         for (k, v) in root["blast_sounds"] as? [String: Any] ?? [:] {
@@ -141,13 +143,86 @@ private final class BufferStore: @unchecked Sendable {
     }
 }
 
+/// The SFX voice pick rule (review 2, H3).
+///
+/// `AVAudioPlayerNode.isPlaying` stays true after a buffer has ended (it only
+/// turns false on `stop()` or `pause()`), so it cannot say which voice is
+/// free. Each voice keeps when its sound ends (start plus buffer length over
+/// rate), and the buffer's completion handler frees it as soon as it has
+/// played. A free voice is taken first; when all 16 sound, the oldest one
+/// that is not on the kettle bus is stolen.
+struct VoicePool: Equatable {
+    struct Voice: Equatable {
+        var bus = "sfx"
+        var started: UInt64 = 0
+        var busyUntil: UInt64 = 0
+        var generation = 0
+    }
+
+    private(set) var voices: [Voice]
+    private var next = 0
+
+    init(count: Int) {
+        voices = Array(repeating: Voice(), count: max(1, count))
+    }
+
+    var count: Int { voices.count }
+
+    func isFree(_ i: Int, now: UInt64) -> Bool {
+        i >= 0 && i < voices.count && voices[i].busyUntil <= now
+    }
+
+    /// The voice the next sound plays on.
+    mutating func pick(now: UInt64) -> Int {
+        let n = voices.count
+        for k in 0..<n {
+            let i = (next + k) % n
+            if voices[i].busyUntil <= now {
+                next = (i + 1) % n
+                return i
+            }
+        }
+        var best: Int?
+        for i in 0..<n where voices[i].bus != "kettle" {
+            if best == nil || voices[i].started < voices[best ?? i].started { best = i }
+        }
+        let pick = best ?? (0..<n).min { voices[$0].started < voices[$1].started } ?? 0
+        next = (pick + 1) % n
+        return pick
+    }
+
+    /// A sound of `seconds` starts on voice `i`. Returns the generation its completion handler must name.
+    @discardableResult
+    mutating func start(_ i: Int, now: UInt64, seconds: Double, bus: String) -> Int {
+        guard i >= 0 && i < voices.count else { return -1 }
+        voices[i].bus = bus
+        voices[i].started = now
+        voices[i].busyUntil = now &+ UInt64(max(0, seconds) * 1_000_000_000)
+        voices[i].generation += 1
+        return voices[i].generation
+    }
+
+    /// The buffer of that generation has played: the voice is free (a stolen voice's old handler is ignored).
+    mutating func finished(_ i: Int, generation: Int) {
+        guard i >= 0 && i < voices.count, voices[i].generation == generation else { return }
+        voices[i].busyUntil = 0
+    }
+
+    mutating func reset() {
+        for i in voices.indices {
+            voices[i].busyUntil = 0
+            voices[i].generation += 1
+        }
+    }
+}
+
 /// Every sound in the game through one AVAudioEngine:
 ///
 /// - SFX and barks: decoded once (off the main thread) to mono 48 kHz float
 ///   buffers, played from a pool of 16 voices, each with a varispeed for the
 ///   manifest's random pitch shift. At most 3 of one sound within 50 ms.
 /// - Loops (wind, Squall, kettle whistle, flight whistle): own voices,
-///   faded by volume.
+///   faded by volume, detached from the graph when they stop.
 /// - Music: the three Region 1 layers start on the same sample and loop
 ///   from the file (trimmed to `samples`), so they never drift; Stir and
 ///   Peril fade in and out on bar lines over one bar. Impacts duck the
@@ -155,7 +230,8 @@ private final class BufferStore: @unchecked Sendable {
 ///
 /// The session is `ambient`: the silent switch and the player's own music
 /// are respected. While another app plays audio, our music stays silent.
-/// No sound plays before the first Play tap (`unlocked`).
+/// No sound plays before the first Play tap (`unlocked`), and none while the
+/// battle's Pause card is up (`held`, UX 8.2 and 8.3).
 @MainActor
 final class SoundEngine {
     let manifest: SoundManifest
@@ -164,8 +240,12 @@ final class SoundEngine {
     private var sfxMixer = AVAudioMixerNode()
     private var musicMixer = AVAudioMixerNode()
     private var voiceMixer = AVAudioMixerNode()
-    private var voices: [(player: AVAudioPlayerNode, pitch: AVAudioUnitVarispeed, bus: String, started: UInt64)] = []
+    private var voices: [(player: AVAudioPlayerNode, pitch: AVAudioUnitVarispeed)] = []
+    private var pool = VoicePool(count: 16)
     private var loops: [String: (player: AVAudioPlayerNode, pitch: AVAudioUnitVarispeed)] = [:]
+    /// What each running loop should be (gain, pitch), so a route change or the end of a
+    /// pause can bring them back without waiting for a new frame.
+    private var loopWanted: [String: (gain: Float, pitch: Double)] = [:]
     private var barkVoices: [AVAudioPlayerNode] = []
     private var nextBarkVoice = 0
     private var layers: [String: AVAudioPlayerNode] = [:]
@@ -173,10 +253,14 @@ final class SoundEngine {
     private var layerGain: [String: Float] = [:]
     private var layerTarget: [String: Float] = [:]
     private var musicTrack: String?
+    /// Bumps when music stops, so a layer start that waits for the engine clock can tell it is stale.
+    private var musicToken = 0
+    /// The track to bring back when the engine runs again (after a pause or a route change).
+    private var suspendedTrack: String?
     private var stingPlayer: AVAudioPlayerNode?
     private let store = BufferStore()
     private var recent: [String: [UInt64]] = [:]
-    private var nextVoice = 0
+    private var graphBuilt = false
     private var started = false
     private var failed = false
     private var loading = false
@@ -188,6 +272,8 @@ final class SoundEngine {
     private var barkSides: Set<Int> = []
     private var lastLines: [String: String] = [:]
     private var rng: UInt32 = 0x1F12_3BB5
+    /// `secondaryAudioShouldBeSilencedHint`, read once and then on its notice (L4).
+    private var otherAudioPlaying = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint
 
     /// Sliders, 0 to 100.
     var volume = 85 { didSet { applyVolume() } }
@@ -196,8 +282,12 @@ final class SoundEngine {
     var muted = false { didSet { applyVolume() } }
     /// False until the first Play tap on first launch (no sound before it).
     var unlocked = true
+    /// True while the battle's Pause card is up: the engine is paused and no sound starts.
+    private(set) var held = false
     /// A subtitle for a bark: the line and the side.
     var onSubtitle: ((String, Int) -> Void)?
+    /// Headphones (or another output) went away: the battle pauses (UX 8.3).
+    var onOutputLost: (() -> Void)?
 
     init(manifest: SoundManifest = .shared) {
         self.manifest = manifest
@@ -220,10 +310,18 @@ final class SoundEngine {
             MainActor.assumeIsolated { me.value?.rebuild() }
         })
         observers.append(nc.addObserver(forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { me.value?.restartIfNeeded() }
+            MainActor.assumeIsolated { me.value?.configurationChanged() }
+        })
+        observers.append(nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { note in
+            let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            let lost = raw == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
+            MainActor.assumeIsolated { if lost { me.value?.onOutputLost?() } }
         })
         observers.append(nc.addObserver(forName: AVAudioSession.silenceSecondaryAudioHintNotification, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { me.value?.applyVolume() }
+            MainActor.assumeIsolated {
+                me.value?.otherAudioPlaying = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint
+                me.value?.applyVolume()
+            }
         })
     }
 
@@ -233,36 +331,57 @@ final class SoundEngine {
             engine.pause()
         } else {
             try? AVAudioSession.sharedInstance().setActive(true)
-            restartIfNeeded()
+            resume()
         }
     }
 
-    private func restartIfNeeded() {
-        guard started, !engine.isRunning else { return }
-        try? engine.start()
-        resumeMusicIfNeeded()
+    /// The engine's I/O format changed (headphones in or out, AirPods): the engine stopped and
+    /// every player node lost what was scheduled. Clear the voices and loops, start the music
+    /// again from its first sample, and bring the loops back (review 2, M3).
+    private func configurationChanged() {
+        guard started else { return }
+        let track = musicTrack ?? suspendedTrack
+        stopMusic()
+        suspendedTrack = track
+        for v in voices { v.player.stop() }
+        pool.reset()
+        for p in barkVoices { p.stop() }
+        stingPlayer?.stop()
+        let wanted = loopWanted
+        removeAllLoops()
+        loopWanted = wanted
+        guard !held else { return }
+        resume()
     }
 
     /// Media services were reset: every node is gone. Build the graph again on the next sound.
     private func rebuild() {
-        let track = musicTrack
+        let track = musicTrack ?? suspendedTrack
+        let wanted = loopWanted
         voices = []
+        pool = VoicePool(count: 16)
         barkVoices = []
         loops = [:]
         layers = [:]
         layerFiles = [:]
         stingPlayer = nil
-        nextVoice = 0
+        graphBuilt = false
         started = false
         failed = false
+        musicToken += 1
         engine = AVAudioEngine()
         sfxMixer = AVAudioMixerNode()
         musicMixer = AVAudioMixerNode()
         voiceMixer = AVAudioMixerNode()
         musicTrack = nil
-        if let track {
-            if track == "mus_r1" { startBattleMusic() } else { playMusic(track) }
+        suspendedTrack = nil
+        loopWanted = wanted
+        guard !held else {
+            suspendedTrack = track
+            return
         }
+        if let track { startTrack(track) }
+        restoreLoops()
     }
 
     /// The app went to the background: let go of the audio session (UX 8.3).
@@ -272,67 +391,103 @@ final class SoundEngine {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    /// Stops all sound, for the Pause card and app switches.
+    /// Stops all sound for an app switch; `resume()` brings it back.
     func pause() {
         guard started else { return }
         engine.pause()
     }
 
-    func resume() {
-        guard started, !engine.isRunning else { return }
-        try? AVAudioSession.sharedInstance().setActive(true)
-        try? engine.start()
-        resumeMusicIfNeeded()
+    /// The Pause card is up (true) or gone (false). While held no sound plays, the UI's
+    /// own taps included, and coming back to the app does not restart the engine (UX 8.2, 8.3 rule 4).
+    func setHeld(_ on: Bool) {
+        guard on != held else { return }
+        held = on
+        if on {
+            if started { engine.pause() }
+        } else {
+            resume()
+        }
     }
 
+    /// Back to the app (or out of a pause): start the engine, and only then the music and loops.
+    func resume() {
+        guard !held else { return }
+        // One failed start does not silence the whole run: try again on each foreground (L4).
+        failed = false
+        guard started || suspendedTrack != nil || !loopWanted.isEmpty else { return }
+        if started { try? AVAudioSession.sharedInstance().setActive(true) }
+        guard prepare() else { return }
+        resumeMusicIfNeeded()
+        restoreLoops()
+    }
+
+    /// Only with the engine running (`play()` on a stopped engine raises an exception Swift cannot catch).
     private func resumeMusicIfNeeded() {
-        for p in layers.values where !p.isPlaying { p.play() }
+        guard engine.isRunning else { return }
+        if let track = suspendedTrack {
+            suspendedTrack = nil
+            startTrack(track)
+            return
+        }
+        // A layer that stopped cannot be restarted alone without leaving the others: restart them together.
+        if let track = musicTrack, layers.values.contains(where: { !$0.isPlaying }) {
+            stopMusic()
+            startTrack(track)
+        }
+    }
+
+    private func startTrack(_ track: String) {
+        if track == "mus_r1" { startBattleMusic() } else { playMusic(track) }
     }
 
     // MARK: Graph
 
+    /// Builds the graph once and starts the engine. False while held, after a failed start,
+    /// or when the engine cannot run.
     private func prepare() -> Bool {
-        if failed { return false }
-        if started {
-            if !engine.isRunning { try? engine.start() }
-            return engine.isRunning
+        if held || failed { return false }
+        if !graphBuilt {
+            do {
+                try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                // Keep going: the engine still plays with the default session.
+            }
+            engine.attach(sfxMixer)
+            engine.attach(musicMixer)
+            engine.attach(voiceMixer)
+            engine.connect(sfxMixer, to: engine.mainMixerNode, format: nil)
+            engine.connect(musicMixer, to: engine.mainMixerNode, format: nil)
+            engine.connect(voiceMixer, to: engine.mainMixerNode, format: nil)
+            for _ in 0..<pool.count {
+                let p = AVAudioPlayerNode()
+                let v = AVAudioUnitVarispeed()
+                engine.attach(p)
+                engine.attach(v)
+                engine.connect(p, to: v, format: format)
+                engine.connect(v, to: sfxMixer, format: format)
+                voices.append((p, v))
+            }
+            for _ in 0..<2 {
+                let p = AVAudioPlayerNode()
+                engine.attach(p)
+                engine.connect(p, to: voiceMixer, format: format)
+                barkVoices.append(p)
+            }
+            graphBuilt = true
+            applyVolume()
+            preload()
         }
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default, options: [.mixWithOthers])
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            // Keep going: the engine still plays with the default session.
+        if !engine.isRunning {
+            do {
+                try engine.start()
+            } catch {
+                failed = true
+                return false
+            }
         }
-        engine.attach(sfxMixer)
-        engine.attach(musicMixer)
-        engine.attach(voiceMixer)
-        engine.connect(sfxMixer, to: engine.mainMixerNode, format: nil)
-        engine.connect(musicMixer, to: engine.mainMixerNode, format: nil)
-        engine.connect(voiceMixer, to: engine.mainMixerNode, format: nil)
-        for _ in 0..<16 {
-            let p = AVAudioPlayerNode()
-            let v = AVAudioUnitVarispeed()
-            engine.attach(p)
-            engine.attach(v)
-            engine.connect(p, to: v, format: format)
-            engine.connect(v, to: sfxMixer, format: format)
-            voices.append((p, v, "sfx", 0))
-        }
-        for _ in 0..<2 {
-            let p = AVAudioPlayerNode()
-            engine.attach(p)
-            engine.connect(p, to: voiceMixer, format: format)
-            barkVoices.append(p)
-        }
-        applyVolume()
-        do {
-            try engine.start()
-            started = true
-        } catch {
-            failed = true
-        }
-        preload()
-        return started
+        started = true
+        return engine.isRunning
     }
 
     /// Decodes every SFX and bark off the main thread.
@@ -358,13 +513,19 @@ final class SoundEngine {
                           subdirectory: "audio/" + (name as NSString).deletingLastPathComponent)
     }
 
+    nonisolated private static let log = Logger(subsystem: "games.castleprotect", category: "audio")
+
     /// Decodes one file to mono 48 kHz float, trimmed to the manifest's sample count.
     nonisolated private static func decode(_ entry: SoundEntry, format: AVAudioFormat) -> AVAudioPCMBuffer? {
         guard let url = url(for: entry), let file = try? AVAudioFile(forReading: url) else { return nil }
         let frames = AVAudioFrameCount(file.length)
         guard frames > 0, let raw = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frames),
               (try? file.read(into: raw)) != nil, let src = raw.floatChannelData else { return nil }
-        guard raw.format.sampleRate == format.sampleRate else { return nil }
+        guard raw.format.sampleRate == format.sampleRate else {
+            // The asset rules say 48 kHz; a file that is not is skipped, and said so (round 1 M6).
+            log.warning("Skipped \(entry.id, privacy: .public): \(raw.format.sampleRate, privacy: .public) Hz, not 48000 Hz")
+            return nil
+        }
         let count = entry.samples > 0 ? min(Int(raw.frameLength), entry.samples) : Int(raw.frameLength)
         guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(count)),
               let dst = out.floatChannelData?[0] else { return nil }
@@ -390,8 +551,7 @@ final class SoundEngine {
         sfxMixer.outputVolume = master * Float(max(0, min(100, volume))) / 100
         voiceMixer.outputVolume = master * Float(max(0, min(100, voiceVolume))) / 100
         // Another app's music wins over ours (silent switch is the session's job).
-        let other = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint
-        musicMixer.outputVolume = other ? 0 : master * Float(max(0, min(100, musicVolume))) / 100 * duckGain
+        musicMixer.outputVolume = otherAudioPlaying ? 0 : master * Float(max(0, min(100, musicVolume))) / 100 * duckGain
     }
 
     // MARK: SFX
@@ -405,7 +565,7 @@ final class SoundEngine {
 
     /// Plays one sound. `pitch` in semitones on top of the manifest's random shift.
     func play(_ id: String, pitch: Double = 0, gain: Float = 1) {
-        guard unlocked, !muted else { return }
+        guard unlocked, !muted, !held else { return }
         guard let entry = manifest.sounds[id] else { return }
         if entry.kind == "music" || entry.kind == "sting" {
             playSting(id)
@@ -417,23 +577,23 @@ final class SoundEngine {
         guard times.count < 3 else { return }
         times.append(now)
         recent[id] = times
-        // Steal the oldest voice that is not a kettle sound.
-        var index = nextVoice
-        for k in 0..<voices.count {
-            let i = (nextVoice + k) % voices.count
-            if !voices[i].player.isPlaying { index = i; break }
-            if voices[i].bus != "kettle" { index = i }
-        }
-        nextVoice = (index + 1) % voices.count
+        let index = pool.pick(now: now)
         let v = voices[index]
-        if v.player.isPlaying { v.player.stop() }
+        // A stolen voice stops; its old completion handler names an old generation and is ignored.
+        v.player.stop()
         let shift = pitch + (entry.pitchVar > 0 ? (nextRandom() * 2 - 1) * entry.pitchVar : 0)
-        v.pitch.rate = Float(pow(2, shift / 12))
+        let rate = pow(2, shift / 12)
+        v.pitch.rate = Float(rate)
         v.player.volume = max(0, min(1, entry.volume * gain))
-        v.player.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+        let seconds = Double(buffer.frameLength) / max(1, buffer.format.sampleRate) / max(0.25, rate)
+        let generation = pool.start(index, now: now, seconds: seconds, bus: entry.bus)
+        let me = WeakRef(self)
+        v.player.scheduleBuffer(buffer, at: nil, options: [], completionCallbackType: .dataPlayedBack) { _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { me.value?.pool.finished(index, generation: generation) }
+            }
+        }
         v.player.play()
-        voices[index].bus = entry.bus
-        voices[index].started = now
         if let db = manifest.duckDb[entry.bus], id != "hit_blast_tiny" { duck(db: db) }
     }
 
@@ -447,16 +607,20 @@ final class SoundEngine {
 
     // MARK: Loops
 
+    /// Live loop voices (tests and the leak check: stopped loops leave the graph).
+    var loopNodeCount: Int { loops.count }
+    /// Nodes attached to the engine (tests: loops that stop leave nothing behind).
+    var attachedNodeCount: Int { engine.attachedNodes.count }
+
     /// Starts or updates a looping sound (wind, Squall, whistles). Volume 0 stops it.
     func setLoop(_ id: String, gain: Float, pitch: Double = 0) {
         guard unlocked else { return }
         if gain <= 0.001 || muted {
-            if let l = loops[id] {
-                l.player.stop()
-                loops[id] = nil
-            }
+            loopWanted[id] = nil
+            removeLoop(id)
             return
         }
+        loopWanted[id] = (gain, pitch)
         guard let entry = manifest.sounds[id], prepare() else { return }
         if loops[id] == nil {
             guard let buffer = buffer(id) else { return }
@@ -487,9 +651,31 @@ final class SoundEngine {
         }
     }
 
+    /// Stops a loop and takes both of its nodes out of the graph (review 2, M4).
+    private func removeLoop(_ id: String) {
+        guard let l = loops[id] else { return }
+        l.player.stop()
+        engine.disconnectNodeOutput(l.player)
+        engine.disconnectNodeOutput(l.pitch)
+        engine.detach(l.player)
+        engine.detach(l.pitch)
+        loops[id] = nil
+    }
+
+    private func removeAllLoops() {
+        for id in Array(loops.keys) { removeLoop(id) }
+        loopWanted = [:]
+    }
+
+    /// The loops that should sound, after the engine came back.
+    private func restoreLoops() {
+        for (id, want) in loopWanted where loops[id] == nil {
+            setLoop(id, gain: want.gain, pitch: want.pitch)
+        }
+    }
+
     func stopLoops() {
-        for l in loops.values { l.player.stop() }
-        loops = [:]
+        removeAllLoops()
     }
 
     // MARK: Music
@@ -498,15 +684,13 @@ final class SoundEngine {
     func startBattleMusic() {
         guard musicTrack != "mus_r1" else { return }
         stopMusic()
-        guard unlocked, prepare() else { return }
+        guard unlocked else { return }
+        guard prepare() else {
+            if held { suspendedTrack = "mus_r1" }
+            return
+        }
         musicTrack = "mus_r1"
         let ids = ["base": "mus_r1_base", "stir": "mus_r1_stir", "peril": "mus_r1_peril"]
-        // One start time for all three on the engine's sample clock, a little ahead,
-        // so they share the first sample.
-        var startTime: AVAudioTime?
-        if let last = engine.outputNode.lastRenderTime, last.isSampleTimeValid {
-            startTime = AVAudioTime(sampleTime: last.sampleTime + AVAudioFramePosition(0.12 * last.sampleRate), atRate: last.sampleRate)
-        }
         for (layer, id) in ids {
             guard let entry = manifest.sounds[id], let url = Self.url(for: entry), let file = try? AVAudioFile(forReading: url) else { continue }
             let p = AVAudioPlayerNode()
@@ -521,9 +705,53 @@ final class SoundEngine {
             let frames = AVAudioFrameCount(entry.samples > 0 ? min(Int64(entry.samples), file.length) : file.length)
             // Two copies queued; each finished copy queues the next, so the loop never gaps.
             scheduleLoop(p, file: file, frames: frames, copies: 2)
-            p.play(at: startTime)
+        }
+        startLayersTogether(token: musicToken, tries: 25)
+    }
+
+    /// One start time for every layer on the engine's sample clock, a little ahead, so they
+    /// share the first sample. Right after the engine starts that clock is not valid yet:
+    /// wait a short tick and look again, never start a layer alone (review 2, M5).
+    private func startLayersTogether(token: Int, tries: Int) {
+        guard token == musicToken, !layers.isEmpty else { return }
+        guard engine.isRunning else { return }
+        if let last = engine.outputNode.lastRenderTime, last.isSampleTimeValid, last.sampleRate > 0 {
+            let at = AVAudioTime(sampleTime: last.sampleTime + AVAudioFramePosition(0.12 * last.sampleRate), atRate: last.sampleRate)
+            for p in layers.values { p.play(at: at) }
+            #if DEBUG
+            checkLayersLocked(token: token)
+            #endif
+            return
+        }
+        guard tries > 0 else {
+            // The clock never came (no output device): start them in one go, the best left.
+            for p in layers.values { p.play(at: nil) }
+            return
+        }
+        let me = WeakRef(self)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+            MainActor.assumeIsolated { me.value?.startLayersTogether(token: token, tries: tries - 1) }
         }
     }
+
+    #if DEBUG
+    /// Debug builds: half a second in, the three layers' own sample times must agree.
+    private func checkLayersLocked(token: Int) {
+        let me = WeakRef(self)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            MainActor.assumeIsolated {
+                guard let engine = me.value, engine.musicToken == token else { return }
+                let times = engine.layers.values.compactMap { p -> AVAudioFramePosition? in
+                    guard let node = p.lastRenderTime, let t = p.playerTime(forNodeTime: node) else { return nil }
+                    return t.sampleTime
+                }
+                if let lo = times.min(), let hi = times.max(), hi - lo > 0 {
+                    SoundEngine.log.warning("Music layers out of step by \(hi - lo, privacy: .public) samples")
+                }
+            }
+        }
+    }
+    #endif
 
     private func scheduleLoop(_ p: AVAudioPlayerNode, file: AVAudioFile, frames: AVAudioFrameCount, copies: Int) {
         let me = WeakRef(self)
@@ -545,8 +773,12 @@ final class SoundEngine {
     func playMusic(_ id: String) {
         guard musicTrack != id else { return }
         stopMusic()
-        guard unlocked, let entry = manifest.sounds[id], prepare(), let url = Self.url(for: entry),
-              let file = try? AVAudioFile(forReading: url) else { return }
+        guard unlocked, let entry = manifest.sounds[id], let url = Self.url(for: entry) else { return }
+        guard prepare() else {
+            if held { suspendedTrack = id }
+            return
+        }
+        guard let file = try? AVAudioFile(forReading: url) else { return }
         musicTrack = id
         let p = AVAudioPlayerNode()
         engine.attach(p)
@@ -643,6 +875,8 @@ final class SoundEngine {
         layerTarget = [:]
         fadeStartedOnBar = [:]
         musicTrack = nil
+        suspendedTrack = nil
+        musicToken += 1
     }
 
     // MARK: Barks (Hob-speak)

@@ -59,8 +59,9 @@ final class BattleSKView: SKView {
 
     @objc private func frameTick() {
         let now = DispatchTime.now().uptimeNanoseconds
-        // Idle poses step at 15 a second; effects, flight and the camera draw every frame.
-        let pose = now / 66_000_000
+        // Idle poses step at 5 a second (the idle frames are 400 ms; a blink is an active clip and
+        // draws every frame while it plays). Effects, flight and the camera draw every frame (review 2, M7).
+        let pose = now / 200_000_000
         let colours = session.settings.colourSet
         let busy = session.fx.isActive || session.snapshot.phase.isResolving || battleScene.cameraMoving
         // Draw only when something changed (H8, M1).
@@ -146,7 +147,8 @@ final class BattleScene: SKScene {
     }
 
     /// True while any lens camera is still easing toward its target.
-    var cameraMoving: Bool { layers.contains { $0.rig.moving } }
+    /// Only shown lenses count: a rig left easing when its lens was hidden must not keep the scene at 60 fps.
+    var cameraMoving: Bool { layers.contains { !$0.crop.isHidden && $0.rig.moving } }
 
     func render(snapshot: BattleSnapshot, layout: BattleLayout, fx: FieldFX, colours: ColourSet, dragging: Bool, reduceMotion: Bool) {
         let nanos = DispatchTime.now().uptimeNanoseconds
@@ -339,7 +341,10 @@ final class LensLayer {
         for fort in snap.forts {
             drawFort(fort, snap: snap, fx: fx, palette: palette, useArt: useArt, small: small, reduceMotion: reduceMotion)
         }
-        for i in snap.forts.count..<fortNodes.count { fortNodes[i].isHidden = true }
+        // A core with more castles than nodes must not trap the range (L1).
+        if snap.forts.count < fortNodes.count {
+            for i in snap.forts.count..<fortNodes.count { fortNodes[i].isHidden = true }
+        }
 
         // Collapse ghosts: creak, lean, drop row by row, land, break (view only).
         if useArt {
@@ -523,7 +528,9 @@ final class LensLayer {
         }
 
         let shimmerClip = fx.library.clip("fx_shimmer")
-        for (bi, b) in fort.blocks.enumerated() {
+        // Blocks a collapse crushed stay until its ghost blocks land on them (review 2, M6).
+        let blocks = fort.blocks + fx.held(side: fort.side)
+        for (bi, b) in blocks.enumerated() {
             let node = take("block", parent: body, z: 1)
             let ratio = Double(max(0, b.hp)) / Double(max(1, b.hpMax))
             let wear = ratio > 0.66 ? "fresh" : (ratio > 0.33 ? "scuffed" : "battered")
@@ -603,7 +610,9 @@ final class LensLayer {
             let selected = h.id == snap.selectedHob && fort.side == snap.activeSide
             let aiming = snap.phase == .plan && snap.isHuman(fort.side)
             let lift = fx.bonkLift(side: fort.side, hob: Int(h.id) ?? -1)
-            let at = local(h.x, h.y + lift)
+            // A Hob that fell with a collapse rides down with its chunk (review 2, M6).
+            let drop = fx.hobOffset(side: fort.side, hob: h.id)
+            let at = local(h.x + drop.dx, h.y + lift + drop.dy)
             if useArt, let pick = fx.hobSprite(side: fort.side, hob: h, selected: selected, aiming: aiming, power: snap.aim.power) {
                 placeClip(node, pick.0, pick.1, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: fort.side == 1)
             } else {

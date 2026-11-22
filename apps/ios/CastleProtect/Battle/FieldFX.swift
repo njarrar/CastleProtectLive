@@ -60,6 +60,15 @@ struct WalkAnim: Equatable {
     var lastStomp = -1
 }
 
+/// A Hob that fell with a collapse (core event `drop`): drawn at `from` until its chunk
+/// drops, then it falls to `to` and lands with the blocks (review 2, M6). View offsets, y up.
+struct HobDrop: Equatable {
+    var dx: Double
+    var dy: Double
+    var fallStart: Double
+    var land: Double
+}
+
 /// What a Hob is doing right now, for its sprite.
 struct HobAnim: Equatable {
     /// Clip suffix: fire, hit, tumble, land, dig, cheer, nextdoor, blink, bonked.
@@ -92,6 +101,15 @@ final class FieldFX {
     private(set) var bonkedAt: [String: Double] = [:]
     /// The last impact, for the camera's 0.6 s hold (real time, ns).
     private(set) var lastImpact: (x: Double, y: Double, at: UInt64)?
+    /// Hobs that fell with a collapse, until they land.
+    private(set) var hobDrops: [String: HobDrop] = [:]
+    /// Blocks the collapse crushes: the core has already removed them, the view keeps
+    /// drawing them until the ghost blocks land on them (side to blocks and land time).
+    private(set) var heldBlocks: [Int: (blocks: [BlockView], until: Double)] = [:]
+    /// A kettle pop was seen and its pop frame has not played yet (the win sting waits for it).
+    private(set) var popFramePending = false
+    /// The kettle's pop frame: the win or lose sting starts here (review 2, M8).
+    var onPopFrame: (() -> Void)?
 
     // Settings
     var reduceMotion = false
@@ -133,11 +151,42 @@ final class FieldFX {
 
     var motion: MotionData { library.motion }
 
-    /// True while anything is moving, so the renderer draws every frame.
+    /// True while anything is moving, so the renderer draws every frame. A Bonked Hob's
+    /// looping balloon pose is not "moving" once its lift is done: it steps with the idle
+    /// poses, so Plan stays idle after a Bonk (review 2, M7).
     var isActive: Bool {
         !sprites.isEmpty || !pieces.isEmpty || !walks.isEmpty || trauma > 0.001
-            || !kettlePops.filter { now - $0.value.start < 1200 }.isEmpty
-            || !hobAnims.isEmpty || clock < slowUntil
+            || isPopShowing || !hobDrops.isEmpty
+            || hobAnims.contains { $0.value.suffix != "bonked" }
+            || bonkedAt.values.contains { now - $0 < Self.bonkLiftMs }
+            || clock < slowUntil
+    }
+
+    /// The balloon lift ends 18 cells up: 0.8 s wait, then 8 cells a second.
+    static let bonkLiftMs = 800.0 + 18.0 / 8.0 * 1000
+
+    /// The kettle pop show (crack, pop, the slow motion, the sit) is still playing.
+    var isPopShowing: Bool {
+        let length = library.clip("kettle_pop")?.total ?? 1800
+        return popFramePending || kettlePops.contains { now - $0.value.start < length } || clock < slowUntil
+    }
+
+    /// The collapse show is still playing: the ghost blocks have not all landed and broken.
+    var collapseShowing: Bool { !pieces.isEmpty || !hobDrops.isEmpty }
+
+    /// Where a Hob is drawn now relative to the core's spot (zero unless it is falling with a collapse).
+    func hobOffset(side: Int, hob: String) -> (dx: Double, dy: Double) {
+        guard let id = Int(hob), let d = hobDrops["\(side):\(id)"] else { return (0, 0) }
+        if now >= d.land { return (0, 0) }
+        if now <= d.fallStart { return (d.dx, d.dy) }
+        let p = (now - d.fallStart) / max(1, d.land - d.fallStart)
+        return (d.dx * (1 - p), d.dy * (1 - p * p))
+    }
+
+    /// Crushed blocks still drawn for a side.
+    func held(side: Int) -> [BlockView] {
+        guard let h = heldBlocks[side], now < h.until else { return [] }
+        return h.blocks
     }
 
     func reset() {
@@ -150,6 +199,10 @@ final class FieldFX {
         flaps = [:]
         lids = [:]
         bonkedAt = [:]
+        hobDrops = [:]
+        heldBlocks = [:]
+        popFramePending = false
+        timers = []
         lastImpact = nil
         trauma = 0
         hitStopUntil = 0
@@ -313,6 +366,10 @@ final class FieldFX {
                     case "crack": onSound?("ket_crack", 0, 1)
                     case "pop":
                         onSound?("ket_pop", 0, 1)
+                        if popFramePending {
+                            popFramePending = false
+                            onPopFrame?()
+                        }
                         let ns = clock
                         hitStop(80, nowNanos: ns)
                         addTrauma(1.0, decayMs: 600)
@@ -345,6 +402,14 @@ final class FieldFX {
             }
         }
 
+        // Hobs that fell: the tumble starts as their chunk drops; they are done when they land.
+        for (key, d) in hobDrops where t1 >= d.land {
+            hobDrops[key] = nil
+        }
+        for (side, h) in heldBlocks where t1 >= h.until {
+            heldBlocks[side] = nil
+        }
+
         // Pin drops: the stick sound.
         for (key, start) in pinDrops where t0 - start < 70 && t1 - start >= 70 {
             _ = key
@@ -367,8 +432,35 @@ final class FieldFX {
         for e in events where e.raw?.t == "hit" && e.raw?.target == "hob" { _ = e; hobHitThisBatch = true }
         var firstBlast = true
 
+        // Collapses first: the ghost blocks fix when each side's chunk lands. What the landing
+        // does (crush hits and breaks, a kettle pop from the crush, a Hob that fell) waits for it.
+        var landBySide: [Int: Double] = [:]
+        for e in events where e.raw?.t == "collapse" {
+            guard let raw = e.raw else { continue }
+            let before = pieces.count
+            collapse(raw, in: old, nowNanos: nowNanos)
+            if let side = raw.side, pieces.count > before {
+                let land = pieces[before...].map { landTime($0) }.max() ?? now
+                landBySide[side] = max(landBySide[side] ?? 0, land)
+            }
+        }
+        if !landBySide.isEmpty { holdCrushedBlocks(old: old, new: new, landBySide: landBySide) }
+
         for e in events {
             guard let raw = e.raw else { continue }
+            if raw.t == "collapse" { continue }
+            if let land = deferUntil(raw, landBySide: landBySide), land > now {
+                if raw.t == "drop" {
+                    noteDrop(raw, in: new, land: land)
+                    continue
+                }
+                if raw.t == "kettle_pop", library.clip("kettle_pop") != nil { popFramePending = true }
+                let event = e
+                spawnTimer(after: land - now) { [weak self] in
+                    self?.landed(event, old: old, new: new)
+                }
+                continue
+            }
             switch raw.t {
             case "turn_start":
                 newTurn()
@@ -425,8 +517,6 @@ final class FieldFX {
                 if let side = raw.side, let c = raw.c, let r = raw.r {
                     breakBlock(side: side, c: c, r: r, in: old, why: raw.why)
                 }
-            case "collapse":
-                collapse(raw, in: old, nowNanos: nowNanos)
             case "big_drop":
                 break
             case "bonk":
@@ -470,6 +560,7 @@ final class FieldFX {
             case "kettle_pop":
                 if let side = raw.side, kettlePops[side] == nil {
                     kettlePops[side] = (now, -1)
+                    popFramePending = library.clip("kettle_pop") != nil
                 }
             case "walk":
                 if let side = raw.side, let from = raw.from, let to = raw.to, !from.isEmpty, !to.isEmpty {
@@ -518,11 +609,90 @@ final class FieldFX {
                 addTrauma(0.4, decayMs: 300)
             case "relight":
                 onSound?("ket_patch", 2, 1)
+                // Volley Points: the kettle is lit again; a second pop gets its own show (review 2, M8).
+                if let side = raw.side { kettlePops[side] = nil }
             default:
                 break
             }
         }
         noteState(new)
+    }
+
+    /// When an event of this batch must wait for a collapse to land, or nil to play it now.
+    private func deferUntil(_ raw: CoreEvent, landBySide: [Int: Double]) -> Double? {
+        guard !landBySide.isEmpty else { return nil }
+        let latest = landBySide.values.max()
+        switch raw.t {
+        case "hit", "break":
+            guard raw.why == "crush" || raw.why == "fall" else { return nil }
+            return raw.side.flatMap { landBySide[$0] } ?? latest
+        case "drop":
+            return raw.side.flatMap { landBySide[$0] } ?? latest
+        case "kettle_pop":
+            return raw.side.flatMap { landBySide[$0] }
+        default:
+            return nil
+        }
+    }
+
+    /// A deferred event, once the ghost blocks have landed.
+    private func landed(_ e: BattleEvent, old: BattleSnapshot, new: BattleSnapshot) {
+        guard let raw = e.raw else { return }
+        switch raw.t {
+        case "hit":
+            if raw.target == "hob", let hob = raw.hob {
+                let side = hobSide(hob, in: new) ?? raw.side ?? 0
+                playHob(side: side, hob: hob, "hit", in: new)
+                if let def = hobDef(side: side, hob: hob, in: new) { onBark?(def, "takes_hit", side) }
+            } else if raw.target == "kettle" {
+                onSound?("ket_hit", 0, 1)
+            }
+        case "break":
+            if let side = raw.side, let c = raw.c, let r = raw.r {
+                breakBlock(side: side, c: c, r: r, in: old, why: raw.why)
+            }
+        case "kettle_pop":
+            if let side = raw.side, kettlePops[side] == nil {
+                kettlePops[side] = (now, -1)
+            }
+        default:
+            break
+        }
+    }
+
+    /// A Hob that fell with the collapse: it stays at `from` until its chunk drops, then falls to `to`.
+    private func noteDrop(_ raw: CoreEvent, in new: BattleSnapshot, land: Double) {
+        guard let hob = raw.hob else { return }
+        let side = raw.side ?? hobSide(hob, in: new) ?? 0
+        let key = Self.key(side, hob)
+        if let from = raw.from, let to = raw.to, from.count >= 2, to.count >= 2 {
+            // Core cells are y down; the view's offsets are y up.
+            let dx = Double(from[0] - to[0])
+            let dy = Double(to[1] - from[1])
+            let fallMs = sqrt(2 * max(1, abs(dy)) / Self.fallGravity) * 1000
+            hobDrops[key] = HobDrop(dx: dx, dy: dy, fallStart: max(now, land - fallMs), land: land)
+            spawnTimer(after: max(0, land - fallMs - now)) { [weak self] in
+                self?.playHob(side: side, hob: hob, "tumble", in: new)
+            }
+        } else {
+            spawnTimer(after: max(0, land - now)) { [weak self] in
+                self?.playHob(side: side, hob: hob, "tumble", in: new)
+            }
+        }
+    }
+
+    /// Blocks gone from the new frame that are not the collapse's own ghost blocks were
+    /// crushed by it: keep drawing them until the ghosts land.
+    private func holdCrushedBlocks(old: BattleSnapshot, new: BattleSnapshot, landBySide: [Int: Double]) {
+        for (side, land) in landBySide {
+            guard let before = old.fort(side), let after = new.fort(side) else { continue }
+            func key(_ b: BlockView) -> Int { Int(b.x.rounded()) * 10_000 + Int(b.y.rounded()) }
+            let still = Set(after.blocks.map(key))
+            let ghosts = Set(pieces.filter { $0.side == side }.map { Int($0.x.rounded()) * 10_000 + Int($0.y.rounded()) })
+            let crushed = before.blocks.filter { !still.contains(key($0)) && !ghosts.contains(key($0)) }
+            guard !crushed.isEmpty else { continue }
+            heldBlocks[side] = (crushed, land)
+        }
     }
 
     /// Pins, Flaps and the Pot Lid change state between frames, not by event alone.

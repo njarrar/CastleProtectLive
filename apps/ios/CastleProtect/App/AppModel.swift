@@ -113,6 +113,7 @@ final class AppModel: ObservableObject {
         sound.unlocked = loaded.firstRunDone && !isUITesting
         applySettings()
         notice = launchNotice
+        sound.onOutputLost = { [weak self] in self?.outputLost() }
         if screen == .map { sound.playMusic("mus_map") }
     }
 
@@ -183,10 +184,18 @@ final class AppModel: ObservableObject {
             if phase == .background { sound.release() } else { sound.pause() }
             store.flush()
         case .active:
+            // Held while the Pause card is up: the sound comes back on Resume, not here (UX 8.3 rule 4).
             sound.resume()
         @unknown default:
             break
         }
+    }
+
+    /// Headphones pulled out (or another output went away): pause and mute the battle (UX 8.3).
+    private func outputLost() {
+        guard let s = session, screen == .battle, !s.paused else { return }
+        s.pause()
+        autosave()
     }
 
     // MARK: Title and map
@@ -257,6 +266,8 @@ final class AppModel: ObservableObject {
     }
 
     private func begin(_ setup: BattleSetup, title: String, sheet: LevelInfo?) {
+        // A saved fight is replaying: nothing else may start until it is ready (review 2, M1).
+        guard !resuming else { return }
         endSession(abandon: true)
         if let error = game.start(setup) {
             notice = "This fight could not start (\(error))."
@@ -297,9 +308,16 @@ final class AppModel: ObservableObject {
         s.onEnded = { [weak self] session, result in self?.battleEnded(session, result) }
         s.onFault = { [weak self] session, why in self?.battleFault(session, why) }
         s.onFrame = { [weak self] snap in self?.updateAudio(snap) }
+        s.onPausedChanged = { [weak self] paused in self?.sound.setHeld(paused) }
         let sound = self.sound
         s.fx.onSound = { id, pitch, gain in sound.play(id, pitch: pitch, gain: gain) }
         s.fx.onBark = { def, event, side in sound.bark(hob: def, event: event, side: side) }
+        pendingSting = nil
+        s.fx.onPopFrame = { [weak self] in
+            guard let self, let sting = self.pendingSting else { return }
+            self.pendingSting = nil
+            self.sound.playSting(sting)
+        }
         sound.onSubtitle = { [weak s] text, side in s?.showSubtitle(text, side: side) }
         return s
     }
@@ -322,7 +340,7 @@ final class AppModel: ObservableObject {
         sound.setLoop("ket_whistle_loop", gain: k <= 50 && k > 0 && !ended ? 1 : 0, pitch: Double(50 - min(50, k)) / 50 * 3)
         // A shell's whistle while it flies, pitched by height.
         if let sh = snap.shells.first, snap.world.h > 0 {
-            sound.setLoop("fly_whistle_loop", gain: 1, pitch: (sh.y / snap.world.h) * 14 - 7)
+            sound.setLoop("fly_whistle_loop", gain: 1, pitch: min(7, max(-7, (sh.y / snap.world.h) * 14 - 7)))
         } else {
             sound.setLoop("fly_whistle_loop", gain: 0)
         }
@@ -347,6 +365,7 @@ final class AppModel: ObservableObject {
         guard let s = session else { return }
         s.stop()
         sound.stopLoops()
+        sound.setHeld(false)
         // The core keeps nothing between battles; the battle save (if any) stays in SaveData.
         _ = abandon
         game.end()
@@ -410,6 +429,10 @@ final class AppModel: ObservableObject {
     private func battleEnded(_ s: BattleSession, _ result: BattleResult) {
         guard session === s else { return }
         endSession(abandon: false)
+        if let sting = pendingSting {
+            pendingSting = nil
+            sound.playSting(sting)
+        }
         if result.pennants > 0 { haptics.play(.pennant) }
         screen = .results
     }
@@ -488,6 +511,11 @@ final class AppModel: ObservableObject {
             let result = await self.game.load(saved.core)
             self.resuming = false
             self.save.resumeInProgress = false
+            guard self.session == nil else {
+                // Something else started meanwhile: leave it alone, keep the save for next time.
+                self.persist()
+                return
+            }
             switch result {
             case .ok:
                 self.persist()
@@ -500,6 +528,8 @@ final class AppModel: ObservableObject {
                 self.dropSavedBattle("This saved fight was made by an older version of the game rules, so it cannot be carried on.")
             case .damaged, .replayFailed:
                 self.dropSavedBattle("This saved fight could not be loaded, so it was cleared. Your progress is safe.")
+            case .superseded:
+                self.persist()
             }
         }
     }
@@ -556,7 +586,13 @@ final class AppModel: ObservableObject {
                 announce(snap.isDuel ? "\(snap.name(e.side)) wins!" : headline)
                 let win = snap.isDuel || e.side == 0
                 sound.stopLoops()
-                sound.playSting(win ? "sting_win" : "sting_lose")
+                let sting = win ? "sting_win" : "sting_lose"
+                if let fx = session?.fx, fx.popFramePending {
+                    // The sting starts on the kettle's pop frame, not before it has cracked (review 2, M8).
+                    pendingSting = sting
+                } else {
+                    sound.playSting(sting)
+                }
             case "squall_warn":
                 if !e.text.isEmpty { announce(e.text) }
             case "draft_start":
@@ -585,6 +621,8 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// A result sting waiting for the kettle's pop frame.
+    private var pendingSting: String?
     private var shotDamage = 0
     private var shotBonks = 0
     private var shotLive = false

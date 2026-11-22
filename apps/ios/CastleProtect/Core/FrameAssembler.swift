@@ -10,6 +10,8 @@ final class FrameAssembler {
     private let catalog: ContentCatalog
     private var lastFull: CoreSnapshot?
     private var lastView: BattleSnapshot?
+    /// The hand-off state the last view was built with.
+    private var lastHandoff: Int?
     private var grid: TerrainGrid?
     private var heights: [Double] = []
     private var heightsDirty = true
@@ -29,6 +31,7 @@ final class FrameAssembler {
     func reset() {
         lastFull = nil
         lastView = nil
+        lastHandoff = nil
         grid = nil
         heights = []
         heightsDirty = true
@@ -44,40 +47,53 @@ final class FrameAssembler {
     /// Builds the view frame. `handoff` is the app's own hand-off card state (Couch Duel).
     func assemble(_ raw: CoreSnapshot, handoffTo: Int?, speed: Int) -> BattleSnapshot {
         applyTerrain(raw)
-        if !raw.full, let last = lastFull, var v = lastView {
-            // Lean: only shells, phase and tick move. Forts, HUD and props stay as built (H8).
-            noteShots(raw.events, names: last.hud.names)
-            let H = Double(max(1, last.map.h))
+        if !raw.full, var merged = lastFull, var v = lastView {
+            noteShots(raw.events, names: merged.hud.names)
+            // Merge the lean frame into the last full one (core/API.md: keep everything else,
+            // replace `aim` and `preview`), so a later rebuild starts from the newest state.
+            merged.tick = raw.tick
+            merged.phase = raw.phase
+            merged.side = raw.side
+            merged.awaiting = raw.awaiting
+            merged.shells = raw.shells
+            merged.events = raw.events
+            merged.terrain = CoreTerrain()
+            if let aim = raw.aim {
+                if let i = merged.hobs.firstIndex(where: { $0.id == aim.hob && $0.side == aim.side }) {
+                    merged.hobs[i].aim.angle = aim.angle
+                    merged.hobs[i].aim.power = aim.power
+                }
+                merged.preview = raw.preview
+            }
+            var stored = merged
+            stored.events = []
+            lastFull = stored
+            if raw.phase == "plan" || raw.phase == "draft" || handoffTo != lastHandoff {
+                // Plan frames only come after a command (or READY on the hand-off card), so
+                // rebuilding the view here is cheap and keeps the aim readout, the preview and
+                // Fire in step with the core (review 2, H1 and H2).
+                var rebuilt = view(merged, handoffTo: handoffTo, speed: speed)
+                rebuilt.lean = true
+                lastView = rebuilt
+                lastHandoff = handoffTo
+                return rebuilt
+            }
+            // Lean in flight: only shells, phase and tick move. Forts, HUD and props stay as built (H8).
+            let H = Double(max(1, merged.map.h))
             v.lean = true
             v.tick = raw.tick
-            v.activeSide = raw.side
+            v.activeSide = min(max(0, raw.side), 1)
             switch raw.phase {
             case "resolve": v.phase = raw.shells.isEmpty ? .resolve : .flight
             case "settle": v.phase = .resolve
             case "ended": v.phase = .ended
-            case "plan": v.phase = handoffTo == nil ? .plan : .handoff
-            case "draft": v.phase = .draft
             default: v.phase = .none
             }
-            if raw.phase == "plan" {
-                // A lean frame after `aim` (v0.2): the new aim and preview replace the old ones.
-                if let aim = raw.aim, v.aim.set, String(aim.hob) == v.selectedHob {
-                    v.aim = AimView(angle: aim.angle, power: aim.power, set: true)
-                    var flat: [Double] = []
-                    flat.reserveCapacity(raw.preview.count * 2)
-                    for p in raw.preview where p.count >= 2 {
-                        flat.append(Double(p[0]))
-                        flat.append(H - Double(p[1]))
-                    }
-                    v.preview = flat
-                }
-            } else {
-                v.canFire = false
-                v.preview = []
-            }
+            v.canFire = false
+            v.preview = []
             v.shells = raw.shells.map { ShellView(x: Double($0.x), y: H - Double($0.y), kind: $0.shot, rot: $0.rot) }
             v.speed = speed
-            if !raw.terrain.chunks.isEmpty { v.terrain = groundHeights(fallback: last) }
+            if !raw.terrain.chunks.isEmpty { v.terrain = groundHeights(fallback: merged) }
             v.ground = grid
             v.events = raw.events.compactMap { Self.event($0, mapHeight: H) }
             lastView = v
@@ -87,6 +103,7 @@ final class FrameAssembler {
         noteShots(raw.events, names: raw.hud.names)
         let v = view(raw, handoffTo: handoffTo, speed: speed)
         lastView = v
+        lastHandoff = handoffTo
         return v
     }
 
@@ -170,7 +187,8 @@ final class FrameAssembler {
         v.roundCap = hud.roundCap
         v.squallIn = hud.squallWarning ?? -1
         v.squallRound = hud.squallRound
-        v.activeSide = s.side
+        // Clamped once here, so every later lookup by side is safe (L1).
+        v.activeSide = min(max(0, s.side), 1)
         v.turnSeq = hud.turn
         v.wind = hud.wind
         v.forecast = hud.forecast

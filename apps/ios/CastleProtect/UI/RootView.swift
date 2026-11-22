@@ -27,6 +27,10 @@ struct RootView: View {
             if model.showResume, model.screen == .map, let battle = model.save.battle {
                 ResumeCard(battle: battle)
             }
+            if model.resuming {
+                // The saved fight replays off the main thread: block the map until it is ready (review 2, M1).
+                LoadingCard()
+            }
         }
         // Text follows the system size (Theme.scaled), capped so the HUD still fits (M4).
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
@@ -133,6 +137,26 @@ struct TitleView: View {
 }
 
 // MARK: S18, Carry on?
+
+/// Covers the screen while a saved fight replays, so nothing else can start meanwhile.
+struct LoadingCard: View {
+    var body: some View {
+        ZStack {
+            Theme.ink.opacity(0.45).ignoresSafeArea()
+            VStack(spacing: 14) {
+                ProgressView().tint(Theme.ink)
+                Text("Loading your fight").font(Theme.label(18)).foregroundStyle(Theme.ink)
+            }
+            .padding(24)
+            .panel(corner: 24)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {}
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityIdentifier("loadingFight")
+    }
+}
 
 struct ResumeCard: View {
     @EnvironmentObject private var model: AppModel

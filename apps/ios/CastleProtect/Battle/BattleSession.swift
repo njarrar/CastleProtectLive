@@ -208,6 +208,8 @@ final class BattleSession: ObservableObject {
     var onAnnounce: ((String) -> Void)?
     /// Each new frame, for loops and music layers.
     var onFrame: ((BattleSnapshot) -> Void)?
+    /// The Pause card went up (true) or away (false): sound follows it (UX 8.2).
+    var onPausedChanged: ((Bool) -> Void)?
 
     private var clock: FrameClock?
     private var bannerTask: Task<Void, Never>?
@@ -231,6 +233,8 @@ final class BattleSession: ObservableObject {
     /// Sim time owed after hit stop and slow motion scale the clock (ms).
     private var simCarry = 0.0
     private var subtitleTask: Task<Void, Never>?
+    /// The HUD kept its old numbers while a collapse show plays.
+    private var hudHeld = false
     /// Aim commands during a drag go out at most this often.
     static let aimInterval: UInt64 = 66_000_000
 
@@ -318,16 +322,27 @@ final class BattleSession: ObservableObject {
                 // is fixed step, so this changes when it is drawn, never what happens).
                 let view = fx.advance(realMs: Double(real), nowNanos: now)
                 fx.runTimers()
-                simCarry = min(500, simCarry + view)
-                let simMs = Int(simCarry)
-                if simMs > 0 {
-                    simCarry -= Double(simMs)
-                    game.advance(milliseconds: simMs)
+                if fx.collapseShowing && snapshot.shells.isEmpty && snapshot.phase.isResolving {
+                    // The core's settle is shorter than the fall show: the sim waits for the blocks
+                    // to land, so the next turn never starts with blocks in the air (review 2, M6).
+                    simCarry = 0
+                } else {
+                    simCarry = min(500, simCarry + view)
+                    let simMs = Int(simCarry)
+                    if simMs > 0 {
+                        simCarry -= Double(simMs)
+                        game.advance(milliseconds: simMs)
+                    }
                 }
                 lastNanos += UInt64(ms) * 1_000_000
             }
         }
         flushAim(now: now, force: false)
+        if hudHeld && !fx.collapseShowing {
+            hudHeld = false
+            let next = HudState(snapshot)
+            if next != hud { hud = next }
+        }
         if let snap = game.frameIfNeeded() {
             apply(snap)
         } else if let fault = game.fault, !faultReported {
@@ -337,6 +352,9 @@ final class BattleSession: ObservableObject {
         }
         if game.recoveredNotice {
             game.recoveredNotice = false
+            // The battle was rebuilt from the turn start: no pose or show of the old run is left (L5).
+            fx.reset()
+            if let s = game.frame() { apply(s) }
             showBanner("Hiccup! Back to the start of the turn")
         }
     }
@@ -360,7 +378,14 @@ final class BattleSession: ObservableObject {
             lastTurnSeq = snap.turnSeq
             turnStarted(snap)
         }
-        if !snap.lean || snap.phase != oldPhase {
+        // A lean frame can still move what the HUD shows: the aim after `aim` (Fine Tune, the
+        // readout, VoiceOver), Fire after READY, and the 2x label (review 2, H1 and H2).
+        if fx.collapseShowing && snap.phase == oldPhase {
+            // Kettle and crew numbers wait for the ghost blocks to land (review 2, M6).
+            hudHeld = true
+        } else if !snap.lean || snap.phase != oldPhase || snap.aim != hud.aim || snap.canFire != hud.canFire
+            || snap.speed != hud.speed || snap.selectedHob != hud.selectedHob || hudHeld {
+            hudHeld = false
             let next = HudState(snap)
             if next != hud { hud = next }
         }
@@ -374,7 +399,16 @@ final class BattleSession: ObservableObject {
             // Record at once; only the screen change waits (H5).
             onResult?(self, result)
             endTask = Task { [weak self] in
+                // At least 1.2 s, then wait for the kettle pop show and any collapse to end,
+                // so the screen change never cuts the slow motion (review 2, M8). Capped at 3 s.
                 try? await Task.sleep(nanoseconds: 1_200_000_000)
+                var waited = 1_200
+                while waited < 3_000 {
+                    guard !Task.isCancelled, let self, !self.stopped else { return }
+                    if !self.fx.isPopShowing && !self.fx.collapseShowing { break }
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    waited += 100
+                }
                 guard !Task.isCancelled, let self, !self.stopped else { return }
                 self.onEnded?(self, result)
             }
@@ -474,11 +508,14 @@ final class BattleSession: ObservableObject {
         endDragKeepingAim(restore: true)
         paused = true
         showPauseCard = true
+        onPausedChanged?(true)
     }
 
     func resume() {
+        let was = paused
         paused = false
         showPauseCard = false
+        if was { onPausedChanged?(false) }
     }
 
     // MARK: Aim Drag
@@ -720,8 +757,10 @@ final class BattleSession: ObservableObject {
         game.waitUntilIdle()
         let side: Int? = snapshot.isDuel ? snapshot.activeSide : nil
         let reply = game.giveUp(side: side)
+        let was = paused
         paused = false
         showPauseCard = false
+        if was { onPausedChanged?(false) }
         if !reply.ok { refused(reply) }
         game.markDirty()
         tick()

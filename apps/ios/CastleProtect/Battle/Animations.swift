@@ -223,7 +223,8 @@ final class AnimationLibrary: @unchecked Sendable {
         var m = MotionData()
         let d = root["data"] as? [String: Any] ?? [:]
         if let bob = d["fort_bob"] as? [String: Any] {
-            m.bobFrameMs = Track.num(bob["frame_ms"] ?? 110)
+            // Never 0: the walk divides by it (L2).
+            m.bobFrameMs = max(1, Track.num(bob["frame_ms"] ?? 110))
             let dy = (bob["dy"] as? [Any] ?? []).map(Track.num)
             let tilt = (bob["tilt"] as? [Any] ?? []).map(Track.num)
             if !dy.isEmpty { m.bobDy = dy }

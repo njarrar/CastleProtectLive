@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RUST_VERSION: "1.99.1"
+  # The Rust version comes from core/rust-toolchain.toml (scripts/setup-rust.sh).
   IPHONEOS_DEPLOYMENT_TARGET: "16.0"
   # Scheme to build. If it does not exist, the first scheme in the project is used.
   IOS_SCHEME: CastleProtect
@@ -161,12 +161,19 @@ jobs:
         working-directory: apps/ios
         run: |
           grep -q "Linking the real core" build/xcodebuild-build.log || { echo "::error::The build used the stand-in core, not CastleCore.xcframework."; exit 1; }
-          for t in testRealCoreWhenLinked testRefusedSetupIsReported testRescueLevelHasProps testGoldenHashesMatch testMultiTurnReplayMatchesTheHash testGiveUpOnTheRealCore testHelpVolleyAndBossSetupsStart; do
+          for t in testRealCoreWhenLinked testRefusedSetupIsReported testRescueLevelHasProps testGoldenHashesMatch testMultiTurnReplayMatchesTheHash testGiveUpOnTheRealCore testHelpVolleyAndBossSetupsStart testLeanAimReachesTheHudOnTheRealCore testCouchDuelAfterReadyOnTheRealCore; do
             if ! grep -qE "Test Case .*${t}\]' passed" build/xcodebuild-test.log; then
               echo "::error::Real-core test ${t} did not pass (skipped or missing)."
               exit 1
             fi
           done
+          # A test that quietly goes missing must not leave the run green.
+          passed="$(grep -cE "Test Case .*' passed" build/xcodebuild-test.log || true)"
+          echo "Passed test cases: $passed"
+          if [ "$passed" -lt 85 ]; then
+            echo "::error::Only $passed test cases passed; at least 85 are expected."
+            exit 1
+          fi
           echo "Real core linked and real-core tests passed."
 
       # A Release build for a device (unsigned), the way an archive is built.
@@ -209,7 +216,7 @@ jobs:
             local category="$1"; shift
             local hits=""
             for sym in "$@"; do
-              if grep -qx "_${sym}" build/undefined-symbols.txt; then hits="$hits $sym"; fi
+              if grep -qxF "_${sym}" build/undefined-symbols.txt; then hits="$hits $sym"; fi
             done
             if [ -n "$hits" ]; then
               echo "$category:$hits"
@@ -223,8 +230,42 @@ jobs:
           check NSPrivacyAccessedAPICategorySystemBootTime mach_absolute_time
           check NSPrivacyAccessedAPICategoryDiskSpace statfs statfs64 fstatfs fstatfs64 statvfs fstatvfs
           check NSPrivacyAccessedAPICategoryActiveKeyboards activeInputModes
+          # UserDefaults (and @AppStorage) show up as the class reference, not a C symbol.
+          check NSPrivacyAccessedAPICategoryUserDefaults 'OBJC_CLASS_$_NSUserDefaults'
+          # Where fstat comes from (Rust std's panic and backtrace code), for the build log.
+          echo "Objects that pull in fstat:"
+          nm -A ../../core/target/aarch64-apple-ios/release/libcastle_ffi.a 2>/dev/null | grep -E " U _fstat(64)?$" | head -n 8 || true
           echo "Undefined symbols checked: $(wc -l < build/undefined-symbols.txt)"
           exit $fail
+
+      # core/API.md: a debug core refuses a call from another thread with
+      # wrong_thread (compiled out in release). Link the debug core once and run
+      # the tests that make a Rival turn, a replay and lean aim frames.
+      - name: Thread rule on a debug core
+        if: ${{ !cancelled() && steps.check.outputs.core == 'true' }}
+        working-directory: apps/ios
+        run: |
+          ../../scripts/build-xcframework.sh --dev
+          set +e
+          xcodebuild test \
+            -project "${{ steps.pick.outputs.project }}" \
+            -scheme "${{ steps.pick.outputs.scheme }}" \
+            -configuration Debug \
+            -destination "${{ steps.pick.outputs.destination }}" \
+            -derivedDataPath build/DerivedDataDev \
+            -only-testing:CastleProtectTests/CoreGameTests/testRealCoreWhenLinked \
+            -only-testing:CastleProtectTests/RealCoreTests/testMultiTurnReplayMatchesTheHash \
+            -only-testing:CastleProtectTests/LeanHudTests/testLeanAimReachesTheHudOnTheRealCore \
+            -only-testing:CastleProtectTests/LeanHudTests/testCouchDuelAfterReadyOnTheRealCore \
+            CODE_SIGNING_ALLOWED=NO > build/xcodebuild-dev.log 2>&1
+          status=$?
+          set -e
+          grep -E "Test Case .* (passed|failed|skipped)|Executed [0-9]+ test|: error: |Linking the real core" build/xcodebuild-dev.log || true
+          tail -n 30 build/xcodebuild-dev.log
+          [ "$status" -eq 0 ] || exit "$status"
+          for t in testRealCoreWhenLinked testMultiTurnReplayMatchesTheHash testLeanAimReachesTheHudOnTheRealCore testCouchDuelAfterReadyOnTheRealCore; do
+            grep -qE "Test Case .*${t}\]' passed" build/xcodebuild-dev.log || { echo "::error::${t} did not pass on the debug core."; exit 1; }
+          done
 
       - name: Zip simulator app
         if: steps.check.outputs.app == 'true'
@@ -254,6 +295,7 @@ jobs:
             apps/ios/build/TestResults.xcresult
             apps/ios/build/*.log
             apps/ios/build/undefined-symbols.txt
+            apps/ios/build/xcodebuild-dev.log
           if-no-files-found: ignore
 
   # Signed archive for TestFlight. Turn on once the Apple secrets exist

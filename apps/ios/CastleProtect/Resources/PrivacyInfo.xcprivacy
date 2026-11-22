@@ -10,6 +10,13 @@
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
+		<!--
+			File Timestamp (C617.1): the game never reads a file date. The Release binary
+			imports fstat because the Rust core links Rust std, whose panic and backtrace
+			code can read the app's own binary to name symbols; catch_unwind in castle-ffi
+			keeps that path linked. The rules never call it. Keep this entry: removing the
+			import would need a nightly build-std setup and would cost the panic safety.
+		-->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
