@@ -180,7 +180,7 @@ impl Battle {
         let preview: Vec<Value> = self.preview().iter().map(|p| json!([p.0, p.1])).collect();
         let s = self.side as usize;
         let crew = |side: u8| -> Vec<Value> {
-            self.hobs.iter().filter(|h| h.side == side).map(|h| json!({"id": h.id, "hp_pct": h.hp.max(0) * 100 / h.max.max(1), "state": h.state.name(), "class": h.class, "rest": h.rest.max(0)})).collect()
+            self.hobs.iter().filter(|h| h.side == side).map(|h| json!({"id": h.id, "hp_pct": if h.alive() && h.hp > 0 { (h.hp * 100 / h.max.max(1)).max(1) } else { 0 }, "state": h.state.name(), "class": h.class, "rest": h.rest.max(0)})).collect()
         };
         let hand = |side: usize| -> Vec<Value> {
             self.hands[side]
@@ -289,9 +289,9 @@ impl Battle {
             match &self.stats[side].best_shot {
                 None => Value::Null,
                 Some(b) => {
-                    let hob = self.hobs.get(b.hob as usize);
-                    json!({"side": side, "hob": b.hob, "hob_name": hob.map(|h| h.name.clone()),
-                           "shot": b.shot, "shot_name": self.content.shot(&b.shot).map(|d| d.name.clone()),
+                    let (_, shot_name, hob_name) = self.blow_names(&b.shot, b.hob);
+                    json!({"side": side, "hob": b.hob, "hob_name": hob_name,
+                           "shot": b.shot, "shot_name": shot_name,
                            "angle": b.angle, "power": b.power, "round": b.round, "dmg": b.dmg})
                 }
             }

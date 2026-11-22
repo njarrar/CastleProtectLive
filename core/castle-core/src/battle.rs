@@ -712,11 +712,19 @@ impl Battle {
                 .map(|x| terrain.surface(x))
                 .min()
                 .unwrap_or(level.height);
-            let knack_uses = ls.knack_uses.unwrap_or(2);
+            // the level's grade for this AI preset (Skirmish maps)
+            let grade = match control[s] {
+                Control::Ai(p) => ls.grades.as_ref().and_then(|g| g.get(p.name())),
+                Control::Human => None,
+            };
+            let knack_uses = grade
+                .and_then(|g| g.knack_uses)
+                .or(ls.knack_uses)
+                .unwrap_or(2);
             if !(0..=2).contains(&knack_uses) {
                 return Err(format!("level {} knack_uses must be 0 to 2", level.id));
             }
-            let hp_pct = ls.hp_pct.unwrap_or(100);
+            let hp_pct = grade.and_then(|g| g.hp_pct).or(ls.hp_pct).unwrap_or(100);
             if !(50..=200).contains(&hp_pct) {
                 return Err(format!("level {} hp_pct must be 50 to 200", level.id));
             }
@@ -774,7 +782,18 @@ impl Battle {
             if cfg.aim.is_some_and(|a| !(1..=5).contains(&a)) {
                 return Err("aim must be 1 to 5".into());
             }
-            aim_grade[s] = cfg.aim.or(ls.aim).unwrap_or(3).clamp(1, 5);
+            if grade
+                .and_then(|g| g.aim)
+                .is_some_and(|a| !(1..=5).contains(&a))
+            {
+                return Err(format!("level {} grade aim must be 1 to 5", level.id));
+            }
+            aim_grade[s] = cfg
+                .aim
+                .or(grade.and_then(|g| g.aim))
+                .or(ls.aim)
+                .unwrap_or(3)
+                .clamp(1, 5);
             if let Some(k) = &kit {
                 for sh in &k.shells {
                     if !kit_shells.contains(sh) {
@@ -1928,34 +1947,62 @@ impl Battle {
         let st = &self.stats[side as usize];
         let mut top = st.taken.clone();
         top.sort_by(|a, b| b.2.cmp(&a.2).then(a.0.cmp(&b.0)).then(a.1.cmp(&b.1)));
-        let name = |h: i32| -> Value {
-            if h >= 0 {
-                self.hobs
-                    .get(h as usize)
-                    .map(|x| json!(x.name))
-                    .unwrap_or(Value::Null)
-            } else {
-                Value::Null
-            }
-        };
-        let shot_name = |id: &str| -> Value {
-            self.content
-                .shot(id)
-                .map(|d| json!(d.name))
-                .unwrap_or(json!(id))
+        let entry = |sh: &str, h: i32| -> Value {
+            let (by, shot_name, hob_name) = self.blow_names(sh, h);
+            json!({"shot": sh, "shot_name": shot_name, "hob": if h >= 0 { json!(h) } else { Value::Null }, "hob_name": hob_name, "by": by})
         };
         let last = st.last_blow.as_ref().map(|(sh, h, r)| {
-            json!({"shot": sh, "shot_name": shot_name(sh), "hob": if *h >= 0 { json!(h) } else { Value::Null }, "hob_name": name(*h), "round": r})
+            let mut e = entry(sh, *h);
+            e["round"] = json!(r);
+            e
         });
         json!({
             "side": side,
             "how": how,
             "last": last,
-            "top": top.iter().take(3).map(|(sh, h, d)| json!({"shot": sh, "shot_name": shot_name(sh), "hob": if *h >= 0 { json!(h) } else { Value::Null }, "hob_name": name(*h), "dmg": d})).collect::<Vec<_>>(),
+            "top": top.iter().take(3).map(|(sh, h, d)| {
+                let mut e = entry(sh, *h);
+                e["dmg"] = json!(d);
+                e
+            }).collect::<Vec<_>>(),
             "kettle_lost": st.kettle_lost,
             "blocks_lost": st.blocks_lost,
             "hobs_bonked": st.own_bonked,
         })
+    }
+
+    /// Words for a blow in `result.broke` and `best_shot`: (`by`, shot name,
+    /// who or what dealt it). Never null: a blow with no Hob behind it is
+    /// named for what dealt it (the Squall, a fall, Fatigue, a prop shell,
+    /// the 1-10 shears, the side's own shot).
+    pub fn blow_names(&self, shot: &str, hob: i32) -> (&'static str, String, String) {
+        let shot_name = self
+            .content
+            .shot(shot)
+            .map(|d| d.name.clone())
+            .unwrap_or_else(|| match shot {
+                "squall" => "Squall".into(),
+                "ground" => "Fall".into(),
+                "fatigue" => "Fatigue collapse".into(),
+                "self" => "Own shot".into(),
+                "shears" => "Big Snip".into(),
+                "prop" => "Prop".into(),
+                other => other.replace('_', " "),
+            });
+        if let Some(h) = (hob >= 0).then(|| self.hobs.get(hob as usize)).flatten() {
+            return ("hob", shot_name, h.name.clone());
+        }
+        match shot {
+            "squall" => ("squall", shot_name, "The Squall".into()),
+            "ground" => ("ground", shot_name, "A fall".into()),
+            "fatigue" => ("fatigue", shot_name, "Fatigue".into()),
+            "self" => ("self", shot_name, "Your own shot".into()),
+            "shears" => ("shears", shot_name, "The shears".into()),
+            _ => {
+                let who = format!("A {shot_name}");
+                ("prop", shot_name, who)
+            }
+        }
     }
 
     fn pennants(&self, winner: u8, how: &str) -> Vec<bool> {

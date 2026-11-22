@@ -1068,7 +1068,9 @@ impl Battle {
             ),
             Some(_) => ("self".to_string(), -1),
             None => (
-                if self.squall_round() > 0 {
+                if self.soft_falls {
+                    "fatigue".to_string()
+                } else if self.squall_round() > 0 {
                     "squall".to_string()
                 } else {
                     "ground".to_string()
@@ -1077,14 +1079,17 @@ impl Battle {
             ),
         };
         let round = self.round;
+        // the last blow: an enemy shot, or the field itself (Squall, a fall
+        // outside any shot, Fatigue); never the side's own shot
         let enemy = self.cur.as_ref().is_some_and(|c| c.side != victim);
+        let field = self.cur.is_none();
         if enemy {
             if let Some(c) = self.cur.as_mut() {
                 c.enemy_dmg += d as i64;
             }
         }
         let st = &mut self.stats[victim as usize];
-        if enemy {
+        if enemy || field {
             st.last_blow = Some((shot.clone(), hob, round));
         }
         match st.taken.iter_mut().find(|t| t.0 == shot && t.1 == hob) {

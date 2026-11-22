@@ -1,10 +1,11 @@
 # Castle Protect core API (v0.2)
 
-Rules version 3 (`cp_version().rules`). What changed from v0.1 is listed in
+Rules version 4 (`cp_version().rules`). What changed from v0.1 is listed in
 "Changes in v0.2" at the end of this file and in the Fixes section of
 `docs/review/code/core-review-1.md`. What changed for QA playtest 1 is in
 "Changes for QA playtest 1" at the end, and in the "Core fixes" section of
-`docs/qa/playtest-1/REPORT.md`.
+`docs/qa/playtest-1/REPORT.md`. QA playtest 2: "Changes for QA playtest 2"
+at the end, and the "Core fixes" section of `docs/qa/playtest-2/REPORT.md`.
 
 The core owns every game rule. Apps send commands as JSON and read frame
 snapshots as JSON. Same calls on all three platforms:
@@ -18,7 +19,7 @@ snapshots as JSON. Same calls on all three platforms:
 | `void cp_free_string(char*)` | (not needed) | Free any string the C ABI returned |
 | `void cp_free(CpGame*)` | `game.free()` | Free the battle |
 | `char* cp_last_error(CpGame*)` | `last_error()` / `cp_last_error()` | The last refusal reply (JSON) or panic text for that handle; with NULL, this thread's last `cp_new` error. NULL when there is none |
-| `char* cp_version(void)` | `cp_version()` | `{"sim":"0.2.0","rules":3,"tick_hz":120}` |
+| `char* cp_version(void)` | `cp_version()` | `{"sim":"0.2.0","rules":4,"tick_hz":120}` |
 | `char* cp_golden_hashes(void)` | `golden_hashes()` | Golden replay hashes, one `name hash` line each |
 | `uint64_t cp_daily_seed(const char* date)` | `daily_seed(date)` | Daily Dust-up seed from the local date text (`2026-11-22`) and the rules version |
 | | `default_content()` | The built in content bundle as JSON |
@@ -312,7 +313,13 @@ weak spot block.
 ```
 
 `x, y`: the Hob's feet. `state`: `seated` (in an intact Nook, has Cover),
-`open`, `dropped`, `tumbled`, `squashed`, `bonked`. `rest`: the cog (turns
+`open`, `dropped`, `tumbled`, `squashed`, `bonked`. Only `bonked` is out of
+the fight (HP 0, no turns). `dropped`, `tumbled` and `squashed` are hurt but
+alive: they keep their HP (1 or more), may act (`can_fire`) and are drawn as
+live Hobs. `squashed`: a falling chunk landed on the Hob in its Nook (crush);
+it pops back up (`open` or `seated`) at the end of its side's turn. The round
+10 Fatigue collapse often leaves Hobs `squashed` or `dropped` at 1 HP: draw
+them hurt, never Bonked. `rest`: the cog (turns
 left to sit out; a value of 1 right after firing a Medium shot clears at the
 end of this turn). `buried`: Loophole dug in (Fire greys; Shove Off clears).
 `grudge`: Old Thumper's next Clodpot is one band larger. `clatter`: Nan's
@@ -348,7 +355,7 @@ order.
 | `steam` | `[side0, side1]` Steam left |
 | `steam_turn_left` | Steam the active side may still spend this turn |
 | `kettle_pct` | `[side0, side1]` |
-| `crew` | Per side, `[{"id", "hp_pct", "state", "class", "rest"}]` (HP pips) |
+| `crew` | Per side, `[{"id", "hp_pct", "state", "class", "rest"}]` (HP pips). `hp_pct` is at least 1 while the Hob is alive (a Hob on 1 HP never reads 0); it is 0 only for `bonked`. `state` as in `hobs[]` |
 | `squall_warning` | 3, 2, 1 or null ("Squall in 3") |
 | `squall_round` | 0, or 1 to 3 in the Sudden Squall |
 | `squall` | Whether this battle has a Squall |
@@ -451,7 +458,8 @@ blocks lost to a Thump (`why: "thump"`) or a Squall (`why: "squall"`).
 
 - `stats[i].best_shot` and `best_shot`: the shot of side `i` that dealt the
   most damage to the other side, `{"side", "hob", "hob_name", "shot",
-  "shot_name", "angle", "power", "round", "dmg"}` or null. `best_shot` is
+  "shot_name", "angle", "power", "round", "dmg"}` or null. `hob_name` and
+  `shot_name` are always strings. `best_shot` is
   the winner's (`stats[winner].best_shot`): use it for "Best shot" on a
   results screen, never a shot of the losing side. The blow that ends the
   fight counts (in `hits` too).
@@ -465,10 +473,39 @@ blocks lost to a Thump (`why: "thump"`) or a Squall (`why: "squall"`).
 - `score`: Siege Score per side (damage x the shot's Skill Factor, +150 per
   Bonk, +400 per Kettle Pop; at the end +50 per unused round and +200 for no
   Hob lost, except in Volley Points).
-- `broke`: "what broke you" for the losing side: the last enemy blow, the
-  three shots that did the most damage (`shot` may also be `squall`,
-  `ground` for falls with no shot, `prop` for a Tick-Tock Crock, `shears`),
-  and what it lost.
+- `broke`: "what broke you" for the losing side: the last blow (an enemy
+  shot, or the field: Squall, a fall, Fatigue), the three shots that did the
+  most damage, and what it lost. Each blow is `{"shot", "shot_name", "hob",
+  "hob_name", "by"}` (plus `round` in `last`, `dmg` in `top`); `last` is
+  null only when the side took no such blow. `shot_name` and `hob_name` are
+  never null. `by` says who dealt it: `hob` (`hob` is the Hob id, `hob_name`
+  its name), or, with `hob` null, `squall` (`shot` `squall`, `hob_name`
+  "The Squall"), `ground` (a fall with no shot: "A fall"), `fatigue` (the
+  round 10 collapse: "Fatigue"), `self` ("Your own shot"), `shears` (1-10:
+  "The shears"), `prop` (a woken prop shell such as a Tick-Tock Crock:
+  "A Tick-Tock Crock"). Apps can print `hob_name` as is.
+
+## Frame sizes
+
+Measured with `BOT_FRAMES=1 cargo run --release -p castle-core --example
+winrate -- 40 fair 1-8 1-10` (the player bot against Fair, stepping 2 ticks
+per frame with a snapshot each frame, as a live app does; 80 battles, about
+400,000 frames):
+
+| Frame | Size |
+|---|---|
+| The first snapshot, after `resume` or `terrain_all` (the whole map: 456 terrain chunks) | about 2.35 MB, 1 frame |
+| Any later frame | at most 210 KB (terrain chunks after a big carve); a full frame without terrain is 20 to 35 KB, a lean one under 2 KB |
+| The round 10 Fatigue frame (the `fatigue` event and its collapse) | at most 33 KB, 45 events, 12 `collapse` events, no terrain resend |
+| The busiest second (60 frames) | at most 640 KB, in ordinary shot rounds |
+
+Limits the core keeps (checked by `tests/qa_playtest_2.rs`): the Fatigue
+frame is under 96 KB, holds at most 200 events and at most 64 terrain
+chunks; it never resends the map. Only the first frame, `resume` and
+`terrain_all` send the whole map. So the round 10 start is not a burst; a
+crash there (QA playtest 2, B2) is not caused by the size of what the core
+sends. Apps that want to bound their own work per frame should cap the
+effects they spawn per `collapse` event, not drop events.
 
 ## Test Yard
 
@@ -595,3 +632,31 @@ From `docs/qa/playtest-1/REPORT.md` (bugs M1, M2, M4, M6, m1). Rules version
   slowly. New level content fields `player`/`rival` `knack_uses` (0 to 2)
   and `hp_pct` (50 to 200). Region 1 levels retuned; 1-7 cage bars 80 HP.
   Measured with `cargo run --release -p castle-core --example winrate`.
+
+## Changes for QA playtest 2 (rules version 4)
+
+From `docs/qa/playtest-2/REPORT.md` (N2, N4, m7, B1, B2). Rules version 4:
+old saves from rules version 3 do not resume (the 1-7 cage, the Skirmish
+maps and the Skirmish Rival grades changed, so an old log would not replay
+to the same fight).
+
+- **Crushed Hobs (N2).** A Hob crushed to 1 HP is `squashed` (or `dropped`
+  if its floor went too), alive and able to act; only `bonked` is out.
+  `hud.crew[].hp_pct` no longer rounds an alive Hob on 1 HP down to 0.
+  See `hobs[]`.
+- **What broke you (B1).** `result.broke.last`, `broke.top[]` and every
+  `best_shot` always carry string `hob_name` and `shot_name`, and blows
+  carry `by` (`hob`, `squall`, `ground`, `fatigue`, `self`, `shears`,
+  `prop`). The last blow can now be the Squall, a fall or Fatigue (it was
+  null, or an older shot). Fatigue crush is recorded as `fatigue`, not
+  `ground`.
+- **Skirmish Rival grades (N4).** New level content field
+  `player`/`rival` `grades`: per AI preset (`cozy`, `fair`, `stubborn`)
+  an `aim`, `knack_uses` and `hp_pct` that replace the side's own when the
+  AI plays it on that preset (a setup `aim` still wins). `d1` and `d2`:
+  Cozy aim 1, no Knack, 50% HP; Fair aim 2, 1 Knack use, 90% HP; Stubborn
+  unchanged (aim 3, full crew). The player's loaner fort on `d1` and `d2` is
+  now the Stone Skirt kit fort (`bp_kit_stone`), the same fort the web app
+  gives the Rival, so the loaner forts are even.
+- **1-7 Rescue (m7).** Cage bars 100 HP (was 80), Hetty 140 HP (was 110).
+- **Frame sizes (B2).** Measured and bounded; see "Frame sizes".

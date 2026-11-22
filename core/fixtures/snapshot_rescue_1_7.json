@@ -1293,7 +1293,7 @@
   ],
   "full": true,
   "ghosts": [],
-  "hash": "70f281f8c21f26cb",
+  "hash": "cb3c65843604c75d",
   "hobs": [
     {
       "aim": {
@@ -1785,10 +1785,10 @@
   ],
   "props": [
     {
-      "hp": 80,
+      "hp": 100,
       "id": 1,
       "kind": "cage_bar",
-      "max": 80,
+      "max": 100,
       "shot": null,
       "side": 2,
       "tag": "cage",
@@ -1796,10 +1796,10 @@
       "y": 284
     },
     {
-      "hp": 80,
+      "hp": 100,
       "id": 2,
       "kind": "cage_bar",
-      "max": 80,
+      "max": 100,
       "shot": null,
       "side": 2,
       "tag": "cage",
@@ -1807,10 +1807,10 @@
       "y": 265
     },
     {
-      "hp": 80,
+      "hp": 100,
       "id": 3,
       "kind": "cage_bar",
-      "max": 80,
+      "max": 100,
       "shot": null,
       "side": 2,
       "tag": "cage",
@@ -1818,10 +1818,10 @@
       "y": 283
     },
     {
-      "hp": 110,
+      "hp": 140,
       "id": 4,
       "kind": "captive",
-      "max": 110,
+      "max": 140,
       "shot": null,
       "side": 2,
       "tag": "captive",

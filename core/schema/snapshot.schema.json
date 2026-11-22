@@ -1129,9 +1129,21 @@
                 "how": {
                   "type": "string"
                 },
-                "last": {},
+                "last": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/$defs/blow"
+                    }
+                  ]
+                },
                 "top": {
-                  "type": "array"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/blow"
+                  }
                 },
                 "kettle_lost": {
                   "type": "integer"
@@ -1193,7 +1205,9 @@
           "required": [
             "side",
             "hob",
+            "hob_name",
             "shot",
+            "shot_name",
             "dmg",
             "round"
           ],
@@ -1205,19 +1219,15 @@
               "type": "integer"
             },
             "hob_name": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string",
+              "description": "Never null"
             },
             "shot": {
               "type": "string"
             },
             "shot_name": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string",
+              "description": "Never null"
             },
             "angle": {
               "type": "integer"
@@ -1234,6 +1244,51 @@
           }
         }
       ]
+    },
+    "blow": {
+      "type": "object",
+      "description": "A blow in result.broke: who or what dealt it. Names are never null; a blow with no Hob behind it is named for what dealt it.",
+      "required": [
+        "shot",
+        "shot_name",
+        "hob",
+        "hob_name",
+        "by"
+      ],
+      "properties": {
+        "shot": {
+          "type": "string"
+        },
+        "shot_name": {
+          "type": "string"
+        },
+        "hob": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "hob_name": {
+          "type": "string"
+        },
+        "by": {
+          "enum": [
+            "hob",
+            "squall",
+            "ground",
+            "fatigue",
+            "self",
+            "shears",
+            "prop"
+          ]
+        },
+        "round": {
+          "type": "integer"
+        },
+        "dmg": {
+          "type": "integer"
+        }
+      }
     }
   }
 }

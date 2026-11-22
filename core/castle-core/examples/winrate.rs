@@ -9,10 +9,16 @@
 //! hit the Rival fort.
 //!
 //! Run: cargo run --release -p castle-core --example winrate -- [N] [preset] [levels...]
+//! A `d*` level plays as the web app's Skirmish: both sides seat the first
+//! four player Hobs, the player on the level's loaner fort, the Rival on the
+//! Stone Skirt kit fort, light wind, Quick Pick shells, coin toss for the
+//! first turn and a 10 round cap (BOT_CAP overrides it).
+//!
 //! Env: BOT_ANGLE, BOT_POWER (aim error), BOT_APP_SEED (the web app's one
 //! seed per level), BOT_CREW (player crew JSON list), BOT_RIVAL and
 //! BOT_RULES (extra setup fields to try a tuning), BOT_TAKEN (print each
-//! battle's end and what hurt the player most).
+//! battle's end and what hurt the player most), BOT_FRAMES (play in 2 tick
+//! frames with a snapshot each, as a live app does, and print snapshot sizes).
 use castle_core::actor::Hit;
 use castle_core::battle::{block_world_center, Phase};
 use castle_core::content::FlightKind;
@@ -176,6 +182,79 @@ impl Bot {
     }
 }
 
+/// Snapshot sizes as a live app sees them, by round.
+#[derive(Default)]
+struct Frames {
+    /// (round, bytes, events, terrain chunks, collapse events, tick)
+    big: Vec<(i32, usize, usize, usize, usize, i64)>,
+    /// The frame that carries the `fatigue` event, and the next 120 frames
+    /// (bytes, events) summed.
+    fatigue: Option<(usize, usize, usize, usize)>,
+    after: Option<usize>,
+}
+
+impl Frames {
+    fn take(&mut self, b: &mut Battle) -> Vec<serde_json::Value> {
+        let s = b.snapshot();
+        let text = s.to_string();
+        let ev = s["events"].as_array().cloned().unwrap_or_default();
+        let chunks = s["terrain"]["chunks"].as_array().map_or(0, |c| c.len());
+        let collapses = ev.iter().filter(|e| e["t"] == "collapse").count();
+        self.big
+            .push((b.round, text.len(), ev.len(), chunks, collapses, b.tick));
+        if ev.iter().any(|e| e["t"] == "fatigue") {
+            self.fatigue = Some((text.len(), ev.len(), collapses, 0));
+            self.after = Some(0);
+        } else if let (Some(n), Some(f)) = (self.after, self.fatigue.as_mut()) {
+            if n < 120 {
+                f.3 += text.len();
+                self.after = Some(n + 1);
+            }
+        }
+        ev
+    }
+
+    /// Step to the next plan (or the end) in 2 tick frames; returns the events.
+    fn pump(&mut self, b: &mut Battle) -> Vec<serde_json::Value> {
+        let mut seen = self.take(b);
+        let mut guard = 0;
+        while matches!(b.phase, Phase::Resolve | Phase::Settle(_)) && guard < 50_000 {
+            guard += 1;
+            b.step(2);
+            seen.extend(self.take(b));
+        }
+        seen
+    }
+
+    fn report(&self, lvl: &str, seed: u64) {
+        let first = self.big.iter().skip(1); // the first frame sends the whole map
+        let max = first.clone().max_by_key(|x| x.1);
+        let r10 = self
+            .big
+            .iter()
+            .filter(|x| (9..=11).contains(&x.0))
+            .max_by_key(|x| x.1);
+        let most_ev = first.clone().max_by_key(|x| x.2);
+        // the most bytes in any 60 frames (one second at 60 fps), after the first
+        let mut win = (0usize, 0i32);
+        for w in self.big[1..].windows(60) {
+            let sum: usize = w.iter().map(|x| x.1).sum();
+            if sum > win.0 {
+                win = (sum, w[0].0);
+            }
+        }
+        let full = self.big.iter().filter(|x| x.1 > 2000).count();
+        println!(
+            "frames {lvl} seed {seed}: busiest second {} B in round {}; full frames {full}; first {} B; biggest later (round, bytes, events, chunks, collapses, tick) {max:?}; rounds 9-11 {r10:?}; most events {most_ev:?}; fatigue frame (bytes, events, collapses, next 120 frames bytes) {:?}; frames {}",
+            win.0,
+            win.1,
+            self.big.first().map_or(0, |x| x.1),
+            self.fatigue,
+            self.big.len()
+        );
+    }
+}
+
 struct Run {
     win: bool,
     round: i32,
@@ -197,9 +276,22 @@ fn play(content: &Arc<castle_core::Content>, lvl: &str, preset: &str, seed: u64)
             .unwrap_or_default()
     };
     let (rival, rules) = (extra("BOT_RIVAL"), extra("BOT_RULES"));
-    let setup = format!(
-        r#"{{"level":"{lvl}","mode":"campaign","sides":[{{"control":"human"{crew}}},{{"control":"ai","preset":"{preset}"{rival}}}]{rules}}}"#
-    );
+    let setup = if lvl.starts_with('d') {
+        // the web app's Skirmish setup (apps/web/src/screens/setup.ts)
+        let cap = std::env::var("BOT_CAP").unwrap_or_else(|_| "10".into());
+        let crew = if crew.is_empty() {
+            r#","crew":["marge","quill","jax","grub"]"#.to_string()
+        } else {
+            crew
+        };
+        format!(
+            r#"{{"level":"{lvl}","mode":"skirmish","sides":[{{"control":"human","name":"You"{crew}}},{{"control":"ai","preset":"{preset}","name":"Sir Pudge","crew":["marge","quill","jax","grub"],"blueprint":"bp_kit_stone"{rival}}}],"round_cap":{cap},"wind":{{"min":0,"max":3}},"rummage":{{"pool":6,"picks":2}}{rules}}}"#
+        )
+    } else {
+        format!(
+            r#"{{"level":"{lvl}","mode":"campaign","sides":[{{"control":"human"{crew}}},{{"control":"ai","preset":"{preset}"{rival}}}]{rules}}}"#
+        )
+    };
     // BOT_APP_SEED: the battle seed the web app used in the playtest (FNV-1a
     // of the level id, the same on every Retry); only the bot's aim varies
     let battle_seed = if std::env::var("BOT_APP_SEED").is_ok() {
@@ -215,6 +307,9 @@ fn play(content: &Arc<castle_core::Content>, lvl: &str, preset: &str, seed: u64)
         err: (0, 0),
         next_hob: 0,
     };
+    // BOT_FRAMES: play as a live app does (2 tick steps, a snapshot each
+    // frame) and print the biggest frames around the round 10 Fatigue start
+    let mut frames = std::env::var("BOT_FRAMES").is_ok().then(Frames::default);
     let (mut shots, mut hits) = (0, 0);
     let mut guard = 0;
     while b.phase != Phase::Ended && guard < 400 {
@@ -227,11 +322,17 @@ fn play(content: &Arc<castle_core::Content>, lvl: &str, preset: &str, seed: u64)
                 if b.side == 0 {
                     b.events.clear();
                     bot.turn(&mut b);
-                    b.run_until_plan(100_000);
+                    let seen = match frames.as_mut() {
+                        Some(f) => f.pump(&mut b),
+                        None => {
+                            b.run_until_plan(100_000);
+                            std::mem::take(&mut b.events)
+                        }
+                    };
                     // a shot counts as a hit when it hurt the Rival fort, crew or a cage bar
-                    if b.events.iter().any(|e| e["t"] == "fire") {
+                    if seen.iter().any(|e| e["t"] == "fire") {
                         shots += 1;
-                        if b.events
+                        if seen
                             .iter()
                             .any(|e| e["t"] == "hit" && (e["side"] == 1 || e["target"] == "prop"))
                         {
@@ -244,7 +345,17 @@ fn play(content: &Arc<castle_core::Content>, lvl: &str, preset: &str, seed: u64)
             }
             _ => {}
         }
-        b.run_until_plan(100_000);
+        match frames.as_mut() {
+            Some(f) => {
+                f.pump(&mut b);
+            }
+            None => {
+                b.run_until_plan(100_000);
+            }
+        }
+    }
+    if let Some(f) = &frames {
+        f.report(lvl, seed);
     }
     let r = b.result.as_ref().expect("battle ended");
     if std::env::var("BOT_TAKEN").is_ok() {

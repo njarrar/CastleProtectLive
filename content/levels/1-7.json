@@ -112,26 +112,26 @@
     {
       "kind": "cage_bar",
       "x": 1182,
-      "hp": 80,
+      "hp": 100,
       "tag": "cage"
     },
     {
       "kind": "cage_bar",
       "x": 1200,
       "lift": 14,
-      "hp": 80,
+      "hp": 100,
       "tag": "cage"
     },
     {
       "kind": "cage_bar",
       "x": 1218,
-      "hp": 80,
+      "hp": 100,
       "tag": "cage"
     },
     {
       "kind": "captive",
       "x": 1200,
-      "hp": 110,
+      "hp": 140,
       "tag": "captive"
     }
   ]

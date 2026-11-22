@@ -2424,6 +2424,7 @@
       "how": "give_up",
       "kettle_lost": 0,
       "last": {
+        "by": "hob",
         "hob": 0,
         "hob_name": "Marge Dumpling",
         "round": 1,
@@ -2433,6 +2434,7 @@
       "side": 1,
       "top": [
         {
+          "by": "hob",
           "dmg": 29,
           "hob": 0,
           "hob_name": "Marge Dumpling",

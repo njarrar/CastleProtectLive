@@ -509,6 +509,47 @@ pub struct SideSetup {
     /// 200 (default 100). Region 1 Rivals send green crews.
     #[serde(default)]
     pub hp_pct: Option<i32>,
+    /// Per AI preset grade: when the AI plays this side on that preset,
+    /// these replace `aim`, `knack_uses` and `hp_pct` (a setup `aim` still
+    /// wins). The Skirmish maps use it so Cozy and Fair Rivals play like
+    /// Region 1 Rivals.
+    #[serde(default)]
+    pub grades: Option<Grades>,
+}
+
+/// Rival grades per AI preset.
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct Grades {
+    #[serde(default)]
+    pub cozy: Option<Grade>,
+    #[serde(default)]
+    pub fair: Option<Grade>,
+    #[serde(default)]
+    pub stubborn: Option<Grade>,
+}
+
+/// One preset's grade: aim 1 to 5, Knack uses 0 to 2, Hob HP percent.
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct Grade {
+    #[serde(default)]
+    pub aim: Option<i32>,
+    #[serde(default)]
+    pub knack_uses: Option<i32>,
+    #[serde(default)]
+    pub hp_pct: Option<i32>,
+}
+
+impl Grades {
+    pub fn get(&self, preset: &str) -> Option<&Grade> {
+        match preset {
+            "cozy" => self.cozy.as_ref(),
+            "fair" => self.fair.as_ref(),
+            "stubborn" => self.stubborn.as_ref(),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

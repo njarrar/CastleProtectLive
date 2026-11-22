@@ -189,6 +189,103 @@
           "minimum": 50,
           "maximum": 200,
           "description": "Hob HP of this side in this level, percent of each Hob's own HP (default 100)."
+        },
+        "grades": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per AI preset (cozy, fair, stubborn): when the AI plays this side on that preset, aim, knack_uses and hp_pct here replace the side's own. A setup aim still wins. Used by the Skirmish maps.",
+          "properties": {
+            "cozy": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "aim": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 5
+                },
+                "knack_uses": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "hp_pct": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 50,
+                  "maximum": 200
+                }
+              }
+            },
+            "fair": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "aim": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 5
+                },
+                "knack_uses": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "hp_pct": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 50,
+                  "maximum": 200
+                }
+              }
+            },
+            "stubborn": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "aim": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 5
+                },
+                "knack_uses": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "hp_pct": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 50,
+                  "maximum": 200
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -261,6 +358,103 @@
           "minimum": 50,
           "maximum": 200,
           "description": "Hob HP of this side in this level, percent of each Hob's own HP (default 100)."
+        },
+        "grades": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per AI preset (cozy, fair, stubborn): when the AI plays this side on that preset, aim, knack_uses and hp_pct here replace the side's own. A setup aim still wins. Used by the Skirmish maps.",
+          "properties": {
+            "cozy": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "aim": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 5
+                },
+                "knack_uses": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "hp_pct": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 50,
+                  "maximum": 200
+                }
+              }
+            },
+            "fair": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "aim": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 5
+                },
+                "knack_uses": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "hp_pct": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 50,
+                  "maximum": 200
+                }
+              }
+            },
+            "stubborn": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "aim": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 5
+                },
+                "knack_uses": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "hp_pct": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 50,
+                  "maximum": 200
+                }
+              }
+            }
+          }
         }
       }
     },

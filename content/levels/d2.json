@@ -64,7 +64,7 @@
       "jax",
       "grub"
     ],
-    "blueprint": "bp_home_4"
+    "blueprint": "bp_kit_stone"
   },
   "rival": {
     "name": "Skirmish Rival",
@@ -76,7 +76,19 @@
       "pebble_pitcher",
       "mower_minder"
     ],
-    "aim": 3
+    "aim": 3,
+    "grades": {
+      "cozy": {
+        "aim": 1,
+        "knack_uses": 0,
+        "hp_pct": 50
+      },
+      "fair": {
+        "aim": 2,
+        "knack_uses": 1,
+        "hp_pct": 90
+      }
+    }
   },
   "rules": {
     "round_cap": 15,
