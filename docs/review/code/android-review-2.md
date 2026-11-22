@@ -259,3 +259,58 @@ The design is sound: the log is kept after each command, a dead reply rebuilds w
 - Sound has one thread, pan, pitch spread, the 3 in 50 ms rule, ducking, and releases its `SoundPool`, players and focus in `release()`. No leak of an activity or view was found.
 - Help, Volley Points, Give up, the boss HUD and the Results screen read everything from the core's `hud` and `result`. Buttons are summed from `result.buttons` once per battle.
 - Portrait: Title, Map, Pre-battle, Results, Skirmish and Couch Duel setup all scroll and pad for insets.
+
+---
+
+## Fixes
+
+All in `apps/android/`. Checked with `./gradlew assembleDebug testDebugUnitTest lintDebug`: build, 75 JVM tests (5 skipped, they need the host core), lint 0 errors. New tests are in `app/src/test/kotlin/games/castleprotect/ReviewTwoTest.kt` (21 tests). Nothing was run on a device, so the sound, frame rate and TalkBack fixes are checked by unit tests of their rules, not by ear or eye.
+
+| Id | Fix | Test |
+|---|---|---|
+| N-H1 | `game/AudioPolicy.kt` `FocusState`: a granted request restores music and effects at once (no GAIN callback is needed). A full loss stops only the music; effects play on. After a full loss focus is asked for again only on a player action (a new screen, Resume, a return to the app), never on its own | `focusComesBackWhenARequestIsGrantedAfterAFullLoss` |
+| N-H2 | `MainActivity.dispatchTouchEvent` (and `onKeyDown`) open the sound on the first tap anywhere, so 2 Players, Skirmish, Settings and Carry on all have sound. The lock (`SoundGate`) is written to a new `soundUnlocked` setting, apart from `seenIntro`, so the first run auto start still works and later launches are never silent. Music asked for while locked starts on that tap. TalkBack users get sound from the start | `theFirstTapAnywhereOpensTheSoundOnceAndForGood` |
+| N-H3 | `battle/FieldFx.kt` `CollapsePlan`: a piece starts at its own (pre-fall) cell and lands `fall` cells lower. Dust, rubble, chunks and the land beat play at the landing place | `collapsePiecesStartAtTheirCellAndLandWhereTheCoreSays` |
+| M6, N-M2 | Wind leaves and trails are ambient effects and do not count for `busy`; shimmer and the Squall never did. Ambient motion runs at the 12 fps idle rate. The render loop is capped at 60 fps | `windLeavesAreAmbient` |
+| N-M3 | Paused: the field draws one still frame whenever the surface is new or changes size (Home and back, a turn, a layout switch), then waits | by reading |
+| H8, N-M8 | `FieldFx` and `BattleRenderer` allocate nothing per frame on the common path: one shared clip event sink (`ClipEvents`), sprites resolved when a clip changes frame and kept on the clip (`spriteOf`), flaps and lids in arrays by room number, pins by a packed number, pose names looked up once per Hob, prop, steam, flap and lid sprites in the start tables, index loops in the hot paths, no `Pair` per Hob | `aClipSpriteIsLookedUpOnlyWhenItsFrameChanges` |
+| N-M1 | The rubble clip lives only as long as its frames; the `Rubble` object shows the broken block and fades | `rubbleClipEndsWithItsFramesAndTheHoldFades` |
+| N-M4 | `AimMemory`: Recall, picking a Hob and a refused aim forget the last aim sent, so the next key steps from the core's aim. `GameSession.recall` | `recallForgetsTheLastAimSent` |
+| N-M5 | `relight` drops the popped kettle clip; a finished pop is also dropped when the snapshot says the kettle is whole | `aRelitKettleDropsThePoppedLook` |
+| N-M6 | Wide layout: the camera target is frozen while a finger aims | by reading |
+| N-M7 | Music is decoded once (`game/Pcm.kt` `PcmDecoder`) and the layers are mixed into one AudioTrack (`MusicEngine`, `LayerMix`): one sample position for all layers, so no drift and no re-seek, and each loop wraps by sample count with no gap. Decoded audio is cut to the manifest's `samples` after the encoder delay (`AudioRules.window`), which removes the AAC loop gap on Android 8 and 9. The same applies to the world loops (`LoopTrack`). Decoding runs on its own thread, so taps are not late when a battle opens (also N-L7) | `layersLoopBySampleCountAndStayOnTheSameSample`, `decodedLoopsAreCutToTheirSamplesAfterTheEncoderDelay` |
+| N-M9 | The aim is out of `BattleUi` (all Hob angles and powers read 0 there) and in its own flow `GameSession.aimState`, read only by the readout and the Fine Tune pad | `anAimStepGivesAnEqualBattleUi` |
+| N-M10 | `Sprites`: a byte bounded LRU cache (`CostLru`, 64 MB), a failed decode is not cached, `prefetch` decodes a battle's sprites (field art plus the crew's poses) on a worker when the battle starts or is carried on, and a low memory trim drops only what was not drawn in the last 5 s. Atlas pages are not done (they need a change to the shared assets) | `theSpriteCacheIsBoundedByBytes` |
+| N-M11 | The texts of one frame are joined into one announcement, and the same text twice in a row still changes the live region | `announcementsOfOneFrameAreJoinedAndRepeatsStillChange` |
+| N-M12 | A collapse that lands after the settle adds no shake, hit stop or slow motion, and a new turn ends any slow motion or hit stop | `aNewTurnEndsSlowMotionAndHitStop` |
+| N-M13 | `LiveBattle.finishDraft`: Carry on into a battle saved in the Rummage ends the draft first | `carryOnIntoARummageSaveEndsTheDraft` |
+| N-M14 | World loops are AudioTracks of their own, so a burst of impacts cannot steal them, and a loop wanted before its sound is ready starts as soon as it can (`LoopWants`, retry every 500 ms). SoundPool priorities follow 07 section 9.5; blasts, Bonks and the kettle are never stolen (also N-L21) | `aLoopThatCouldNotStartStaysWanted` |
+| N-M15 | Music and loops stop under the Pause card and resume only on Resume; nothing ticks in the background; effects always resume on return; headphones pulled out pause the battle and silence the game until the player acts; no focus request while Music is at 0 or Mute all is on | `focusComesBackWhenARequestIsGrantedAfterAFullLoss` (focus rule), the rest by reading |
+| N-M16 | `LiveBattle.recover` closes the new handle when the replay throws; the dropped command is reported (`takeDropped`) and the player sees a short note; a rebuild shows "Loading..." over the field (`onRebuild`); a snapshot still owed after a fault is taken at once; a panic that repeats on the same command right after a rebuild sets the battle aside at once instead of after three replays | `aFailedRebuildClosesItsHandleAndTheDroppedMoveIsReported`, `aPanicThatRepeatsRightAfterARebuildGivesUpAtOnce` |
+| Lens rule | `Camera.fortOrNull`: camera, hint and overlay code never index the fort list or force-unwrap the view; a missing fort falls back to the other fort, then to the whole map. `BattleScreen` no longer uses `ref.view!!` | `aMissingFortFallsBackAndNeverCrashes` |
+
+Low items:
+
+| Id | Fix |
+|---|---|
+| N-L1 | A winner's cheer repeats without its sounds |
+| N-L2 | A Hob Bonked before the view was made starts in the loop, with no inflate or lift sound (`AnimClip.skipToLoop`) |
+| N-L3 | Clip events belong to the real frame, so a clip played backwards fires them at the right end (test `aBackwardsClipFiresEventsOnTheirOwnFrame`) |
+| N-L4 | `FieldFx.clear` resets flap, lid and pin state, legs, the Squall, shimmer and the last state frame |
+| N-L5 | Wide flight camera keeps a shell below the target fort in view |
+| N-L6 | The aim band loop starts and stops on the UI thread only |
+| N-L7 | Music ducks only for a bark that can be heard; release runs in `finally`; no MediaPlayer is left (no prepare on the audio thread, a dead music track is rebuilt) |
+| N-L8 | Barks load with the crew in play, not all 48 at start. Both audio formats still ship: Android 8 and 9 need the AAC copies |
+| N-L9 | A note shows on every screen (`NoticeBar`), not only the Title |
+| N-L10 | `lastStepAt` is written on the sim thread only; the quiet map theme after a loss plays once |
+| N-L12 | Numbers are formatted with `Locale.ROOT` |
+| N-L13 | After a snapshot that could not be read, the app asks for `terrain_all` |
+| N-L14 | The Wide field node is hidden under cards too |
+| N-L15 | Only the newest two set-aside saves are kept (test `onlyTheNewestTwoSetAsideSavesAreKept`) |
+| N-L16 | `onCleared` waits at most 1 s for the sim thread |
+| N-L17 | At the effect cap an ambient effect goes first; leaves are capped at a quarter of it; the Squall uses fewer, larger tiles |
+| N-L19 | `Juice` takes one lock for every write |
+| N-L20 | A refused Give up shows a note |
+| N-L21 | See N-M14 |
+
+Not done: N-L11 (view rules still in Kotlin; they need fields from the core or shared data files), N-L18 (needs a device to check the surface resize), N-L22 second half (tests still use the Maven `org.json`). Sprite atlas pages (part of N-M10) need a change in `assets/`.

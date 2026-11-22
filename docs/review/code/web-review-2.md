@@ -262,3 +262,40 @@ Fix: add a `webkit` project and a phone project (390x844, touch). Add tests for 
 3. M1 and M2 (the two known portrait issues, both still there).
 4. M3, M4, M7, M8 on a real iPhone, then M5 and M6.
 5. M9 to M14, then the Low list.
+
+## Fixes
+
+All in `apps/web/` and `.github/workflows/web.yml`. Checked with `scripts/build-wasm.sh`, then `npm ci && npm run build && npx playwright test` in `apps/web`, with the default base and with `VITE_BASE=/CastleProtectLive/`: 51 of 51 pass in both (desktop Chromium, iPhone 15 portrait in WebKit, Pixel 7 landscape in Chromium). After screenshots at 390x844 and 844x390 are in `docs/review/code/web-shots/review-2-after/` and were looked at.
+
+| Id | Status | What changed | Test |
+|---|---|---|---|
+| H1 | Fixed | Found that `resume` runs on to the next stable point after the last command, so a mid-flight hash can never match. A save taken in `resolve` or `settle` now stores the hash of that landing state (a scratch `Game` replays the log once, `real.ts` `landingHash`). Settings from Pause takes over the live battle on Back (`core.battleGen`), so the shot carries on where it was; the save string is only the fallback. A log that replays but lands on another hash now loads with a note and is kept; only a log the core refuses is put aside | `fixes.spec.ts` H1 (two tests), `recovery.spec.ts` hash test |
+| H2 | Fixed | `App.go` keeps the route Settings goes back to (not the bare battle route) on the back stack, drops stale battle routes when a fight is entered, and gives every fight its own history entry so Back always reaches Pause | `fixes.spec.ts` H2 |
+| H3 | Fixed | `build-art.mjs` puts a 10 digit content hash in the names of atlas page images, backgrounds (`art/bg.json`) and every sound file, and rewrites the page JSON and `audio.json` to match. The JSON files (`audio.json`, `barks.json`, `bg.json`, page JSON) are precached with revisions; the hashed files stay runtime `CacheFirst`. Frame rects and their image always come together | `fixes.spec.ts` H3 |
+| M1 | Fixed | `joined` class on the HUD in the joined flight lens: strip borders transparent, Pause and the aim cluster sit 52 px up, above the drawn strip | `fixes.spec.ts` portrait |
+| M2 | Fixed | Words are laid out in screen px: anchored in the world, then pushed sideways off every number and off the kettle rooms, kept inside the lens; words drawn first, numbers on top | `fixes.spec.ts` words |
+| M3 | Fixed | `visibilitychange` and `pagehide` suspend the context, visible resumes it. `stopLoops` fades and stops each source. Pause turns slow motion audio off | `fixes.spec.ts` sound |
+| M4 | Fixed | About 20 sounds a first shot needs decode first, one at a time, the other effects in idle time. Barks decode only for the Hobs in the fight and are freed when it ends. Only one music theme is kept decoded | `fixes.spec.ts` sound |
+| M5 | Fixed | `clientsClaim` (an update still waits for the Update tap), `audio.json` precached, sounds fetched before the worker took control are fetched again through it on `controllerchange`. A failed load is not kept; a failed music layer is tried again | build check in H3 test |
+| M6 | Fixed | A decode error tries the other format once and keeps it for the session. Both forms of `decodeAudioData` are handled (L12) | not run on Safari |
+| M7 | Fixed | `destroy` zeroes every lens cache canvas, the terrain canvas and the field canvas. A crater now patches only its rects in each lens's scaled terrain copy (`TerrainLayer.dirtySince`), at once | covered by the shot tests |
+| M8 | Fixed | `adaptRes` times the work inside `tick`, not the frame gap | not tested (too machine dependent for CI) |
+| M9 | Mostly fixed | Titles for `give_up`, `volley_points`, `captive_bonked`. `hud.handicap` shown on the hand-off card (Help, Steam, preview share, crew). `roller_move`, `roller_done`, `shears`, `column`, `prop`, `prop_wake`, `carve`, `mound` have sounds and words. Still open: `dial` and `target` on `fire` (needs a `types.ts` and UI pass) | `fixes.spec.ts` Give up |
+| M10 | Fixed | When the next turn starts, a collapse still creaking skips to its drop, rows let go 30 ms apart and the rest plays at 2x. The feel layer keeps running under the hand-off card, so blocks never hang | smoke collapse test |
+| M11 | Fixed | Clean Sweep slow motion comes from the core `win` event (`how: clean_sweep`); a Bonk is a plain Bonk slow. Blast bands live in one place (`juice.ts`). `feel.ending` removed | |
+| M12 | Fixed | `old.free()` wrapped; crash Retry loads the last autosave and replays it | |
+| M13 | Partly fixed | Bark subtitles from `barks.json` show as a speech tag over the Hob, also at volume 0. Shell card opens on a 500 ms long press. `-webkit-touch-callout: none`. Not done: Voices slider, Mono, haptics | `mobile.spec.ts` long press |
+| M14 | Fixed | Projects `iphone` (iPhone 15, WebKit) and `pixel-landscape` (Pixel 7 landscape, Chromium) run `fixes.spec.ts` and `mobile.spec.ts`; CI installs both engines, runs all projects, 2 workers, 1 retry | |
+| L1, L2 | Fixed | Collapse counts only pool slots taken; a slow that loses to a stronger one spends no budget | |
+| L3, L4 | Fixed | Layer fades start from the current value and ramp to the sound's volume; loops schedule a ramp only on a real change | |
+| L6 | Fixed | `upgrade()` retries after a failed fetch; crew and tray keys include `sprites.scale`; replaced @1x bitmaps are closed | |
+| L7 | Fixed | Any first tap or key unlocks sound (map and Workshop too) | |
+| L8 | Fixed | Save quill moved off the Rival pips | |
+| L9 | Fixed | A still clip is painted once and leaves the ticker | |
+| L10 | Fixed | Stale comments removed | |
+| L11 | Fixed | Hourly update check; `castle-copy` skips `vite preview` | |
+| L12 | Fixed | `display: standalone`, `100dvh` | |
+| L13 | Fixed | The workflow prints the wasm size and warns over 1 MB | |
+| L5 | Open | Per frame garbage in the HUD keys and `merge` | |
+
+Also fixed while here, each with a test in `mobile.spec.ts`: the 1-1 "Drag to aim" hint no longer throws while the portrait lenses are joined (Fire three times with no drag, rounds advance), and the landscape lens is cleared under the CSS sky before the backdrop cache is blitted, so aim previews no longer pile up.
