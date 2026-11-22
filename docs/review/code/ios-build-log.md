@@ -51,3 +51,24 @@ Final green run: https://github.com/njarrar/CastleProtectLive/actions/runs/45044
   `testHelpVolleyAndBossSetupsStart`.
 - 72 unit tests and 2 UI tests passed, none skipped.
 
+
+## Review 2 fixes
+
+| # | Run | Result | Cause | Fix |
+|---|---|---|---|---|
+| 12 | [45047453012](https://github.com/njarrar/CastleProtectLive/actions/runs/45047453012) | Cancelled | Superseded by run 13 (the own-fort aim rule). | None. |
+| 13 | [45048275843](https://github.com/njarrar/CastleProtectLive/actions/runs/45048275843) | Failed in tests | The new core thread ran `sync` work inside `withoutActuallyEscaping`; the thread's job queue still held the closure when the caller returned, so the runtime trapped ("closure argument was escaped"). Each trap restarted the test runner. | `CoreHost.sync` takes an escaping closure. |
+| 14 | [45050397036](https://github.com/njarrar/CastleProtectLive/actions/runs/45050397036) | Failed: 1 test | `testEveryCoreCallRunsOnOneThread` saved after a Rival turn; the stand-in does not log `ai_turn`, so its replay hash differed. The debug core step passed (4 real-core tests, no `wrong_thread`). | The test saves and replays before the shot. |
+| 15 | [45052238644](https://github.com/njarrar/CastleProtectLive/actions/runs/45052238644) | Passed | | |
+
+Final green run: https://github.com/njarrar/CastleProtectLive/actions/runs/45052238644
+
+- 93 test cases passed (unit and UI), none skipped; the run now fails below 85.
+- Required real-core tests now also include `testLeanAimReachesTheHudOnTheRealCore` and
+  `testCouchDuelAfterReadyOnTheRealCore`.
+- New step "Thread rule on a debug core": builds the core with `--dev` (the `wrong_thread` check on)
+  and runs `testRealCoreWhenLinked`, `testMultiTurnReplayMatchesTheHash` and the two lean HUD tests. All pass.
+- Privacy check: `fstat` (File Timestamp, declared) is still the only hit; `NSUserDefaults` is now checked
+  too and is not used. The `nm` probe for which archive member imports `fstat` printed nothing on this
+  runner (the release archive path did not match), so the source stays as review 2 found it: Rust std's
+  panic and backtrace code, not the rules. `PrivacyInfo.xcprivacy` says so in a comment.

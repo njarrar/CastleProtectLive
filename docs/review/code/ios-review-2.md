@@ -353,3 +353,36 @@ the reason code is.
 4. M3, M4, M5 in one pass over `SoundEngine`, then a device listen.
 5. M6 and M8: order of the collapse and the pop show.
 6. M7, then the low items.
+
+## Fixes
+
+Fixed on branch `castle-protect-plan`. Paths are relative to `apps/ios/CastleProtect/`. New tests are in
+`apps/ios/Tests/CastleProtectTests/ReviewTwoTests.swift`. The stand-in core now answers `aim` with a lean frame
+carrying `aim` and `preview`, as the real core does, so the stand-in no longer hides the lean path.
+
+| Id | Status | What changed | Test |
+|---|---|---|---|
+| H1 | Fixed | `Core/FrameAssembler.swift`: a lean frame is merged into the last full snapshot (`aim` into the selected Hob, `preview`, phase, side, awaiting). Plan and draft frames rebuild the view from the merged state; flight frames keep the cheap path. `Battle/BattleSession.swift` refreshes the HUD on a lean frame when the aim, `canFire`, the selected Hob or the speed differ | `testFineTuneMovesTheReadoutOnALeanFrame`, `testLeanAimReachesTheHudOnTheRealCore` (real core, required in CI), `testSpeedLabelFlipsInFlight` |
+| H2 | Fixed | The assembler remembers the hand-off state of the last view and rebuilds from the merged full state when it changes (READY), so aim, preview and `canFire` come back; a lean aim frame after READY is applied | `testReadyRebuildsAimPreviewAndFire`, `testCouchDuelAfterReadyOnTheRealCore` (real core, required in CI) |
+| H3 | Fixed | `Feedback/SoundEngine.swift`: `VoicePool` keeps when each voice's sound ends (length over rate) and the buffer's `.dataPlayedBack` completion frees it, guarded by a generation so a stolen voice's old handler is ignored. A free voice first, else the oldest not on the kettle bus. `isPlaying` is no longer read | `VoicePoolTests` (4 tests, fake clock) |
+| H8 / M1 (regression, M7 here) | Fixed | Idle pose step back to 5 a second (`Battle/BattleSpriteView.swift`); a Bonked Hob's looping pose no longer counts as active after its balloon lift; `cameraMoving` counts shown lenses only | `testBonkedHobLetsThePlanStepGoIdle` |
+| M6 (regression, wrong format) | Fixed | A sound file that is not 48 kHz is skipped with an `os.Logger` warning | None (needs a bad asset) |
+| M1 | Fixed | A blocking "Loading your fight" card while `resuming` (`UI/RootView.swift`); `begin` refuses while it is set; `CoreGame.start` bumps `startCount` and a load that finds it moved returns `.superseded` and touches nothing; Carry on drops its result when a session already exists | `testLoadIsDroppedWhenAnotherBattleStarts` |
+| M2 | Fixed | `Core/CoreHost.swift`: one dedicated `Thread` with an ordered job queue runs every core call, `cp_new` and the quick ones included; the handle is freed there too. The `ai_turn` reply is read: a dead handle is rebuilt, any other refusal is retried, and three in a row raise a fault. CI now builds the debug core and runs the Rival, replay and lean aim tests on it | `testEveryCoreCallRunsOnOneThread`, `testRefusedRivalTurnRaisesAFault`, CI step "Thread rule on a debug core" |
+| M3 | Fixed | Configuration change: voices, loops and music are cleared, the engine restarts, the music starts again from its first sample and the loops come back from their stored gains. `play()` only runs with the engine running (`prepare()` returns false otherwise). Route change `oldDeviceUnavailable` pauses the battle. The Pause card holds the sound (`SoundEngine.setHeld`), so nothing plays under it, coming back to the app does not restart it, and Resume does | `testPauseCardHoldsTheSound` |
+| M4 | Fixed | A stopped loop's player and varispeed are disconnected and detached | `testLoopsLeaveNoNodesBehind` |
+| M5 | Fixed | Music layers wait (20 ms ticks, up to 0.5 s) for a valid engine render time and start together on it; a layer that stopped restarts the whole track; Debug builds log if the layers' sample times differ | Device listen still needed |
+| M6 | Fixed (defects 1 to 3) | `Battle/FieldFX.swift`: collapses are read first; crush and fall hits and breaks, a kettle pop from the crush and a Hob drop wait for the chunk's landing. The Hob is drawn at `from` and falls to `to` with its chunk; crushed blocks stay drawn until the ghosts land; the HUD keeps its numbers until then; the sim waits (no settle steps) while the fall show plays, so the next turn never starts mid fall. Defect 4 (sink in the same batch) is open | `testCrushAndHobDropWaitForTheLanding` |
+| M7 | Fixed | See the H8 regression row | |
+| M8 | Fixed | Results wait at least 1.2 s, then for the pop show and any collapse to end, capped at 3 s; the win or lose sting starts on the pop frame (or at the screen change if the frame never came). `relight` clears the pop | `testKettlePopShowAndRelight` |
+| L1 | Fixed | Side clamped to 0 or 1 in the assembler; the fort node range no longer traps with more castles | |
+| L2 | Fixed | `fort_bob.frame_ms` is at least 1 | |
+| L4 | Partly | Whistle pitch clamped to -7..+7; the session hint is cached; a failed engine start is retried on the next foreground; a `null` launch sound plays nothing; the wrong-format warning is back. Slow motion pitch drop and voice ducking of world loops are not built | |
+| L5 | Partly | `fx` is reset after a dead-handle rebuild | |
+| L6 | Fixed | The pre-battle sheet says "N shots each, most damage wins" for Volley Points | |
+| L9 | Partly | Unused `RUST_VERSION` removed; the run fails when fewer than 85 test cases pass; the debug core is linked in one step. No Xcode pin yet | |
+| L10 | Partly | The privacy check also looks for `_OBJC_CLASS_$_NSUserDefaults` (UserDefaults) and matches names exactly | |
+| Owner rule (design 00, 2.3) | Done | `Battle/BattleSession.swift` `aimMayStart(at:)`: an Aim Drag starts only on the active side's fort (its block box grown by 32 cells) or within 48 pt of the picked Hob, using the lens camera (`LensMap` in `Battle/BattleSpriteView.swift`). A press anywhere else never changes the aim | `testDragFromOpenSkyLeavesTheAim`, `testDragFromTheOwnFortAims` |
+| Privacy | Kept | The File Timestamp entry stays, with a comment in `PrivacyInfo.xcprivacy`: `fstat` comes from Rust std's panic and backtrace code, kept linked by `catch_unwind`; the rules never call it. CI prints which archive members of `libcastle_ffi.a` import it | |
+
+Not done this round: L3 (held Walk), L7 (terrain textures over frames), L8 (Reduce motion lens join), M6 defect 4.
