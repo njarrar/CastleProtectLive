@@ -8,7 +8,7 @@ import { clearBattle, dropBattleSave, loadBattleSave, saveBattle } from '../save
 import { DEBUG } from '../ui/fatal';
 import { CLASS_COLOR, CLASS_ICON, CLASS_INK, btn, h, repeatKey } from '../ui/dom';
 import { ctx2d } from '../render/ctx2d';
-import { type DrawOpts, LensCache, drawLens, drawStrip } from '../render/draw';
+import { type DrawOpts, LensCache, aimHeat, drawLens, drawStrip, roundRect } from '../render/draw';
 import { type Cam, type Rect, toScreen, toWorld } from '../render/view';
 import { Feel } from '../render/feel';
 import { firePress, handoffFlip, turnBanner } from '../ui/motion';
@@ -33,6 +33,8 @@ interface Gesture {
   skyAim?: boolean;
   /** The pull direction while the finger was clear of the screen edge (unit vector, world y up). */
   lockDir?: [number, number];
+  /** Pull in px for power 100 on this drag. */
+  full?: number;
   t0: number;
 }
 
@@ -640,6 +642,7 @@ export function battleScreen(app: App, route: Route): Screen {
     const work0 = performance.now();
     last = now;
     readRects();
+    edgeSlide(dt);
     flushAim();
     // Hit stop and slow motion scale view time; the fixed-step sim is stepped in view time,
     // so it freezes and slows with the view and its ticks never change (07 §6.1, §6.4).
@@ -784,19 +787,110 @@ export function battleScreen(app: App, route: Route): Screen {
       else { stripLenses[0].rect = rc.top; stripLenses[0].cam = camTop; stripLenses[1].rect = rc.bottom; }
       drawStrip(ctx, joined ? stripRect : rc.strip, snap, terr, stripLenses, joined ? 1 : 2, me);
     }
-    if (drag && drag.mode === 'aim') {
-      ctx.save();
-      ctx.strokeStyle = app.settings.quickFire && dist(drag) > 12 ? '#E5484D' : 'rgba(43,30,46,0.7)';
-      ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(drag.x0, drag.y0);
-      ctx.lineTo(drag.x, drag.y);
-      ctx.stroke();
-      ctx.fillStyle = '#FFF4DE';
-      ctx.beginPath(); ctx.arc(drag.x0, drag.y0, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.restore();
+    if (drag && drag.mode === 'aim') drawAimBand(drag, me);
+  }
+
+  /** The Aim Drag band: a 10 step power scale that fills as you pull, the last shot's notch, the
+   *  cancel spot at the anchor, and the power and angle badges at the top of the lens. */
+  function drawAimBand(g: Gesture, me: Side): void {
+    const full = g.full ?? 0.4 * Math.min(W, H);
+    const a = pendingAim ?? snap.hud.aim;
+    const inCancel = dist(g) < 12;
+    const sgn = app.settings.dragMode === 'point' ? -1 : 1;
+    const armed = app.settings.quickFire && !inCancel;
+    ctx.save();
+    ctx.lineCap = 'round';
+    // The direction from the anchor toward the finger for an aim angle (tenths of a degree).
+    const along = (angle: number): [number, number] => { const r = (angle / 10) * Math.PI / 180; return [-Math.cos(r) * sgn, Math.sin(r) * sgn]; };
+    if (a && !inCancel) {
+      const [ux, uy] = along(a.angle);
+      const nx = -uy, ny = ux, w = 10;
+      const seg = full / 10;
+      const pull = (a.power / 100) * full;
+      const quad = (b0: number, b1: number) => {
+        ctx.beginPath();
+        ctx.moveTo(g.x0 + ux * b0 + nx * w / 2, g.y0 + uy * b0 + ny * w / 2);
+        ctx.lineTo(g.x0 + ux * b1 + nx * w / 2, g.y0 + uy * b1 + ny * w / 2);
+        ctx.lineTo(g.x0 + ux * b1 - nx * w / 2, g.y0 + uy * b1 - ny * w / 2);
+        ctx.lineTo(g.x0 + ux * b0 - nx * w / 2, g.y0 + uy * b0 - ny * w / 2);
+        ctx.closePath();
+      };
+      for (let k = 0; k < 10; k++) {
+        const b0 = k * seg + 1.5, b1 = (k + 1) * seg - 1.5;
+        quad(b0, b1);
+        ctx.fillStyle = 'rgba(255,244,222,0.55)'; ctx.fill();
+        ctx.strokeStyle = armed ? '#E5484D' : 'rgba(43,30,46,0.6)'; ctx.lineWidth = armed ? 2 : 1; ctx.stroke();
+        if (pull > b0) { quad(b0, Math.min(b1, pull)); ctx.fillStyle = aimHeat((k + 1) * 10); ctx.fill(); }
+      }
+      // The last shot of this Hob: a notch where its pull would end, and the change from it.
+      const last = lastPinOf(me);
+      if (last) {
+        const [lx, ly] = along(last.angle);
+        const d = (last.power / 100) * full;
+        const mx = g.x0 + lx * d, my = g.y0 + ly * d;
+        ctx.save();
+        ctx.translate(mx, my); ctx.rotate(Math.atan2(ly, lx));
+        ctx.fillStyle = '#FFF4DE'; ctx.strokeStyle = '#2B1E2E'; ctx.lineWidth = 1.5;
+        ctx.fillRect(-2.5, -11, 5, 22); ctx.strokeRect(-2.5, -11, 5, 22);
+        ctx.restore();
+        const dp = a.power - last.power, da = (a.angle - last.angle) / 10;
+        const sign = (v: number) => (v > 0 ? '+' : v < 0 ? '\u2212' : '\u00B1');
+        const txt = `${sign(dp)}${Math.abs(dp)} | ${sign(da)}${Math.abs(da).toFixed(1)}\u00B0`;
+        bandTag(txt, mx + nx * 22, my + ny * 22, '#2B1E2E');
+      }
+    } else if (inCancel) {
+      ctx.strokeStyle = 'rgba(43,30,46,0.45)'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(g.x0, g.y0); ctx.lineTo(g.x, g.y); ctx.stroke();
     }
+    // The cancel spot: drag back onto it and let go to keep the old aim.
+    ctx.fillStyle = inCancel ? '#E5484D' : '#FFF4DE'; ctx.strokeStyle = '#2B1E2E'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(g.x0, g.y0, 15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = inCancel ? '#FFF4DE' : '#2B1E2E'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(g.x0 - 5.5, g.y0 - 5.5); ctx.lineTo(g.x0 + 5.5, g.y0 + 5.5); ctx.moveTo(g.x0 + 5.5, g.y0 - 5.5); ctx.lineTo(g.x0 - 5.5, g.y0 + 5.5); ctx.stroke();
+    if (inCancel) bandTag(t('hud.cancel_aim'), g.x0, g.y0 - 30, '#E5484D');
+    // Power and angle badges at the top of the lens that aims.
+    if (a) {
+      const lr = lensRects().find((l) => l.id === g.lens)?.rect ?? { x: 0, y: 0, w: W, h: H };
+      const bw = 124, top = (layout === 'wide' ? Math.max(lr.y, rc.clear.y) : lr.y) + 8, x0 = lr.x + lr.w / 2 - bw - 5;
+      badge(x0, top, bw, 'bolt', t('hud.power').toUpperCase(), `${a.power}%`, a.power, 0);
+      badge(x0 + bw + 10, top, bw, 'arrow', t('hud.angle').toUpperCase(), `${(a.angle / 10).toFixed(1)}\u00B0`, a.power, a.angle / 10);
+    }
+    ctx.restore();
+  }
+  function lastPinOf(me: Side): PinView | undefined {
+    for (let i = snap.pins.length - 1; i >= 0; i--) { const p = snap.pins[i]; if (p.side === me && p.hob === snap.hud.hob) return p; }
+    return undefined;
+  }
+  function bandTag(text: string, x: number, y: number, color: string): void {
+    ctx.save();
+    ctx.font = '600 13px system-ui, sans-serif';
+    const w = ctx.measureText(text).width + 12;
+    const bx = clamp(x - w / 2, 4, W - w - 4), by = clamp(y - 10, 4, H - 24);
+    ctx.fillStyle = 'rgba(255,244,222,0.94)'; roundRect(ctx, bx, by, w, 20, 6); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = color; ctx.textBaseline = 'middle'; ctx.fillText(text, bx + 6, by + 10.5);
+    ctx.restore();
+  }
+  function badge(x: number, y: number, w: number, icon: 'bolt' | 'arrow', title: string, val: string, power: number, deg: number): void {
+    ctx.save();
+    ctx.fillStyle = 'rgba(43,30,46,0.88)'; roundRect(ctx, x, y, w, 36, 18); ctx.fill();
+    ctx.fillStyle = '#FFF4DE'; ctx.beginPath(); ctx.arc(x + 18, y + 18, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.translate(x + 18, y + 18);
+    ctx.fillStyle = '#2B1E2E'; ctx.strokeStyle = '#2B1E2E';
+    if (icon === 'bolt') {
+      ctx.beginPath(); ctx.moveTo(2, -9); ctx.lineTo(-5, 1); ctx.lineTo(0, 1); ctx.lineTo(-2, 9); ctx.lineTo(5, -1); ctx.lineTo(0, -1); ctx.closePath();
+      ctx.save(); ctx.clip(); ctx.fillStyle = aimHeat(power); const f = power / 100; ctx.fillRect(-8, 9 - 18 * f, 16, 18 * f); ctx.restore();
+      ctx.lineWidth = 1.2; ctx.stroke();
+    } else {
+      ctx.rotate(-deg * Math.PI / 180); ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.moveTo(-7, 0); ctx.lineTo(5, 0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(2, -5); ctx.lineTo(2, 5); ctx.closePath(); ctx.fill();
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#FFF4DE'; ctx.textBaseline = 'middle';
+    ctx.font = '600 10px system-ui, sans-serif'; ctx.fillText(title, x + 38, y + 11);
+    ctx.font = '700 15px system-ui, sans-serif'; ctx.fillText(val, x + 38, y + 25);
+    ctx.restore();
   }
 
   // ---------- events -> feel (effects, numbers, shake, sound), banners, save ----------
@@ -1542,13 +1636,6 @@ export function battleScreen(app: App, route: Route): Screen {
     } else if (drag.mode === 'strip') stripLook(e.clientX);
   });
 
-  /** How far a finger can pull from the anchor along (ux, uy) before it meets the screen edge. */
-  function room(x0: number, y0: number, ux: number, uy: number, m: number): number {
-    let t = Infinity;
-    if (ux < 0) t = Math.min(t, (x0 - m) / -ux); else if (ux > 0) t = Math.min(t, (W - m - x0) / ux);
-    if (uy < 0) t = Math.min(t, (y0 - m) / -uy); else if (uy > 0) t = Math.min(t, (H - m - y0) / uy);
-    return Math.max(0, t);
-  }
   function aimFromDrag(g: Gesture): void {
     let dx = g.x0 - g.x, dy = g.y - g.y0; // pull-back: shot goes opposite the pull, world y up
     if (app.settings.dragMode === 'point') { dx = -dx; dy = -dy; }
@@ -1565,15 +1652,31 @@ export function battleScreen(app: App, route: Route): Screen {
     let deg = (Math.atan2(uy, ux) * 180) / Math.PI;
     if (deg < 0) deg = deg < -90 ? 180 : 0;
     const angle = Math.round(deg * 2) * 5;
-    // Full power is reached before the finger meets the edge: the pull for 100 is the usual
-    // 40% of the short side, or less when the anchor is near the edge (never under 64 px).
-    // Slow Drag (Fine Tune cell 6) doubles the pull span for micro-precision.
-    const sgn = app.settings.dragMode === 'point' ? -1 : 1;
-    const baseFull = clamp(room(g.x0, g.y0, -ux * sgn, uy * sgn, m + 2), 64, 0.4 * Math.min(W, H));
+    // The pull for 100 is always 40% of the short side, wherever the drag starts, so the same
+    // pull gives the same power. A finger that meets the edge first slides the anchor away
+    // (edgeSlide, 07 §3.1 step 7). Slow Drag (Fine Tune cell 6) makes the span 1.75 times longer.
+    const baseFull = 0.4 * Math.min(W, H);
     const full = slowDrag ? baseFull * 1.75 : baseFull;
+    g.full = full;
     const along = Math.max(0, dx * ux + dy * uy);
     const power = clamp(Math.round((along / full) * 100), 0, 100);
     pendingAim = { angle, power }; // sent once per frame by flushAim
+  }
+
+  /** Edge help (07 §3.1 step 7): while the finger sits on the screen edge under power 100, the
+   *  anchor slides away from it, so the pull keeps growing and the angle keeps its direction. */
+  function edgeSlide(dt: number): void {
+    const g = drag;
+    if (!g || g.mode !== 'aim' || !g.lockDir) return;
+    const m = 6;
+    if (!(g.x <= m || g.x >= W - m || g.y <= m || g.y >= H - m)) return;
+    const a = pendingAim ?? snap.hud.aim;
+    if (!a || a.power >= 100) return;
+    const sgn = app.settings.dragMode === 'point' ? -1 : 1;
+    const sp = 0.4 * Math.min(W, H) * dt; // about 2.5 s from 0 to 100
+    g.x0 += g.lockDir[0] * sp * sgn;
+    g.y0 -= g.lockDir[1] * sp * sgn;
+    aimFromDrag(g);
   }
 
   /** cancel true: put the old aim back. false: a lift (Quick Fire may fire). 'keep': keep the aim, never fire. */

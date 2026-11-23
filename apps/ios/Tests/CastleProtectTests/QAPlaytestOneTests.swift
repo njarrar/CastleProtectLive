@@ -548,19 +548,37 @@ final class PanAndEdgeTests: XCTestCase {
         XCTAssertEqual(g.angleTenths, 450)
     }
 
-    /// The pull for 100 is the room left toward the edge when that is shorter, never under 64 pt.
-    func testPowerSpanShrinksToTheRoomLeft() {
+    /// The same pull gives the same power from any start: the pull for 100 never shrinks near an edge.
+    func testTheSamePullGivesTheSamePowerFromAnyStart() {
         let bounds = CGRect(x: 0, y: 0, width: 844, height: 390)
         var near = AimGesture(anchor: CGPoint(x: 300, y: 300), powerSpan: 156, mode: .pullBack, bounds: bounds)
         _ = near.move(to: CGPoint(x: 300, y: 310))
-        XCTAssertTrue(near.isDragging)
-        XCTAssertEqual(near.powerSpan, 86, accuracy: 0.01, "90 pt to the bottom edge, less the edge margin")
-        var tight = AimGesture(anchor: CGPoint(x: 300, y: 360), powerSpan: 156, mode: .pullBack, bounds: bounds)
-        _ = tight.move(to: CGPoint(x: 300, y: 370))
-        XCTAssertEqual(tight.powerSpan, AimGesture.minPowerSpan)
+        _ = near.move(to: CGPoint(x: 300, y: 350))
         var open = AimGesture(anchor: CGPoint(x: 300, y: 100), powerSpan: 156, mode: .pullBack, bounds: bounds)
         _ = open.move(to: CGPoint(x: 300, y: 110))
-        XCTAssertEqual(open.powerSpan, 156, "40% of the short side when there is room")
+        _ = open.move(to: CGPoint(x: 300, y: 150))
+        XCTAssertEqual(near.powerSpan, 156)
+        XCTAssertEqual(open.powerSpan, 156)
+        XCTAssertEqual(near.power, open.power, "50 pt is the same power near the edge and in the open")
+    }
+
+    /// With the finger on the edge, the anchor slides along the shot until power is full.
+    func testTheAnchorSlidesUntilFullPowerOnTheEdge() {
+        let bounds = CGRect(x: 0, y: 0, width: 844, height: 390)
+        var g = AimGesture(anchor: CGPoint(x: 300, y: 300), powerSpan: 156, mode: .pullBack, bounds: bounds)
+        var d: CGFloat = 0
+        while d < 90 {
+            d += 5
+            _ = g.move(to: CGPoint(x: 300 - d, y: 300 + d))
+        }
+        XCTAssertNotNil(g.edgeAngle)
+        XCTAssertLessThan(g.power, 100)
+        let start = g.anchor
+        for _ in 0..<200 { _ = g.slide(points: 2) }
+        XCTAssertEqual(g.power, 100)
+        XCTAssertEqual(g.angleTenths, 450, "the angle holds while the anchor slides")
+        XCTAssertGreaterThan(g.anchor.x, start.x, "the anchor moves along the shot, up and right")
+        XCTAssertLessThan(g.anchor.y, start.y)
     }
 }
 

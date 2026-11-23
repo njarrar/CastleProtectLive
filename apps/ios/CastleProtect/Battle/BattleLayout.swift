@@ -188,11 +188,11 @@ struct AimGesture: Equatable, Sendable {
     /// A finger this close to the screen edge is on the edge.
     static let edgeMargin: CGFloat = 2
 
-    let anchor: CGPoint
+    private(set) var anchor: CGPoint
     private(set) var finger: CGPoint
     private(set) var isDragging = false
-    /// The pull for power 100: 40% of the short side, or the room left toward the edge the
-    /// drag heads for (set when the drag starts), never under 64 pt.
+    /// The pull for power 100: always 40% of the short side, wherever the drag starts, so the
+    /// same pull gives the same power. A finger that meets the edge first slides the anchor (slide).
     private(set) var powerSpan: CGFloat
     let mode: DragMode
     /// The screen, so a pull into its edge keeps its angle; nil means no edge rule.
@@ -243,10 +243,6 @@ struct AimGesture: Equatable, Sendable {
         if !isDragging && distance >= Self.dragThreshold {
             isDragging = true
             started = true
-            // Full power comes before the finger meets the edge it heads for.
-            if let room = roomToEdge(toward: point) {
-                powerSpan = max(Self.minPowerSpan, min(powerSpan, room))
-            }
         }
         if isOnEdge(point) && isDragging {
             // On the edge the angle keeps the direction it had; only power follows the finger.
@@ -256,6 +252,19 @@ struct AimGesture: Equatable, Sendable {
             lastAngle = rawAngleTenths
         }
         return started
+    }
+
+    /// Edge help (07 section 3.1 step 7): while the finger sits on the screen edge under power 100,
+    /// the anchor moves `points` along the shot's direction (pull-back) or against it (point mode),
+    /// so the pull keeps growing and the angle keeps its direction. Returns true when it moved.
+    mutating func slide(points: CGFloat) -> Bool {
+        guard isDragging, isOnEdge(finger), power < 100, let a = edgeAngle else { return false }
+        let r = Double(a) / 10 * .pi / 180
+        // The shot's direction on screen (y grows down).
+        var ux = CGFloat(cos(r)), uy = CGFloat(-sin(r))
+        if mode != .pullBack { ux = -ux; uy = -uy }
+        anchor = CGPoint(x: anchor.x + ux * points, y: anchor.y + uy * points)
+        return true
     }
 
     /// Angle in tenths of a degree, snapped to 0.5 degree, 0 right to 1800 left.

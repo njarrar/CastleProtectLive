@@ -328,6 +328,10 @@ final class LensLayer {
     /// The gold ring on the picked Hob while the owner rule is being taught (QA playtest 2).
     private let ownerRing = SKShapeNode()
     private var lastOwnerRadius: CGFloat = -1
+    /// The aim beam in bands (ink edge, colour, white shine), and the miss tag.
+    private var beamNodes: [SKShapeNode] = []
+    private let missBox = SKShapeNode()
+    private let missLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
 
     /// World cells per @1x pixel for Hob frames (72 x 80 px at @1x), so a Hob
     /// stands about two blocks tall in its Nook. Blocks are 1 cell a pixel.
@@ -381,6 +385,77 @@ final class LensLayer {
         ownerRing.fillColor = .clear
         ownerRing.isHidden = true
         world.addChild(ownerRing)
+        for band in 0..<Self.beamBands * 3 {
+            let n = SKShapeNode()
+            n.zPosition = 5 + CGFloat(band % 3) * 0.01
+            n.fillColor = .clear
+            n.lineCap = .round
+            n.lineJoin = .round
+            n.isHidden = true
+            world.addChild(n)
+            beamNodes.append(n)
+        }
+        missBox.zPosition = 9
+        missBox.fillColor = Palette.hex(0xFFF4DE).withAlphaComponent(0.94)
+        missBox.strokeColor = Palette.hex(0x2C221E)
+        missBox.isHidden = true
+        missLabel.fontColor = Palette.hex(0x2C221E)
+        missLabel.verticalAlignmentMode = .center
+        missLabel.horizontalAlignmentMode = .center
+        missBox.addChild(missLabel)
+        world.addChild(missBox)
+    }
+
+    static let beamBands = 12
+
+    /// Aim colour by power: blue at 0, orange near 89, red only from 90.
+    nonisolated static func aimHeat(_ power: Int) -> UIColor {
+        let p = Double(min(100, max(0, power)))
+        let hue = p >= 90 ? 4.0 : 205 - 175 * p / 89
+        return UIColor(hue: CGFloat(hue / 360), saturation: 0.78, brightness: 0.92, alpha: 1)
+    }
+
+    /// "3 blocks short" or "1 block long" for a shot that missed the rival fort (nil on a hit).
+    /// Short and long are seen from the shooter: short falls before the fort, long goes past it.
+    static func missText(_ pin: PinView, snap: BattleSnapshot) -> String? {
+        let own = Camera.fortRect(pin.side, snap: snap)
+        let foe = Camera.fortRect(1 - pin.side, snap: snap)
+        if pin.x >= foe.minX && pin.x <= foe.maxX { return nil }
+        let toward: Double = foe.midX >= own.midX ? 1 : -1
+        let edge = pin.x < foe.minX ? foe.minX : foe.maxX
+        let n = Int((abs(pin.x - edge) / 16).rounded())
+        guard n > 0 else { return nil }
+        let short = (pin.x - edge) * toward < 0
+        let key = short ? "hud.miss_short" : "hud.miss_long"
+        return n == 1 ? GameText.shared.t(key + "_one") : GameText.shared.t(key).replacingOccurrences(of: "{n}", with: String(n))
+    }
+
+    private func updateBeam(show: Bool, snap: BattleSnapshot, cellsPerPoint: Double) {
+        let n = snap.preview.count / 2
+        guard show, n >= 2 else {
+            for b in beamNodes { b.isHidden = true }
+            return
+        }
+        let col = Self.aimHeat(snap.aim.power)
+        let ink = Palette.hex(0x2C221E)
+        let k = CGFloat(max(0.7, min(1.2, 1.4 / max(0.0001, cellsPerPoint)))) * CGFloat(cellsPerPoint)
+        let per = max(1, Int((Double(n) / Double(Self.beamBands)).rounded(.up)))
+        for band in 0..<Self.beamBands {
+            let a = band * per, b = min(n - 1, (band + 1) * per)
+            let edge = beamNodes[band * 3], fill = beamNodes[band * 3 + 1], shine = beamNodes[band * 3 + 2]
+            guard a < b else { edge.isHidden = true; fill.isHidden = true; shine.isHidden = true; continue }
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: snap.preview[a * 2], y: snap.preview[a * 2 + 1]))
+            for i in (a + 1)...b { path.addLine(to: CGPoint(x: snap.preview[i * 2], y: snap.preview[i * 2 + 1])) }
+            let f = CGFloat(a + b) / 2 / CGFloat(n)
+            let w = (10 * (1 - f) + 2) * k
+            edge.path = path; edge.strokeColor = ink; edge.lineWidth = w + 3 * CGFloat(cellsPerPoint)
+            edge.alpha = 0.4 * (1 - f * 0.6); edge.isHidden = false
+            fill.path = path; fill.strokeColor = col; fill.lineWidth = w
+            fill.alpha = 0.95 * (1 - f * 0.6); fill.isHidden = false
+            shine.path = path; shine.strokeColor = .white; shine.lineWidth = max(1.5 * CGFloat(cellsPerPoint), w * 0.22)
+            shine.isHidden = f > 0.5
+        }
     }
 
     /// The gold ring around the picked Hob of the side on turn, pulsing, until 3 aims were
@@ -629,26 +704,38 @@ final class LensLayer {
             cutLine.isHidden = true
         }
 
-        // The preview dots, pulsing, in the active side's shape.
-        if !small {
-            let pulse = fx.library.clip(snap.activeSide == 0 ? "fx_ghost_dot_p1_pulse" : "fx_ghost_dot_p2_pulse")
-            let dotName = snap.activeSide == 0 ? "fx_ghost_dot_p1" : "fx_ghost_dot_p2"
+        // The aim beam: thick near the fort, thin at the far end, coloured by power.
+        updateBeam(show: !small, snap: snap, cellsPerPoint: cellsPerPoint)
+
+        // The picked Hob's last shot: its flight as dots, and how far it missed in blocks.
+        var missShown = false
+        if !small, snap.phase == .plan, snap.humans.indices.contains(snap.activeSide), snap.humans[snap.activeSide],
+           let id = snap.selectedHob,
+           let last = snap.pins.last(where: { $0.side == snap.activeSide && $0.hob == id }) {
+            let k = CGFloat(max(0.5, cellsPerPoint))
+            let step = max(2, last.path.count / 2 / 14) * 2
             var i = 0
-            var n = 0
-            while i + 1 < snap.preview.count {
-                let node = take("dot", parent: world, z: 5)
-                let at = CGPoint(x: snap.preview[i], y: snap.preview[i + 1])
-                let k = CGFloat(max(0.5, 0.8 * cellsPerPoint))
-                if useArt, let pulse {
-                    placeClip(node, pulse.frame(at: reduceMotion ? 0 : now + Double(n) * 60), pulse, at: at, cellsPerPx: k, flip: false)
-                } else {
-                    place(node, frame: useArt ? sheet.frame(dotName) : nil, at: at, scale: k, flip: false, fallback: palette.paper,
-                          fallbackSize: CGSize(width: 5 * cellsPerPoint, height: 5 * cellsPerPoint))
-                }
-                i += 2
-                n += 1
+            while i + 1 < last.path.count {
+                let node = take("lastdot", parent: world, z: 4.5)
+                place(node, frame: nil, at: CGPoint(x: last.path[i], y: last.path[i + 1]), scale: 1, flip: false,
+                      fallback: palette.side(last.side), fallbackSize: CGSize(width: 5 * k, height: 5 * k))
+                node.alpha = 0.8
+                i += step
+            }
+            if !snap.preview.isEmpty, let text = Self.missText(last, snap: snap) {
+                missShown = true
+                missLabel.text = text
+                missLabel.fontSize = CGFloat(13 * cellsPerPoint)
+                let size = missLabel.frame.size
+                let pad = CGFloat(6 * cellsPerPoint)
+                let box = CGRect(x: -size.width / 2 - pad, y: -size.height / 2 - pad / 2,
+                                 width: size.width + pad * 2, height: size.height + pad)
+                missBox.path = CGPath(roundedRect: box, cornerWidth: pad, cornerHeight: pad, transform: nil)
+                missBox.lineWidth = CGFloat(1.5 * cellsPerPoint)
+                missBox.position = CGPoint(x: last.x, y: last.y + 34 * cellsPerPoint)
             }
         }
+        missBox.isHidden = !missShown
 
         // Pins: capped to the 2 most recent per side so Round 10 Fatigue never turns into clutter (Plate 2).
         for pin in Self.visiblePins(snap.pins, maxPerSide: 2) {

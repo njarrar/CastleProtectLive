@@ -138,6 +138,15 @@ struct DragOverlay: Equatable {
     var power: Int
     /// Quick Fire is on and the finger is outside the cancel ring: lifting fires.
     var armed: Bool
+    /// The finger, and the pull in points for power 100.
+    var finger: CGPoint = .zero
+    var span: CGFloat = 156
+    /// The finger is back on the cancel spot: lifting keeps the old aim.
+    var cancel = false
+    /// The picked Hob's last shot (tenths of a degree, power), when it has one.
+    var lastAngle: Int?
+    var lastPower: Int?
+    var pullBack = true
 }
 
 /// "Drag from your fort to aim": a short line by the player's fort (view points).
@@ -500,6 +509,7 @@ final class BattleSession: ObservableObject {
             }
         }
         if !paused { onSlowMo?(Float(fx.timeScale(nowNanos: now))) }
+        slideAim(nanos: now)
         flushAim(now: now, force: false)
         if hudHeld && !fx.collapseShowing {
             hudHeld = false
@@ -1032,8 +1042,34 @@ final class BattleSession: ObservableObject {
         } else if g.power < 100 {
             hitFullPower = false
         }
+        publishOverlay(g)
+    }
+
+    private func publishOverlay(_ g: AimGesture) {
+        let last = lastPinOfPicked()
         dragModel.overlay = DragOverlay(anchor: g.anchor, end: g.bandEnd, angle: g.angleTenths, power: g.power,
-                                        armed: settings.quickFire && !g.isInCancelRing)
+                                        armed: settings.quickFire && !g.isInCancelRing,
+                                        finger: g.finger, span: g.powerSpan, cancel: g.isInCancelRing,
+                                        lastAngle: last?.angle, lastPower: last?.power,
+                                        pullBack: g.mode == .pullBack)
+    }
+
+    /// The newest Pin of the picked Hob on the side in turn.
+    private func lastPinOfPicked() -> PinView? {
+        guard let id = snapshot.selectedHob else { return nil }
+        return snapshot.pins.last(where: { $0.side == snapshot.activeSide && $0.hob == id })
+    }
+
+    private var lastSlideAt: UInt64 = 0
+    /// Edge help: a finger held on the screen edge slides the anchor until power 100, about 2.5 s from 0.
+    private func slideAim(nanos: UInt64) {
+        defer { lastSlideAt = nanos }
+        guard lastSlideAt > 0, nanos > lastSlideAt, var g = gesture, g.isDragging, canAct else { return }
+        let ms = min(100, Double(nanos - lastSlideAt) / 1_000_000)
+        guard g.slide(points: g.powerSpan * CGFloat(ms / 2500)) else { return }
+        gesture = g
+        pendingAim = (g.angleTenths, g.power)
+        publishOverlay(g)
     }
 
     private func flushAim(now: UInt64, force: Bool) {

@@ -7,7 +7,7 @@ import type { TerrainLayer } from './terrain';
 import { anims, frameAt } from './anim';
 import { ctx2d } from './ctx2d';
 import { flattenerSpriteName, isCrewHob, sprites } from './sprites';
-import { list } from '../ui/text';
+import { list, t } from '../ui/text';
 import { type Cam, type Rect, stage, sx, sy, toScreen, toWorld } from './view';
 
 export { type Cam, type Rect, toScreen, toWorld };
@@ -20,6 +20,14 @@ const STOMPERS = true;
 export const INK = '#2C221E';
 export const TEAM = ['#2F6FDE', '#E8730C'];
 export const TEAM_LIGHT = ['#9DBDF5', '#FFB070'];
+
+/** Aim colour by power: cool blue at 0, warm orange near 89, red only from 90. Shape and numbers
+ *  carry power too, so colour-blind players lose nothing. */
+export function aimHeat(power: number, alpha = 1): string {
+  const p = Math.max(0, Math.min(100, power));
+  const hue = p >= 90 ? 4 : Math.round(205 - (175 * p) / 89);
+  return `hsla(${hue}, 82%, 52%, ${alpha})`;
+}
 /** Reusable 16x16 occupancy grid for double-weight fort outer silhouette contour (zero per-frame allocs). */
 const FORT_OCC = new Uint8Array(256);
 const MAT: Record<string, [string, string, string]> = {
@@ -208,6 +216,7 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     else if (p.side !== o.you && rivalN < 2) { ghost(ctx, r, cam, p, 0.3, DASH_RIVAL); rivalN++; }
   }
   if (pickedLast && o.showPreview) ghostDots(ctx, r, cam, pickedLast, feel, o.reduceMotion);
+  if (pickedLast && o.showPreview) missTag(ctx, r, cam, snap, pickedLast);
 
   feel.fx.draw(ctx, r, cam, 1);
 
@@ -279,25 +288,8 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     pin(ctx, r, cam, p, feel);
   }
 
-  // preview arc (already cut to the preview share by the core)
-  if (o.showPreview && snap.hud.preview.length > 1) {
-    ctx.fillStyle = '#fff';
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.5;
-    const pts = snap.hud.preview;
-    const step = Math.max(1, Math.round(8 / Math.max(0.3, cam.s * 3)));
-    const rad = Math.max(2.5, 4 * Math.min(1, cam.s * 1.2));
-    // One path for all dots: one fill and one stroke per lens.
-    ctx.beginPath();
-    for (let i = 1; i < pts.length; i += step) {
-      const x = sx(r, cam, pts[i][0]), y = sy(r, cam, pts[i][1]);
-      if (x < r.x - 8 || x > r.x + r.w + 8 || y < r.y - 8 || y > r.y + r.h + 8) continue;
-      ctx.moveTo(x + rad, y);
-      ctx.arc(x, y, rad, 0, Math.PI * 2);
-    }
-    ctx.fill();
-    ctx.stroke();
-  }
+  // preview arc (already cut to the preview share by the core): a beam that thins out, then beads
+  if (o.showPreview && snap.hud.preview.length > 1) aimBeam(ctx, r, cam, snap.hud.preview, snap.hud.aim?.power ?? 0);
 
   // shells in flight, at their carried-on positions
   for (let i = 0; i < snap.shells.length; i++) {
@@ -1636,6 +1628,67 @@ function pin(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, p: PinView, feel:
   ctx.textAlign = 'center';
   ctx.fillText(roundLabel(p.round), x, y - 16);
 }
+/** How far the newest shot of the picked Hob missed the other fort, in blocks, by its Pin. */
+function missTag(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap: Snapshot, p: PinView) {
+  const mine = snap.forts[p.side], rival = snap.forts[p.side === 0 ? 1 : 0];
+  if (!mine || !rival) return;
+  if (p.x >= rival.x && p.x <= rival.x + rival.w) return; // it landed on the fort
+  const toward = rival.x + rival.w / 2 > mine.x + mine.w / 2 ? 1 : -1;
+  const edge = p.x < rival.x ? rival.x : rival.x + rival.w;
+  const n = Math.max(1, Math.round(Math.abs(p.x - edge) / 16));
+  const short = (p.x - edge) * toward < 0;
+  const text = t(short ? (n === 1 ? 'hud.miss_short_one' : 'hud.miss_short') : (n === 1 ? 'hud.miss_long_one' : 'hud.miss_long'), { n });
+  const x = sx(r, cam, p.x), y = sy(r, cam, p.y) - 44;
+  if (x < r.x - 40 || x > r.x + r.w + 40 || y < r.y - 20 || y > r.y + r.h) return;
+  ctx.save();
+  ctx.font = '600 13px system-ui, sans-serif';
+  const w = ctx.measureText(text).width + 12;
+  const bx = Math.max(r.x + 4, Math.min(r.x + r.w - w - 4, x - w / 2)), by = Math.max(r.y + 4, y - 10);
+  ctx.fillStyle = 'rgba(255,244,222,0.94)'; roundRect(ctx, bx, by, w, 20, 6); ctx.fill();
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = INK; ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillText(text, bx + 6, by + 10.5);
+  ctx.restore();
+}
+
+/** The aim preview as a beam: thick and bright at the Loophole, thinner and fainter along the
+ *  path, then three small beads. Same length as the dots it replaces (00 §2.4). */
+function aimBeam(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, pts: [number, number][], power: number) {
+  const n = pts.length;
+  const k0 = Math.max(0.7, Math.min(1.2, cam.s * 1.4));
+  ctx.save();
+  ctx.lineCap = 'round';
+  const col = aimHeat(power);
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 1; i < n; i += 2) {
+      const f = i / n;
+      const w = (10 * (1 - f) + 2) * k0;
+      ctx.globalAlpha = (pass ? 0.95 : 0.4) * (1 - f * 0.6);
+      ctx.strokeStyle = pass ? col : INK;
+      ctx.lineWidth = pass ? w : w + 3;
+      const a = pts[Math.max(0, i - 2)], b = pts[i];
+      ctx.beginPath(); ctx.moveTo(sx(r, cam, a[0]), sy(r, cam, a[1])); ctx.lineTo(sx(r, cam, b[0]), sy(r, cam, b[1])); ctx.stroke();
+    }
+  }
+  // A white shine down the thick half of the beam.
+  ctx.globalAlpha = 1; ctx.strokeStyle = '#ffffff';
+  for (let i = 1; i < n / 2; i += 2) {
+    const a = pts[Math.max(0, i - 2)], b = pts[i];
+    ctx.lineWidth = Math.max(1.5, (10 * (1 - i / n) + 2) * k0 * 0.22);
+    ctx.beginPath(); ctx.moveTo(sx(r, cam, a[0]), sy(r, cam, a[1])); ctx.lineTo(sx(r, cam, b[0]), sy(r, cam, b[1])); ctx.stroke();
+  }
+  if (n >= 6) {
+    const last = pts[n - 1], prev = pts[n - 6];
+    const vx = last[0] - prev[0], vy = last[1] - prev[1], vl = Math.hypot(vx, vy) || 1;
+    ctx.fillStyle = col; ctx.strokeStyle = INK; ctx.lineWidth = 1;
+    for (let j = 1; j <= 3; j++) {
+      const x = sx(r, cam, last[0] + (vx / vl) * j * 28), y = sy(r, cam, last[1] + (vy / vl) * j * 28 - j * j * 3);
+      ctx.globalAlpha = 0.85 - j * 0.2;
+      ctx.beginPath(); ctx.arc(x, y, (3.4 - j * 0.6) * k0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 const ROUNDS: string[] = [];
 const roundLabel = (n: number) => (ROUNDS[n] ??= String(n));
 
