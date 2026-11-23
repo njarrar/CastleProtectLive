@@ -470,7 +470,8 @@ final class AppModel: ObservableObject {
         s.onAimBand = { gain, pitch in sound.setLoop("aim_band_stretch", gain: gain, pitch: pitch) }
         s.onSlowMo = { scale in sound.setSlowMotion(scale) }
         s.onHobPicked = { [weak s] def, side in
-            let who = s.map { Self.barkContext($0.snapshot, side: side) } ?? (mates: [], rival: nil)
+            let fallback: (mates: [String], rival: String?) = (mates: [], rival: nil)
+            let who: (mates: [String], rival: String?) = s.map { AppModel.barkContext($0.snapshot, side: side) } ?? fallback
             sound.bark(hob: def, event: "picked", side: side, mates: who.mates, rival: who.rival)
         }
         s.fx.onSound = { id, pitch, gain in sound.play(id, pitch: pitch, gain: gain) }
@@ -484,7 +485,8 @@ final class AppModel: ObservableObject {
             sound.play(id, pitch: pitch, gain: gain, pan: pan)
         }
         s.fx.onBark = { [weak s] def, event, side in
-            let who = s.map { Self.barkContext($0.snapshot, side: side) } ?? (mates: [], rival: nil)
+            let fallback: (mates: [String], rival: String?) = (mates: [], rival: nil)
+            let who: (mates: [String], rival: String?) = s.map { AppModel.barkContext($0.snapshot, side: side) } ?? fallback
             sound.bark(hob: def, event: event, side: side, mates: who.mates, rival: who.rival)
         }
         pendingSting = nil
@@ -788,8 +790,8 @@ final class AppModel: ObservableObject {
                 shotLive = true
                 shotSide = e.side >= 0 ? e.side : snap.activeSide
                 let hobId = e.raw?.hob.map { String($0) }
-                let hob = snap.fort(shotSide)?.hobs.first { $0.id == hobId }
-                    ?? snap.fort(shotSide)?.hobs.first { $0.id == snap.selectedHob }
+                let firedBy: HobView? = snap.fort(shotSide)?.hobs.first(where: { $0.id == hobId })
+                let hob: HobView? = firedBy ?? snap.fort(shotSide)?.hobs.first(where: { $0.id == snap.selectedHob })
                 shotHob = hob?.shortName ?? ""
             case "damage":
                 shotDamage += max(0, e.amount)

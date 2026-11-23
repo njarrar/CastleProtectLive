@@ -80,7 +80,7 @@ struct ContentCatalog: Sendable {
         }
 
         var matchedHobArt: String? {
-            switch matchClass?.lowercased() {
+            switch (matchClass ?? "").lowercased() {
             case "lobber": return "marge"
             case "zinger": return "quill"
             case "scatterjack": return "jax"

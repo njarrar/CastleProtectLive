@@ -42,7 +42,7 @@ final class SaveStore: @unchecked Sendable {
 
     /// The saved data, or a fresh one when there is none or both files are damaged.
     func load() -> SaveData {
-        queue.sync {
+        return queue.sync { () -> SaveData in
             clearStaleTemps()
             let main = read(fileURL)
             let backup: (ok: SaveData?, newer: Bool) = main.ok == nil ? read(backupURL) : (ok: nil, newer: false)

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Kettle HP gauge: Tier-3 frosted parchment pill with brass pressure dial and bold % readout.
 struct KettleGauge: View {
@@ -458,6 +459,15 @@ struct ShellInspectCard: View {
 
     private var damageValue: Int { info?.damage ?? 0 }
 
+    /// True when the card has a damage bar or any stat pill to show.
+    private var hasStats: Bool {
+        if damageValue > 0 { return true }
+        let cells: Int = info?.maxCells ?? 0
+        let splits: Int = info?.splitCount ?? 0
+        let hops: Int = info?.bounces ?? 0
+        return cells > 0 || splits > 1 || hops > 0
+    }
+
     private var damageFillFraction: CGFloat {
         CGFloat(min(1.0, max(0.08, Double(damageValue) / 85.0)))
     }
@@ -470,7 +480,7 @@ struct ShellInspectCard: View {
 
     private var matchedHobArt: String? {
         if let art = info?.matchedHobArt { return art }
-        switch chip.matchClass?.lowercased() {
+        switch (chip.matchClass ?? "").lowercased() {
         case "lobber": return "marge"
         case "zinger": return "quill"
         case "scatterjack": return "jax"
@@ -542,7 +552,7 @@ struct ShellInspectCard: View {
             }
 
             // Visual Damage Bar + Secondary Stats (Blast / Tunnel / Splits / Bounces / Threads)
-            if damageValue > 0 || (info?.maxCells ?? 0) > 0 || (info?.splitCount ?? 0) > 1 || (info?.bounces ?? 0) > 0 {
+            if hasStats {
                 VStack(alignment: .leading, spacing: 6) {
                     if damageValue > 0 {
                         HStack {
@@ -963,7 +973,7 @@ struct PassButton: View {
     var compact: Bool = false
     @State private var holding = false
     @State private var holdProgress: CGFloat = 0
-    @State private var holdTask: Task<Void, Never>?
+    @State private var holdTask: Task<Void, Never>? = nil
     @State private var confirmPass = false
 
     private var needsConfirm: Bool {

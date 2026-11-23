@@ -170,7 +170,12 @@ final class TerrainGrid: Equatable {
                             rgb = (0x8B, 0xCB, 0x3A) // meadow turf
                         }
                     } else if air5 || air7 {
-                        rgb = (hash & 3) == 0 ? (0x6B, 0x43, 0x22) : (0x7B, 0x4E, 0x29) // rich sub-turf root edge
+                        // rich sub-turf root edge
+                        if (hash & 3) == 0 {
+                            rgb = (0x6B, 0x43, 0x22)
+                        } else {
+                            rgb = (0x7B, 0x4E, 0x29)
+                        }
                     } else {
                         // Organic pebbled loam cross-section
                         let pebble = ((gx >> 1) &* 31 ^ (gy >> 1) &* 17) & 31

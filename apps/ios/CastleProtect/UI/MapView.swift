@@ -7,9 +7,9 @@ struct MapView: View {
 
     private var playTargetLevel: LevelInfo? {
         let levels = model.campaign.levels
-        return levels.first { $0.state == "next" }
-            ?? levels.last { !$0.isLocked }
-            ?? levels.first
+        if let next = levels.first(where: { $0.state == "next" }) { return next }
+        if let open = levels.last(where: { !$0.isLocked }) { return open }
+        return levels.first
     }
 
     var body: some View {
@@ -357,15 +357,19 @@ private struct TopiaryPeacockMapCrest: View {
                 let a = CGFloat(i) * 0.38 - .pi / 2
                 var plume = Path()
                 plume.move(to: CGPoint(x: cx, y: cy))
-                let tip = CGPoint(x: cx + cos(a) * h * 0.80, y: cy + sin(a) * h * 0.80)
-                let ctrl = CGPoint(x: cx + cos(a - 0.15) * h * 0.55, y: cy + sin(a - 0.15) * h * 0.55)
-                let ctrl2 = CGPoint(x: cx + cos(a + 0.15) * h * 0.55, y: cy + sin(a + 0.15) * h * 0.55)
+                let ca: CGFloat = cos(a), sa: CGFloat = sin(a)
+                let aLo: CGFloat = a - 0.15, aHi: CGFloat = a + 0.15
+                let reach: CGFloat = h * 0.80, bend: CGFloat = h * 0.55
+                let tip = CGPoint(x: cx + ca * reach, y: cy + sa * reach)
+                let ctrl = CGPoint(x: cx + cos(aLo) * bend, y: cy + sin(aLo) * bend)
+                let ctrl2 = CGPoint(x: cx + cos(aHi) * bend, y: cy + sin(aHi) * bend)
                 plume.addQuadCurve(to: tip, control: ctrl)
                 plume.addQuadCurve(to: CGPoint(x: cx, y: cy), control: ctrl2)
                 plume.closeSubpath()
                 ctx.fill(plume, with: .color(i % 2 == 0 ? Color(hex: 0x2F7E36) : Color(hex: 0x3D9642)))
                 ctx.stroke(plume, with: .color(ink), lineWidth: 1.5)
-                let ex = cx + cos(a) * h * 0.56, ey = cy + sin(a) * h * 0.56
+                let eyeReach: CGFloat = h * 0.56
+                let ex: CGFloat = cx + ca * eyeReach, ey: CGFloat = cy + sa * eyeReach
                 let eye = Path(ellipseIn: CGRect(x: ex - 3.5, y: ey - 3.5, width: 7, height: 7))
                 ctx.fill(eye, with: .color(Theme.brassMid))
                 ctx.stroke(eye, with: .color(ink), lineWidth: 1)
@@ -653,13 +657,19 @@ private struct PreBattleContent: View {
         let picker = draft.turn
         let humanPick = session.snapshot.isHuman(picker) && !draft.done
         let focusedChip = draft.pool.first { $0.id == focused }
+        let pickLine: String
+        if draft.done {
+            pickLine = tx("rummage.all_picked")
+        } else if hud.isDuel || picker != 0 {
+            let pickerName: String = picker < hud.names.count ? hud.names[picker] : ""
+            pickLine = tx("rummage.their_pick", ["name": pickerName])
+        } else {
+            pickLine = tx("rummage.your_pick", ["n": draft.hand(0).count + 1, "total": draft.picksEach])
+        }
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(tx("rummage.title")).font(Theme.title(16)).foregroundStyle(Theme.ink)
-                Text(draft.done ? tx("rummage.all_picked")
-                     : (hud.isDuel || picker != 0
-                        ? tx("rummage.their_pick", ["name": picker < hud.names.count ? hud.names[picker] : ""])
-                        : tx("rummage.your_pick", ["n": draft.hand(0).count + 1, "total": draft.picksEach])))
+                Text(pickLine)
                     .font(Theme.label(14)).foregroundStyle(Theme.inkSoft)
                 Spacer()
                 Button(tx("rummage.quick_pick")) { session.quickPick() }

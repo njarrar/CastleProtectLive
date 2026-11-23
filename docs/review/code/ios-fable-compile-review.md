@@ -71,3 +71,59 @@ The content, the assets and the core fixtures all changed in this work tree. The
 - **Real-core tests.** They read as right against the core source, but they only run on CI.
 - **Rival banner.** One Rival turn in four shows a `rivals.banner.thinking` line. No test pins it.
 - **UI tests.** The two launch tests rely on the `play`, `fire`, `pause` and `resume` ids, which are all still set.
+
+## Second pass
+
+The first pass missed two real errors, both fixed before this pass: `App/AppModel.swift:473` (an unlabelled tuple after `??`, then `.mates` and `.rival`) and `UI/WorkshopView.swift:215` (`frame(minWidth:height:)`, which SwiftUI does not have).
+
+This pass read every Swift file under `apps/ios/CastleProtect` (33 files) and `apps/ios/Tests` (11 files) again, line by line, with the list of new lines since `ff3f679` beside it. Still no compiler on this machine, so nothing was built. Nothing was committed.
+
+### What was checked this time
+
+- Every SwiftUI modifier call in `UI/` was listed by name and labels (a script) and each shape was checked against iOS 16: `frame` (no call mixes fixed and flexible sizes now, and labels are in order), `padding`, `overlay` and `background` with `alignment`, `mask`, `stroke` on shapes and on the Canvas context, `foregroundStyle` and `fill` with ternaries (both sides the same type), `onChange` (one value form), `confirmationDialog`, `alert`, `keyboardShortcut`, `italic`, `scrollContentBackground`.
+- Every call to a function declared in this repo was checked against its declaration for labels and order (a script, then by eye for the names the script could not tell from system names). Every `Type.member`, `session.`, `hud.`, `fx.`, `model.`, `catalog.`, `layout.`, `snap.`, `Theme.`, `palette.` member used in the app and the tests exists on that type.
+- Every memberwise call (`ShotChip`, `LevelInfo`, `BattleSetup`, `CoreSideConfig`, `BattleLayout`, `WorkshopCheck`, `AnimClip`, `DraftChip`, `BattleResult`, `ResultInfo` and the views) against the property order.
+- Tuples: every `??`, ternary and `map` that gives a tuple, and every `.0`, `.1` and label read after one.
+- Main actor: every test that touches a main actor type or a view's static member is `@MainActor`; every static read from plain code is `nonisolated`. `TerrainGrid` is only used from main actor types. Every closure handed to `CoreHost.sync`, `run` and `background` takes only `Sendable` values. Every `static var` is in a main actor type; every `static let` is `Sendable`.
+- Brackets balance in all 44 files. No type is declared twice.
+
+### Certain compile errors found
+
+None beyond the two above.
+
+### Likely or unclear, made plain
+
+Each of these read as valid but leaned on a rule that is easy to get wrong without a compiler, or was a long line that could time out. Each now says its types out loud. Behaviour is the same.
+
+| # | File and line | Risk | Fix |
+|---|---|---|---|
+| 1 | `UI/HudParts.swift:976` | `@State private var holdTask: Task<Void, Never>?` had no start value. A private wrapped property with no start value can make the memberwise init private, and `PassButton(session:)` is called from `BattleView.swift`. | `= nil`. |
+| 2 | `UI/HudParts.swift:2` | `UIAccessibility` used with only `import SwiftUI`. | `import UIKit`. |
+| 3 | `UI/HudParts.swift:462`, `:555` | An `if` in a view builder with four `\|\|`, three `??` and four number literals. | Moved to `hasStats`, built in steps. |
+| 4 | `UI/HudParts.swift:483`, `Core/ContentCatalog.swift:83` | `switch` on an optional string with plain string cases. | `switch (x ?? "").lowercased()`. |
+| 5 | `App/AppModel.swift:473`, `:488` | The bark context after `??`. | Both sides typed `(mates: [String], rival: String?)`. |
+| 6 | `App/AppModel.swift:793`, `Battle/FieldFX.swift:595`, `:822`, `Battle/BattleSession.swift:770`, `UI/MapView.swift:10` | Two or three `first { }` closures joined by `??` in one line. | Typed steps with `first(where:)`. |
+| 7 | `Battle/BattleSession.swift:1146` | An unlabelled tuple from `map` joined to a labelled list. | The closure returns `(id: String, label: String)`. |
+| 8 | `Battle/BattleSpriteView.swift:112` to `:118` | `0` or a `UInt64` in a ternary, then six `!=` in one line. | `UInt64` written out; the line split in three. |
+| 9 | `Battle/BattleSpriteView.swift:491` | `CGFloat / Double` in one line. | `Double(worldRect.midX)`. |
+| 10 | `Battle/BattleSpriteView.swift:819` | A closure with nine operators and four literals. | Four named edges and a typed closure. |
+| 11 | `Battle/BattleSpriteView.swift:293`, `:1080` | A `Hashable` struct declared inside a static method of a main actor class. | Moved to file scope (`private struct CellKey`). |
+| 12 | `Battle/BattleSpriteView.swift:1610`, `:1687`, `:1783` | A statement that starts with `(` on the line after a call. | A named `UIColor`, then `.setFill()`. |
+| 13 | `Battle/BattleSpriteView.swift:1981` | A static method called with no type name inside a static `let`. | `BattleArtCache.hobFallbackTexture(...)`. |
+| 14 | `Battle/FieldFX.swift:1098` | A closure with `abs`, an enum case with no type and three literals. | A typed closure in steps. |
+| 15 | `Battle/SpriteAtlas.swift:110` | A stored property `overlays` and a method `overlays(for:)` in one class. | The property is `overlayTable`. |
+| 16 | `Core/CoreModels.swift:173` | A ternary of two tuples of number literals. | `if` and `else`. |
+| 17 | `Core/GameText.swift:145` | A closure over a dictionary entry with `== .line(name)`. | A typed closure with guards. |
+| 18 | `Core/WorkshopGrid.swift:286`, `:300` | `Self.` inside a `@Sendable` closure in a main actor class. | `WorkshopChecker.validateOnCore`. |
+| 19 | `Save/SaveStore.swift:45` | `queue.sync` with a many-line closure and no result type. | `return queue.sync { () -> SaveData in`. |
+| 20 | `UI/MapView.swift:360` to `:372`, `:660` to `:672` | `cos` and `sin` mixed with `CGFloat` and literals; a nested ternary of `tx` calls inside `Text(...)`. | Typed locals; the line is built before the view. |
+| 21 | `UI/Theme.swift:630` | The same `cos` and `sin` mix. | Typed locals. |
+| 22 | `Tests/CastleProtectTests/AuditFixTests.swift:175` | Six `abs` compares in one closure. | A small `near` helper. |
+| 23 | `Tests/CastleProtectTests/RedesignPartTwoTests.swift:148` | `Data.withUnsafeBytes { buf in` fits two overloads. | `(buf: UnsafeRawBufferPointer)`. |
+| 24 | `UI/Theme.swift:178`, `:217` | `makeBody` had `let` lines and then a view with no `return`. That only works because the protocol marks it as a view builder. | `return` written out. |
+
+### Still not sure without a compiler
+
+- **Type-check time.** The long view bodies (`WideHud`, `TallHud`, `ShellInspectCard`, `draftingBoard`, `PreBattleContent`) and the Canvas drawing in `KnackFallbackIcon` read as valid. Only a build shows whether one line is too slow.
+- **Strict concurrency.** The rules were followed as written above, but Swift 6 can still flag a capture that looks fine on paper. The new `FrameClock`, `DisplayLinkProxy`, `SoundCleanupBag` and `ViewObserverBox` are the newest code of that kind.
+- **A real check is possible.** A Swift 6 toolchain for Linux can be fetched on this machine and would type-check the files with no SwiftUI or SpriteKit in them (`Core/`, `Save/`, `BattleLayout`, `Animations`). Running it was not allowed in this session.

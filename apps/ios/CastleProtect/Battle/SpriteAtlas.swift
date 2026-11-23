@@ -107,10 +107,10 @@ final class SpriteSheet {
     private static var cached: SpriteSheet?
     private let frames: [String: Frame]
     private let aliases: [String: String]
-    private let overlays: [String: [SpriteOverlay]]
+    private let overlayTable: [String: [SpriteOverlay]]
 
     var isEmpty: Bool { frames.isEmpty }
-    var isV2: Bool { !aliases.isEmpty || !overlays.isEmpty || frames.values.contains(where: \.isTrimmed) }
+    var isV2: Bool { !aliases.isEmpty || !overlayTable.isEmpty || frames.values.contains(where: \.isTrimmed) }
 
     /// One sheet per process; the pages stay loaded between battles.
     static func shared() -> SpriteSheet {
@@ -123,7 +123,7 @@ final class SpriteSheet {
     init(frames: [String: Frame], aliases: [String: String] = [:], overlays: [String: [SpriteOverlay]] = [:]) {
         self.frames = frames
         self.aliases = aliases
-        self.overlays = overlays
+        self.overlayTable = overlays
     }
 
     init(bundle: Bundle) {
@@ -167,7 +167,7 @@ final class SpriteSheet {
         }
         self.frames = frames
         self.aliases = aliases
-        self.overlays = overlays
+        self.overlayTable = overlays
     }
 
     /// Builds a `Frame` from an `AtlasRect` (supporting legacy untrimmed and `--v2` trimmed/scaled records).
@@ -214,7 +214,7 @@ final class SpriteSheet {
 
     /// Team scarf/balloon overlay entries for a logical sprite name when `--v2` deduplication is active.
     func overlays(for name: String) -> [SpriteOverlay] {
-        overlays[name] ?? []
+        overlayTable[name] ?? []
     }
 
     private static func loadManifest(bundle: Bundle) -> ([String: SpriteManifest.Entry], SpriteManifest.Dedup?) {

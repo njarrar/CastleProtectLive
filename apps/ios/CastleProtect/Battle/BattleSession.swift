@@ -767,7 +767,9 @@ final class BattleSession: ObservableObject {
         onLocalHaptic?(.illegal)
         guard let reason = reply.reason, reason != "busy" else { return }
         let fort = snapshot.fort(snapshot.activeSide)
-        let hob = reply.hob.flatMap { id in fort?.hobs.first { $0.id == String(id) } } ?? selectedHobView
+        let namedId: String? = reply.hob.map { String($0) }
+        let named: HobView? = namedId == nil ? nil : fort?.hobs.first(where: { $0.id == namedId })
+        let hob: HobView? = named ?? selectedHobView
         let shotId = reply.shot ?? snapshot.selectedShot
         let shot = snapshot.shots.first { $0.id == shotId }?.name
         let doodad = armedDoodad.map { game.catalog.doodadName($0) }
@@ -1141,8 +1143,8 @@ final class BattleSession: ObservableObject {
         let text = GameText.shared
         let kettle: (id: String, label: String) = ("kettle", text.t("hud.doodad.kettle_room"))
         guard let fort = snapshot.fort(snapshot.activeSide) else { return [kettle] }
-        return [kettle] + fort.rooms.enumerated().map { idx, room in
-            ("nook:\(room.id)", text.t("hud.doodad.nook", ["n": idx + 1]))
+        return [kettle] + fort.rooms.enumerated().map { idx, room -> (id: String, label: String) in
+            (id: "nook:\(room.id)", label: text.t("hud.doodad.nook", ["n": idx + 1]))
         }
     }
 

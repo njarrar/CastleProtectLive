@@ -283,7 +283,7 @@ final class WorkshopChecker {
         let setup = Self.setupJSON
         let wasStarted = started
         let (reply, isStarted) = await host.run { bridge -> (CoreReply, Bool) in
-            Self.validateOnCore(bridge, setup: setup, command: command, wasStarted: wasStarted)
+            WorkshopChecker.validateOnCore(bridge, setup: setup, command: command, wasStarted: wasStarted)
         }
         started = isStarted
         return Self.makeResult(reply: reply, grid: grid)
@@ -297,7 +297,7 @@ final class WorkshopChecker {
         let setup = Self.setupJSON
         let wasStarted = started
         let (reply, isStarted) = host.sync { bridge -> (CoreReply, Bool) in
-            Self.validateOnCore(bridge, setup: setup, command: command, wasStarted: wasStarted)
+            WorkshopChecker.validateOnCore(bridge, setup: setup, command: command, wasStarted: wasStarted)
         }
         started = isStarted
         return Self.makeResult(reply: reply, grid: grid)

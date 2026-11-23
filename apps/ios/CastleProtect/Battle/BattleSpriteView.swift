@@ -109,12 +109,13 @@ final class BattleSKView: SKView {
         guard window != nil else { return }
         let now = DispatchTime.now().uptimeNanoseconds
         // Idle poses step at 5 Hz; the owner-ring pulse steps at 15 Hz when Reduce Motion is off.
-        let pose = session.settings.reduceMotion ? 0 : now / 200_000_000
-        let ringStep = (session.showOwnerRing && !session.settings.reduceMotion) ? now / 66_000_000 : 0
+        let pose: UInt64 = session.settings.reduceMotion ? 0 : now / 200_000_000
+        let ringStep: UInt64 = (session.showOwnerRing && !session.settings.reduceMotion) ? now / 66_000_000 : 0
         let colours = session.settings.colourSet
         let busy = session.fx.isActive || session.snapshot.phase.isResolving || battleScene.cameraMoving
-        let changed = busy || session.frameVersion != drawnVersion || session.layout != drawnLayout
-            || colours != drawnColours || pose != drawnPose || ringStep != drawnRingStep
+        let frameChanged: Bool = session.frameVersion != drawnVersion || session.layout != drawnLayout
+        let lookChanged: Bool = colours != drawnColours || pose != drawnPose || ringStep != drawnRingStep
+        let changed: Bool = busy || frameChanged || lookChanged
         guard changed else {
             idleTicks += 1
             if idleTicks >= 2 && !isPaused { isPaused = true }
@@ -287,6 +288,12 @@ final class CameraRig {
         rect = current
         return current
     }
+}
+
+/// A block cell of a fort, for the outer contour.
+private struct CellKey: Hashable {
+    let c: Int
+    let r: Int
 }
 
 /// One lens: a crop node over its viewport, atmospheric backdrop + parallax hills,
@@ -481,7 +488,7 @@ final class LensLayer {
 
         // Atmospheric parallax hills tinted with ~18% sky haze so distant hills recede cleanly.
         if !small {
-            let parallaxNorm = CGFloat(worldRect.midX / max(1, snap.world.w) - 0.5)
+            let parallaxNorm = CGFloat(Double(worldRect.midX) / max(1, snap.world.w) - 0.5)
             let hillW = max(vp.width * 1.45, 520)
             let farH = max(60, vp.height * 0.42)
             let midH = max(50, vp.height * 0.32)
@@ -809,7 +816,16 @@ final class LensLayer {
                 placeTexture(back, BattleArtCache.nookRoomTexture, at: local(room.box.midX, room.box.midY),
                              size: CGSize(width: room.box.width + 2, height: room.box.height + 2),
                              anchor: CGPoint(x: 0.5, y: 0.5))
-                let occupied = fort.hobs.contains { !$0.isOut && $0.x >= room.box.x0 - 4 && $0.x <= room.box.x1 + 4 && $0.y >= room.box.y0 - 4 && $0.y <= room.box.y1 + 4 }
+                let roomX0: Double = room.box.x0 - 4
+                let roomX1: Double = room.box.x1 + 4
+                let roomY0: Double = room.box.y0 - 4
+                let roomY1: Double = room.box.y1 + 4
+                let occupied = fort.hobs.contains { (h: HobView) -> Bool in
+                    if h.isOut { return false }
+                    let inX = h.x >= roomX0 && h.x <= roomX1
+                    let inY = h.y >= roomY0 && h.y <= roomY1
+                    return inX && inY
+                }
                 if occupied {
                     let glow = take("lantern", parent: body, z: 0.89)
                     placeTexture(glow, BattleArtCache.lanternGlowTexture, at: local(room.box.midX, room.box.midY + 4),
@@ -1062,7 +1078,6 @@ final class LensLayer {
 
     /// Computes exposed exterior edges of a fort's blocks for the double-weight espresso silhouette contour.
     private static func outerContourPath(blocks: [BlockView], fort: FortView, originOffset: CGPoint) -> CGPath {
-        struct CellKey: Hashable { let c: Int; let r: Int }
         var occupied = Set<CellKey>()
         occupied.reserveCapacity(blocks.count)
         for b in blocks {
@@ -1592,7 +1607,8 @@ private enum BattleArtCache {
             flag.addLine(to: CGPoint(x: 45, y: 31))
             flag.addLine(to: CGPoint(x: 12, y: 33))
             flag.close()
-            (isFlattener ? Palette.hex(0x5A6572) : color).setFill(); flag.fill()
+            let flagFill: UIColor = isFlattener ? Palette.hex(0x5A6572) : color
+            flagFill.setFill(); flag.fill()
             if isFlattener {
                 // Sharp orange Flattener stripe
                 let stripe = UIBezierPath(rect: CGRect(x: 13, y: 19, width: 24, height: 6))
@@ -1668,7 +1684,8 @@ private enum BattleArtCache {
             UIColor.white.setFill(); gloveL.fill(); gloveR.fill()
             ink.setStroke(); gloveL.lineWidth = 2.2; gloveL.stroke(); gloveR.lineWidth = 2.2; gloveR.stroke()
             let tool = UIBezierPath(rect: CGRect(x: cx + 14, y: baseY - 40, width: 4, height: 26))
-            (kind == "snipper" ? orange : slateLight).setFill(); tool.fill()
+            let toolFill: UIColor = kind == "snipper" ? orange : slateLight
+            toolFill.setFill(); tool.fill()
             ink.setStroke(); tool.lineWidth = 1.8; tool.stroke()
 
             // Blocky head
@@ -1763,7 +1780,8 @@ private enum BattleArtCache {
                 plume.addQuadCurve(to: tip, controlPoint: left)
                 plume.addQuadCurve(to: CGPoint(x: cx, y: cy), controlPoint: right)
                 plume.close()
-                (i % 2 == 0 ? Palette.hex(0x2F7E36) : Palette.hex(0x3D9642)).setFill()
+                let plumeFill: UIColor = i % 2 == 0 ? Palette.hex(0x2F7E36) : Palette.hex(0x3D9642)
+                plumeFill.setFill()
                 plume.fill()
                 ink.setStroke(); plume.lineWidth = 3.2; plume.stroke()
                 // Gold-ringed peacock eye-spot
@@ -1960,7 +1978,7 @@ private enum BattleArtCache {
     }()
 
     static let captiveHettyTexture: SKTexture = {
-        hobFallbackTexture(side: 0, color: Palette.hex(0x2F6FDE), bonked: false)
+        BattleArtCache.hobFallbackTexture(side: 0, color: Palette.hex(0x2F6FDE), bonked: false)
     }()
 
     /// Outlined floating combat number / `Drop!` starburst texture (Plate 2).

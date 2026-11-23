@@ -142,9 +142,11 @@ final class GameText: @unchecked Sendable {
     func rivalKey(named name: String) -> String? {
         guard !name.isEmpty else { return nil }
         let suffix = ".name"
-        let match = entries.first { pair in
-            pair.key.hasPrefix("rivals.") && pair.key.hasSuffix(suffix) && pair.value == .line(name)
-                && pair.key.split(separator: ".").count == 3
+        let wanted = Entry.line(name)
+        let match = entries.first { (pair: (key: String, value: Entry)) -> Bool in
+            guard pair.key.hasPrefix("rivals."), pair.key.hasSuffix(suffix) else { return false }
+            guard pair.value == wanted else { return false }
+            return pair.key.split(separator: ".").count == 3
         }
         guard let key = match?.key else { return nil }
         return String(key.dropFirst("rivals.".count).dropLast(suffix.count))

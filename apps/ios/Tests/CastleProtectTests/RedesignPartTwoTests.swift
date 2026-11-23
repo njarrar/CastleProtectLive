@@ -145,7 +145,7 @@ final class RedesignPartTwoTests: XCTestCase {
         let img = try XCTUnwrap(grid.rgba(chunkIndex: 0))
         XCTAssertEqual(img.data.count, 64 * 64 * 4)
         var distinctColors = Set<UInt32>()
-        img.data.withUnsafeBytes { buf in
+        img.data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) in
             for p in 0..<(64 * 64) where buf[p * 4 + 3] == 255 {
                 let rgb = (UInt32(buf[p * 4]) << 16) | (UInt32(buf[p * 4 + 1]) << 8) | UInt32(buf[p * 4 + 2])
                 distinctColors.insert(rgb)

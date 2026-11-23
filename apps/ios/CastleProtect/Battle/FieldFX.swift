@@ -592,8 +592,9 @@ final class FieldFX {
                     let side = hobSide(hob, in: new) ?? raw.side ?? 0
                     playHob(side: side, hob: hob, "hit", in: new)
                     if dmg > 0 {
-                        let h = new.fort(side)?.hobs.first { $0.id == String(hob) }
-                            ?? old.fort(side)?.hobs.first { $0.id == String(hob) }
+                        let hobId: String = String(hob)
+                        let hNew: HobView? = new.fort(side)?.hobs.first(where: { $0.id == hobId })
+                        let h: HobView? = hNew ?? old.fort(side)?.hobs.first(where: { $0.id == hobId })
                         let cx = h?.x ?? e.x
                         let cy = (h?.y ?? e.y) + 28
                         spawnCallout("-\(dmg)", x: cx, y: cy, style: .hobHit)
@@ -818,8 +819,9 @@ final class FieldFX {
                 let side = hobSide(hob, in: new) ?? raw.side ?? 0
                 let isOut = new.fort(side)?.hobs.first(where: { $0.id == String(hob) })?.isOut ?? false
                 if dmg > 0 {
-                    let h = new.fort(side)?.hobs.first { $0.id == String(hob) }
-                        ?? old.fort(side)?.hobs.first { $0.id == String(hob) }
+                    let hobId: String = String(hob)
+                    let hNew: HobView? = new.fort(side)?.hobs.first(where: { $0.id == hobId })
+                    let h: HobView? = hNew ?? old.fort(side)?.hobs.first(where: { $0.id == hobId })
                     spawnCallout("-\(dmg)", x: h?.x ?? e.x, y: (h?.y ?? e.y) + 28, style: .hobHit)
                 }
                 if !isOut {
@@ -1093,9 +1095,14 @@ final class FieldFX {
 
     func spawnCallout(_ text: String, x: Double, y: Double, style: CalloutStyle, duration: Double = 1150) {
         // Coalesce identical wallBreak numbers at the exact same cell within 80 ms so bursts stay crisp.
-        if style == .wallBreak,
-           callouts.contains(where: { $0.style == .wallBreak && abs($0.x - x) < 10 && abs($0.y - y) < 10 && now - $0.start < 80 }) {
-            return
+        if style == .wallBreak {
+            let stamp: Double = now
+            let same = callouts.contains { (c: CombatCallout) -> Bool in
+                guard c.style == CalloutStyle.wallBreak else { return false }
+                let near = abs(c.x - x) < 10.0 && abs(c.y - y) < 10.0
+                return near && stamp - c.start < 80.0
+            }
+            if same { return }
         }
         if callouts.count >= 16 { callouts.removeFirst() }
         let id = nextCalloutId

@@ -172,10 +172,13 @@ final class AuditFixTests: XCTestCase {
 
         var newSnap = old
         if let fi = newSnap.forts.firstIndex(where: { $0.side == 1 }) {
-            newSnap.forts[fi].blocks.removeAll { b in
-                (abs(b.x - collapsedBlock.x) < 1 && abs(b.y - collapsedBlock.y) < 1)
-                    || (abs(b.x - blastedBlock.x) < 1 && abs(b.y - blastedBlock.y) < 1)
-                    || (abs(b.x - crushedBlock.x) < 1 && abs(b.y - crushedBlock.y) < 1)
+            func near(_ a: BlockView, _ b: BlockView) -> Bool {
+                let dx: Double = abs(a.x - b.x)
+                let dy: Double = abs(a.y - b.y)
+                return dx < 1.0 && dy < 1.0
+            }
+            newSnap.forts[fi].blocks.removeAll { (b: BlockView) -> Bool in
+                near(b, collapsedBlock) || near(b, blastedBlock) || near(b, crushedBlock)
             }
             if let hi = newSnap.forts[fi].hobs.firstIndex(where: { $0.id == hob.id }) {
                 newSnap.forts[fi].hobs[hi].bonked = true

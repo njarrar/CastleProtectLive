@@ -173,9 +173,9 @@ struct GoldButtonStyle: ButtonStyle {
     var minWidth: CGFloat = 160
 
     func makeBody(configuration: Configuration) -> some View {
-        let clampedHeight = max(48, height)
-        let clampedWidth = max(48, minWidth)
-        configuration.label
+        let clampedHeight: CGFloat = max(48, height)
+        let clampedWidth: CGFloat = max(48, minWidth)
+        return configuration.label
             .font(Theme.title(22))
             .foregroundStyle(Theme.ink)
             .padding(.horizontal, 22)
@@ -213,8 +213,8 @@ struct PaperButtonStyle: ButtonStyle {
     var height: CGFloat = 48
 
     func makeBody(configuration: Configuration) -> some View {
-        let clampedHeight = max(48, height)
-        configuration.label
+        let clampedHeight: CGFloat = max(48, height)
+        return configuration.label
             .font(Theme.label(16))
             .foregroundStyle(Theme.ink)
             .padding(.horizontal, 14)
@@ -627,9 +627,11 @@ struct KnackFallbackIcon: View {
                 drawCircle(w * 0.50, h * 0.52, w * 0.18, fill: Theme.brassMid)
                 for i in 0..<6 {
                     let a = CGFloat(i) * .pi / 3
+                    let ca: CGFloat = cos(a)
+                    let sa: CGFloat = sin(a)
                     var spoke = Path()
-                    spoke.move(to: CGPoint(x: w * 0.50 + cos(a) * w * 0.18, y: h * 0.52 + sin(a) * h * 0.18))
-                    spoke.addLine(to: CGPoint(x: w * 0.50 + cos(a) * w * 0.34, y: h * 0.52 + sin(a) * h * 0.34))
+                    spoke.move(to: CGPoint(x: w * 0.50 + ca * w * 0.18, y: h * 0.52 + sa * h * 0.18))
+                    spoke.addLine(to: CGPoint(x: w * 0.50 + ca * w * 0.34, y: h * 0.52 + sa * h * 0.34))
                     ctx.stroke(spoke, with: .color(ink), lineWidth: lw * 0.85)
                 }
 

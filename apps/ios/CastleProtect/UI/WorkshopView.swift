@@ -212,7 +212,7 @@ struct WorkshopView: View {
                     }
                     .foregroundStyle(Theme.orangeInk)
                     .padding(.horizontal, 4)
-                    .frame(minWidth: frontW, height: headerH)
+                    .frame(minWidth: frontW, minHeight: headerH, maxHeight: headerH)
                     .background(Capsule().fill(Theme.brassHi.opacity(0.7)).overlay(Capsule().stroke(Theme.orangeInk, lineWidth: 1)))
                 }
 
