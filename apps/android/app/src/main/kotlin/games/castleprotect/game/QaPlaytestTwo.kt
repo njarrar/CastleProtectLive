@@ -2,6 +2,7 @@ package games.castleprotect.game
 
 import games.castleprotect.core.Blow
 import games.castleprotect.core.Hob
+import games.castleprotect.core.Text
 import kotlin.math.max
 
 /**
@@ -34,13 +35,14 @@ object HobLook {
         else -> hpPct.coerceIn(1, 100) / 100f
     }
 
-    /** The portrait's state words, for TalkBack. */
+    /** The portrait's state words, for TalkBack (`hobs.states`), or empty when the Hob is fine. */
     fun words(h: Hob): String = when {
-        out(h.state, h.hp) -> "Bonked"
-        squashed(h.state, h.hp) -> if (h.state == "squashed") "Squashed, back up soon" else "Dropped, ${h.hp} HP"
-        h.buried -> "Loophole buried"
-        h.rest > 0 -> "resting ${h.rest}"
-        else -> "${h.hp} of ${h.max} HP"
+        out(h.state, h.hp) -> Text.t("hobs.states.bonked")
+        squashed(h.state, h.hp) -> Text.t(if (h.state == "squashed") "hobs.states.squashed" else "hobs.states.dropped")
+        h.buried -> Text.t("hobs.states.dug")
+        h.rest > 0 -> Text.t("hobs.states.rest")
+        h.cover -> Text.t("hobs.states.cover")
+        else -> ""
     }
 }
 
@@ -87,8 +89,8 @@ class FatigueBeat {
     private fun show(b: Banner, now: Long): Banner { bannerUntil = max(bannerUntil, now + b.ms); return b }
 
     companion object {
-        const val WARN = "Fatigue next round: hurt blocks hold less"
-        const val START = "Fatigue! Battered blocks give way"
+        val WARN: String get() = Text.t("banners.creaks.warn")
+        val START: String get() = Text.t("banners.creaks.start")
         const val WARN_MS = 3500L
         const val START_MS = 3000L
     }
@@ -98,7 +100,7 @@ class FatigueBeat {
 object OwnerRule {
     /** The gold ring shows on the picked Hob until this many aims were started from the fort. */
     const val TEACH = 3
-    const val NUDGE = "Drag from your fort to aim"
+    val NUDGE: String get() = Text.t("hud.aim_hint")
     const val NUDGE_MS = 2500L
 
     fun ringOn(aimStarts: Int): Boolean = aimStarts < TEACH
@@ -134,39 +136,39 @@ class RivalPeek {
         if (shotFlying) on = false
     }
 
+    /** Resets peek state between battles so a new battle never starts zoomed out (Android-L1). */
+    fun reset() { on = false; turn = -1 }
+
     fun label(): String = if (on) HOME else VIEW
 
     companion object {
-        const val VIEW = "View Rival fort"
-        const val HOME = "Back to my fort"
+        val VIEW: String get() = Text.t("hud.view_rival")
+        val HOME: String get() = Text.t("hud.view_mine")
     }
 }
 
-/** "What broke you" (B1): the core's `by` names who dealt each blow; `hob_name` is never null. */
+/** "What broke you" (B1): the core's `by` names who dealt each blow. Words from `results.blow`, never the core's English. */
 object BrokeText {
     /** Who dealt a blow, from `by` (older cores: from the shot). */
     fun by(b: Blow): String = b.by.ifEmpty {
         when (b.shot) { "squall" -> "squall"; "ground" -> "ground"; else -> if (b.hob >= 0) "hob" else "" }
     }
 
-    /** "Clodpot from Marge Dumpling", or a field blow by its own name: "The Squall", "A fall", "Fatigue". */
-    fun blow(b: Blow): String {
-        val shot = b.shotName.ifEmpty { b.shot.replace('_', ' ') }
-        return when (by(b)) {
-            "hob" -> if (b.hobName.isNotEmpty()) "$shot from ${b.hobName}" else shot
-            "squall" -> b.hobName.ifEmpty { "The Squall" }
-            "ground" -> b.hobName.ifEmpty { "A fall" }
-            "fatigue" -> b.hobName.ifEmpty { "Fatigue" }
-            "self" -> b.hobName.ifEmpty { "Your own shot" }
-            "shears" -> b.hobName.ifEmpty { "The shears" }
-            "prop" -> b.hobName.ifEmpty { shot }
-            else -> if (b.hobName.isNotEmpty()) "$shot from ${b.hobName}" else shot
-        }
+    /**
+     * "Marge's Clodpot", or a field blow by its own words: "the Squall", "a fall", "the Creaks".
+     * [hobShort] turns the blow's Hob id into its short name; [shotName] a shot id into its name.
+     */
+    fun blow(b: Blow, hobShort: (Int) -> String? = { null }, shotName: (String) -> String? = { null }): String {
+        val shot = shotName(b.shot) ?: b.shotName.ifEmpty { b.shot.replace('_', ' ') }
+        val who = if (b.hob >= 0) hobShort(b.hob) ?: b.hobName else ""
+        val key = by(b).ifEmpty { "hob" }
+        return if (key == "hob" && who.isEmpty()) Text.t("results.blow.shot_only", "shot" to shot)
+        else Text.byId("results.blow", key, "who" to who, "shot" to shot).ifEmpty { shot }
     }
 
-    fun last(b: Blow): String = "Last blow: ${blow(b)}" + if (b.round > 0) ", round ${b.round}" else ""
+    fun last(b: Blow, hobShort: (Int) -> String? = { null }, shotName: (String) -> String? = { null }): String =
+        Text.t("results.last_blow", "blow" to blow(b, hobShort, shotName), "n" to b.round)
 
-    /** The result note for a Double Pop (n5): how the winner was picked. */
-    fun doublePop(how: String?): String? = if (how == "double_pop")
-        "Both kettles popped in the same Squall round. The kettle that had more left before that round wins." else null
+    /** The result note for a Double Pop (n5): how the winner was picked (core battle.rs total_hp). */
+    fun doublePop(how: String?): String? = if (how == "double_pop") Text.t("results.double_pop_rule") else null
 }

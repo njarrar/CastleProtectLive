@@ -1,6 +1,6 @@
 {
   "id": "d1",
-  "name": "Twin Puddings",
+  "name": "Two Lumps",
   "type": "skirmish",
   "size": "M",
   "width": 2400,
@@ -36,12 +36,12 @@
         300
       ],
       [
-        1400,
-        330
+        1406,
+        333
       ],
       [
-        1700,
-        420
+        1690,
+        417
       ],
       [
         2100,
@@ -51,14 +51,23 @@
         2400,
         300
       ]
+    ],
+    "patches": [
+      [
+        1228,
+        1244,
+        322,
+        300,
+        "rock"
+      ]
     ]
   },
   "pads": [
     {
-      "x": 450
+      "x": 446
     },
     {
-      "x": 1950
+      "x": 1957
     }
   ],
   "player": {
@@ -71,8 +80,34 @@
     "blueprint": "bp_kit_stone"
   },
   "rival": {
-    "name": "Skirmish Rival",
     "habit": "Plays it straight.",
+    "habit_id": "balanced",
+    "roster": [
+      {
+        "name": "Sir Pudge",
+        "think_ms": 1800
+      },
+      {
+        "name": "Private Tuft",
+        "think_ms": 1300
+      },
+      {
+        "name": "Lance Corporal Fernsby",
+        "think_ms": 1200
+      },
+      {
+        "name": "Corporal Dibber",
+        "think_ms": 1400
+      },
+      {
+        "name": "Sergeant Posy Rake",
+        "think_ms": 900
+      },
+      {
+        "name": "Warden Snedd",
+        "think_ms": 600
+      }
+    ],
     "blueprint": "bp_r1_orchard",
     "crew": [
       "hedge_snipper",
@@ -107,7 +142,7 @@
     "first_turn": 2
   },
   "pennants": [],
-  "map_note": "Two equal round hills, a stream between. The fair, even map.",
+  "map_note": "Two round hills, near enough equal, a stream between with one stone in it. The fair map.",
   "new_thing": "",
   "water": [
     {

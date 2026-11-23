@@ -42,6 +42,26 @@ One sim cell is 1 px at @1x. A block is 16 x 16 cells, so 16 px at @1x and 32 px
 
 `castle@1x.json` and `castle@2x.json` list the pages for each scale. Frames have a 2 px gap. They are not trimmed and not turned. Terrain tiles, backgrounds and the app icon are not in the atlas; load them as their own textures so they can repeat.
 
+## The v2 atlas (`--v2`, what is checked in now)
+
+```
+node tools/art-gen/gen-sprites.mjs --v2
+node tools/art-gen/render-sprites.mjs --v2
+node tools/art-gen/verify-atlas.mjs --strict --max-pages 1
+```
+
+- One 2048 px page per scale. Frames are trimmed to their alpha box: each has `trim: [x, y, w, h]` (where the cut sits in the full sprite) and `sourceSize`.
+- Hobs are drawn once, with no team. The atlas index (`castle@2x.json`) maps each old name (`hob_marge_orange_fire_3`, `portrait_jax_blue`, `icon_gravel`) to the neutral frame in `aliases`, and lists what to draw on top in `overlays`: `{ sprite, dx, dy, rot, scale }`, in px at @1x from the base anchor. Team parts are the scarf (`hob_scarf_blue`, `hob_scarf_orange`), the P2 hat diamond (`hob_patch_orange`) and the Snooze Balloon.
+- Hob and Flattener frames sit on the @2x page at @1x size (`scale: 1` on the frame). That is what keeps it to one page; they are drawn at about 0.4 px per @1x px, so it costs a little sharpness on 3x screens. `render-sprites.mjs --v2 --char-scale=2` packs them at full @2x (more pages).
+- `sprites/` still has a PNG for every old team name, drawn as base plus overlays. They are for code and tests that load single files; they are not in the atlas.
+- PNGs are re-compressed losslessly after render.
+
+## Rival Hobs and idle timing
+
+- Rival Hobs have their own look: the Hob's own hat shape in Flattener slate with a green level vial, and the hatched orange scarf. Frames `hob_<name>_rival_<pose>_<i>`, clips `hob_<name>_rival_<action>` (same actions as blue and orange), portraits `portrait_<name>_rival`. These are real frames in the atlas, with the scarf and the Snooze Balloon baked in, so there are no aliases or overlays for them. Use them for any Hob on the Rival side in campaign and Skirmish. Couch Duel player 2 stays `orange`. Flatteners (`flattener_<key>_*`) are the other Rival look.
+- Each Hob has its own `ms` for `idle`, `blink`, `fire` and `bonked` (Grub slow, Jax quick, Old Thumper with a hitch, Nan even, Bobbin fidgety). `fire` still releases on frame 0. Fire totals are 320 to 390 ms; the bonked `lift` lands 480 to 580 ms in.
+- Idle clips have `random_start: true` and a `start_offset_ms`. Start the idle loop at a random time in the loop so a crew never breathes in step; if you do not randomise, start at `start_offset_ms` (it differs per Hob and per team).
+
 ## Groups and names
 
 | Group | Names | Notes |
@@ -125,9 +145,9 @@ Hit stop, shake and slow motion numbers stay in `docs/design/07-ux-ui-audio.md` 
 ## Choices made here
 
 - The 8 Trick Shells are the Region 1 start six (Pudding Bomb, Lid Lifter, Marble Sack, Nosy Goose, Mole Mail, Old Turnip) plus the two Region 1 level shells (Rubber Radish, Sod Sack), from `docs/design/01-weapons-and-shots.md`.
-- Team colour is baked into the blue and orange sprites for v0.1. The art doc asks for tinted parts later.
+- v0.1 baked team colour into blue and orange sprites. v2 uses neutral Hobs plus scarf and hat patch overlays (see above).
 - Blocks have one fresh look each. Seeded variants can come later.
 - Hobs are frame sprites for now. The art doc asks for paper-doll rigs later; the poses and times here carry over.
 - Trails are grouped by damage type (blast, pierce, dig, fire, mend). The owner rim is drawn in code.
 - One next door glow serves all four Passives. It is gold, so it is never read as a team colour or the kettle teal.
-- The @2x atlas grew from 2 pages to 4.
+- The @2x atlas grew from 2 pages to 4 in v0.1. v2 packs it back to 1.

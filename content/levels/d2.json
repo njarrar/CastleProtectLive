@@ -9,52 +9,57 @@
     "points": [
       [
         0,
-        420
+        336
       ],
       [
         300,
-        430
+        336
       ],
       [
-        600,
-        420
+        700,
+        336
       ],
       [
-        900,
-        360
+        944,
+        257
       ],
       [
         1200,
-        300
+        210
       ],
       [
-        1500,
-        280
+        1458,
+        262
       ],
       [
-        1650,
-        320
+        1700,
+        336
       ],
       [
-        1800,
-        250
-      ],
-      [
-        2050,
-        240
+        2100,
+        336
       ],
       [
         2400,
-        300
+        336
+      ]
+    ],
+    "patches": [
+      [
+        1145,
+        1155,
+        240,
+        212,
+        "clay"
       ]
     ]
   },
   "pads": [
     {
-      "x": 420
+      "x": 517
     },
     {
-      "x": 1900
+      "x": 1889
     }
   ],
   "player": {
@@ -67,13 +72,39 @@
     "blueprint": "bp_kit_stone"
   },
   "rival": {
-    "name": "Skirmish Rival",
     "habit": "Plays it straight.",
+    "habit_id": "balanced",
+    "roster": [
+      {
+        "name": "Sir Pudge",
+        "think_ms": 1800
+      },
+      {
+        "name": "Private Tuft",
+        "think_ms": 1300
+      },
+      {
+        "name": "Lance Corporal Fernsby",
+        "think_ms": 1200
+      },
+      {
+        "name": "Corporal Dibber",
+        "think_ms": 1400
+      },
+      {
+        "name": "Sergeant Posy Rake",
+        "think_ms": 900
+      },
+      {
+        "name": "Warden Snedd",
+        "think_ms": 600
+      }
+    ],
     "blueprint": "bp_r1_orchard",
     "crew": [
-      "hedge_snipper",
       "rake_hand",
       "pebble_pitcher",
+      "mower_minder",
       "mower_minder"
     ],
     "aim": 3,
@@ -103,6 +134,6 @@
     "first_turn": 2
   },
   "pennants": [],
-  "map_note": "You high, the Rival in a dell behind a hedge row.",
+  "map_note": "Two bluffs across a deep central orchard dip, an old stump at the bottom. The left rim dips a touch lower.",
   "new_thing": ""
 }

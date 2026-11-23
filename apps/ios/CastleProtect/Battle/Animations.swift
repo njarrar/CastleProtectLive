@@ -23,6 +23,10 @@ struct AnimClip: Equatable, Sendable {
     let hold: String?
     /// A pose set chosen by a value (aim: power), not a timed clip.
     let pick: String?
+    /// Idle clips (assets/animations.json): start at a random point in the loop, else at
+    /// `startOffsetMs`, so a crew does not breathe in step.
+    var randomStart: Bool = false
+    var startOffsetMs: Double = 0
 
     var total: Double { ms.reduce(0, +) }
     private var loopStart: Double { ms.prefix(max(0, min(loopFrom, ms.count))).reduce(0, +) }
@@ -218,7 +222,8 @@ final class AnimationLibrary: @unchecked Sendable {
                 loopFrom: Int(Track.num(a["loop_from"] ?? 0)),
                 w: Track.num(a["w"] ?? 16), h: Track.num(a["h"] ?? 16),
                 anchor: CGPoint(x: anchor.count > 0 ? anchor[0] : 0, y: anchor.count > 1 ? anchor[1] : 0),
-                events: events, next: a["next"] as? String, hold: a["hold"] as? String, pick: a["pick"] as? String)
+                events: events, next: a["next"] as? String, hold: a["hold"] as? String, pick: a["pick"] as? String,
+                randomStart: a["random_start"] as? Bool ?? false, startOffsetMs: Track.num(a["start_offset_ms"] ?? 0))
         }
         var m = MotionData()
         let d = root["data"] as? [String: Any] ?? [:]

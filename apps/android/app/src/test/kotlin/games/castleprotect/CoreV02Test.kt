@@ -44,7 +44,7 @@ class CoreV02Test {
         assertEquals(45, f.hud.handicap[1].previewPct)
         // The win event carries its fields; castle_drop its cells.
         assertTrue(f.events.any { it.t == "win" && it.how == "give_up" && it.winner == 0 })
-        assertTrue(f.events.any { it.t == "castle_drop" && it.cells == 6 })
+        assertTrue(f.events.any { it.t == "castle_drop" && it.cells == 3 })
         assertTrue(f.events.any { it.t == "fire" && it.shot == "clodpot" && it.power == 78 })
         assertTrue(f.events.any { it.t == "explode" && it.type == "blast" && it.r == 28 })
     }

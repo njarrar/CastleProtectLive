@@ -4,6 +4,11 @@
     python3 tools/audio-gen/build.py            # build all, write manifests, run checks
     python3 tools/audio-gen/build.py --only sfx # sfx, music or barks
     python3 tools/audio-gen/build.py --no-qa
+    python3 tools/audio-gen/build.py --no-barks-json   # leave assets/audio/barks.json alone
+
+barks.json: the writer owns the subtitles and voice notes. If the file is there, build.py keeps its
+file as it is (keys, subtitles, voice, extra fields) and only refreshes `hob_speak`, matched by `sound`.
+With --no-barks-json it does not touch the file at all; it prints the hob_speak lines that differ.
 
 Needs Python 3.11+, numpy and pillow (requirements.txt) and ffmpeg with libopus.
 Output: assets/audio/{sfx,music,barks}/*.ogg (Opus) and *.m4a (AAC),
@@ -71,13 +76,37 @@ def encode(wav, base, kind, ch):
     ko, ka = RATES[(kind, ch)]
     exact = ['-map_metadata', '-1', '-fflags', '+bitexact', '-flags:a', '+bitexact']
     ffmpeg('-i', wav, '-c:a', 'libopus', '-b:a', f'{ko}k', '-vbr', 'on', '-application', 'audio', *exact, base + '.ogg')
-    ffmpeg('-i', wav, '-c:a', 'aac', '-b:a', f'{ka}k', '-movflags', '+faststart', *exact, base + '.m4a')
+    # movie_timescale = SR makes the edit list sample exact (the default 1000 rounds the length to whole ms),
+    # so players that honour elst (AVFoundation, MediaExtractor) drop the encoder's priming and tail padding.
+    ffmpeg('-i', wav, '-c:a', 'aac', '-b:a', f'{ka}k', '-movflags', '+faststart', '-movie_timescale', str(SR), *exact, base + '.m4a')
+
+
+def mp4_edit_samples(path):
+    """Play length in samples from the first elst entry of an .m4a (None if there is none)."""
+    with open(path, 'rb') as fh:
+        d = fh.read()
+    i, j = d.find(b'mvhd'), d.find(b'elst')
+    if i < 0 or j < 0:
+        return None
+    v = d[i + 4]
+    ts = int.from_bytes(d[i + 24:i + 28] if v == 1 else d[i + 16:i + 20], 'big')
+    v = d[j + 4]
+    if int.from_bytes(d[j + 8:j + 12], 'big') < 1 or ts <= 0:
+        return None
+    dur = int.from_bytes(d[j + 12:j + 20] if v == 1 else d[j + 12:j + 16], 'big')
+    return int(round(dur * SR / ts))
 
 
 def decode(path, ch):
     p = subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-i', path, '-f', 'f32le', '-ac', str(ch), '-ar', str(SR), '-'],
                        check=True, capture_output=True)
-    return np.frombuffer(p.stdout, '<f4').reshape(-1, ch).T.astype(float)
+    x = np.frombuffer(p.stdout, '<f4').reshape(-1, ch).T.astype(float)
+    if path.endswith('.m4a'):
+        # The ffmpeg CLI drops the priming but not the tail padding; cut to the edit list like a real player does.
+        n = mp4_edit_samples(path)
+        if n is not None and 0 < n <= x.shape[1]:
+            x = x[:, :n]
+    return x
 
 
 def finish(x, target, loop, ceiling=-3.0, shelf_db=-6.0):
@@ -89,7 +118,7 @@ def finish(x, target, loop, ceiling=-3.0, shelf_db=-6.0):
         x = dsp.trim(x, -52, 0.012)
         n = x.shape[1]
         x = x * dsp.ar(n, 0.0008, min(0.02, n / SR / 4))
-    return dsp.normalise(x, target, ceiling)
+    return dsp.normalise(x, target, ceiling, circular=loop)
 
 
 def build_sound(items, tmp, kind, sub, sid, x, target, loop, meta):
@@ -150,6 +179,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--only', choices=['sfx', 'music', 'barks'])
     ap.add_argument('--no-qa', action='store_true')
+    ap.add_argument('--no-barks-json', action='store_true', help='do not write assets/audio/barks.json')
     a = ap.parse_args()
     if shutil.which('ffmpeg') is None:
         sys.exit('ffmpeg not found')
@@ -183,11 +213,11 @@ def main():
             x = music.r1_base()
             pcm['mus_r1_base'] = build_sound(items, tmp, 'music', 'music', 'mus_r1_base', x, -23, True, dict(
                 m, layer='base', sync=sync, trigger=dict(game='Always in a Region 1 battle. Start all three layers at once, mute Stir and Peril', anim=None)))
-            x = music.r1_stir().mean(axis=0)
+            x = music.r1_stir()
             pcm['mus_r1_stir'] = build_sound(items, tmp, 'music', 'music', 'mus_r1_stir', x, -22, True, dict(
                 m, layer='stir', sync=sync, trigger=dict(
                     game='Fade in on a bar line when a Heartkettle is at 50% or less, a side has 2 Hobs or fewer, or the Squall is within 3 rounds (core event squall_warning)', anim=None)))
-            x = music.r1_peril().mean(axis=0)
+            x = music.r1_peril()
             pcm['mus_r1_peril'] = build_sound(items, tmp, 'music', 'music', 'mus_r1_peril', x, -25, True, dict(
                 m, layer='peril', sync=sync, trigger=dict(
                     game='Fade in on a bar line when a side is on its last Hob, a Heartkettle is at 25% or less, or the Squall has started (core event squall_round)', anim=None)))
@@ -257,8 +287,30 @@ def main():
         cls, voice = barks.VOICE_NOTES[hob]
         bk['hobs'][hob] = dict(**{'class': cls}, voice=voice, barks={
             ev: dict(sound=f'bark_{hob}_{ev}', hob_speak=' '.join(barks.BARKS[hob][ev][0]), subtitles=barks.SUBS[hob][ev]) for ev in barks.E0})
-    with open(os.path.join(OUT, 'barks.json'), 'w') as f:
-        f.write(json.dumps(bk, indent=1, ensure_ascii=False) + '\n')
+    bk_path = os.path.join(OUT, 'barks.json')
+    old_bk = json.load(open(bk_path)) if os.path.exists(bk_path) else None
+    if old_bk:      # keep the writer's file as it is (keys, text, extra fields); refresh only hob_speak
+        import copy
+        gen = bk
+        bk = copy.deepcopy(old_bk)
+        by_sound = {b.get('sound'): b for h in bk.get('hobs', {}).values() for b in h.get('barks', {}).values()}
+        for hob, h in gen['hobs'].items():
+            for ev, b in h['barks'].items():
+                tgt = by_sound.get(b['sound'])
+                if tgt is not None:
+                    tgt['hob_speak'] = b['hob_speak']
+                else:
+                    bk.setdefault('hobs', {}).setdefault(hob, {k: v for k, v in h.items() if k != 'barks'}).setdefault('barks', {})[ev] = b
+    if a.no_barks_json:
+        was = {b.get('sound'): b.get('hob_speak') for h in (old_bk or {}).get('hobs', {}).values() for b in h.get('barks', {}).values()}
+        stale = [(hob, ev, b['hob_speak']) for hob, h in bk['hobs'].items() for ev, b in h['barks'].items()
+                 if not old_bk or was.get(b['sound']) != b['hob_speak']]
+        print(f'barks.json left alone. {len(stale)} hob_speak line(s) differ from the new sounds:')
+        for hob, ev, line in stale:
+            print(f'  {hob}.{ev}: {line}')
+    else:
+        with open(bk_path, 'w') as f:
+            f.write(json.dumps(bk, indent=1, ensure_ascii=False) + '\n')
 
     mb = (total['ogg'] + total['m4a']) / 1048576
     print(f"{len(items)} sounds. ogg {total['ogg'] / 1048576:.2f} MB, m4a {total['m4a'] / 1048576:.2f} MB, both {mb:.2f} MB of 8 MB")

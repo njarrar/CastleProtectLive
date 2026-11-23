@@ -16,7 +16,7 @@ val jniLibsDir = projectDir.resolve("src/main/jniLibs")
 // Without it a DEBUG build still assembles and runs on the fixture player (src/debug).
 // A RELEASE build fails, and so does any build with -Pcastle.requireNative=true (CI sets
 // it whenever it built the core), so a missing or stale core can never ship quietly.
-val shimSymbols = listOf("cp_new", "cp_command", "cp_step", "cp_snapshot", "cp_last_error", "cp_version", "cp_free_string", "cp_free")
+val shimSymbols = listOf("cp_new", "cp_command", "cp_step", "cp_snapshot", "cp_last_error", "cp_version", "cp_daily_seed", "cp_free_string", "cp_free")
 val coreLibAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64").filter { jniLibsDir.resolve("$it/libcastle_ffi.so").isFile }
 val headerText = if (coreHeader.isFile) coreHeader.readText() else ""
 val missingSymbols = shimSymbols.filter { !Regex("\\b$it\\s*\\(").containsMatchIn(headerText) }
@@ -101,18 +101,31 @@ tasks.matching { it.name == "preReleaseBuild" }.configureEach {
 }
 
 // Sprites and audio come from the shared assets/ folder at the repo root. They are
-// copied at build time, never checked in twice. Only the @2x PNGs ship (drawn scaled),
-// plus the manifest and any audio. A missing folder is fine: the renderer falls back to shapes.
+// copied at build time, never checked in twice. When a --v2 single-page trimmed/deduped
+// atlas is present (assets/atlas/castle@2x.json with "v2": true), we pack that atlas plus
+// non-atlas bg/terrain sprites; otherwise we pack the legacy individual @2x PNGs.
+val atlasV2Index = repoRoot.resolve("assets/atlas/castle@2x.json")
+val useV2Atlas = atlasV2Index.isFile && Regex("\"v2\"\\s*:\\s*true").containsMatchIn(atlasV2Index.readText())
 val copyCastleAssets by tasks.registering(Sync::class) {
     from(repoRoot.resolve("assets")) {
-        // Sprites at @2x, the animation list, and the audio: Opus (.ogg) for Android 10 and up,
-        // AAC (.m4a) for older phones that can not play Opus in Ogg.
-        include("manifest.json", "animations.json", "sprites/*@2x.png", "audio/audio.json", "audio/barks.json", "audio/**/*.ogg", "audio/**/*.m4a")
+        // Sprites at @2x (or --v2 atlas), the animation list, and the audio: Opus (.ogg) for
+        // Android 10 and up, AAC (.m4a) for older phones that can not play Opus in Ogg.
+        if (useV2Atlas) {
+            include(
+                "manifest.json", "animations.json",
+                "atlas/castle@2x*.json", "atlas/castle@2x*.png",
+                "sprites/bg_*@2x.png", "sprites/terrain_*@2x.png",
+                "audio/audio.json", "audio/barks.json", "audio/**/*.ogg", "audio/**/*.m4a",
+            )
+        } else {
+            include("manifest.json", "animations.json", "sprites/*@2x.png", "audio/audio.json", "audio/barks.json", "audio/**/*.ogg", "audio/**/*.m4a")
+        }
         exclude("sprites/app_icon*")
     }
-    // Menu texts (level names, rivals, shot names) from the shared content folder.
+    // Every line a player reads (text.json), names and cards (shots, hobs, classes, doodads, materials),
+    // levels, app.json and blueprints.json, from the shared content folder.
     from(repoRoot.resolve("content")) {
-        include("levels/*.json", "shots.json", "hobs.json", "doodads.json")
+        include("levels/*.json", "text.json", "shots.json", "hobs.json", "classes.json", "doodads.json", "materials.json", "app.json", "blueprints.json")
         into("content")
     }
     into(layout.buildDirectory.dir("generated/castleAssets"))

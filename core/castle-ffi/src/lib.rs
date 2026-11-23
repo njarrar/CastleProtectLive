@@ -36,7 +36,7 @@ thread_local! {
 
 fn set_new_error(e: Option<String>) {
     let v = e.and_then(|s| CString::new(s.replace('\0', "")).ok());
-    LAST_NEW_ERROR.with(|c| *c.borrow_mut() = v);
+    let _ = LAST_NEW_ERROR.try_with(|c| *c.borrow_mut() = v);
 }
 
 /// NULL reads as "". Bad UTF-8 is an error, never a silent "".
@@ -70,8 +70,15 @@ fn panic_text(p: &(dyn std::any::Any + Send)) -> String {
 }
 
 /// Run `f` on a live handle. Catches panics (the handle is then dead) and
-/// records refusals for `cp_last_error`.
-fn guarded<F: FnOnce(&mut Game) -> String>(h: &mut CpGame, f: F) -> String {
+/// records refusals for `cp_last_error` when `check_refusal` is true.
+fn guarded<F: FnOnce(&mut Game) -> String>(h: &mut CpGame, check_refusal: bool, f: F) -> String {
+    #[cfg(debug_assertions)]
+    if std::thread::current().id() != h.owner {
+        return refusal(
+            "wrong_thread",
+            "call a handle only from the thread that made it",
+        );
+    }
     if let Some(why) = &h.dead {
         let r = refusal(
             "dead_handle",
@@ -80,18 +87,9 @@ fn guarded<F: FnOnce(&mut Game) -> String>(h: &mut CpGame, f: F) -> String {
         h.last_error = CString::new(r.clone()).ok();
         return r;
     }
-    #[cfg(debug_assertions)]
-    if std::thread::current().id() != h.owner {
-        let r = refusal(
-            "wrong_thread",
-            "call a handle only from the thread that made it",
-        );
-        h.last_error = CString::new(r.clone()).ok();
-        return r;
-    }
     match catch_unwind(AssertUnwindSafe(|| f(&mut h.game))) {
         Ok(s) => {
-            if is_refusal(&s) {
+            if check_refusal && is_refusal(&s) {
                 h.last_error = CString::new(s.replace('\0', "")).ok();
             }
             s
@@ -154,15 +152,10 @@ pub unsafe extern "C" fn cp_command(handle: *mut CpGame, json: *const c_char) ->
     let Some(h) = handle.as_mut() else {
         return out(refusal("null_handle", "the handle is NULL"));
     };
-    let text = match read_str(json) {
-        Ok(t) => t,
-        Err(e) => {
-            let r = refusal("bad_json", &e);
-            h.last_error = CString::new(r.clone()).ok();
-            return out(r);
-        }
-    };
-    out(guarded(h, |g| g.command(text)))
+    out(guarded(h, true, |g| match read_str(json) {
+        Ok(text) => g.command(text),
+        Err(e) => refusal("bad_json", &e),
+    }))
 }
 
 /// Advance the sim by whole 120 Hz ticks. Returns {"tick":..,"phase":..}.
@@ -174,7 +167,7 @@ pub unsafe extern "C" fn cp_step(handle: *mut CpGame, ticks: i32) -> *mut c_char
     let Some(h) = handle.as_mut() else {
         return out(refusal("null_handle", "the handle is NULL"));
     };
-    out(guarded(h, |g| g.step(ticks)))
+    out(guarded(h, false, |g| g.step(ticks)))
 }
 
 /// The frame snapshot as JSON. Drains events and dirty terrain chunks.
@@ -186,7 +179,7 @@ pub unsafe extern "C" fn cp_snapshot(handle: *mut CpGame) -> *mut c_char {
     let Some(h) = handle.as_mut() else {
         return out(refusal("null_handle", "the handle is NULL"));
     };
-    out(guarded(h, |g| g.snapshot()))
+    out(guarded(h, false, |g| g.snapshot()))
 }
 
 /// The last error text for `handle` (the last refusal reply, or the panic
@@ -197,11 +190,17 @@ pub unsafe extern "C" fn cp_snapshot(handle: *mut CpGame) -> *mut c_char {
 /// `handle` must be NULL or come from `cp_new`.
 #[no_mangle]
 pub unsafe extern "C" fn cp_last_error(handle: *mut CpGame) -> *mut c_char {
-    let e = match handle.as_mut() {
-        Some(h) => h.last_error.clone(),
-        None => LAST_NEW_ERROR.with(|c| c.borrow().clone()),
-    };
-    e.map(|c| c.into_raw()).unwrap_or(ptr::null_mut())
+    catch_unwind(AssertUnwindSafe(|| {
+        let e = match handle.as_ref() {
+            Some(h) => h.last_error.clone(),
+            None => LAST_NEW_ERROR
+                .try_with(|c| c.borrow().clone())
+                .ok()
+                .flatten(),
+        };
+        e.map(|c| c.into_raw()).unwrap_or(ptr::null_mut())
+    }))
+    .unwrap_or(ptr::null_mut())
 }
 
 /// Version info as JSON.
@@ -217,6 +216,9 @@ pub extern "C" fn cp_version() -> *mut c_char {
 /// `date` must be NULL or a NUL terminated string.
 #[no_mangle]
 pub unsafe extern "C" fn cp_daily_seed(date: *const c_char) -> u64 {
+    if date.is_null() {
+        return 0;
+    }
     match read_str(date) {
         Ok(d) => catch_unwind(|| castle_core::daily_seed(d)).unwrap_or(0),
         Err(_) => 0,
@@ -298,7 +300,7 @@ mod tests {
         unsafe {
             let level = CString::new(r#"{"level":"1-1"}"#).unwrap();
             let h = cp_new(ptr::null(), level.as_ptr(), 7);
-            let r = guarded(&mut *h, |_| panic!("boom in the sim"));
+            let r = guarded(&mut *h, true, |_| panic!("boom in the sim"));
             assert!(
                 r.contains("\"reason\":\"panic\"") && r.contains("boom"),
                 "{r}"
@@ -344,6 +346,7 @@ mod tests {
             assert!(text(cp_snapshot(ptr::null_mut())).contains("null_handle"));
             cp_free(ptr::null_mut());
             cp_free_string(ptr::null_mut());
+            assert_eq!(cp_daily_seed(ptr::null()), 0);
             assert_eq!(cp_daily_seed(raw.as_ptr() as *const c_char), 0);
             cp_free(h);
         }

@@ -1,18 +1,21 @@
 // The battle screen: canvas lenses, HUD in both layouts, aim input, camera, hand-off card.
 // It never decides an outcome. It sends commands to the core and draws its snapshots.
 import type { App, Route, Screen } from '../app';
-import { bark, cue, loop, musicLayers, play, preloadBarks, releaseBarks, setMusic, slowmoAudio, stopLoops, unlockAudio } from '../audio/sfx';
-import type { BattleSetup, Command, PinView, Side, Snapshot } from '../core/types';
+import { bark, crewLine, cue, loop, musicLayers, play, preloadBarks, releaseBarks, setCaptionSink, setMusic, setPaused, slowmoAudio, stopLoops, unlockAudio } from '../audio/sfx';
+import type { BattleSetup, Command, DraftChip, PinView, ShotChip, Side, Snapshot } from '../core/types';
 import { SaveError, TICK_HZ } from '../core/types';
 import { clearBattle, dropBattleSave, loadBattleSave, saveBattle } from '../save/db';
 import { DEBUG } from '../ui/fatal';
-import { CLASS_COLOR, CLASS_ICON, btn, h, repeatKey } from '../ui/dom';
+import { CLASS_COLOR, CLASS_ICON, CLASS_INK, btn, h, repeatKey } from '../ui/dom';
 import { type DrawOpts, LensCache, drawLens, drawStrip } from '../render/draw';
 import { type Cam, type Rect, toScreen, toWorld } from '../render/view';
 import { Feel } from '../render/feel';
 import { firePress, handoffFlip, turnBanner } from '../ui/motion';
 import { TerrainLayer } from '../render/terrain';
 import { hobSpriteName, sprites } from '../render/sprites';
+import { bestClassStrip, describeShot, resolveShotIconUrl, restCogImgs } from '../ui/shellMeta';
+import { fatigueFlameUrl, kettleDialUrl, windPennantUrl } from '../ui/svgIcons';
+import { byId, className, has, hobContentId, plural, rivalLine, rivalShort, t } from '../ui/text';
 
 type LensId = 'wide' | 'top' | 'bottom' | 'joined' | 'strip';
 
@@ -49,12 +52,18 @@ export function battleScreen(app: App, route: Route): Screen {
     else core.resendTerrain?.(); // the pre-battle sheet already read the first snapshot
   } catch (e) {
     console.error(e);
-    if (r.resume) { void dropBattleSave(); throw new Error(e instanceof SaveError ? `${e.message} It was put aside.` : 'That saved fight could not be loaded. It was put aside.'); }
-    throw new Error(`This fight cannot start: ${e instanceof Error ? e.message : String(e)}`);
+    if (r.resume) { void dropBattleSave(); throw new SaveError(e instanceof SaveError ? e.message : t('errors.saved_fight_cleared'), e instanceof SaveError ? e.why : 'corrupt'); }
+    throw new SaveError(t('errors.fight_cannot_start'), 'corrupt');
   }
   app.lastSetup = setup;
   let snap = core.snapshot();
-  if (snap.phase === 'draft') { core.command({ cmd: 'end_draft' }); snap = merge(snap, core.snapshot()); }
+  // Campaign drafting happens on the Pre-battle sheet; direct campaign launches (Retry / test helpers)
+  // auto-finish draft, and so does Shells: Quick Pick. Skirmish and Couch Duel with Shells: The
+  // Rummage open the in-battle Draft modal (Web-H10).
+  if (snap.phase === 'draft' && (setup.mode === 'campaign' || setup.shells !== 'draft')) {
+    core.command({ cmd: 'end_draft' });
+    snap = core.snapshot();
+  }
 
   const terr = new TerrainLayer();
   terr.apply(snap.terrain);
@@ -69,51 +78,100 @@ export function battleScreen(app: App, route: Route): Screen {
     const hb = snap.hobs.find((q) => q.id === id);
     if (hb) feel.fx.word(`"${line}"`, hb.x, hb.y + 70, 13, side === 0 ? '#CFE0FF' : '#FFD9B8', false, Math.max(2000, 1500 + 60 * line.length));
   };
-  preloadBarks(snap.hobs.map((hb) => hobSpriteName(hb.def ?? hb.id, hb.cls)));
+  // Barks by content Hob id per side; Rival lines only against a named Rival (not in a Couch Duel).
+  const crewIds = (side: Side) => snap.hobs.filter((hb) => hb.side === side).map((hb) => hobContentId(hb.def ?? hb.id));
+  const barkId = preloadBarks([crewIds(0), crewIds(1)], setup.mode === 'campaign' || setup.mode === 'skirmish' ? rivalShort(snap.sides[1].name, setup.level) : '');
+  setPaused(false);
   setMusic('battle');
   // Shell positions carried on between ticks: [id, x, y] per shell (no allocation per frame).
   const shellBuf = new Float64Array(3 * 16);
   let nShell = 0;
-  const canvas = h('canvas', { class: 'field', 'aria-label': 'Battle field' });
+  const canvas = h('canvas', { class: 'field', 'aria-label': t('a11y.field') });
   const ctx = canvas.getContext('2d')!;
   const root = h('div', { class: 'battle' }, canvas);
   let crashed = false;
   const hud = h('div', { class: 'hud' });
+  // One persistent non-overlay container sibling of `overlay` so rotating while a modal is open
+  // never leaves reparented HUD controls stuck `.inert = true` (Web-C1).
+  const hudStage = h('div', { class: 'hud-stage' });
+  const overlay = h('div', { class: 'overlay-layer' });
   root.append(hud);
 
   // ---------- HUD parts ----------
-  const kettleEl: [HTMLElement, HTMLElement] = [h('div', { class: 'kettle side0' }), h('div', { class: 'kettle side1' })];
+  const kettleDialImg: [HTMLImageElement, HTMLImageElement] = [
+    h('img', { class: 'hud-ico kettle-dial', src: kettleDialUrl('full'), alt: '', 'aria-hidden': 'true' }) as HTMLImageElement,
+    h('img', { class: 'hud-ico kettle-dial', src: kettleDialUrl('full'), alt: '', 'aria-hidden': 'true' }) as HTMLImageElement,
+  ];
+  const kettlePctEl: [HTMLElement, HTMLElement] = [h('span', { class: 'kettle-pct' }), h('span', { class: 'kettle-pct' })];
+  const kettleEl: [HTMLElement, HTMLElement] = [
+    h('div', { class: 'kettle side0' }, kettleDialImg[0], kettlePctEl[0]),
+    h('div', { class: 'kettle side1' }, kettleDialImg[1], kettlePctEl[1]),
+  ];
   const pipsEl: [HTMLElement, HTMLElement] = [h('div', { class: 'pips side0' }), h('div', { class: 'pips side1' })];
   const roundEl = h('div', { class: 'round' });
+  const fatigueTxt = h('span', {}, t('hud.creaks.on'));
+  const fatigueImg = h('img', { class: 'hud-ico fatigue-ico', src: fatigueFlameUrl(), alt: '', 'aria-hidden': 'true' }) as HTMLImageElement;
+  const fatigueBadge = h('div', { class: 'fatigue-pill', hidden: true }, fatigueImg, fatigueTxt);
+  const roundGroup = h('div', { class: 'round-group' }, roundEl, fatigueBadge);
   // One status line per event for screen readers (the canvas has no text of its own).
   const liveEl = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite' });
   let liveT = 0;
   const say = (text: string) => { clearTimeout(liveT); liveT = window.setTimeout(() => { liveEl.textContent = text; }, 50); };
-  const windEl = h('div', { class: 'wind' });
+  const windFlagImg = h('img', { class: 'hud-ico wind-flag', src: windPennantUrl(), alt: '', 'aria-hidden': 'true' }) as HTMLImageElement;
+  const windValEl = h('span', { class: 'wind-val' });
+  const windEl = h('div', { class: 'wind' }, windFlagImg, windValEl);
   const top = h('div', { class: 'topstrip' });
-  const pause = btn('II', () => openPause(), 'pause round-btn', { 'aria-label': 'Pause', 'data-key': 'Esc' });
+  const pause = btn('II', () => openPause(), 'pause round-btn', { 'aria-label': t('hud.pause'), 'data-key': 'Esc' });
   const saveTick = h('span', { class: 'savetick', 'aria-hidden': 'true' }, '✎');
-  const hobsEl = h('div', { class: 'hobs', role: 'group', 'aria-label': 'Crew' });
+  const hobsEl = h('div', { class: 'hobs', role: 'group', 'aria-label': t('hud.crew') });
   const steamBar = h('div', { class: 'steam' }, h('i'), h('b'));
-  const walkL = h('button', { class: 'btn key walkbtn', type: 'button', 'aria-label': 'Walk left' }, '◀');
-  const walkR = h('button', { class: 'btn key walkbtn', type: 'button', 'aria-label': 'Walk right' }, '▶');
+  const walkL = h('button', { class: 'btn key walkbtn', type: 'button', 'aria-label': t('hud.walk_left') }, '◀');
+  const walkR = h('button', { class: 'btn key walkbtn', type: 'button', 'aria-label': t('hud.walk_right') }, '▶');
   const walkEl = h('div', { class: 'walk' }, steamBar, h('div', { class: 'walkkeys' }, walkL, walkR));
-  const trayEl = h('div', { class: 'tray', role: 'group', 'aria-label': 'Shots' });
-  const readout = btn('--', () => { padOpen = true; padNudge(); }, 'readout silent', { 'aria-label': 'Aim readout' });
+  const trayEl = h('div', { class: 'tray', role: 'group', 'aria-label': t('hud.shots') });
+  const readout = btn('--', () => { padOpen = true; padNudge(); }, 'readout silent', { 'aria-label': t('hud.fine_tune') });
   const nudge = (da: number, dp: number) => {
     const a = snap.hud.aim ?? { angle: 450, power: 50 };
-    send({ cmd: 'aim', angle: clamp(a.angle + da, 0, 1800), power: clamp(a.power + dp, 0, 100) });
+    const nextA = clamp(a.angle + da, 0, 1800);
+    const nextP = clamp(a.power + dp, 0, 100);
+    const hitLimit = (da !== 0 && nextA === a.angle) || (dp !== 0 && nextP === a.power);
+    send({ cmd: 'aim', angle: nextA, power: nextP });
     padNudge();
-    play('tap');
+    play(hitLimit ? 'aim_limit' : 'aim_tick');
   };
   const up = () => (snap.hud.you === 0 ? 1 : -1);
+  let slowDrag = false;
+  const recallBtn = btn(t('hud.last_aim'), () => recallStep(), 'key k-recall silent', { 'aria-label': t('hud.last_aim_hint') });
+  const slowDragBtn = btn(t('hud.slow'), () => {
+    slowDrag = !slowDrag;
+    slowDragBtn.classList.toggle('on', slowDrag);
+    slowDragBtn.setAttribute('aria-pressed', String(slowDrag));
+    padNudge();
+    play(slowDrag ? 'toggle_on' : 'tap');
+  }, 'key k-slow silent', { 'aria-label': t('hud.slow_hint'), 'aria-pressed': 'false' });
   const pad = h('div', { class: 'finetune' },
-    repeatKey('Ang \u25B2', () => nudge(up(), 0), 'k-ang-up', { 'aria-label': 'Angle up' }),
-    repeatKey('Ang \u25BC', () => nudge(-up(), 0), 'k-ang-down', { 'aria-label': 'Angle down' }),
-    btn('R', () => recallStep(), 'key k-recall', { 'aria-label': 'Recall' }),
-    repeatKey('Pow +', () => nudge(0, 1), 'k-pow-up', { 'aria-label': 'Power up' }),
-    repeatKey('Pow \u2212', () => nudge(0, -1), 'k-pow-down', { 'aria-label': 'Power down' }),
+    repeatKey(`${t('hud.angle')} \u25B2`, () => nudge(up(), 0), 'k-ang-up', { 'aria-label': t('hud.angle_up') }),
+    repeatKey(`${t('hud.angle')} \u25BC`, () => nudge(-up(), 0), 'k-ang-down', { 'aria-label': t('hud.angle_down') }),
+    recallBtn,
+    repeatKey(`${t('hud.power')} +`, () => nudge(0, 1), 'k-pow-up', { 'aria-label': t('hud.power_up') }),
+    repeatKey(`${t('hud.power')} \u2212`, () => nudge(0, -1), 'k-pow-down', { 'aria-label': t('hud.power_down') }),
+    slowDragBtn,
   );
+  // Compact dial / Mendglob block-target bar (Web-H1).
+  const dialBar = h('div', { class: 'dialbar', role: 'group', 'aria-label': t('hud.shot_options'), hidden: true });
+  let pickedDial: 'puff_up' | 'rebuild' | 'hops3' | undefined = undefined;
+  let mendTarget: [number, number] | undefined = undefined;
+  let lastShotChoiceKey = '';
+  // Sound captions pill when Settings -> Sound captions is enabled (Web-M17).
+  const captionEl = h('div', { class: 'sound-caption', role: 'status', 'aria-live': 'off', hidden: true });
+  let captionT = 0;
+  setCaptionSink((text) => {
+    if (!app.settings.captions || !alive) return;
+    captionEl.textContent = `[${text}]`;
+    captionEl.hidden = false;
+    clearTimeout(captionT);
+    captionT = window.setTimeout(() => { captionEl.hidden = true; }, 1600);
+  });
   // Fine Tune sits on its own, never on the active fort: in Tall it docks on the side of the bottom
   // lens away from your fort, in a short Wide view it sits under the top strip, off the tray. It
   // also hides while a finger aims (QA playtest 1, M7).
@@ -124,10 +182,10 @@ export function battleScreen(app: App, route: Route): Screen {
   const fortMark = h('button', { class: 'edgemark fortmark', type: 'button', 'data-testid': 'fort-mark' });
   fortMark.addEventListener('click', (e) => { e.preventDefault(); peek = !peek; if (peek) manual = false; play('tap'); });
   const arcMark = h('div', { class: 'edgemark arcmark', 'data-testid': 'arc-mark', 'aria-hidden': 'true' }, h('i', {}, '\u27A4'));
-  const fire = h('button', { class: 'btn fire', type: 'button', 'aria-label': 'Fire', 'data-testid': 'fire' }, 'FIRE');
+  const fire = h('button', { class: 'btn fire', type: 'button', 'aria-label': t('hud.fire'), 'data-testid': 'fire' }, t('hud.fire'));
   // Why Fire is grey (the picked shot is not ready): the core's reason, next to the button.
   const fireWhyEl = h('div', { class: 'firewhy', 'data-testid': 'fire-why', role: 'status' });
-  const reframe = btn('⌖', () => { manual = false; topManual = false; bottomManual = false; peek = false; }, 'reframe round-btn', { 'aria-label': 'Re-frame' });
+  const reframe = btn('⌖', () => resetView(), 'reframe round-btn', { 'aria-label': t('hud.reframe') });
   const banner = h('div', { class: 'banner', role: 'status' });
   const prompt = h('div', { class: 'prompt' });
   const hand = h('div', { class: 'ghosthand', 'aria-hidden': 'true' });
@@ -141,18 +199,18 @@ export function battleScreen(app: App, route: Route): Screen {
   const floatsR = h('div', { class: 'floats-r' });
   const crewRow = h('div', { class: 'crewrow' });
   const dock = h('div', { class: 'dockplate' });
-  const overlay = h('div', { class: 'overlay-layer' });
+  const bottomBar = h('div', { class: 'bottombar' });
   let yardBar: HTMLElement | null = null;
   if (setup.mode === 'yard') {
     // The wind slider only where the core takes a wind command.
     let windCtl: HTMLElement | string = '';
     if (core.features.setWind) {
-      const slider = h('input', { type: 'range', min: -10, max: 10, step: 1, value: 0, 'aria-label': 'Wind' }) as HTMLInputElement;
-      const lab = h('span', {}, 'Wind 0');
-      slider.addEventListener('input', () => { send({ cmd: 'set_wind', wind: Number(slider.value) }); lab.textContent = `Wind ${slider.value}`; });
+      const slider = h('input', { type: 'range', min: -10, max: 10, step: 1, value: 0, 'aria-label': t('hud.wind.label') }) as HTMLInputElement;
+      const lab = h('span', {}, t('hud.wind.set', { n: 0 }));
+      slider.addEventListener('input', () => { send({ cmd: 'set_wind', wind: Number(slider.value) }); lab.textContent = t('hud.wind.set', { n: slider.value }); play('slider_tick'); });
       windCtl = h('span', { class: 'row' }, lab, slider);
     }
-    yardBar = h('div', { class: 'yardbar' }, btn('Back', () => app.go(app.progress.blueprint ? { to: 'workshop' } : { to: 'map' }), 'small'), windCtl);
+    yardBar = h('div', { class: 'yardbar' }, btn(t('common.back'), () => { play('back'); app.go(app.progress.blueprint ? { to: 'workshop' } : { to: 'map' }); }, 'small silent'), windCtl);
   }
 
   // ---------- layout ----------
@@ -164,19 +222,21 @@ export function battleScreen(app: App, route: Route): Screen {
     if (drag?.mode === 'aim') endDrag('keep');
     top.replaceChildren(
       layout === 'wide' ? pause : '',
-      kettleEl[0], pipsEl[0], roundEl, windEl, pipsEl[1], kettleEl[1], saveTick,
+      kettleEl[0], pipsEl[0], roundGroup, windEl, pipsEl[1], kettleEl[1], saveTick,
     );
     if (layout === 'wide') {
-      hud.replaceChildren(top, hobsEl, walkEl, trayEl, pad, aimCluster, fire, fireWhyEl, fortMark, arcMark, reframe, banner, ownRing, prompt, hand, overlay);
-      if (yardBar) hud.append(yardBar);
+      bottomBar.replaceChildren(walkEl, trayEl, aimCluster, fire);
+      hudStage.replaceChildren(top, hobsEl, dialBar, bottomBar, pad, fireWhyEl, fortMark, arcMark, reframe, banner, ownRing, prompt, hand, captionEl);
+      if (yardBar) hudStage.append(yardBar);
     } else {
-      floatsL.replaceChildren(pause, walkEl);
+      // Portrait: keep Walk Pad in a slim dock bar clear of lower fort/Grub (QA-M2), keep Pause in floatsL.
+      floatsL.replaceChildren(pause);
       floatsR.replaceChildren(aimCluster);
+      lensTop.replaceChildren(yardBar ?? '', reframe);
       lensBottom.replaceChildren(floatsL, floatsR, pad, banner);
       crewRow.replaceChildren(hobsEl, fire);
-      dock.replaceChildren(trayEl, crewRow);
-      hud.replaceChildren(top, lensTop, strip, lensBottom, dock, fireWhyEl, reframe, ownRing, prompt, hand, overlay);
-      if (yardBar) lensTop.replaceChildren(yardBar);
+      dock.replaceChildren(dialBar, walkEl, trayEl, crewRow);
+      hudStage.replaceChildren(top, lensTop, strip, lensBottom, dock, fireWhyEl, ownRing, prompt, hand, captionEl);
     }
     resize();
     rectsDirty = true;
@@ -242,6 +302,17 @@ export function battleScreen(app: App, route: Route): Screen {
   let lastShell: [number, number] | null = null;
   let joined = false;
   let wideLook = false;
+
+  /** Shared camera reset (Re-frame button, F key, and afterAction) including pinch/wheel zoom (Web-M1). */
+  function resetView(): void {
+    manual = false;
+    topManual = false;
+    bottomManual = false;
+    wideLook = false;
+    peek = false;
+    zoomWide = 1;
+    zoomTop = 1;
+  }
 
   const youSide = (): Side => {
     if (setup.mode === 'duel') return snap.hud.active;
@@ -420,7 +491,18 @@ export function battleScreen(app: App, route: Route): Screen {
       const t = frameBox(rt, Math.min(f[0].x, f[1].x) - 80, Math.max(f[0].x + f[0].w, f[1].x + f[1].w) + 80, Math.min(f[0].y, f[1].y) - 40, Math.max(f[0].y + f[0].h, f[1].y + f[1].h) + 120, 0.05, 2);
       ease(camTop, t, dt, rm);
     } else if (!topManual) {
-      ease(camTop, { cx: ft.x + ft.w / 2, cy: ft.y + (0.5 - 0.25) * (rt.h / (ts * zoomTop)), s: ts * zoomTop }, dt, rm);
+      // Portrait 1-7 Rescue: auto-frame the rescue cage in the Top Lens until its bars are freed (QA-M3).
+      const bars = snap.props.filter((p) => p.kind === 'cage_bar');
+      if (bars.length > 0) {
+        let bx = 0, by = 0;
+        for (const b of bars) { bx += b.x; by += b.y; }
+        bx /= bars.length; by /= bars.length;
+        ease(camTop, { cx: bx, cy: by + 0.22 * (rt.h / (ts * zoomTop)), s: ts * zoomTop }, dt, rm);
+      } else {
+        // Test Yard: shift Dummy fort slightly lower so its roof clears the top yard bar (QA-m1).
+        const footShare = setup.mode === 'yard' ? 0.12 : 0.25;
+        ease(camTop, { cx: ft.x + ft.w / 2, cy: ft.y + (0.5 - footShare) * (rt.h / (ts * zoomTop)), s: ts * zoomTop }, dt, rm);
+      }
     }
     joined = following && !rm;
     if (joined && lastShell) {
@@ -477,10 +559,64 @@ export function battleScreen(app: App, route: Route): Screen {
   let fast = false;
   let alive = true;
   let ended = false;
-  let turnHits = { blocks: 0, dmg: 0, who: '' };
+  /** What the last shot did, for the hand-off card and the Rival's taunts. `side` is the shooter's. */
+  let turnHits: { blocks: number; dmg: number; who: string; side?: Side; landed?: boolean } = { blocks: 0, dmg: 0, who: '' };
   let missCount = 0;
+
+  // ---------- names and lines from content/text.json ----------
+  /** The Rival's short name (rivals.<key>.short), from the name the core gave the Rival side. */
+  const rivalName = (): string => rivalShort(snap.sides[1].name || setup.sides[1].name, setup.level) || t('common.rival');
+  const weightWord = (w: number): string => t(`shell_card.weight.${['light', 'medium', 'heavy'][w] ?? 'light'}`);
+  /** "Marge, Lobber, 90 of 120 HP. Needs a rest." for chips and screen readers. */
+  const hobChip = (c: Snapshot['hobs'][number]): string => {
+    const st = c.state === 'ready' ? '' : t(`hobs.states.${c.state}`);
+    // A Dummy has no Class: its chip leaves the Class out.
+    const dummy = c.def === 'straw_stuffer';
+    const v = { hob: c.name, class: dummy ? '' : className(c.cls), hp: c.hp, max: c.maxHp, state: st };
+    const line = st ? t('hud.hob_chip_state', v) : t('hud.hob_chip', v);
+    return dummy ? line.replace(/, ,/, ',') : line;
+  };
+  /** "Nook 2, Marge" when a Hob sits in that Nook. */
+  const nookLabel = (side: Side, id: number): string => {
+    const rm = snap.rooms.find((x) => x.side === side && x.id === id);
+    const hb = rm ? snap.hobs.find((q) => q.side === side && q.state !== 'bonked' && q.x >= rm.x && q.x < rm.x + rm.w && q.y >= rm.y - 2 && q.y < rm.y + rm.h) : undefined;
+    return hb ? t('hud.doodad.nook_with', { n: id + 1, hob: hb.name }) : t('hud.doodad.nook', { n: id + 1 });
+  };
+  /** The save card line: "1-4 Breezy Tops. Round 6, your turn." */
+  const saveLabel = (side: Side, round: number): string => {
+    const lvl = setup.level ? app.levels().find((l) => l.id === setup.level) : undefined;
+    const where = setup.mode === 'duel' || !isHuman(side)
+      ? t('home.carry_on.where', { n: round, name: setup.mode === 'duel' ? snap.sides[side].name : rivalName() })
+      : t('home.carry_on.where_you', { n: round });
+    return lvl ? `${lvl.id} ${lvl.name}. ${where}` : where;
+  };
+  /** The crew's win line from barks.json (crew.win), said once by the whole winning crew. */
+  const crewWinLine = (): string => crewLine('win');
+
+  // The Rival's taunts (rivals.<key>.taunts): `start` once at the top of the fight, the rest now
+  // and then, never two turns running. Flatteners are polite and never gloat.
+  let lastTauntTurn = -9;
+  let lastThinkTurn = -9;
+  function taunt(kind: string, force = false): void {
+    if (setup.mode === 'duel' || setup.mode === 'yard' || isHuman(1)) return;
+    if (!force && (turnCount - lastTauntTurn < 2 || Math.random() > 0.35)) return;
+    const line = rivalLine(`taunts.${kind}`, snap.sides[1].name || setup.sides[1].name, setup.level);
+    if (!line) return;
+    lastTauntTurn = turnCount;
+    const f = snap.forts[1];
+    feel.fx.word(`"${line}"`, f.x + f.w / 2, f.y + f.h + 70, 13, '#FFD9B8', false, Math.max(2200, 1500 + 60 * line.length));
+    say(`${rivalName()}: ${line}`);
+  }
+  /** At a turn start: the Rival's line on the shot that just landed (or did not). */
+  function rivalTurnTaunt(side: Side): void {
+    if (!turnHits.who) return;
+    if (side === 0 && turnHits.side === 1) taunt(turnHits.landed ? 'hit' : 'miss');
+    else if (side === 1 && turnHits.side === 0 && turnHits.landed) taunt('hurt');
+  }
   let handoffOpen = false;
+  let draftOpen = false;
   let paused = false;
+  let collapseHoldMs = 0;
   const startT = performance.now();
 
   let lastN = 1;
@@ -502,7 +638,7 @@ export function battleScreen(app: App, route: Route): Screen {
     flushAim();
     // Hit stop and slow motion scale view time; the fixed-step sim is stepped in view time,
     // so it freezes and slows with the view and its ticks never change (07 §6.1, §6.4).
-    const running = !paused && !handoffOpen;
+    const running = !paused && !handoffOpen && !draftOpen;
     const calm = snap.phase === 'plan' || drag?.mode === 'aim';
     const lw = lensRects()[0];
     feel.reduceMotion = app.settings.reduceMotion;
@@ -510,20 +646,28 @@ export function battleScreen(app: App, route: Route): Screen {
     feel.juice.fast = fast;
     feel.you = youSide();
     const vs = feel.update(!paused ? dt * 1000 : 0, snap, calm, lw.cam.cx, lw.cam.cy, lw.rect.w / lw.cam.s, shellBuf, nShell);
-    slowmoAudio(feel.juice.slowing !== null);
+    slowmoAudio(feel.juice.slowing !== null && !paused);
     sounds();
     if (running) {
-      // "Rival turns at 2x" speeds up the whole Rival turn: think pose and flight.
-      const rivalTurn = !isHuman(snap.hud.active) && setup.mode !== 'yard';
-      acc += dt * vs * TICK_HZ * (fast ? 2 : 1) * (rivalTurn && app.settings.rivalFast ? 2 : 1);
-      const n = Math.floor(acc);
-      acc -= n;
-      if (n > 0) {
-        prevShell.clear();
-        for (const sh of snap.shells) prevShell.set(sh.id, [sh.x, sh.y]);
-        lastN = n;
-        core.step(n);
+      // Wait for active collapse choreography before letting settle hand off to the next turn (capped at 2.2 s, skipped on 2x/Reduce Motion).
+      const waitCollapse = snap.phase === 'resolve' && !snap.shells.length && feel.col.busy && !fast && !app.settings.reduceMotion && collapseHoldMs < 2200;
+      if (waitCollapse) {
+        collapseHoldMs += dt * 1000;
         snap = merge(snap, core.snapshot());
+      } else {
+        if (!feel.col.busy) collapseHoldMs = 0;
+        // "Rival turns at 2x" speeds up the whole Rival turn: think pose and flight.
+        const rivalTurn = !isHuman(snap.hud.active) && setup.mode !== 'yard';
+        acc += dt * vs * TICK_HZ * (fast ? 2 : 1) * (rivalTurn && app.settings.rivalFast ? 2 : 1);
+        const n = Math.floor(acc);
+        acc -= n;
+        if (n > 0) {
+          prevShell.clear();
+          for (const sh of snap.shells) prevShell.set(sh.id, [sh.x, sh.y]);
+          lastN = n;
+          core.step(n);
+          snap = merge(snap, core.snapshot());
+        }
       }
     } else {
       snap = merge(snap, core.snapshot());
@@ -531,12 +675,14 @@ export function battleScreen(app: App, route: Route): Screen {
     terr.apply(snap.terrain);
     snap.terrain.chunks = [];
     handleEvents(now);
+    // Pick an acting Hob BEFORE rendering so there is no 1-frame flicker on a resting Hob (Web-L2).
+    if (snap.phase === 'plan' && isHuman(snap.hud.active)) openOnActiveHob();
     carryShells();
     updateCams(dt, now);
     snapCams = false;
     render(now);
     updateHud(now);
-    if (!paused && !handoffOpen && document.visibilityState === 'visible') adaptRes(performance.now() - work0);
+    if (running && document.visibilityState === 'visible') adaptRes(performance.now() - work0);
   }
 
   /** A throw in the frame loop (a wasm trap, a draw bug): stop the loop and offer a way out. */
@@ -547,27 +693,33 @@ export function battleScreen(app: App, route: Route): Screen {
     cancelAnimationFrame(raf);
     console.error(e);
     card('crash-card', 'crash-h',
-      h('h2', { id: 'crash-h' }, 'The fight got stuck'),
-      h('p', {}, 'Something went wrong in this fight. Retry picks it up from the last saved turn.'),
-      btn('Retry', () => {
+      h('h2', { id: 'crash-h' }, t('errors.fight_stuck_title')),
+      h('p', {}, t('errors.fight_stuck_body')),
+      btn(t('errors.try_again'), () => {
         closeCards();
         // A new Game replays the saved log (core/API.md "Errors and panics"); no save: a fresh fight.
         void loadBattleSave().catch(() => undefined).then((sv) => app.go(sv && sv.coreName === core.name && setup.mode !== 'yard' ? { to: 'battle', setup: sv.setup, resume: sv.core } : { to: 'battle', setup }));
       }, 'primary', { 'data-autofocus': true, 'data-testid': 'crash-retry' }),
-      btn('Map', () => { closeCards(); app.go({ to: 'map' }); }, 'secondary'),
+      btn(t('common.map'), () => { closeCards(); app.go({ to: 'map' }); }, 'secondary'),
     );
   }
 
   /** Loops and music layers from what the snapshot shows (assets/audio/README.md). */
   function sounds(): void {
+    const live = !paused && !handoffOpen && !draftOpen && !ended;
     let lowK = 1;
     for (const k of snap.kettles) if (k.hp > 0) lowK = Math.min(lowK, k.hp / k.maxHp);
-    // A Heartkettle at 50% or less whistles, higher as HP drops (up to 3 semitones).
-    loop('ket_whistle_loop', lowK <= 0.5 && !ended ? 0.8 : 0, Math.round((0.5 - Math.min(0.5, lowK)) * 6));
-    loop('wx_wind_loop', ended ? 0 : Math.min(1, Math.abs(snap.wind) / 10) * 0.7);
-    loop('wx_squall_loop', snap.squall.on && !ended ? Math.min(1, 0.5 + 0.15 * snap.squall.on) : 0);
+    // Gate all ambient loops on live state so Pause/Hand-off never leave loops running (Web-M2).
+    loop('ket_whistle_loop', live && lowK <= 0.5 ? 0.8 : 0, Math.round((0.5 - Math.min(0.5, lowK)) * 6));
+    loop('wx_wind_loop', live ? Math.min(1, Math.abs(snap.wind) / 10) * 0.7 : 0);
+    loop('wx_squall_loop', live && snap.squall.on ? Math.min(1, 0.5 + 0.15 * snap.squall.on) : 0);
     const sh = snap.shells[0];
-    loop('fly_whistle_loop', sh && !paused ? 0.5 : 0, sh ? Math.round(clamp((sh.y - snap.forts[0].y) / 60 - 7, -7, 7)) : 0);
+    const rolling = live && snap.shells.some((q) => q.kind === 'rolypoly' || q.kind === 'marble');
+    loop('fly_whistle_loop', live && sh && !rolling ? 0.5 : 0, sh ? Math.round(clamp((sh.y - snap.forts[0].y) / 60 - 7, -7, 7)) : 0);
+    loop('fly_roll_loop', rolling ? 0.65 : 0);
+    const aiming = live && drag?.mode === 'aim';
+    const aimPwr = snap.hud.aim?.power ?? 0;
+    loop('aim_band_stretch', aiming ? 0.45 : 0, Math.round((aimPwr / 100) * 6 - 2));
     let fewest = 9;
     for (let side = 0; side < 2; side++) {
       let n = 0;
@@ -614,6 +766,7 @@ export function battleScreen(app: App, route: Route): Screen {
     const lenses = lensRects();
     opts.you = me; opts.seeThrough = plan ? snap.hud.active : -1; opts.pickedHob = plan ? snap.hud.hob : undefined;
     opts.showPreview = plan; opts.time = (now - startT) / 1000; opts.reduceMotion = app.settings.reduceMotion; opts.lean = lean ?? undefined;
+    opts.mendTarget = plan && mendTarget ? mendTarget : undefined;
     opts.nShells = nShell;
     opts.dpr = dpr;
     opts.cssSky = layout === 'wide' && skyCss();
@@ -648,27 +801,46 @@ export function battleScreen(app: App, route: Route): Screen {
     for (const e of snap.events) {
       feel.onEvent(e, snap, l.cam.cx, vw);
       switch (e.t) {
-        case 'fire': turnHits = { blocks: 0, dmg: 0, who: snap.sides[e.side].name }; say(`${snap.sides[e.side].name} fired`); break;
+        case 'fire': {
+          const shooter = snap.hobs.find((q) => q.id === e.hob);
+          turnHits = { blocks: 0, dmg: 0, who: snap.sides[e.side].name, side: e.side };
+          const who = shooter?.name ?? snap.sides[e.side].name;
+          say(e.shotName ? t('a11y.fired', { hob: who, shot: e.shotName }) : t('a11y.fired_plain', { hob: who }));
+          break;
+        }
         case 'note':
-          // The Test Yard Dummy passes every turn: no banner over the Back key for that (n6).
-          if (setup.mode === 'yard' && /passed$/.test(e.text)) break;
-          if (e.x === undefined || e.y === undefined) showBanner(e.text, 'slate');
+          // The Test Yard Dummy passes every turn and opens on wind 0: suppress noise banners (QA-m1).
+          if (setup.mode === 'yard' && (e.id === 'pass' || (e.id === 'front' && snap.round <= 1))) break;
+          if (e.text && (e.x === undefined || e.y === undefined)) showBanner(e.text, 'slate');
           if (e.sound) play(e.sound as Parameters<typeof play>[0]);
-          if (e.status) say(e.text);
+          if (e.status && e.text) say(e.text);
           break;
-        case 'hit':
-          if (e.dmg > 0) say(`Hit ${e.what}, ${e.dmg} damage`); else say('Missed');
+        case 'hit': {
+          // Screen reader lines name the Hob that was hit, never a side id (content/text.json a11y).
+          const target = e.what === 'hob' ? snap.hobs.find((q) => q.id === e.hob)?.name : undefined;
+          if (e.dmg <= 0) say(t('a11y.missed'));
+          else if (e.what === 'hob') say(t('a11y.hit_hob', { target: target ?? '', n: e.dmg }));
+          else if (e.what === 'kettle') say(t('a11y.hit_kettle', { n: e.dmg }));
+          else say(t('a11y.hit_block', { n: e.dmg }));
           if (e.dmg > 0) turnHits.dmg += e.dmg; else missCount++;
+          if (e.dmg > 0 && e.side !== undefined && e.side !== turnHits.side) turnHits.landed = true;
           break;
+        }
+        case 'bonk': {
+          const hb = snap.hobs.find((q) => q.id === e.hob);
+          if (hb) say(t('a11y.bonked', { target: hb.name }));
+          if (hb && hb.side === 1 && !isHuman(1) && setup.mode !== 'duel') taunt('unit_bonked');
+          break;
+        }
         case 'break': turnHits.blocks++; break;
         case 'collapse': turnHits.blocks += e.blocks.length; break;
-        case 'kettle_pop': say(`${snap.sides[e.side].name}'s kettle popped`); break;
-        case 'squall_warn': if (e.left === 3) showBanner('Squall in 3', 'slate'); break;
-        case 'squall': if (e.n === 1) showBanner('Sudden Squall', 'slate'); break;
+        case 'kettle_pop': say(setup.mode !== 'duel' && e.side === 0 ? t('results.loss.title.kettle_pop') : t('a11y.kettle_popped', { name: snap.sides[e.side].name })); break;
+        case 'squall_warn': if (e.left === 3) showBanner(t('banners.weather.squall_in', { n: e.left }), 'slate weather'); break;
+        case 'squall': showBanner(e.n === 1 ? t('banners.weather.squall') : t('banners.weather.squall_round', { n: e.n }), 'slate weather'); break;
         case 'fatigue':
           // Fatigue gets its own banner, held before the turn banner (QA playtest 2, N1), and at
           // its start the camera stays on your own fort while the collapse plays there.
-          showBanner(e.text, e.phase === 'start' ? 'danger' : 'slate', e.phase === 'start' ? 2200 : 1800);
+          showBanner(e.text, e.phase === 'start' ? 'danger notice' : 'slate notice', e.phase === 'start' ? 2200 : 1800);
           say(e.text);
           play(e.phase === 'start' ? 'creak' : 'sheet');
           if (e.phase === 'start') {
@@ -691,18 +863,31 @@ export function battleScreen(app: App, route: Route): Screen {
     turnCount++;
     fast = false;
     padOpen = false;
-    peek = false;
-    bottomManual = false;
+    recallIdx = 0;
+    recallList = [];
+    pickedDial = undefined;
+    mendTarget = undefined;
+    resetView();
     const human = isHuman(side);
+    const rival = rivalName();
     if (setup.mode === 'duel') {
-      showTurnBanner(`${snap.sides[side].name}'s turn`, side === 0 ? 'blue' : 'orange');
+      showTurnBanner(t('banners.name_turn', { name: snap.sides[side].name }), side === 0 ? 'blue' : 'orange');
       play(side === 0 ? 'turn' : 'turn2');
       if (turnCount > 1 && setup.seats !== 'one') openHandoff(side, round);
     } else if (setup.mode !== 'yard') {
-      if (human) { showTurnBanner('Your turn', 'blue'); play('turn'); }
-      else showTurnBanner(`${snap.sides[side].name} aims`, 'orange');
+      if (human) { showTurnBanner(t('banners.your_turn'), 'blue'); play('turn'); }
+      else {
+        // Now and then, in place of "<Rival> aims": what the Flattener does while it thinks (one turn in four at most).
+        const think = turnCount - lastThinkTurn >= 4 && Math.random() < 0.3;
+        if (think) lastThinkTurn = turnCount;
+        showTurnBanner(think ? t('rivals.banner.thinking', { rival }) : t('banners.rival_aims', { rival }), 'orange');
+      }
+      rivalTurnTaunt(side);
     }
-    say(`Round ${round}. ${human ? (setup.mode === 'duel' ? `${snap.sides[side].name}'s turn` : 'Your turn') : `${snap.sides[side].name} aims`}`);
+    say(human
+      ? (setup.mode === 'duel' ? t('a11y.round_name_turn', { n: round, name: snap.sides[side].name }) : t('a11y.round_your_turn', { n: round }))
+      : t('a11y.round_rival_aims', { n: round, rival }));
+    turnHits = { blocks: 0, dmg: 0, who: '', side };
     if (turnCount > 1) void autosave(side, round);
   }
 
@@ -711,7 +896,7 @@ export function battleScreen(app: App, route: Route): Screen {
     try {
       await saveBattle({
         setup, core: core.saveBattle(), coreName: core.name,
-        label: setup.mode === 'duel' ? `Round ${round}, ${snap.sides[side].name}'s turn` : `${setup.level ? `Level ${setup.level}, ` : ''}Round ${round}`,
+        label: saveLabel(side, round),
         savedAt: Date.now(), handoff: setup.mode === 'duel',
       });
       saveTick.classList.remove('show');
@@ -728,7 +913,17 @@ export function battleScreen(app: App, route: Route): Screen {
     // Progress first, then drop the save, then the results: closing the tab in between loses nothing.
     void (res ? app.recordResult(setup, res) : Promise.resolve()).catch(() => undefined).then(() => clearBattle());
     play(res && res.winner === 0 ? 'win' : setup.mode === 'duel' ? 'win' : 'lose');
-    if (res) say(res.winner === 0 || setup.mode === 'duel' ? `${snap.sides[res.winner === 1 ? 1 : 0].name} wins` : 'You lost');
+    if (res) {
+      if (res.winner === 0 || res.winner === 1 && setup.mode === 'duel') say(t('a11y.wins', { name: snap.sides[res.winner].name }));
+      else if (res.winner === 1) say(byId('results.loss.title', res.howKey ?? res.how, { rival: rivalName(), captive: '' }));
+      else say(t('results.duel.draw'));
+      // The whole winning crew says the crew line once, after the Hob win lines.
+      const line = crewWinLine();
+      if (line && (res.winner === 0 || res.winner === 1)) {
+        const f = snap.forts[res.winner];
+        setTimeout(() => { if (alive) feel.fx.word(`"${line}"`, f.x + f.w / 2, f.y + f.h + 90, 15, res.winner === 0 ? '#CFE0FF' : '#FFD9B8', false, 2200); }, 700);
+      }
+    }
     // A battle-ending slow motion (Kettle Pop, Clean Sweep) plays out before the results.
     setTimeout(() => { if (alive) app.go({ to: 'results', setup }); }, (app.settings.reduceMotion ? 600 : 1500) + feel.juice.slowRemaining * 2);
   }
@@ -774,7 +969,30 @@ export function battleScreen(app: App, route: Route): Screen {
   const setHidden = (el: HTMLElement, v: boolean) => { if (changed(el, 'h', String(v))) el.hidden = v; };
   const setClass = (el: HTMLElement, c: string, on: boolean) => { if (changed(el, `c${c}`, String(on))) el.classList.toggle(c, on); };
   const setStyle = (el: HTMLElement, k: string, v: string) => { if (changed(el, `s${k}`, v)) el.style.setProperty(k, v); };
+  const ICON_FALLBACK: Record<string, string> = {
+    gravel_sneeze: 'icon_gravel',
+    extra_shake: 'icon_gravel',
+    grand_dumpling: 'icon_pudding_bomb',
+    sunspear: 'icon_hatpin',
+    pepper_rain: 'icon_gravel',
+    burrowbomb: 'icon_nibbler',
+    rolypoly: 'icon_bouncebean',
+    barn_raising: 'icon_mend_bucket',
+    tick_tock_crock: 'icon_clodpot',
+    pan_parade: 'icon_lid_lifter',
+  };
+  const shotIconUrl = (c: ShotChip): string | undefined => resolveShotIconUrl(c.icon, ICON_FALLBACK);
+  sprites.whenLoaded(() => {
+    windFlagImg.src = windPennantUrl();
+    fatigueImg.src = fatigueFlameUrl();
+    for (const side of [0, 1] as Side[]) {
+      const st = (kettleEl[side].dataset.state as 'full' | 'hurt' | 'critical') || 'full';
+      kettleDialImg[side].src = kettleDialUrl(st);
+    }
+  });
+
   let hudKey = '';
+  let lastPipsKey = '';
   function updateHud(now: number): void {
     const s = snap;
     const hd = s.hud;
@@ -788,63 +1006,122 @@ export function battleScreen(app: App, route: Route): Screen {
     setData(hud, 'phase', s.phase);
     setData(hud, 'active', String(hd.active));
     setData(hud, 'you', String(me));
-    // top strip
+    // top strip (Web-L3: skip crew.map/join when tick & hob count unchanged)
+    const pipsTick = `${s.tick}:${s.hobs.length}:${s.round}`;
+    const rebuildPips = pipsTick !== lastPipsKey;
+    if (rebuildPips) lastPipsKey = pipsTick;
     for (const side of [0, 1] as Side[]) {
       const k = s.kettles.find((x) => x.side === side);
       const pct = k ? Math.round((100 * k.hp) / k.maxHp) : 0;
-      setText(kettleEl[side], `♨ ${pct}%`);
-      setData(kettleEl[side], 'state', pct <= 25 ? 'critical' : pct <= 50 ? 'hurt' : 'full');
-      const crew = s.hobs.filter((x) => x.side === side);
-      const pk = crew.map((c) => `${c.id}:${c.hp}:${c.state}`).join(',');
-      if (pipsEl[side].dataset.k !== pk) {
-        pipsEl[side].dataset.k = pk;
-        pipsEl[side].replaceChildren(...crew.map((c) => h('span', {
-          class: `pip ${side ? 'p-diamond' : 'p-round'} ${c.state === 'bonked' ? 'bonked' : c.state === 'squashed' ? 'squashed' : ''}`,
-          style: `--c:${CLASS_COLOR[c.cls]};--f:${Math.round((100 * c.hp) / c.maxHp)}%`,
-          title: `${c.name} ${c.hp}${c.state === 'squashed' ? ', Squashed' : ''}`,
-        }, side ? CLASS_ICON[c.cls] : '')));
+      const kState: 'full' | 'hurt' | 'critical' = pct <= 25 ? 'critical' : pct <= 50 ? 'hurt' : 'full';
+      setText(kettlePctEl[side], `${pct}%`);
+      if (changed(kettleEl[side], 'kstate', kState)) {
+        kettleEl[side].dataset.state = kState;
+        kettleDialImg[side].src = kettleDialUrl(kState);
+      }
+      if (changed(kettleEl[side], 'aria', `${pct}`)) {
+        // Your own kettle in a one-player fight is just "Kettle"; others go by their side's name.
+        kettleEl[side].setAttribute('aria-label', setup.mode !== 'duel' && side === 0 ? t('handoff.kettle', { n: pct }) : t('hud.kettle_spoken', { name: s.sides[side].name, n: pct }));
+      }
+      if (rebuildPips) {
+        const crew = s.hobs.filter((x) => x.side === side);
+        const pk = crew.map((c) => `${c.id}:${c.hp}:${c.state}`).join(',');
+        if (pipsEl[side].dataset.k !== pk) {
+          pipsEl[side].dataset.k = pk;
+          pipsEl[side].replaceChildren(...crew.map((c) => h('span', {
+            class: `pip ${side ? 'p-diamond' : 'p-round'} ${c.state === 'bonked' ? 'bonked' : c.state === 'squashed' ? 'squashed' : ''}`,
+            style: `--c:${CLASS_COLOR[c.cls]};--fg:${CLASS_INK[c.cls]};--f:${Math.round((100 * c.hp) / c.maxHp)}%`,
+            title: hobChip(c),
+          }, side ? CLASS_ICON[c.cls] : '')));
+        }
       }
     }
     const sq = s.squall;
-    const fat = s.fatigue?.[0] || s.fatigue?.[1];
+    const fat = !!(s.fatigue?.[0] || s.fatigue?.[1]);
     const vo = s.hud.volley;
+    const sc = s.hud.score;
     const bo = s.hud.boss;
     // Fatigue warned a few rounds ahead when the core says when it comes (QA playtest 1, M2).
     const fatIn = !fat && s.fatigueIn !== undefined && s.fatigueIn > 0 && s.fatigueIn <= 3 ? s.fatigueIn : 0;
-    const rk = vo ? `v${vo.left[0]}:${vo.left[1]}:${vo.actions}` : `${sq.on}:${s.round}:${s.roundCap}:${sq.warn}:${fat}:${fatIn}:${bo?.phase ?? 0}:${layout}`;
+    const rk = vo
+      ? `v${vo.left[0]}:${vo.left[1]}:${vo.actions}:${sc?.[0] ?? 0}:${sc?.[1] ?? 0}:${layout}`
+      : `${sq.on}:${s.round}:${s.roundCap}:${sq.warn}:${fat}:${fatIn}:${bo?.phase ?? 0}:${layout}`;
     if (changed(roundEl, 'k', rk)) {
-      // Portrait has a narrow top strip: a short label (n7), the full words in the title and for screen readers.
-      const long = setup.mode === 'yard' ? 'Test Yard' : vo ? `Shots left ${vo.left[0]} : ${vo.left[1]} of ${vo.actions}`
-        : sq.on ? `Squall ${sq.on} of 3` : `Round ${s.round}/${s.roundCap}${sq.warn ? `  Squall in ${sq.warn}` : ''}${fat ? ', Fatigue' : fatIn ? `  Fatigue in ${fatIn}` : ''}${bo ? `, Phase ${bo.phase}` : ''}`;
-      const short = setup.mode === 'yard' || vo || sq.on ? long
-        : `R${s.round}/${s.roundCap}${sq.warn ? ` \u00B7 Sq ${sq.warn}` : ''}${fat ? ' \u00B7 Fatigue' : fatIn ? ` \u00B7 Fat. ${fatIn}` : ''}${bo ? ` \u00B7 P${bo.phase}` : ''}`;
+      // Volley Points shows both Siege Scores and shots left (Web-H3); Boss Phase uses Ph1 not P1 (QA-p3).
+      const scoreTxt = vo ? t('hud.score', { a: sc?.[0] ?? 0, b: sc?.[1] ?? 0 }) : '';
+      const shotsTxt = vo ? t('hud.shots_left', { n: vo.left[me], total: vo.actions }) : '';
+      const parts = (...p: (string | false | undefined)[]) => p.filter(Boolean).join('. ');
+      const ariaLong = setup.mode === 'yard' ? t('hud.test_yard')
+        : vo ? parts(scoreTxt, shotsTxt)
+        : sq.on ? t('hud.squall.count', { n: sq.on })
+        : parts(t('hud.round', { n: s.round, cap: s.roundCap }), sq.warn ? t('hud.squall.in', { n: sq.warn }) : '', fat ? t('hud.creaks.on') : fatIn ? t('hud.creaks.in', { n: fatIn }) : '', bo ? t('hud.boss.phase', { n: bo.phase }) : '');
+      const long = setup.mode === 'yard' ? t('hud.test_yard')
+        : vo ? `${scoreTxt} · ${shotsTxt}`
+        : sq.on ? t('hud.squall.count', { n: sq.on })
+        : [t('hud.round', { n: s.round, cap: s.roundCap }), sq.warn ? t('hud.squall.in', { n: sq.warn }) : '', bo ? t('hud.boss.phase', { n: bo.phase }) : ''].filter(Boolean).join(' · ');
+      const short = setup.mode === 'yard' || sq.on ? long
+        : vo ? `${sc?.[0] ?? 0}:${sc?.[1] ?? 0} · ${vo.left[me]}/${vo.actions}`
+        : [t('hud.round_short', { n: s.round, cap: s.roundCap }), sq.warn ? t('hud.squall.in', { n: sq.warn }) : '', bo ? t('hud.boss.phase', { n: bo.phase }) : ''].filter(Boolean).join(' · ');
       roundEl.textContent = layout === 'tall' ? short : long;
-      roundEl.title = long;
-      roundEl.setAttribute('aria-label', long);
+      roundEl.title = ariaLong;
+      roundEl.setAttribute('aria-label', ariaLong);
+    }
+    const showFatPill = setup.mode !== 'yard' && !vo && !sq.on && (fat || fatIn > 0);
+    setHidden(fatigueBadge, !showFatPill);
+    if (showFatPill) {
+      setClass(fatigueBadge, 'active', fat);
+      setText(fatigueTxt, fat ? t('hud.creaks.on') : t('hud.creaks.in', { n: fatIn }));
     }
     setClass(roundEl, 'squall', !!sq.on);
-    const arrow = (w: number) => (w === 0 ? '• 0' : `${w > 0 ? '→' : '←'} ${Math.abs(w)}`);
-    setText(windEl, `${arrow(s.wind)}   ⇢ ${Math.abs(s.forecast)}`);
-    if (changed(windEl, 'title', `${s.wind}/${s.forecast}`)) windEl.title = `Wind ${s.wind}, next ${s.forecast}`;
+    const arrow = (w: number) => (w === 0 ? '0' : `${w > 0 ? '→' : '←'} ${Math.abs(w)}`);
+    setText(windValEl, `${arrow(s.wind)} · ⇢ ${Math.abs(s.forecast)}`);
+    setClass(windFlagImg, 'left', s.wind < 0);
+    setClass(windFlagImg, 'calm', s.wind === 0);
+    const windKey = `${s.wind}/${s.forecast}/${hd.frontRoundsLeft ?? ''}`;
+    if (changed(windEl, 'title', windKey)) {
+      const wnow = s.wind === 0 ? t('hud.wind.none') : t(s.wind > 0 ? 'hud.wind.right' : 'hud.wind.left', { n: Math.abs(s.wind) });
+      const wnext = s.forecast === 0 ? t('hud.wind.next_none') : t(s.forecast > 0 ? 'hud.wind.next_right' : 'hud.wind.next_left', { n: Math.abs(s.forecast) });
+      windEl.title = [wnow, wnext, hd.frontRoundsLeft ? plural('hud.wind.front_left', hd.frontRoundsLeft) : ''].filter(Boolean).join('. ');
+      windEl.setAttribute('aria-label', windEl.title);
+    }
     setData(top, 'active', String(hd.active));
 
+    // Reset shot dial / Mendglob target whenever the selected Hob or shot changes.
+    const shotChoiceKey = `${hd.active}:${hd.hob ?? ''}:${hd.shot ?? ''}`;
+    if (shotChoiceKey !== lastShotChoiceKey) {
+      lastShotChoiceKey = shotChoiceKey;
+      pickedDial = undefined;
+      mendTarget = undefined;
+    }
+
     // crew
-    const crew = s.hobs.filter((x) => x.side === me);
-    const ck = crew.map((c) => `${c.id}:${c.hp}:${c.state}:${c.rest}`).join(',') + `|${hd.hob}|${plan}|${sprites.ready}|${sprites.scale}`;
+    const ck = `${pipsTick}|${hd.hob}|${plan}|${sprites.ready}|${sprites.scale}|${me}`;
     if (ck !== hudKey) {
       hudKey = ck;
-      rectsDirty = true;
-      hobsEl.replaceChildren(...crew.map((c) => {
-        const pu = sprites.url(`portrait_${hobSpriteName(c.def ?? c.id, c.cls)}_${me === 0 ? 'blue' : 'orange'}`);
-        const b = btn(h('span', { class: 'face' }, pu ? h('img', { src: pu, alt: '' }) : CLASS_ICON[c.cls]), () => { send({ cmd: 'pick_hob', id: c.id }); }, `hob ${c.id === hd.hob ? 'on' : ''} ${c.state}`, {
-          'aria-label': `${c.name}, ${c.cls}, ${c.hp} HP${c.state === 'rest' ? ', needs a rest' : c.state === 'dug' ? ', Loophole buried' : c.state === 'squashed' ? ', Squashed, back up soon' : ''}`,
-          style: `--c:${CLASS_COLOR[c.cls]};--f:${Math.round((360 * c.hp) / c.maxHp)}deg`,
-          'data-hob': c.id,
-          disabled: c.state === 'bonked' || !plan,
-        });
-        if (c.state === 'rest') b.append(h('em', { class: 'cog' }, `${c.rest}`));
-        return b;
-      }));
+      const crew = s.hobs.filter((x) => x.side === me);
+      const exactCk = crew.map((c) => `${c.id}:${c.hp}:${c.state}:${c.rest}`).join(',') + `|${hd.hob}|${plan}|${sprites.ready}|${sprites.scale}`;
+      if (hobsEl.dataset.k !== exactCk) {
+        hobsEl.dataset.k = exactCk;
+        rectsDirty = true;
+        hobsEl.replaceChildren(...crew.map((c) => {
+          const pu = sprites.url(`portrait_${hobSpriteName(c.def ?? c.id, c.cls)}_${me === 0 ? 'blue' : 'orange'}`);
+          const b = btn(h('span', { class: 'face' }, pu ? h('img', { src: pu, alt: '' }) : CLASS_ICON[c.cls]), () => {
+            if (send({ cmd: 'pick_hob', id: c.id })) {
+              recallIdx = 0;
+              recallList = [];
+              play('hob_pick');
+              feel.bark(hobContentId(c.def ?? c.id), 'picked', me, -1000, c.id);
+            }
+          }, `hob silent ${c.id === hd.hob ? 'on' : ''} ${c.state}`, {
+            'aria-label': hobChip(c),
+            style: `--c:${CLASS_COLOR[c.cls]};--fg:${CLASS_INK[c.cls]};--f:${Math.round((360 * c.hp) / c.maxHp)}deg`,
+            'data-hob': c.id,
+            disabled: c.state === 'bonked' || !plan,
+          });
+          if (c.state === 'rest') b.append(h('em', { class: 'cog' }, `${c.rest}`));
+          return b;
+        }));
+      }
     }
     // tray: shots, then Doodads (each Doodad is an Action, used from its card)
     const tk = hd.shots.map((x) => `${x.id}:${x.uses}:${x.ready}:${x.weight}`).join(',') + `|${hd.doodads.map((d) => d.id).join(',')}|${hd.shot}|${plan}|${sprites.ready}|${sprites.scale}`;
@@ -852,52 +1129,98 @@ export function battleScreen(app: App, route: Route): Screen {
       trayEl.dataset.k = tk;
       rectsDirty = true;
       const shotBtns = hd.shots.map((c, i) => {
-        const ic = c.icon ? sprites.url(`icon_${c.icon}`) : undefined;
-        const b = btn(h('span', { class: 'nm' }, ic ? h('img', { src: ic, alt: '', class: 'ico' }) : '', c.name), () => send({ cmd: 'pick_shot', id: c.id }), `chip shot ${c.id === hd.shot ? 'on' : ''} ${c.ready ? '' : 'off'}`, {
-          'aria-label': `${c.name}${c.uses >= 0 ? `, ${c.uses} left` : ''}, ${['Light', 'Medium', 'Heavy'][c.weight]}${c.ready ? '' : `, not ready${c.why ? `: ${c.why}` : ''}`}`,
+        const ic = shotIconUrl(c);
+        const b = btn(h('span', { class: 'nm' }, ic ? h('img', { src: ic, alt: '', class: 'ico' }) : '', h('span', { class: 'shot-label' }, c.name)), () => send({ cmd: 'pick_shot', id: c.id }), `chip shot ${c.id === hd.shot ? 'on' : ''} ${c.ready ? '' : 'off'}`, {
+          'aria-label': !c.ready && c.why ? t('hud.shot_chip_locked', { shot: c.name, why: c.why }) : c.uses >= 0 ? t('hud.shot_chip_left', { shot: c.name, weight: weightWord(c.weight), n: c.uses }) : t('hud.shot_chip', { shot: c.name, weight: weightWord(c.weight) }),
           'data-key': String(i + 1), disabled: !plan,
         });
         if (c.uses >= 0) b.append(h('em', { class: 'uses' }, String(c.uses)));
-        if (c.weight) b.append(h('i', { class: 'cogs', 'aria-hidden': 'true' }, '⚙'.repeat(c.weight)));
-        if (c.best && c.kind === 'shell') b.append(h('i', { class: 'best', style: `--c:${CLASS_COLOR[c.best]}` }, CLASS_ICON[c.best]));
-        b.addEventListener('contextmenu', (e) => { e.preventDefault(); shellCard(c.name, c.weight, c.best); });
+        if (c.weight) b.append(h('i', { class: 'cogs', 'aria-hidden': 'true' }, ...restCogImgs(c.weight)));
+        if (c.best && c.kind === 'shell' && CLASS_COLOR[c.best]) b.append(h('i', { class: 'best', style: `--c:${CLASS_COLOR[c.best]};--fg:${CLASS_INK[c.best]}` }, CLASS_ICON[c.best]));
+        b.addEventListener('contextmenu', (e) => { e.preventDefault(); shellCard(c); });
         // iOS Safari sends no contextmenu on a long press: a 500 ms hold opens the card too.
-        longPress(b, () => shellCard(c.name, c.weight, c.best));
+        longPress(b, () => shellCard(c));
         return b;
       });
       const doodadBtns = hd.doodads.map((d) => {
-        const ic = sprites.url(`icon_${d.id}`);
-        return btn(h('span', { class: 'nm' }, ic ? h('img', { src: ic, alt: '', class: 'ico' }) : '', d.name), () => doodadCard(d), 'chip shot doodad', {
-          'aria-label': `${d.name}, Doodad. ${d.card}`, 'data-doodad': d.id, disabled: !plan,
+        const ic = resolveShotIconUrl(d.id);
+        return btn(h('span', { class: 'nm' }, ic ? h('img', { src: ic, alt: '', class: 'ico' }) : '', h('span', { class: 'shot-label' }, d.name)), () => doodadCard(d), 'chip shot doodad', {
+          'aria-label': t('hud.doodad_chip', { doodad: d.name, card: d.card }), 'data-doodad': d.id, disabled: !plan,
         });
       });
       trayEl.replaceChildren(...shotBtns, ...doodadBtns);
     }
+
+    // Dial / Mendglob block-targeting strip (Web-H1).
+    const pickedChip = hd.shots.find((c) => c.id === hd.shot);
+    const hasBonkedMate = s.hobs.some((hb) => hb.side === me && hb.state === 'bonked');
+    const canPuffUp = (hd.puffUp?.[me] ?? true) && hasBonkedMate;
+    const showDial = plan && !!pickedChip && ((pickedChip.dials?.length ?? 0) > 0 || !!pickedChip.canTargetOwn);
+    setHidden(dialBar, !showDial);
+    if (showDial && pickedChip) {
+      const dk = `${pickedChip.id}:${pickedChip.dials?.join(',') ?? ''}:${pickedChip.canTargetOwn ?? ''}:${pickedDial ?? ''}:${mendTarget?.join(',') ?? ''}:${canPuffUp}`;
+      if (dialBar.dataset.k !== dk) {
+        dialBar.dataset.k = dk;
+        const nodes: (HTMLElement | string)[] = [];
+        if (pickedChip.dials?.includes('puff_up')) {
+          nodes.push(
+            btn(t('hud.dial.rebuild_n', { n: 4 }), () => { pickedDial = 'rebuild'; play('toggle_on'); }, `chip small silent ${pickedDial !== 'puff_up' ? 'on' : ''}`, { 'aria-pressed': String(pickedDial !== 'puff_up') }),
+            btn(t('hud.dial.puff_up'), () => { pickedDial = 'puff_up'; play('toggle_on'); }, `chip small silent ${pickedDial === 'puff_up' ? 'on' : ''}`, {
+              'aria-pressed': String(pickedDial === 'puff_up'),
+              disabled: !canPuffUp,
+              title: canPuffUp ? t('hud.dial.puff_up_hint') : hasBonkedMate ? t('hud.dial.puff_up_used') : t('hud.dial.puff_up_none'),
+            }),
+          );
+        }
+        if (pickedChip.dials?.includes('hops3')) {
+          const on3 = pickedDial === 'hops3';
+          nodes.push(
+            btn(plural('hud.dial.hops', 2), () => { pickedDial = undefined; play('tap'); }, `chip small silent ${!on3 ? 'on' : ''}`, { 'aria-pressed': String(!on3) }),
+            btn(plural('hud.dial.hops', 3), () => { pickedDial = 'hops3'; play('toggle_on'); }, `chip small silent ${on3 ? 'on' : ''}`, { 'aria-pressed': String(on3) }),
+          );
+        }
+        if (pickedChip.canTargetOwn) {
+          if (mendTarget) {
+            nodes.push(btn(`${t('hud.mend.target', { col: mendTarget[0] + 1, row: mendTarget[1] + 1 })} ✕`, () => { mendTarget = undefined; play('back'); }, 'chip small on silent', { 'aria-label': t('hud.mend.clear') }));
+          } else {
+            nodes.push(h('span', { class: 'small dial-hint' }, t('hud.mend.prompt')));
+          }
+        }
+        dialBar.replaceChildren(...nodes);
+      }
+    }
+
     // walk and Steam (the bar is a share of this side's starting Steam, not of 100)
     setHidden(walkEl, !hd.canWalk && !(plan && setup.mode !== 'campaign'));
     const pct = Math.max(0, Math.min(100, (100 * hd.steam) / Math.max(1, hd.steamMax)));
     setStyle(steamBar.children[0] as HTMLElement, 'width', `${pct.toFixed(1)}%`);
-    setText(steamBar.children[1] as HTMLElement, `S ${hd.steam}`);
-    // readout
+    setText(steamBar.children[1] as HTMLElement, t('hud.steam', { n: hd.steam }));
+    if (changed(steamBar, 'aria', `${hd.steam}:${hd.steamTurn}`)) steamBar.setAttribute('aria-label', t('hud.steam_long', { n: hd.steam, max: hd.steamMax, left: hd.steamTurn }));
+    // readout & Recall availability state
     const a = hd.aim;
     setText(readout, a && a.power > 0 ? `${(a.angle / 10).toFixed(1)}° | ${a.power}` : '--');
+    if (changed(readout, 'aria', `${a?.angle}:${a?.power}`)) readout.setAttribute('aria-label', `${a && a.power > 0 ? t('hud.aim_readout', { angle: (a.angle / 10).toFixed(1), power: a.power }) : t('hud.no_aim')}. ${t('hud.fine_tune')}`);
     setHidden(pad, !(plan && (padOpen || padAlways())));
+    const hasPins = s.pins.some((p) => p.hob === hd.hob && !p.spent) || recallIdx > 0;
+    setClass(recallBtn, 'off', !hasPins);
     // fire: FIRE, SHOVE OFF on a buried Loophole, PASS when nothing else is legal, 2x / 1x in Resolve
-    const fs = hd.fire;
+    let fs = hd.fire;
+    if (plan && mendTarget && pickedChip?.canTargetOwn && fs === 'locked' && !hd.fireWhy) fs = 'ready';
     setData(fire, 'state', fs);
-    setText(fire, fs === 'fast' ? (fast ? '1x' : '2x') : fs === 'dug' ? 'SHOVE OFF' : fs === 'pass' ? 'PASS' : 'FIRE');
-    if (changed(fire, 'aria', fs + fast)) fire.setAttribute('aria-label', fs === 'fast' ? (fast ? 'Normal speed' : 'Double speed') : fs === 'dug' ? 'Shove Off: clear the buried Loophole' : fs === 'pass' ? 'Pass the turn' : 'Fire');
+    setText(fire, fs === 'fast' ? (fast ? '1x' : '2x') : fs === 'dug' ? t('hud.shove_off.button') : fs === 'pass' ? t('hud.pass.button') : t('hud.fire'));
+    const shoveLabel = t('hud.shove_off.hint', { n: hd.shoveOffCost ?? 0 });
+    if (changed(fire, 'aria', `${fs}:${fast}:${hd.shoveOffCost ?? ''}`)) {
+      fire.setAttribute('aria-label', fs === 'fast' ? (fast ? t('hud.speed_normal') : t('hud.speed_double')) : fs === 'dug' ? shoveLabel : fs === 'pass' ? t('hud.pass.forced') : t('hud.fire'));
+    }
     setHidden(fire, fs === 'flight' || (!human && fs !== 'fast'));
     // Fire is never lit while the picked shot cannot go: it is grey (locked) and says why.
     const why = plan && fs === 'locked' ? hd.fireWhy ?? '' : '';
     setData(fire, 'why', why);
-    if (changed(fire, 'title', why)) fire.title = why;
-    if (why && changed(fire, 'aria-why', why)) fire.setAttribute('aria-label', `Fire, not ready: ${why}`);
+    if (changed(fire, 'title', why || (fs === 'dug' ? shoveLabel : ''))) fire.title = why || (fs === 'dug' ? shoveLabel : '');
+    if (why && changed(fire, 'aria-why', why)) fire.setAttribute('aria-label', t('hud.fire_locked', { why }));
     setText(fireWhyEl, why);
     setHidden(fireWhyEl, !why);
     if (why) {
-      // Wide: over the shot tray (the valley between the forts, the dimmed chip just below).
-      // Tall: in the free space of the crew row, left of Fire.
       const fr = rc.fire, tr = rc.tray;
       if (layout === 'wide') {
         setStyle(fireWhyEl, 'left', `${Math.round(clamp(tr.x + tr.w / 2, 110, W - 110))}px`);
@@ -911,8 +1234,14 @@ export function battleScreen(app: App, route: Route): Screen {
     }
     if (plan) autoPickReady();
     ownerRing(plan);
-    setHidden(reframe, !(manual || topManual || bottomManual || wideLook || peek));
-    if (plan) { openOnActiveHob(); }
+    // Show Re-frame whenever panned or zoomed (Web-M1), placed in the moved lens on Portrait (QA-m5).
+    const needReframe = manual || topManual || bottomManual || wideLook || peek || zoomWide !== 1 || zoomTop !== 1;
+    setHidden(reframe, !needReframe);
+    if (layout === 'tall' && needReframe) {
+      const wantBottom = bottomManual && !topManual && !wideLook && zoomTop === 1;
+      const targetParent = wantBottom ? lensBottom : lensTop;
+      if (reframe.parentElement !== targetParent) targetParent.append(reframe);
+    }
     edgeMarks(plan, me);
     // onboarding prompts (1-1)
     updatePrompt(now, plan);
@@ -937,10 +1266,10 @@ export function battleScreen(app: App, route: Route): Screen {
         const toRight = (left + right) / 2 > W / 2;
         // While peeking the fort is in view: the key sits low, off it.
         const y = peek ? clamp(Math.max(ay, by) + 30, cr.y + 24, cr.y + cr.h - 24) : clamp((ay + by) / 2, cr.y + 24, cr.y + cr.h - 24);
-        const name = setup.mode === 'duel' ? snap.sides[other(me)].name : setup.mode === 'yard' ? 'Dummy' : 'Rival';
+        const look = setup.mode === 'duel' ? t('hud.view_theirs', { name: snap.sides[other(me)].name }) : setup.mode === 'yard' ? t('hud.view_theirs', { name: t('common.dummy') }) : t('hud.view_rival');
         const back = peek;
-        setText(fortMark, back ? 'Back to my fort' : toRight ? `View ${name} fort \u25B6` : `\u25C0 View ${name} fort`);
-        if (changed(fortMark, 'aria', String(back))) fortMark.setAttribute('aria-label', back ? 'Back to my fort' : `View the ${name} fort`);
+        setText(fortMark, back ? t('hud.view_mine') : toRight ? `${look} \u25B6` : `\u25C0 ${look}`);
+        if (changed(fortMark, 'aria', String(back))) fortMark.setAttribute('aria-label', back ? t('hud.view_mine') : look);
         setData(fortMark, 'side', toRight ? 'right' : 'left');
         setStyle(fortMark, 'top', `${Math.round(y)}px`);
         setStyle(fortMark, 'left', toRight ? 'auto' : `${Math.round(cr.x + 4)}px`);
@@ -1005,7 +1334,7 @@ export function battleScreen(app: App, route: Route): Screen {
     if (nudged || !canAim()) return;
     nudged = true;
     nudgeUntil = performance.now() + 2600;
-    say('Drag from your fort to aim');
+    say(t('hud.aim_hint_keys'));
   }
   const AIM_TEACH = 3;
   const aimStarts = () => app.progress.hints.filter((x) => x.startsWith('aim-start-')).length;
@@ -1023,8 +1352,8 @@ export function battleScreen(app: App, route: Route): Screen {
     setStyle(ownRing, 'top', `${Math.round(y - 14)}px`);
   }
 
-  // A turn opens on a Hob who can act (n1): when the picked Hob has no shot it may fire this turn,
-  // the first crewmate who has one is picked instead, once per turn. None: Pass stays on offer.
+  // A turn opens on a Hob who can act (Web-L2): runs before render() and inspects state directly
+  // so it never logs exploratory `pick_hob` commands into the save replay.
   let actKey = '';
   function openOnActiveHob(): void {
     const hd = snap.hud;
@@ -1032,15 +1361,14 @@ export function battleScreen(app: App, route: Route): Screen {
     if (key === actKey || !hd.shots.length) return;
     actKey = key;
     if (hd.fire === 'dug' || hd.shots.some((c) => c.ready)) return;
-    const start = hd.hob;
-    const crew = snap.hobs.filter((x) => x.side === hd.active && x.id !== start && x.state !== 'bonked')
-      .sort((a, b) => (a.state === 'ready' ? 0 : 1) - (b.state === 'ready' ? 0 : 1));
-    for (const c of crew) {
-      if (!send({ cmd: 'pick_hob', id: c.id })) continue;
+    const rank = (st: string) => (st === 'ready' ? 0 : st === 'rest' || st === 'squashed' ? 1 : st === 'dug' ? 2 : 3);
+    const best = snap.hobs
+      .filter((x) => x.side === hd.active && x.id !== hd.hob && x.state !== 'bonked' && x.state !== 'tumbled')
+      .sort((a, b) => rank(a.state) - rank(b.state))[0];
+    if (best && send({ cmd: 'pick_hob', id: best.id })) {
       snap = merge(snap, core.snapshot());
-      if (snap.hud.shots.some((x) => x.ready)) { autoKey = ''; return; }
+      autoKey = '';
     }
-    if (start && snap.hud.hob !== start && send({ cmd: 'pick_hob', id: start })) snap = merge(snap, core.snapshot());
   }
 
   function doneHint(id: string): void {
@@ -1050,7 +1378,7 @@ export function battleScreen(app: App, route: Route): Screen {
     if (plan && !paused && now < nudgeUntil) {
       // A drag that started in the sky: once per battle, point at the fort to aim from.
       const [hx, hy] = pickedHobScreen();
-      setText(prompt, 'Drag from your fort to aim');
+      setText(prompt, t('hud.aim_hint'));
       const half = Math.min(W / 2 - 8, (prompt.offsetWidth || 250) / 2 + 8);
       setStyle(prompt, 'left', `${Math.round(clamp(hx, half, W - half))}px`);
       setStyle(prompt, 'top', `${Math.round(clamp(hy - 96, 8, H - 120))}px`);
@@ -1073,12 +1401,12 @@ export function battleScreen(app: App, route: Route): Screen {
       setStyle(hand, 'top', `${hy}px`);
       setStyle(prompt, 'left', `${clamp(hx + 60, 70, W - 70)}px`);
       setStyle(prompt, 'top', `${Math.max(8, hy - 90)}px`);
-      setText(prompt, 'Drag from your fort to aim');
+      setText(prompt, t('hud.aim_hint'));
       setHidden(prompt, false);
       setHidden(hand, false);
       return;
     }
-    if (!app.progress.hints.includes('fire') && snap.hud.fire === 'ready') { hint('fire', 'Fire!', fire); return; }
+    if (!app.progress.hints.includes('fire') && snap.hud.fire === 'ready') { hint('fire', t('hud.fire'), fire); return; }
     if (missCount > 0 && !app.progress.hints.includes('pin') && snap.pins.some((p) => p.side === 0)) {
       const p = snap.pins.filter((x) => x.side === 0).slice(-1)[0];
       const l = lensRects().find((x) => x.id === 'top' || x.id === 'wide');
@@ -1086,7 +1414,7 @@ export function battleScreen(app: App, route: Route): Screen {
         const [px, py] = toScreen(l.rect, l.cam, p.x, p.y);
         setStyle(prompt, 'left', `${clamp(px, 70, W - 70)}px`);
         setStyle(prompt, 'top', `${Math.max(8, py - 70)}px`);
-        setText(prompt, 'Tap the pin');
+        setText(prompt, t('hud.tap_pin'));
         setHidden(prompt, false);
         setHidden(hand, true);
         return;
@@ -1111,8 +1439,8 @@ export function battleScreen(app: App, route: Route): Screen {
     const falls = core.leanLines(b.side, b.c, b.r);
     lean = { side: b.side, c: b.c, r: b.r, falls: new Set(falls.map(([c, r]) => `${c},${r}`)) };
     g.mode = 'lean';
-    showBanner(falls.length ? `${falls.length} ${falls.length === 1 ? 'block falls' : 'blocks fall'} with it` : 'Nothing else falls', 'paper');
-    say(falls.length ? `If that block breaks, ${falls.length} more fall` : 'If that block breaks, nothing else falls');
+    showBanner(falls.length ? plural('hud.falls.with_it', falls.length) : t('hud.falls.nothing'), 'paper');
+    say(falls.length ? plural('hud.falls.if_breaks', falls.length) : t('hud.falls.if_breaks_nothing'));
     play('tap');
   }
   const pointers = new Map<number, { x: number; y: number }>();
@@ -1124,7 +1452,7 @@ export function battleScreen(app: App, route: Route): Screen {
     const ls = lensRects();
     return ls.find((l) => x >= l.rect.x && x < l.rect.x + l.rect.w && y >= l.rect.y && y < l.rect.y + l.rect.h);
   }
-  const canAim = () => snap.phase === 'plan' && isHuman(snap.hud.active) && !paused && !handoffOpen;
+  const canAim = () => snap.phase === 'plan' && isHuman(snap.hud.active) && !paused && !handoffOpen && !draftOpen;
 
   /** Aiming starts only from your own fort (owner rule): a press on the fort, or within about two
    *  blocks of it, or within 48 px of the picked Hob. A press anywhere else pans the camera. */
@@ -1134,7 +1462,8 @@ export function battleScreen(app: App, route: Route): Screen {
     const [wx, wy] = toWorld(l.rect, l.cam, px, py);
     const m = 32;
     const inX = wx >= f.x - m && wx <= f.x + f.w + m;
-    const inY = wy >= Math.min(f.y, f.y - f.h) - m && wy <= Math.max(f.y, f.y + f.h) + m;
+    // World Y grows upward from map floor: fort spans [f.y, f.y + f.h] (Web-L1).
+    const inY = wy >= f.y - m && wy <= f.y + f.h + m;
     if (inX && inY) return true;
     const hb = snap.hobs.find((x) => x.id === snap.hud.hob);
     if (hb) { const [hx, hy] = toScreen(l.rect, l.cam, hb.x, hb.y); if (Math.hypot(px - hx, py - hy) <= 48) return true; }
@@ -1188,6 +1517,7 @@ export function battleScreen(app: App, route: Route): Screen {
       drag.mode = 'aim';
       doneHint('drag');
       countAimStart();
+      play('aim_start');
     }
     if (drag.mode === 'maybe-pan' && dist(drag) >= 8) drag.mode = 'pan';
     if (drag.mode === 'aim') aimFromDrag(drag);
@@ -1232,8 +1562,10 @@ export function battleScreen(app: App, route: Route): Screen {
     const angle = Math.round(deg * 2) * 5;
     // Full power is reached before the finger meets the edge: the pull for 100 is the usual
     // 40% of the short side, or less when the anchor is near the edge (never under 64 px).
+    // Slow Drag (Fine Tune cell 6) doubles the pull span for micro-precision.
     const sgn = app.settings.dragMode === 'point' ? -1 : 1;
-    const full = clamp(room(g.x0, g.y0, -ux * sgn, uy * sgn, m + 2), 64, 0.4 * Math.min(W, H));
+    const baseFull = clamp(room(g.x0, g.y0, -ux * sgn, uy * sgn, m + 2), 64, 0.4 * Math.min(W, H));
+    const full = slowDrag ? baseFull * 1.75 : baseFull;
     const along = Math.max(0, dx * ux + dy * uy);
     const power = clamp(Math.round((along / full) * 100), 0, 100);
     pendingAim = { angle, power }; // sent once per frame by flushAim
@@ -1255,6 +1587,7 @@ export function battleScreen(app: App, route: Route): Screen {
       }
       flushAim();
       padNudge();
+      play('aim_set');
       if (app.settings.quickFire && cancel === false) doFire(true);
     }
   }
@@ -1285,8 +1618,15 @@ export function battleScreen(app: App, route: Route): Screen {
   });
   const lose = () => { if (drag?.mode === 'aim' || drag?.mode === 'lean') endDrag(true); clearTimeout(leanT); drag = null; pinch = null; pointers.clear(); stopWalk(); };
   canvas.addEventListener('pointercancel', lose);
-  // Losing the pointer is not a lift: keep the aim, never Quick Fire.
-  canvas.addEventListener('lostpointercapture', (e) => { if (drag?.id === e.pointerId && (drag.mode === 'aim' || drag.mode === 'lean')) endDrag('keep'); });
+  // Losing pointer capture is not a lift: keep the aim, never Quick Fire, and always purge `pointers` (Web-M12).
+  canvas.addEventListener('lostpointercapture', (e) => {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = null;
+    if (drag?.id === e.pointerId) {
+      if (drag.mode === 'aim' || drag.mode === 'lean') endDrag('keep');
+      else { clearTimeout(leanT); drag = null; }
+    }
+  });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -1307,7 +1647,7 @@ export function battleScreen(app: App, route: Route): Screen {
   function tapAt(x: number, y: number): void {
     const l = lensAt(x, y);
     if (!l || l.id === 'strip') return;
-    // pins first (44 pt tap), then Hobs
+    // pins first (44 pt tap), then Hobs, then own-fort block targeting (Mendglob, Web-H1)
     let bestPin: PinView | undefined;
     let bd = 26;
     for (const p of snap.pins) {
@@ -1318,25 +1658,64 @@ export function battleScreen(app: App, route: Route): Screen {
     if (bestPin) {
       if (bestPin.side === youSide() && !bestPin.spent && canAim()) {
         recallFrom = snap.hud.aim ? { ...snap.hud.aim } : undefined;
-        if (send({ cmd: 'recall', pin: bestPin.id })) { padNudge(); doneHint('pin'); play('tap'); }
-      } else showBanner(bestPin.side === youSide() ? 'Pin used' : `${snap.hobs.find((h2) => h2.id === bestPin!.hob)?.name ?? 'Rival'}, round ${bestPin.round}`, 'paper');
+        if (send({ cmd: 'recall', pin: bestPin.slot ?? bestPin.id })) { padNudge(); doneHint('pin'); play('aim_recall'); }
+      } else showBanner(bestPin.side === youSide() ? t('hud.pin_used') : t('hud.pin_label', { hob: snap.hobs.find((h2) => h2.id === bestPin!.hob)?.name ?? rivalName(), n: bestPin.round }), 'paper');
       return;
     }
     for (const hb of snap.hobs) {
       if (hb.side !== youSide() || hb.state === 'bonked') continue;
       const [hx, hy] = toScreen(l.rect, l.cam, hb.x, hb.y + 12);
-      if (Math.hypot(hx - x, hy - y) < 24 && canAim()) { send({ cmd: 'pick_hob', id: hb.id }); play('tap'); return; }
+      if (Math.hypot(hx - x, hy - y) < 24 && canAim()) {
+        if (send({ cmd: 'pick_hob', id: hb.id })) {
+          recallIdx = 0; recallList = [];
+          play('hob_pick');
+          feel.bark(hobContentId(hb.def ?? hb.id), 'picked', youSide(), -1000, hb.id);
+        }
+        return;
+      }
+    }
+    const picked = snap.hud.shots.find((c) => c.id === snap.hud.shot);
+    if (canAim() && picked?.canTargetOwn) {
+      const [wx, wy] = toWorld(l.rect, l.cam, x, y);
+      const b = snap.blocks.find((q) => q.side === youSide() && wx >= q.x && wx < q.x + q.size && wy >= q.y && wy < q.y + q.size);
+      if (b) {
+        if (mendTarget && mendTarget[0] === b.c && mendTarget[1] === b.r) {
+          mendTarget = undefined;
+          play('back');
+        } else {
+          mendTarget = [b.c, b.r];
+          play('toggle_on');
+          showBanner(t('hud.mend.target', { col: b.c + 1, row: b.r + 1 }), 'paper');
+        }
+      }
     }
   }
 
-  // Recall key: steps through last shot, the one before, then back to the current aim.
+  // Recall key: snapshots the Hob's unspent pins at cycle start so spending pin 1 never skips pin 2 (Web-M4).
   let recallIdx = 0;
+  let recallList: string[] = [];
   let recallFrom: { angle: number; power: number } | undefined;
   function recallStep(): void {
-    const mine = snap.pins.filter((p) => p.hob === snap.hud.hob && !p.spent).reverse();
-    if (recallIdx === 0) recallFrom = snap.hud.aim ? { ...snap.hud.aim } : undefined;
-    if (recallIdx < mine.length) { send({ cmd: 'recall', pin: mine[recallIdx].id }); recallIdx++; }
-    else { if (recallFrom) send({ cmd: 'aim', ...recallFrom }); recallIdx = 0; }
+    if (!canAim()) return;
+    if (recallIdx === 0) {
+      recallFrom = snap.hud.aim ? { ...snap.hud.aim } : undefined;
+      recallList = snap.pins.filter((p) => p.hob === snap.hud.hob && !p.spent).map((p) => p.slot ?? p.id).reverse();
+      if (!recallList.length) {
+        showBanner(t('hud.pin_none'), 'paper');
+        say(t('hud.pin_none'));
+        play('denied');
+        return;
+      }
+    }
+    if (recallIdx < recallList.length) {
+      if (send({ cmd: 'recall', pin: recallList[recallIdx] })) play('aim_recall');
+      recallIdx++;
+    } else {
+      if (recallFrom) send({ cmd: 'aim', ...recallFrom });
+      recallIdx = 0;
+      recallList = [];
+      play('aim_recall');
+    }
     padNudge();
   }
 
@@ -1357,83 +1736,171 @@ export function battleScreen(app: App, route: Route): Screen {
   }
 
   // ---------- fire, walk, keys ----------
-  const afterAction = () => { padOpen = false; recallIdx = 0; manual = false; topManual = false; bottomManual = false; wideLook = false; peek = false; };
+  const afterAction = () => { padOpen = false; recallIdx = 0; recallList = []; pickedDial = undefined; mendTarget = undefined; resetView(); };
   function doFire(fromDrag = false): void {
     unlockAudio();
-    if (snap.hud.fire === 'fast') { fast = !fast; if (fast) feel.juice.cancelSlow(); send({ cmd: 'fast', on: fast }); return; }
+    if (snap.hud.fire === 'fast') {
+      fast = !fast;
+      if (fast) { feel.juice.cancelSlow(); play('fast_zip'); }
+      send({ cmd: 'fast', on: fast });
+      return;
+    }
     if (!fromDrag && performance.now() - lastDragEnd < 150) return;
     if (!canAim()) return;
     flushAim();
     if (snap.hud.fire === 'dug') {
       // A buried Loophole: Fire becomes Shove Off (Steam, no Action); then the Hob can fire.
-      if (send({ cmd: 'shove_off' })) play('walk');
-      else showBanner(lastRefusal === 'not_enough_steam' ? 'Not enough Steam to Shove Off' : 'Cannot Shove Off now', 'paper');
+      if (send({ cmd: 'shove_off' })) play('steam');
+      else {
+        showBanner(lastRefusal === 'not_enough_steam' ? t('hud.shove_off.no_steam') : t('hud.shove_off.not_now'), 'paper');
+        play('denied');
+      }
       return;
     }
     if (snap.hud.fire === 'pass') { if (send({ cmd: 'pass' })) afterAction(); return; }
-    if (snap.hud.fire === 'locked' && snap.hud.fireWhy) { showBanner(snap.hud.fireWhy, 'paper'); say(snap.hud.fireWhy); play('tap'); return; }
-    const res = core.command({ cmd: 'fire' });
+    const picked = snap.hud.shots.find((c) => c.id === snap.hud.shot);
+    const hasMend = !!(mendTarget && picked?.canTargetOwn);
+    if (snap.hud.fire === 'locked' && !hasMend && snap.hud.fireWhy) {
+      showBanner(snap.hud.fireWhy, 'paper'); say(snap.hud.fireWhy); play('denied'); return;
+    }
+    const dial = picked?.dials?.length ? (pickedDial ?? (picked.dials.includes('rebuild') ? 'rebuild' : undefined)) : undefined;
+    const cmd: Command = { cmd: 'fire', ...(dial ? { dial } : {}), ...(hasMend ? { target: mendTarget } : {}) };
+    const res = core.command(cmd);
     lastRefusal = res.ok ? '' : res.error ?? '';
-    if (res.ok) { doneHint('fire'); afterAction(); firePress(fire); play('fire_press'); return; }
+    if (res.ok) { doneHint('drag'); doneHint('fire'); afterAction(); firePress(fire); play('fire_press'); return; }
     // Never a silent tap: say why, and move to the shot that can go when the core names one.
-    const why = res.detail ?? snap.hud.fireWhy ?? 'That shot cannot fire now';
-    showBanner(why, 'paper'); say(why); play('tap');
+    const pk = snap.hud.shots.find((c) => c.id === snap.hud.shot);
+    const why = byId('hud.why', WHY_ALIAS[res.error ?? ''] ?? res.error, { hob: snap.hobs.find((q) => q.id === snap.hud.hob)?.name ?? '', shot: pk?.name ?? '' });
+    showBanner(why, 'paper'); say(why); play('denied');
     if (res.readyShot) send({ cmd: 'pick_shot', id: res.readyShot });
   }
   fire.addEventListener('click', (e) => { e.preventDefault(); doFire(); });
-  // Resolve speed-up: a tap anywhere during Resolve also speeds up (07 §2.8). Not on the 2x key
-  // itself: that would set 2x here and its click would turn it straight off again.
+  // Resolve speed-up: a tap on the field during Resolve speeds up (07 §2.8). Exclude Fire, Pause,
+  // and modal overlays (Web-M2), and mirror `fast` to the core (Web-L8).
   root.addEventListener('pointerdown', (e) => {
-    if (fire.contains(e.target as Node)) return;
-    if (snap.phase === 'resolve' && !fast) { fast = true; feel.juice.cancelSlow(); }
+    const t = e.target as Node | null;
+    if (!t || fire.contains(t) || pause.contains(t) || overlay.contains(t)) return;
+    if (paused || handoffOpen || draftOpen || ended) return;
+    if (snap.phase === 'resolve' && !fast) {
+      fast = true;
+      feel.juice.cancelSlow();
+      send({ cmd: 'fast', on: true });
+      play('fast_zip');
+    }
   }, true);
   // Audio unlock on a real user action for iOS (touchend / pointerup / keydown count, pointerdown may not).
   for (const ev of ['pointerup', 'touchend', 'keydown']) root.addEventListener(ev, () => unlockAudio(), { capture: true, passive: true });
 
   let walkHeld: -1 | 0 | 1 = 0;
   let walkMinT = 0;
-  function startWalk(d: -1 | 1): void { if (!canAim()) return; walkHeld = d; walkMinT = performance.now(); send({ cmd: 'walk', dir: d }); play('walk'); }
+  let walkStopT = 0;
+  let walkKeyT = 0;
+  function startWalk(d: -1 | 1): void {
+    if (!canAim()) return;
+    clearTimeout(walkStopT);
+    walkHeld = d; walkMinT = performance.now();
+    send({ cmd: 'walk', dir: d });
+    play('walk');
+  }
   function stopWalk(): void {
     if (!walkHeld) return;
     const wait = Math.max(0, 160 - (performance.now() - walkMinT));
     walkHeld = 0;
-    setTimeout(() => { if (!walkHeld) send({ cmd: 'walk', dir: 0 }); }, wait);
+    clearTimeout(walkStopT);
+    walkStopT = window.setTimeout(() => { if (alive && !walkHeld) send({ cmd: 'walk', dir: 0 }); }, wait);
   }
   for (const [b, d] of [[walkL, -1], [walkR, 1]] as [HTMLElement, -1 | 1][]) {
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); startWalk(d); });
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, stopWalk);
-    b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startWalk(d); setTimeout(stopWalk, 200); } });
+    b.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        startWalk(d);
+        clearTimeout(walkKeyT);
+        walkKeyT = window.setTimeout(() => { if (alive) stopWalk(); }, 200);
+      }
+    });
   }
 
   function onKey(e: KeyboardEvent): void {
-    if (handoffOpen || (e.target as HTMLElement)?.tagName === 'INPUT') return;
+    if (handoffOpen || draftOpen || (e.target as HTMLElement)?.tagName === 'INPUT') return;
     const a = snap.hud.aim ?? { angle: 450, power: 50 };
     const k = e.key;
     if (crashed) return;
-    if (k === 'Escape' || k === 'p' || k === 'P') { if (overlay.firstChild && !paused) { closeCards(); e.preventDefault(); return; } paused ? closePause() : openPause(); e.preventDefault(); return; }
+    if (k === 'Escape' || k === 'p' || k === 'P') {
+      if (overlay.firstChild && !paused) { play('back'); closeCards(); e.preventDefault(); return; }
+      paused ? closePause() : openPause();
+      e.preventDefault();
+      return;
+    }
     if (paused || overlay.firstChild) return;
     if (k === 'ArrowLeft' || k === 'ArrowRight') {
-      const step = e.shiftKey ? 1 : 10;
-      send({ cmd: 'aim', angle: clamp(a.angle + (k === 'ArrowLeft' ? step : -step), 0, 1800), power: a.power });
-      padNudge(); e.preventDefault();
+      if (!canAim()) return;
+      // Flip angle sign for Side 1's mirrored facing (Craft §2.2 / Web-H7).
+      const step = (e.shiftKey ? 1 : 10) * up();
+      const nextA = clamp(a.angle + (k === 'ArrowLeft' ? step : -step), 0, 1800);
+      send({ cmd: 'aim', angle: nextA, power: a.power });
+      doneHint('drag');
+      padNudge();
+      play(nextA === a.angle ? 'aim_limit' : 'aim_tick');
+      e.preventDefault();
     } else if (k === 'ArrowUp' || k === 'ArrowDown') {
+      if (!canAim()) return;
       const step = e.shiftKey ? 1 : 5;
-      send({ cmd: 'aim', angle: a.angle, power: clamp(a.power + (k === 'ArrowUp' ? step : -step), 0, 100) });
-      padNudge(); e.preventDefault();
+      const nextP = clamp(a.power + (k === 'ArrowUp' ? step : -step), 0, 100);
+      send({ cmd: 'aim', angle: a.angle, power: nextP });
+      doneHint('drag');
+      padNudge();
+      play(nextP === a.power ? 'aim_limit' : 'aim_tick');
+      e.preventDefault();
     } else if (k === ' ' || k === 'Enter') {
       if ((e.target as HTMLElement)?.tagName === 'BUTTON' && e.target !== fire) return;
       doFire(); e.preventDefault();
-    } else if (k === 'Tab') {
+    } else if (k === '[' || k === ']' || k === 'h' || k === 'H') {
+      // Native Tab stays intact for full HUD keyboard navigation; `[`/`]`/`H` cycle Hobs (Web-H7).
+      if (!canAim()) return;
       const crew = snap.hobs.filter((x) => x.side === youSide() && x.state !== 'bonked');
       const i = crew.findIndex((x) => x.id === snap.hud.hob);
-      const n = crew[(i + (e.shiftKey ? crew.length - 1 : 1)) % Math.max(1, crew.length)];
-      if (n) send({ cmd: 'pick_hob', id: n.id });
+      const dir = (k === '[' || (k === 'H' && e.shiftKey)) ? -1 : 1;
+      const n = crew[(i + dir + crew.length) % Math.max(1, crew.length)];
+      if (n && send({ cmd: 'pick_hob', id: n.id })) {
+        recallIdx = 0; recallList = [];
+        play('hob_pick');
+        feel.bark(hobContentId(n.def ?? n.id), 'picked', youSide(), -1000, n.id);
+      }
       e.preventDefault();
     } else if (/^[1-9]$/.test(k)) {
+      if (!canAim()) return;
       const c = snap.hud.shots[Number(k) - 1];
-      if (c) send({ cmd: 'pick_shot', id: c.id });
+      if (c && send({ cmd: 'pick_shot', id: c.id })) play('tap');
+    } else if (k === 'q' || k === 'Q') {
+      if (!canAim()) return;
+      const d = snap.hud.doodads[0];
+      if (d) { doodadCard(d); e.preventDefault(); }
+      else { showBanner(t('hud.doodad.none_left'), 'paper'); play('denied'); }
+    } else if (k === 'i' || k === 'I') {
+      if (!canAim()) return;
+      const c = snap.hud.shots.find((x) => x.id === snap.hud.shot);
+      if (c && !e.shiftKey) { shellCard(c); e.preventDefault(); }
+      else { padOpen = !padOpen; if (padOpen) padNudge(); e.preventDefault(); }
+    } else if (k === 'l' || k === 'L') {
+      if (!canAim()) return;
+      if (lean) { lean = null; play('back'); e.preventDefault(); return; }
+      const foe = other(youSide());
+      const foeBlocks = snap.blocks.filter((b) => b.side === foe);
+      const myX = snap.forts[youSide()].x;
+      foeBlocks.sort((b1, b2) => Math.abs(b1.x - myX) - Math.abs(b2.x - myX) || b1.r - b2.r);
+      const target = foeBlocks[0];
+      if (target) {
+        const falls = core.leanLines(target.side, target.c, target.r);
+        lean = { side: target.side, c: target.c, r: target.r, falls: new Set(falls.map(([c, r]) => `${c},${r}`)) };
+        showBanner(falls.length ? plural('hud.falls.with_it', falls.length) : t('hud.falls.nothing'), 'paper');
+        say(falls.length ? plural('hud.falls.if_breaks', falls.length) : t('hud.falls.if_breaks_nothing'));
+        play('tap');
+        e.preventDefault();
+      }
     } else if (k === 'r' || k === 'R') recallStep();
-    else if (k === 'f' || k === 'F') { manual = false; topManual = false; wideLook = false; }
+    else if (k === 'f' || k === 'F') resetView();
     else if ((k === 'a' || k === 'A') && !e.repeat) startWalk(-1);
     else if ((k === 'd' || k === 'D') && !e.repeat) startWalk(1);
     else if (k === '+' || k === '=') { zoomWide = clamp(zoomWide * 1.1, 0.6, 2.2); }
@@ -1446,17 +1913,17 @@ export function battleScreen(app: App, route: Route): Screen {
   window.addEventListener('keydown', onKey);
   window.addEventListener('keyup', onKeyUp);
 
-  // ---------- cards: pause, hand-off, shell ----------
-  // A card is modal for real: everything else in the battle is inert while it is up (no Tab to
-  // Pause behind the hand-off card), Tab cycles inside it, and focus goes back where it was.
+  // ---------- cards: pause, hand-off, draft, shell, doodad ----------
+  // A card is modal for real: canvas and the single persistent hudStage sibling become inert while
+  // it is up, so rotating wide <-> tall can never strand child HUD nodes with `.inert = true` (Web-C1).
   let focusBack: HTMLElement | null = null;
   function card(cls: string, labelId: string, ...kids: (Node | string)[]): HTMLElement {
     if (!overlay.firstChild) focusBack = document.activeElement as HTMLElement | null;
     const c = h('div', { class: `card ${cls}`, role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': labelId }, ...kids);
     const scrim = h('div', { class: 'scrim' }, c);
     overlay.replaceChildren(scrim);
-    for (const el of [canvas, ...Array.from(hud.children)]) if (el !== overlay) (el as HTMLElement).inert = true;
-    // The tall layout nests the HUD parts; keep the overlay itself live.
+    canvas.inert = true;
+    hudStage.inert = true;
     overlay.inert = false;
     c.addEventListener('keydown', (e) => {
       if (e.key !== 'Tab') return;
@@ -1468,11 +1935,14 @@ export function battleScreen(app: App, route: Route): Screen {
       e.preventDefault();
       e.stopPropagation();
     });
+    const af = c.querySelector<HTMLElement>('[data-autofocus], button:not([disabled]), input');
+    if (af) setTimeout(() => { if (af.isConnected) af.focus({ preventScroll: true }); }, 0);
     return scrim;
   }
   function closeCards(): void {
     overlay.replaceChildren();
-    for (const el of [canvas, ...Array.from(hud.children)]) (el as HTMLElement).inert = false;
+    canvas.inert = false;
+    hudStage.inert = false;
     const back = focusBack;
     focusBack = null;
     if (back && back.isConnected && !back.inert) back.focus({ preventScroll: true });
@@ -1481,33 +1951,39 @@ export function battleScreen(app: App, route: Route): Screen {
   function openPause(): void {
     if (ended) return;
     paused = true;
+    setPaused(true);
     lose();
     // No low-pass or pitch drop held on the music while the Pause card is up.
     slowmoAudio(false);
     const lvl = setup.level ? app.levels().find((l) => l.id === setup.level) : undefined;
     const goals = lvl ? h('ul', { class: 'goals' }, ...lvl.goals.map((g) => h('li', {}, g))) : '';
     // Give up where the core has the command.
-    const giveUp = setup.mode !== 'yard' && core.features.giveUp ? btn('Give up', () => { closePause(); send({ cmd: 'give_up' }); }, 'secondary', { 'data-testid': 'give-up' }) : '';
+    const giveUp = setup.mode !== 'yard' && core.features.giveUp ? btn(t('pause.give_up'), () => { closePause(); send({ cmd: 'give_up' }); }, 'secondary', { 'data-testid': 'give-up' }) : '';
     // Pass is always on offer on your turn, so no turn can lock.
-    const pass = snap.hud.canPass ? btn('Pass turn', () => { closePause(); flushAim(); if (send({ cmd: 'pass' })) afterAction(); }, 'secondary', { 'data-testid': 'pass' }) : '';
+    const pass = snap.hud.canPass ? btn(t('pause.skip'), () => { closePause(); flushAim(); if (send({ cmd: 'pass' })) afterAction(); }, 'secondary', { 'data-testid': 'pass' }) : '';
+    const vol = snap.hud.volley;
+    const rule = setup.mode === 'yard' ? t('pause.rule_yard')
+      : vol ? t('pause.rule_volley', { n: vol.actions })
+      : `${t('pause.rule_knockout')} ${snap.squall.on || lvl?.squall !== false ? t('pause.rule_rounds_squall', { n: snap.roundCap }) : t('pause.rule_rounds_count', { n: snap.roundCap })}`;
     card('pause-card', 'pause-h',
-      h('h2', { id: 'pause-h' }, 'Paused'),
+      h('h2', { id: 'pause-h' }, t('pause.title')),
       goals,
-      h('p', { class: 'small' }, lvl ? 'Win by Clean Sweep or Kettle Pop.' : ''),
-      btn('Resume', () => closePause(), 'primary', { 'data-autofocus': true }),
+      h('p', { class: 'small' }, rule),
+      btn(t('pause.carry_on'), () => closePause(), 'primary', { 'data-autofocus': true, 'data-testid': 'pause-resume' }),
       pass,
-      btn('Retry', () => { closePause(); void clearBattle(); app.go({ to: 'battle', setup: retrySetup(setup) }); }, 'secondary'),
-      btn('Settings', () => {
+      btn(t('pause.again'), () => { closePause(); void clearBattle(); app.go({ to: 'battle', setup: retrySetup(setup) }); }, 'secondary', { 'data-testid': 'pause-again' }),
+      btn(t('pause.settings'), () => {
         // Back from Settings takes over this live battle (core.battleGen); the save is the fallback.
         const data = core.saveBattle();
         app.go({ to: 'settings', back: { to: 'battle', setup, resume: data, live: core.battleGen, handoff: false, paused: true } });
       }, 'secondary', { 'data-testid': 'pause-settings' }),
-      btn('Map', () => { void autosave(snap.hud.active, snap.round).then(() => app.go({ to: 'map' })); }, 'secondary', { 'data-testid': 'pause-map' }),
+      setup.mode !== 'yard' ? btn(t('pause.save_and_leave'), () => { void autosave(snap.hud.active, snap.round).then(() => app.go({ to: 'map' })); }, 'secondary', { 'data-testid': 'pause-map' })
+        : btn(t('common.map'), () => app.go({ to: 'map' }), 'secondary', { 'data-testid': 'pause-map' }),
       giveUp,
+      setup.mode !== 'yard' ? h('p', { class: 'small' }, t('pause.saved_note')) : '',
     );
-    overlay.querySelector<HTMLElement>('[data-autofocus]')?.focus();
   }
-  function closePause(): void { paused = false; closeCards(); last = performance.now(); }
+  function closePause(): void { paused = false; setPaused(false); closeCards(); last = performance.now(); }
 
   function openHandoff(side: Side, round: number): void {
     handoffOpen = true;
@@ -1518,99 +1994,252 @@ export function battleScreen(app: App, route: Route): Screen {
     const pct = k ? Math.round((100 * k.hp) / k.maxHp) : 0;
     const crew = snap.hobs.filter((x) => x.side === side && x.state !== 'bonked');
     const openedAt = performance.now();
-    const ready = btn('READY', () => {
+    const ready = btn(t('handoff.ready'), () => {
       if (performance.now() - openedAt < 400) return;
+      play('confirm');
       handoffOpen = false;
       closeCards();
       last = performance.now();
-    }, 'primary big', { 'data-autofocus': true, 'data-testid': 'ready' });
+    }, 'primary big silent', { 'data-autofocus': true, 'data-testid': 'ready' });
     const hits = turnHits;
+    const vo = snap.hud.volley;
+    const sc = snap.hud.score;
+    const prog = vo
+      ? `${t('hud.score', { a: sc?.[0] ?? 0, b: sc?.[1] ?? 0 })}. ${t('hud.shots_left', { n: vo.left[side], total: vo.actions })}`
+      : t('hud.round', { n: round, cap: snap.roundCap });
+    const lastLine = !hits.who ? t('handoff.new_turn')
+      : hits.dmg > 0 ? plural('handoff.last_hit', hits.blocks, { name: hits.who, dmg: Math.round(hits.dmg) })
+      : t('handoff.last_miss', { name: hits.who });
     card(`handoff side${side}`, 'handoff-h',
-      h('p', { class: 'lastshot' }, hits.who ? `${hits.who} hit: ${hits.blocks} blocks, ${Math.round(hits.dmg)} damage` : 'New turn'),
+      h('p', { class: 'lastshot' }, lastLine),
       h('div', { class: `crest ${side ? 'diamond' : 'round'}`, 'aria-hidden': 'true' }, '⚑'),
-      h('p', {}, 'Pass the device to'),
-      h('h2', { class: 'who', id: 'handoff-h' }, name.toUpperCase()),
+      h('p', {}, t('handoff.pass_to')),
+      h('h2', { class: 'who', id: 'handoff-h' }, name),
       handicapLine(side, help),
-      h('p', { class: 'small' }, `♨ ${pct}%  ${crew.map((c) => CLASS_ICON[c.cls]).join(' ')}  Round ${round}/${snap.roundCap}`),
+      h('p', { class: 'small' }, `${t('handoff.kettle', { n: pct })}  ${crew.map((c) => CLASS_ICON[c.cls]).join(' ')}  ${prog}`),
       ready,
     );
+    say(t('handoff.spoken', { name }));
     play('sheet');
     handoffFlip(overlay.querySelector('.handoff') as HTMLElement, side, app.settings.reduceMotion);
-    setTimeout(() => ready.focus(), 0);
   }
 
-  /** The handicaps the core applies to this side (hud.handicap), shown openly: Help, Steam, preview share, crew. */
+  /** Show real handicaps only — never display unhandicapped base Steam ("+120") or default Preview 30% (Web-H4). */
   function handicapLine(side: Side, help: string): HTMLElement | string {
     const hc = snap.hud.handicap?.[side];
     const parts: string[] = [];
     const hl = hc?.help ?? help;
-    if (hl && hl !== 'none') parts.push(`Help: ${hl === 'some' ? 'Some +' : hl === 'lots' ? 'Lots ++' : hl}`);
-    if (hc?.steam) parts.push(`Steam ${hc.steam > 0 ? '+' : ''}${hc.steam}`);
-    if (hc?.previewPct !== undefined && hc.previewPct < 100) parts.push(`Preview ${hc.previewPct}%`);
-    if (hc?.crew) parts.push(`Crew ${hc.crew}`);
-    return parts.length ? h('p', { class: 'helpmark', 'data-testid': 'handicap' }, parts.join(' · ')) : '';
+    const hasHelp = !!hl && hl !== 'none';
+    if (hasHelp) parts.push(t('handoff.help', { level: has(`setup.help.${hl}`) ? t(`setup.help.${hl}`) : hl }));
+    if (hasHelp && hc?.steam) parts.push(t('hud.steam', { n: hc.steam }));
+    const otherCrew = snap.hud.handicap?.[other(side)]?.crew;
+    if (hasHelp && hc?.crew && otherCrew && hc.crew !== otherCrew) parts.push(plural('level_card.crew_of', hc.crew));
+    return parts.length ? h('p', { class: 'helpmark', 'data-testid': 'handicap', title: t('setup.help.what') }, parts.join(' · ')) : '';
   }
 
-  function shellCard(name: string, weight: number, best?: string): void {
+  function shellCard(c: ShotChip): void {
+    const meta = describeShot(c.icon ?? c.id, c);
+    const ic = shotIconUrl(c);
+    const wName = weightWord(c.weight);
+    const restText = c.weight === 0 ? t('shell_card.rest.none') : plural('shell_card.rest', c.weight);
+    const hobNow = snap.hobs.find((q) => q.id === snap.hud.hob)?.name ?? '';
+    const foot = c.kind === 'plain' ? t('shell_card.plain') : c.kind === 'knack' ? t('shell_card.knack', { hob: hobNow }) : t('shell_card.trick');
     const sc = card('shell-card', 'shell-h',
-      h('h3', { id: 'shell-h' }, name),
-      h('p', {}, `Weight: ${['Light', 'Medium', 'Heavy'][weight]}`),
-      best ? h('p', {}, `Best with: ${best}`) : '',
-      h('p', { class: 'small' }, 'Any Hob can fire it.'),
-      btn('Close', () => closeCards(), 'secondary', { 'data-autofocus': true }),
+      h('div', { class: 'shell-head' },
+        h('div', { class: 'shell-art', 'aria-hidden': 'true' }, ic ? h('img', { src: ic, alt: '' }) : ''),
+        h('div', { class: 'shell-title-wrap' },
+          h('h3', { id: 'shell-h' }, c.name),
+          h('div', { class: 'shell-weight-pill' },
+            h('span', {}, t('shell_card.weight_rest', { weight: wName, rest: restText })),
+            ...(c.weight > 0 ? restCogImgs(c.weight) : []),
+          ),
+        ),
+      ),
+      h('div', { class: 'shell-stats' },
+        h('div', { class: 'stat-row' },
+          h('span', { class: 'stat-k' }, meta.dmgTone === 'mend' ? t('shell_card.stats.mend') : t('shell_card.stats.damage')),
+          h('div', { class: 'stat-bar-track', 'aria-hidden': 'true' },
+            h('div', { class: `stat-bar-fill tone-${meta.dmgTone}`, style: `width:${meta.dmgPct}%` }),
+          ),
+          h('b', { class: 'stat-v' }, meta.dmgLabel),
+        ),
+        h('div', { class: 'stat-chips' },
+          meta.rangeLabel ? h('span', { class: 'stat-chip' }, meta.rangeLabel) : '',
+          c.uses >= 0 ? h('span', { class: 'stat-chip' }, plural('shell_card.left', c.uses)) : '',
+        ),
+      ),
+      meta.goodAt ? h('p', { class: 'small goodat' }, meta.goodAt) : '',
+      bestClassStrip(c.best, c.kind === 'shell'),
+      meta.line ? h('p', { class: 'shell-line' }, meta.line) : '',
+      h('p', { class: 'small shell-foot' }, foot),
+      btn(t('common.close'), () => { play('back'); closeCards(); }, 'secondary silent', { 'data-autofocus': true, 'aria-label': t('shell_card.a11y_close') }),
     );
-    sc.addEventListener('click', (e) => { if (e.target === sc) closeCards(); });
+    sc.addEventListener('click', (e) => { if (e.target === sc) { play('back'); closeCards(); } });
   }
 
+  /** Core refusal ids that the table words under another key. */
+  const WHY_ALIAS: Record<string, string> = { not_enough_steam: 'no_steam', battle_over: 'over', not_your_turn: 'not_planning' };
+  /** Doodad refusals by the core's reason id. */
+  const DOODAD_WHY: Record<string, string> = {
+    nothing_to_mend: 'hud.mend.none',
+    already_lidded: 'hud.doodad.room_lidded',
+    bad_room: 'hud.doodad.room_gone',
+    no_doodad: 'hud.doodad.used',
+  };
   /** A Doodad is the turn's Action. Mend Bucket mends the most hurt blocks; Pot Lid asks which room. */
   function doodadCard(d: { id: string; name: string; card: string }): void {
     if (!canAim()) return;
     const use = (room?: string) => {
       closeCards();
       flushAim();
-      if (send({ cmd: 'doodad', id: d.id, room })) { afterAction(); play('sheet'); }
-      else showBanner(`${d.name}: cannot use it now`, 'paper');
+      if (send({ cmd: 'doodad', id: d.id, room })) {
+        afterAction();
+        play(d.id === 'mend_bucket' ? 'mend_bucket' : 'sheet');
+      } else {
+        const msg = DOODAD_WHY[lastRefusal] ? t(DOODAD_WHY[lastRefusal]) : t('hud.doodad.not_now', { doodad: d.name });
+        showBanner(msg, 'paper');
+        say(msg);
+        play('denied');
+      }
     };
     const rooms = snap.rooms.filter((rm) => rm.side === snap.hud.active && rm.intact && !rm.lid);
     const k = snap.kettles.find((x) => x.side === snap.hud.active);
     const choices = d.id === 'pot_lid'
-      ? [...(k && !k.lid ? [btn('Kettle Room', () => use('kettle'), 'primary', { 'data-autofocus': true })] : []),
-        ...rooms.map((rm) => btn(`Nook ${rm.id + 1}`, () => use(`nook:${rm.id}`), 'secondary'))]
-      : [btn(`Use ${d.name}`, () => use(), 'primary', { 'data-autofocus': true, 'data-testid': 'use-doodad' })];
+      ? [...(k && !k.lid ? [btn(t('hud.doodad.kettle_room'), () => use('kettle'), 'primary', { 'data-autofocus': true })] : []),
+        ...rooms.map((rm) => btn(nookLabel(rm.side, rm.id), () => use(`nook:${rm.id}`), 'secondary'))]
+      : [btn(t('hud.doodad.use', { doodad: d.name }), () => use(), 'primary', { 'data-autofocus': true, 'data-testid': 'use-doodad' })];
+    if (d.id === 'pot_lid' && !choices.length) choices.push(h('p', { class: 'small' }, t('hud.doodad.no_room')) as unknown as HTMLButtonElement);
     const sc = card('shell-card doodad-card', 'doodad-h',
       h('h3', { id: 'doodad-h' }, d.name),
       h('p', {}, d.card),
-      h('p', { class: 'small' }, 'Using it is your Action for this turn.'),
+      h('p', { class: 'small' }, t('hud.doodad.go')),
       ...choices,
-      btn('Close', () => closeCards(), 'secondary'),
+      btn(t('common.close'), () => { play('back'); closeCards(); }, 'secondary silent'),
     );
-    sc.addEventListener('click', (e) => { if (e.target === sc) closeCards(); });
-    sc.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+    sc.addEventListener('click', (e) => { if (e.target === sc) { play('back'); closeCards(); } });
+  }
+
+  /** In-battle Draft modal for Skirmish and Couch Duel when `Shells: Draft` is picked (Web-H10). */
+  function openDraft(): void {
+    if (!snap.draft || snap.phase !== 'draft') return;
+    draftOpen = true;
+    lose();
+    let focusChip: string | undefined;
+    const body = h('div', { class: 'draft battle-draft' });
+    const finish = () => {
+      if (snap.phase === 'draft') {
+        send({ cmd: 'end_draft' });
+        snap = merge(snap, core.snapshot());
+      }
+      draftOpen = false;
+      closeCards();
+      last = performance.now();
+      play('confirm');
+      if (snap.phase === 'plan' && setup.mode !== 'yard') {
+        showTurnBanner(setup.mode === 'duel' ? t('banners.name_turn', { name: snap.sides[snap.hud.active].name }) : t('banners.your_turn'), snap.hud.active === 0 ? 'blue' : 'orange');
+      }
+    };
+    const paintDraft = () => {
+      const d = snap.draft;
+      if (!d || d.done || snap.phase !== 'draft') { finish(); return; }
+      const f = d.pool.find((p) => p.id === focusChip);
+      const pickNum = Math.min(d.perSide, d.picks[d.turn].length + 1);
+      const who = setup.mode === 'duel' ? t('rummage.name_pick', { name: snap.sides[d.turn].name, n: pickNum, total: d.perSide }) : t('rummage.your_pick', { n: pickNum, total: d.perSide });
+      const slot = (ids: string[], side: 0 | 1) => h('div', { class: `slots side${side}` }, ...Array.from({ length: d.perSide }, (_, i) => {
+        const s = d.pool.find((p) => p.id === ids[i]);
+        return h('span', { class: `slot ${s ? 'full' : ''}` }, s ? s.name : String(i + 1));
+      }));
+      const chip = (c: DraftChip) => {
+        const owner = c.owner;
+        const ic = resolveShotIconUrl(c.id, ICON_FALLBACK);
+        const b = btn(h('span', { class: 'draft-chip-in' }, ic ? h('img', { src: ic, alt: '', class: 'ico' }) : '', h('span', {}, c.name)), () => {
+          if (owner !== undefined || d.done) return;
+          if (focusChip !== c.id) { focusChip = c.id; paintDraft(); return; }
+          if (send({ cmd: 'pick_shell', id: c.id })) {
+            play('card_take');
+            focusChip = undefined;
+            snap = merge(snap, core.snapshot());
+            paintDraft();
+          }
+        }, `chip shell silent ${owner === 0 ? 'mine' : owner === 1 ? 'theirs' : ''} ${focusChip === c.id ? 'focus' : ''}`, {
+          'aria-label': owner !== undefined ? `${c.name}, ${t('rummage.their_pick', { name: snap.sides[owner].name })}` : c.dud ? `${c.name}, ${t('rummage.dud')}` : c.name, 'data-shell': c.id,
+        });
+        if (c.weight) b.append(h('i', { class: 'cogs', 'aria-hidden': 'true' }, ...restCogImgs(c.weight)));
+        if (c.dud) b.append(h('em', { class: 'dud' }, t('rummage.dud')));
+        if (d.wish === c.id && owner === undefined) b.append(h('em', { class: 'wish', title: t('rummage.rival_wants', { rival: rivalName() }) }, '◆'));
+        return b;
+      };
+      const fMeta = f ? describeShot(f.id) : undefined;
+      body.replaceChildren(
+        h('div', { class: 'draft-head' },
+          h('span', { class: 'small' }, who),
+          btn(t('rummage.quick_pick'), () => {
+            if (send({ cmd: 'quick_pick' })) {
+              play('card_take');
+              snap = merge(snap, core.snapshot());
+              paintDraft();
+            }
+          }, 'secondary small silent', { 'data-testid': 'draft-quick' }),
+        ),
+        h('div', { class: 'pool' }, ...d.pool.map((c) => chip(c))),
+        f && fMeta
+          ? h('div', { class: 'draft-preview' },
+            h('p', { class: 'hint' }, h('b', {}, `${f.name}: `), fMeta.line || f.hint),
+            h('div', { class: 'stat-chips' },
+              fMeta.dmgLabel ? h('span', { class: 'stat-chip' }, fMeta.dmgLabel) : '',
+              fMeta.rangeLabel ? h('span', { class: 'stat-chip' }, fMeta.rangeLabel) : '',
+            ),
+            fMeta.goodAt ? h('p', { class: 'small goodat' }, fMeta.goodAt) : '',
+            bestClassStrip(f.best, true),
+          )
+          : h('p', { class: 'hint' }, t('rummage.hint')),
+        h('div', { class: 'hands' },
+          h('span', {}, snap.sides[0].name), slot(d.picks[0], 0),
+          h('span', {}, snap.sides[1].name), slot(d.picks[1], 1),
+        ),
+      );
+    };
+    card('draft-card', 'draft-h',
+      h('h2', { id: 'draft-h' }, t('rummage.title')),
+      body,
+      btn(t('rummage.fight'), () => finish(), 'primary silent', { 'data-autofocus': true, 'data-testid': 'draft-fight' }),
+    );
+    paintDraft();
+    play('sheet');
   }
 
   // ---------- start ----------
+  hud.replaceChildren(hudStage, overlay, liveEl);
   relayout();
   for (const e of snap.events) if (e.t === 'turn') turnCount++;
   if (turnCount === 0 && snap.phase !== 'over') turnCount = 1;
   snap.events = snap.events.filter((e) => e.t !== 'turn');
-  if (snap.phase === 'plan' && setup.mode !== 'yard' && !r.paused) showTurnBanner(setup.mode === 'duel' ? `${snap.sides[snap.hud.active].name}'s turn` : 'Your turn', snap.hud.active === 0 ? 'blue' : 'orange');
-  hud.append(liveEl);
+  // The Rival's opening line, once, at the top of a fresh fight (rivals.<key>.taunts.start).
+  if (!r.resume && r.live === undefined && snap.round <= 1 && snap.phase !== 'over') window.setTimeout(() => { if (alive) taunt('start', true); }, 1400);
+  if (snap.phase === 'plan' && setup.mode !== 'yard' && !r.paused) showTurnBanner(setup.mode === 'duel' ? t('banners.name_turn', { name: snap.sides[snap.hud.active].name }) : t('banners.your_turn'), snap.hud.active === 0 ? 'blue' : 'orange');
   raf = requestAnimationFrame(frame);
   // The @2x art (1.9 MB) waits a minute in the very first fight, so the first load stays small;
   // from the second fight on it loads in idle time at once.
   const firstFight = !Object.keys(app.progress.levels).length && !r.resume;
   const upT = window.setTimeout(() => { if (alive) sprites.upgrade(); }, firstFight ? 60_000 : 0);
   // Nothing may scroll the battle sideways (focus or a wide banner did, and the HUD slid with the
-  // shake, n8). Cards keep their own scroll.
+  // shake, n8). Cards and the horizontal portrait shot tray keep their own scroll (Web-H8).
   root.addEventListener('scroll', (e) => {
     const t = e.target as HTMLElement;
-    if (!(t instanceof HTMLElement) || overlay.contains(t)) return;
+    if (!(t instanceof HTMLElement) || overlay.contains(t) || trayEl.contains(t)) return;
     if (t.scrollLeft || t.scrollTop) { t.scrollLeft = 0; t.scrollTop = 0; }
   }, true);
+  // Autosave when backgrounding or closing the tab (Web-M2).
+  const onHide = () => { if (document.visibilityState === 'hidden' && !ended && setup.mode !== 'yard') void autosave(snap.hud.active, snap.round); };
+  const onPageHide = () => { if (!ended && setup.mode !== 'yard') void autosave(snap.hud.active, snap.round); };
+  document.addEventListener('visibilitychange', onHide);
+  window.addEventListener('pagehide', onPageHide);
   root.dataset.core = core.name;
   root.dataset.testid = 'battle';
+  // Open in-battle Draft modal for Skirmish / Couch Duel when Shells: Draft is active (Web-H10).
+  if (snap.phase === 'draft') openDraft();
   // A resumed Couch Duel shows the hand-off card first, as the saved turn did.
-  if (r.resume && r.handoff && setup.mode === 'duel' && setup.seats !== 'one' && snap.phase === 'plan') openHandoff(snap.hud.active, snap.round);
+  else if (r.resume && r.handoff && setup.mode === 'duel' && setup.seats !== 'one' && snap.phase === 'plan') openHandoff(snap.hud.active, snap.round);
   // Back from Settings (opened from Pause) lands on the Pause card again, never straight in the fight.
   else if (r.paused && snap.phase !== 'over') openPause();
 
@@ -1637,7 +2266,8 @@ export function battleScreen(app: App, route: Route): Screen {
     // Back in a fight opens Pause (or closes a card); it never leaves the fight unsaved.
     onBack: () => {
       if (crashed || ended) return false;
-      if (overlay.firstChild && !paused) closeCards();
+      if (handoffOpen || draftOpen) return true;
+      if (overlay.firstChild && !paused) { play('back'); closeCards(); }
       else if (paused) closePause();
       else openPause();
       return true;
@@ -1646,10 +2276,15 @@ export function battleScreen(app: App, route: Route): Screen {
       alive = false;
       clearTimeout(leanT);
       clearTimeout(liveT);
+      clearTimeout(walkStopT);
+      clearTimeout(walkKeyT);
+      clearTimeout(captionT);
       cancelAnimationFrame(raf);
       stopLoops();
+      setPaused(false);
       slowmoAudio(false);
-      releaseBarks();
+      setCaptionSink(null);
+      releaseBarks(barkId);
       // iOS Safari frees canvas memory late: give every cache canvas back now (a few Retries
       // must not hit the canvas limit and draw blank).
       for (const k in caches) caches[k].free();
@@ -1658,6 +2293,8 @@ export function battleScreen(app: App, route: Route): Screen {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', lose);
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', onPageHide);
       clearTimeout(bannerT);
       clearTimeout(turnBannerT);
       clearTimeout(padT);
@@ -1668,8 +2305,8 @@ export function battleScreen(app: App, route: Route): Screen {
 
 /** Keep the last full terrain view; merge incremental snapshot data. */
 function merge(prev: Snapshot, next: Snapshot): Snapshot {
-  next.events = [...(prev.events ?? []), ...next.events];
-  next.terrain.chunks = [...(prev.terrain.chunks ?? []), ...next.terrain.chunks];
+  if (prev.events?.length) next.events = [...prev.events, ...next.events];
+  if (prev.terrain.chunks?.length) next.terrain.chunks = [...prev.terrain.chunks, ...next.terrain.chunks];
   return next;
 }
 

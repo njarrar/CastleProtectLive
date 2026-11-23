@@ -261,6 +261,7 @@ struct Run {
     how: String,
     shots: i32,
     hits: i32,
+    pennants: Vec<bool>,
 }
 
 fn play(content: &Arc<castle_core::Content>, lvl: &str, preset: &str, seed: u64) -> Run {
@@ -378,6 +379,7 @@ fn play(content: &Arc<castle_core::Content>, lvl: &str, preset: &str, seed: u64)
         how: r.how.clone(),
         shots,
         hits,
+        pennants: r.pennants.clone(),
     }
 }
 
@@ -422,7 +424,7 @@ fn main() {
         .flat_map(|h| h.join().expect("thread"))
         .collect();
     all.sort_by_key(|x| (x.0, x.1));
-    println!("level | wins | win % | median round | fort hits % | ends");
+    println!("level | wins | win % | median round | fort hits % | pennants % | ends");
     for (l, lvl) in levels.iter().enumerate() {
         let runs: Vec<&Run> = all.iter().filter(|x| x.0 == l).map(|x| &x.2).collect();
         let wins = runs.iter().filter(|r| r.win).count();
@@ -436,12 +438,24 @@ fn main() {
                 .entry(format!("{}{}", if r.win { "W " } else { "L " }, r.how))
                 .or_insert(0) += 1;
         }
+        // share of all battles that earned each Pennant
+        let np = runs.iter().map(|r| r.pennants.len()).max().unwrap_or(0);
+        let pen: Vec<String> = (0..np)
+            .map(|i| {
+                let got = runs
+                    .iter()
+                    .filter(|r| r.pennants.get(i).copied().unwrap_or(false))
+                    .count();
+                format!("{}", got * 100 / runs.len())
+            })
+            .collect();
         println!(
-            "{lvl} | {wins}/{} | {}% | {} | {}% | {ends:?}",
+            "{lvl} | {wins}/{} | {}% | {} | {}% | {} | {ends:?}",
             runs.len(),
             wins * 100 / runs.len(),
             rounds[rounds.len() / 2],
             hits * 100 / shots.max(1),
+            pen.join("/"),
         );
     }
 }

@@ -35,6 +35,13 @@ final class Haptics {
     private var running = false
     /// Times of recent patterns, to keep a cluster shot to a few a moment.
     private var recent: [UInt64] = []
+    /// Cached UIKit fallback generators (reused across impacts instead of allocating per event).
+    private let selectionGenerator = UISelectionFeedbackGenerator()
+    private let lightImpact = UIImpactFeedbackGenerator(style: .light)
+    private let mediumImpact = UIImpactFeedbackGenerator(style: .medium)
+    private let heavyImpact = UIImpactFeedbackGenerator(style: .heavy)
+    private let rigidImpact = UIImpactFeedbackGenerator(style: .rigid)
+    private let notificationGenerator = UINotificationFeedbackGenerator()
 
     init() {
         supportsHaptics = CHHapticEngine.capabilitiesForHardware().supportsHaptics
@@ -60,12 +67,23 @@ final class Haptics {
 
     /// Starts the engine when a battle opens, so the first blast does not pay for it.
     func warmUp() {
-        guard level != .off, let engine, !running else { return }
-        do {
-            try engine.start()
-            running = true
-        } catch {
-            running = false
+        guard level != .off else { return }
+        if let engine, !running {
+            do {
+                try engine.start()
+                running = true
+                return
+            } catch {
+                running = false
+            }
+        }
+        if engine == nil || !running {
+            selectionGenerator.prepare()
+            lightImpact.prepare()
+            mediumImpact.prepare()
+            heavyImpact.prepare()
+            rigidImpact.prepare()
+            notificationGenerator.prepare()
         }
     }
 
@@ -109,21 +127,29 @@ final class Haptics {
     private func fallback(_ kind: Kind) {
         switch kind {
         case .tick:
-            UISelectionFeedbackGenerator().selectionChanged()
+            selectionGenerator.selectionChanged()
+            selectionGenerator.prepare()
         case .dragStart, .threaded:
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            lightImpact.impactOccurred()
+            lightImpact.prepare()
         case .fire, .blastSmall, .pennant:
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            mediumImpact.impactOccurred()
+            mediumImpact.prepare()
         case .blastLarge, .hobHit, .thump, .kettlePop:
-            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+            heavyImpact.impactOccurred()
+            heavyImpact.prepare()
         case .chunk:
-            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+            rigidImpact.impactOccurred()
+            rigidImpact.prepare()
         case .bonkTheirs:
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            notificationGenerator.notificationOccurred(.success)
+            notificationGenerator.prepare()
         case .bonkYours:
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            notificationGenerator.notificationOccurred(.warning)
+            notificationGenerator.prepare()
         case .illegal:
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            notificationGenerator.notificationOccurred(.error)
+            notificationGenerator.prepare()
         }
     }
 

@@ -59,7 +59,7 @@ export interface BattleSetup {
 
 export type Command =
   | { cmd: 'aim'; angle: number; power: number }
-  | { cmd: 'fire' }
+  | { cmd: 'fire'; dial?: 'puff_up' | 'rebuild' | 'hops3'; target?: [number, number] }
   | { cmd: 'walk'; dir: -1 | 0 | 1 }
   | { cmd: 'pick_hob'; id: string }
   | { cmd: 'pick_shot'; id: string }
@@ -184,6 +184,8 @@ export interface ShellView {
 
 export interface PinView {
   id: string;
+  /** Protocol recall key (`side:ghostIndex`), kept separate from unique `id` so animations never collide. */
+  slot?: string;
   side: Side;
   hob: string;
   x: number;
@@ -206,6 +208,18 @@ export interface ShotChip {
   best?: HobClass;
   ready: boolean;
   why?: string; // short reason when not ready
+  /** Optional fire dial choices from content / Hob passive (e.g. rebuild/puff_up, hops3). */
+  dials?: ('puff_up' | 'rebuild' | 'hops3')[];
+  /** True when the shot acts directly on your own fort with no flight arc (e.g. Barn Raising). */
+  selfTarget?: boolean;
+  /** True when the shot can target a chosen block of your own fort via `fire.target` (e.g. Mendglob). */
+  canTargetOwn?: boolean;
+  /** Plain-English card description from content/shots.json. */
+  line?: string;
+  /** Base damage or mend amount from content/shots.json, for the Shell Card. */
+  dmg?: number;
+  /** Blast radius band from content/shots.json (tiny/small/medium/large/huge/point), for the Shell Card. */
+  band?: string;
 }
 
 /** One block of a falling chunk, as it stood before the fall (view coords, bottom-left). */
@@ -213,7 +227,7 @@ export interface FallingBlockView { x: number; y: number; c: number; r: number; 
 
 export type BattleEvent =
   | { t: 'turn'; side: Side; round: number }
-  | { t: 'fire'; side: Side; x: number; y: number; kind: string; hob?: string; weight?: number }
+  | { t: 'fire'; side: Side; x: number; y: number; kind: string; hob?: string; weight?: number; shotName?: string }
   | { t: 'hit'; x: number; y: number; dmg: number; what: 'block' | 'hob' | 'kettle' | 'ground'; hob?: string; side?: Side; mat?: Material; dtype?: string }
   | { t: 'break'; x: number; y: number; mat: Material; side?: Side }
   | { t: 'fall'; count: number; x: number; y: number }
@@ -223,7 +237,8 @@ export type BattleEvent =
   | { t: 'boom'; x: number; y: number; r: number; dtype?: string }
   | { t: 'squall'; n: number }
   | { t: 'squall_warn'; left: number }
-  | { t: 'note'; text: string; x?: number; y?: number; sound?: string; status?: boolean }
+  /** A short word or line for a core event; `id` is that event's id (front, pass, boss_phase...). */
+  | { t: 'note'; text: string; x?: number; y?: number; sound?: string; status?: boolean; id?: string }
   | { t: 'threaded'; x: number; y: number }
   | { t: 'thump'; side: Side }
   /** A Hob animation cue from a core event: tumble, land, dig (Shove Off), nextdoor (a Passive acts). */
@@ -254,21 +269,35 @@ export interface ResultView {
   winner: Side | -1;
   howKey?: string; // the core's `how` id (clean_sweep, kettle_pop, squall, double_pop, rescue, round_cap, total_hp)
   round?: number;
-  how: 'Clean Sweep' | 'Kettle Pop' | 'Sudden Squall' | 'Doze Off' | 'Give Up' | string;
+  how: string; // the core's `how` id, as howKey
   pennants: boolean[]; // campaign: 3
   goals: string[];
   buttons: number;
   stats: [SideStats, SideStats];
   bestShot?: { side: Side; hob: string; round: number; dmg: number; angle: number; power: number };
-  cause?: string; // 'what broke you' line on a loss
+  /** "What broke you" on a loss, as ids and names (the results screen words it from content/text.json). */
+  broke?: {
+    how: string;
+    last?: ResultBlow;
+    top: ResultBlow[];
+    blocksLost: number;
+    hobsBonked: number;
+    bonkedNames: string[];
+  };
+  /** The Rival side's name as the core has it (hud.names[1]). */
+  rival?: string;
   pennantsNew?: boolean[];
   score?: [number, number];
 }
+/** One blow: `by` is the core id (hob, squall, ground, fatigue, self, shears, prop); hob is a short name. */
+export interface ResultBlow { by: string; hob: string; shot: string; round?: number; dmg?: number }
 export interface SideStats {
   shots: number;
   hits: number;
   blocks: number;
   kettle: number; // percent left
+  bonks?: number;
+  streak?: number; // best run of hits
 }
 
 export interface HudView {
@@ -292,6 +321,14 @@ export interface HudView {
   canPass: boolean;
   /** Volley Points: Actions per side and left per side. */
   volley?: { actions: number; left: [number, number] };
+  /** Volley Points / live Siege Scores per side. */
+  score?: [number, number];
+  /** Whether each side may still use Barn Raising's Puff Up dial. */
+  puffUp?: [boolean, boolean];
+  /** Steam cost to Shove Off a buried Loophole. */
+  shoveOffCost?: number;
+  /** Rounds left before the next Weather Front shifts the wind. */
+  frontRoundsLeft?: number;
   /** Handicaps per side, shown openly (Couch Duel house rule 6). */
   handicap?: [{ help: string; steam: number; previewPct: number; crew: number }, { help: string; steam: number; previewPct: number; crew: number }];
   /** Grand Fort phases (1-10): phase, and the red cut line one boss turn before the snip. */
@@ -329,12 +366,17 @@ export interface Snapshot {
 export interface LevelInfo {
   id: string;
   name: string;
-  type: 'Siege' | 'Rescue' | 'Grand Fort';
+  /** The level type id; `type` is its display word. */
+  kind: 'siege' | 'rescue' | 'grand_fort';
+  type: string;
   rival: string;
+  /** The Rival crew's content Hob ids (no Dummies). */
+  rivalUnits?: string[];
   habit: string;
   rivalCrew: HobClass[];
   aim: number;
   roundCap: number;
+  squall: boolean;
   wind: string;
   goals: [string, string, string];
   crewSize: number;
@@ -389,6 +431,8 @@ export interface CoreApi {
   doodadName?(id: string): string;
   /** Skirmish and duel maps: [level id, name]. */
   maps?(): [string, string][];
+  /** The Skirmish Rival the core will pick for this map and seed (its `rival.roster`). */
+  skirmishRival?(map: string, seed: number): { name: string; habit: string } | undefined;
   newBattle(setup: BattleSetup): void;
   command(c: Command): CommandResult;
   /** Advance the sim by whole ticks at 120 Hz. */

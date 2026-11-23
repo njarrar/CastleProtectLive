@@ -131,12 +131,10 @@ fn c2_a_crock_wake_that_breaks_other_props_does_not_panic() {
     );
 }
 
-#[test]
-fn h1_a_mound_on_the_roof_does_not_lift_a_walking_fort() {
-    let mut b = battle(
-        r#"{"level":"d1","mode":"couch","first_turn":0,"rummage":{"pool":0,"picks":0}}"#,
-        2,
-    );
+/// Drops a Sod Sack mound on side 0's roof, then walks 4. `strict` checks
+/// the whole fort box for dirt; otherwise only cells under a block.
+fn mound_then_walk(setup: &str, strict: bool) {
+    let mut b = battle(setup, 2);
     let cs = &b.castles[0];
     let (x, top) = (cs.x + cs.width_cells() / 2, cs.top_y());
     let base0 = cs.base_y;
@@ -147,11 +145,14 @@ fn h1_a_mound_on_the_roof_does_not_lift_a_walking_fort() {
     let effs = b.content.shots[ix].triggers[0].effects.clone();
     b.run_effects(&effs, &a, x, top - 4, None, false);
     b.finish_ctx();
-    // no dirt inside the fort's own box
     let cs = &b.castles[0];
-    for yy in cs.top_y()..cs.base_y {
-        for xx in cs.x..cs.x + cs.width_cells() {
-            assert_eq!(b.terrain.get(xx, yy), 0, "dirt at {xx},{yy}");
+    for xx in cs.x..cs.x + cs.width_cells() {
+        let mut covered = strict;
+        for yy in cs.top_y()..cs.base_y {
+            covered |= cs.slot_at(xx, yy).is_some_and(|(c, r)| cs.has_block(c, r));
+            if covered {
+                assert_eq!(b.terrain.get(xx, yy), 0, "dirt at {xx},{yy}");
+            }
         }
     }
     let r = cmd(&mut b, json!({"cmd": "walk", "dx": 4}));
@@ -160,6 +161,25 @@ fn h1_a_mound_on_the_roof_does_not_lift_a_walking_fort() {
         (b.castles[0].base_y - base0).abs() <= castle_core::battle::WALK_CLIMB,
         "base_y {} from {base0}",
         b.castles[0].base_y
+    );
+}
+
+#[test]
+fn h1_a_mound_on_the_roof_does_not_lift_a_walking_fort() {
+    // A flat roofed fort: no dirt anywhere in its box.
+    mound_then_walk(
+        r#"{"level":"d1","mode":"couch","first_turn":0,"rummage":{"pool":0,"picks":0},"sides":[{"rows":["ttttttt","t11t22t","t11t22t","ttttttt","tKKt33t","tKKt33t","ttttttt","t44t55t","t44t55t","FFFFFFF"]},{}]}"#,
+        true,
+    );
+    // A stepped fort. Since bundle patch 02 the Oak Starter Box fort
+    // (bp_kit_oak) has an open 3 x 3 notch at its top, so dirt may settle
+    // in that notch, as it may on any roof. It must never sit in a block
+    // cell or in a room under one, and it must not lift the fort: walking
+    // climbs only from the base through ground (ground_under), so roof
+    // dirt is not ground.
+    mound_then_walk(
+        r#"{"level":"d1","mode":"couch","first_turn":0,"rummage":{"pool":0,"picks":0},"sides":[{"kit":"kit_oak"},{}]}"#,
+        false,
     );
 }
 
@@ -310,8 +330,10 @@ fn h4_the_terrain_hash_is_incremental_and_exact() {
 
 #[test]
 fn m1_a_fatigue_collapse_stops_short_of_popping_a_kettle() {
+    // The old flat Cobble-capped home fort, inline: the content pass made
+    // `bp_home_3_cobble` crooked, and this test pokes exact cells.
     let mut b = battle(
-        r#"{"level":"d1","mode":"couch","first_turn":0,"rummage":{"pool":0,"picks":0},"sides":[{"blueprint":"bp_home_3_cobble","crew":["marge"]},{"kit":"kit_oak"}]}"#,
+        r#"{"level":"d1","mode":"couch","first_turn":0,"rummage":{"pool":0,"picks":0},"sides":[{"rows":["ccccccc","t11t22t","t11t22t","ttttttt","tKKt33t","tKKt33t","FFFFFFF"],"crew":["marge"]},{"kit":"kit_oak"}]}"#,
         5,
     );
     // open the Kettle Room ceiling, batter the roof arms over the kettle
@@ -319,7 +341,8 @@ fn m1_a_fatigue_collapse_stops_short_of_popping_a_kettle() {
     for c in [1, 2] {
         let i = cs.idx(c, 3);
         cs.slots[i] = Slot::Empty;
-        cs.block_mut(c, 6).unwrap().hp -= 1;
+        let bl = cs.block_mut(c, 6).unwrap();
+        bl.hp = (bl.max / 2 - 1).max(1);
     }
     cs.kettle_hp = 20;
     b.round = 9;
@@ -476,7 +499,7 @@ fn m8_rescue_has_no_squall_and_needs_the_rescue() {
     // the rival kettle popping does not free Hetty
     b.castles[1].kettle_hp = 0;
     assert!(!b.check_win(), "no win without the rescue");
-    b.castles[1].kettle_hp = 300;
+    b.castles[1].kettle_hp = castle_core::castle::KETTLE_HP;
     // the captive Bonked: the player loses
     let cap = b.props.iter().position(|p| p.kind == "captive").unwrap();
     b.props[cap].hp = 0;
@@ -712,7 +735,7 @@ fn boss_phases_two_and_three_roller_and_shears() {
     );
     assert_eq!(b.boss.phase, 1);
     // phase 2 then 3 on the boss's turn starts
-    b.castles[1].kettle_hp = 200;
+    b.castles[1].kettle_hp = 130;
     cmd(&mut b, json!({"cmd": "pass"}));
     b.run_until_plan(1000);
     assert_eq!(b.boss.phase, 2);
@@ -724,7 +747,7 @@ fn boss_phases_two_and_three_roller_and_shears() {
     b.run_until_plan(1000);
     let x1 = b.props.iter().find(|p| p.id == roller).unwrap().x;
     assert_eq!(x0 - x1, 120, "the roller rolled toward the player");
-    b.castles[1].kettle_hp = 90;
+    b.castles[1].kettle_hp = 70;
     cmd(&mut b, json!({"cmd": "pass"}));
     b.run_until_plan(1000);
     cmd(&mut b, json!({"cmd": "pass"}));

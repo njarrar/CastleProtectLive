@@ -29,12 +29,12 @@ class SnapshotParserTest {
         assertEquals(1600, f.mapW); assertEquals(720, f.mapH)
         assertEquals(2, f.castles.size)
         val c0 = f.castles[0]
-        assertEquals(0, c0.side); assertEquals(344, c0.x); assertEquals(390, c0.baseY); assertEquals(16, c0.block)
+        assertEquals(0, c0.side); assertEquals(356, c0.x); assertEquals(390, c0.baseY); assertEquals(16, c0.block)
         assertTrue(c0.blocks.isNotEmpty())
         assertEquals("footing", c0.blocks[0].mat)
         assertEquals(374, c0.blocks[0].y)
         assertNotNull(c0.kettle)
-        assertEquals(300, c0.kettle!!.max)
+        assertEquals(200, c0.kettle!!.max) // rules v5: Kettle 200
         assertTrue(c0.rooms.any { it.kind == "nook" && it.loophole.size == 4 })
         // Hobs are top level, with aim per Hob.
         val marge = f.hobs.first { it.def == "marge" }
@@ -45,7 +45,7 @@ class SnapshotParserTest {
         assertEquals(1, f.hud.round)
         assertEquals(-1, f.hud.squallWarning)
         assertTrue(f.preview.size >= 4 && f.preview.size % 2 == 0)
-        assertEquals(375, f.preview[0]); assertEquals(309, f.preview[1])
+        assertEquals(387, f.preview[0]); assertEquals(309, f.preview[1])
         assertNull(f.draft); assertNull(f.result)
         assertEquals(16, f.hash.length)
         // Rules v3 fields (core/API.md "Changes for QA playtest 1").
@@ -68,7 +68,7 @@ class SnapshotParserTest {
         assertSame(full.hud, l.hud)
         assertEquals(1, l.shells.size)
         val s = l.shells[0]
-        assertEquals(1, s.id); assertEquals(505, s.x); assertEquals(195, s.y); assertEquals(362, s.rot); assertEquals("clodpot", s.shot)
+        assertEquals(1, s.id); assertEquals(517, s.x); assertEquals(195, s.y); assertEquals(362, s.rot); assertEquals("clodpot", s.shot)
     }
 
     @Test fun afterShotEventsAndGhosts() {
@@ -79,15 +79,17 @@ class SnapshotParserTest {
         assertEquals(1, f.side)
         assertEquals(Awaiting.AI, f.awaiting)
         val boom = f.events.first { it.t == "explode" }
-        assertEquals(1301, boom.x); assertEquals(317, boom.y); assertEquals(28, boom.r)
+        assertEquals(1312, boom.x); assertEquals(316, boom.y); assertEquals(28, boom.r)
         assertTrue(f.events.any { it.t == "break" && it.side == 1 })
         assertTrue(f.events.any { it.t == "turn_start" && it.side == 1 })
         val g = f.ghosts.first()
         assertTrue(g.hasPin)
-        assertEquals(1301, g.pinX)
+        assertEquals(1312, g.pinX)
         assertTrue(g.points.size > 10)
         // Broken blocks are gone from the standing list.
-        assertTrue(f.castles[1].blocks.none { it.c == 2 && it.r == 6 })
+        val broken = f.events.filter { it.t == "break" && it.side == 1 }.map { it.c to it.r }
+        assertTrue(broken.isNotEmpty())
+        assertTrue(f.castles[1].blocks.none { (it.c to it.r) in broken })
     }
 
     @Test fun eventsCanBeDroppedForAReplay() {

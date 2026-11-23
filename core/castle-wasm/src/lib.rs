@@ -56,16 +56,22 @@ pub struct Game {
 }
 
 impl Game {
-    fn guarded<F: FnOnce(&mut castle_core::Game) -> String>(&mut self, f: F) -> String {
+    fn guarded<F: FnOnce(&mut castle_core::Game) -> String>(
+        &mut self,
+        check_refusal: bool,
+        f: F,
+    ) -> String {
         if self.dead {
-            return refusal(
+            let r = refusal(
                 "dead_handle",
                 "an earlier call panicked; rebuild from the log",
             );
+            set_error(Some(r.clone()));
+            return r;
         }
         match catch_unwind(AssertUnwindSafe(|| f(&mut self.inner))) {
             Ok(s) => {
-                if is_refusal(&s) {
+                if check_refusal && is_refusal(&s) {
                     set_error(Some(s.clone()));
                 }
                 s
@@ -103,17 +109,17 @@ impl Game {
 
     /// cp_command
     pub fn command(&mut self, json: &str) -> String {
-        self.guarded(|g| g.command(json))
+        self.guarded(true, |g| g.command(json))
     }
 
     /// cp_step
     pub fn step(&mut self, ticks: i32) -> String {
-        self.guarded(|g| g.step(ticks))
+        self.guarded(false, |g| g.step(ticks))
     }
 
     /// cp_snapshot
     pub fn snapshot(&mut self) -> String {
-        self.guarded(|g| g.snapshot())
+        self.guarded(false, |g| g.snapshot())
     }
 }
 
@@ -157,25 +163,35 @@ pub fn cp_last_error() -> Option<String> {
 
 #[wasm_bindgen]
 pub fn cp_version() -> String {
+    install_hook();
     castle_core::version_json()
 }
 
 /// The golden replay hashes, "<name> <hash>" per line, same as native.
 #[wasm_bindgen]
 pub fn golden_hashes() -> String {
+    install_hook();
     castle_core::replay::golden_lines()
 }
 
 /// The built in content bundle as JSON.
 #[wasm_bindgen]
 pub fn default_content() -> String {
+    install_hook();
     castle_core::embedded::bundle_json().to_string()
 }
 
 /// Daily Dust-up seed for a local date text.
 #[wasm_bindgen]
 pub fn daily_seed(date: &str) -> u64 {
+    install_hook();
     castle_core::daily_seed(date)
+}
+
+/// Same as `daily_seed`, under the C name.
+#[wasm_bindgen]
+pub fn cp_daily_seed(date: &str) -> u64 {
+    daily_seed(date)
 }
 
 /// A command reply (or a list of replies) with `"ok": false` in it.
@@ -201,7 +217,7 @@ mod tests {
             dead: false,
         };
         install_hook();
-        let r = g.guarded(|_| panic!("boom"));
+        let r = g.guarded(true, |_| panic!("boom"));
         assert!(r.contains("\"panic\""), "{r}");
         assert!(last_error().unwrap_or_default().contains("boom"));
         assert!(g.command(r#"{"cmd":"pass"}"#).contains("dead_handle"));

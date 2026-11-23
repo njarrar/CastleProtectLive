@@ -43,33 +43,45 @@
         2400,
         540
       ]
+    ],
+    "patches": [
+      [
+        995,
+        1006,
+        343,
+        314,
+        "clay"
+      ]
     ]
   },
   "pads": [
     {
-      "x": 420
+      "x": 433
     },
     {
-      "x": 1550
+      "x": 1543
     }
   ],
   "player": {
     "crew": [
       "marge",
       "quill",
-      "jax"
+      "jax",
+      "old_thumper"
     ],
     "crew_size": 3,
     "blueprint": "bp_home_3_cobble"
   },
   "rival": {
-    "name": "Warden Privet Snedd",
+    "name": "Warden Snedd",
     "habit": "Aims at roofs.",
+    "habit_id": "roof_wrecker",
+    "think_ms": 600,
     "blueprint": "bp_r1_beanpole",
     "crew": [
       "hedge_snipper",
       "hedge_snipper",
-      "pebble_pitcher"
+      "rake_hand"
     ],
     "aim": 1,
     "knack_uses": 1,
@@ -89,18 +101,19 @@
   "pennants": [
     {
       "type": "win",
-      "text": "Win"
+      "text": "See Snedd off the slope"
     },
     {
-      "type": "no_hob_bonked",
-      "text": "No Hob of yours Bonked"
+      "type": "bonk_nook",
+      "text": "Bonk the Hob atop the Stamp Tower first",
+      "value": 1
     },
     {
       "type": "kettle_above_pct",
-      "text": "Your kettle above 60%",
-      "value": 60
+      "text": "Your kettle above 70%",
+      "value": 70
     }
   ],
-  "map_note": "A long slope up to the right. The Stamp Tower stands half way up. You in a hollow below.",
+  "map_note": "A long slope up to the right with a stump half way. The Stamp Tower stands further up. You in a hollow below.",
   "new_thing": "The Workshop with 3 Cobble blocks. +Grub on clear."
 }

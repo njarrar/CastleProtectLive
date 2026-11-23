@@ -7,12 +7,8 @@ struct DuelSetupView: View {
     @State private var options = DuelOptions()
     @State private var loaded = false
 
-    static let sillyNames = [
-        "Mabel", "Otis", "Captain Crumb", "Dot", "Sir Wobble", "Pip", "Granny Gale", "Biscuit", "Nell", "Tumble",
-        "Moss", "Juniper", "Wilf", "Bramble", "Lady Lumpkin", "Fig", "Rolo", "Hattie", "Pudding", "Sprout",
-        "Clem", "Marmalade", "Basil", "Tilly", "Gus", "Pickle", "Ada", "Bertie", "Noodle", "Winnie",
-        "Muffin", "Ozzie", "Rosie", "Crumpet", "Iggy", "Primrose", "Bosco", "Lettie", "Scone", "Duke Dumpling",
-    ]
+    /// The one Couch Duel name list (`names.duel` in content/text.json).
+    static var sillyNames: [String] { GameText.shared.pool("names.duel") }
 
     var body: some View {
         GeometryReader { geo in
@@ -20,19 +16,19 @@ struct DuelSetupView: View {
             let wide = m.wide
             VStack(spacing: 0) {
                 HStack {
-                    ScreenHeader(title: "Couch Duel") { model.leaveDuel() }
+                    ScreenHeader(title: tx("setup.duel_title")) { model.leaveDuel() }
                     if m.compact {
-                        Text("2 players, 1 device.")
+                        Text(tx("modes.duel.line"))
                             .font(Theme.label(13)).foregroundStyle(Theme.inkSoft)
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    Button("Swap sides") { swapSides() }
-                        .buttonStyle(PaperButtonStyle(height: 44))
+                    Button(tx("setup.swap_sides")) { swapSides() }
+                        .buttonStyle(PaperButtonStyle(height: 48))
                         .padding(.trailing, 12)
                 }
                 .background(Theme.cream)
                 if !m.compact {
-                    Text("2 players, 1 device. Free forever, no ads.")
+                    Text(tx("modes.duel.line") + " " + tx("app.promise"))
                         .font(Theme.label(14)).foregroundStyle(Theme.inkSoft).padding(.top, 6)
                 }
                 ScrollView {
@@ -58,10 +54,13 @@ struct DuelSetupView: View {
                         .allowsHitTesting(false)
                 }
                 HStack {
-                    Button("Quick start") { model.startDuel(DuelOptions.quickStart(names: options.names)) }
+                    Button(tx("setup.quick_start")) { model.startDuel(DuelOptions.quickStart(names: options.names)) }
                         .buttonStyle(PaperButtonStyle(height: m.button))
                     Spacer()
-                    Button("FIGHT") { model.startDuel(cleaned()) }
+                    Button(tx("common.fight").uppercased()) {
+                        model.sound.play("ui_confirm")
+                        model.startDuel(cleaned())
+                    }
                         .buttonStyle(GoldButtonStyle(height: m.button))
                         .accessibilityIdentifier("duelFight")
                 }
@@ -74,7 +73,18 @@ struct DuelSetupView: View {
         .onAppear {
             if !loaded {
                 options = model.save.duel
+                if model.workshopFortRows(minSeats: 4) == nil {
+                    for i in 0..<options.forts.count where options.forts[i] == "workshop" {
+                        options.forts[i] = i == 0 ? "box_2" : "box_1"
+                    }
+                }
                 loaded = true
+            }
+        }
+        .onChange(of: options.winBy) { next in
+            let allowed = next == .volley ? BattleSetup.volleyChoices : [12, 15, 18]
+            if !allowed.contains(options.rounds) {
+                options.rounds = next == .volley ? 10 : 15
             }
         }
     }
@@ -108,36 +118,39 @@ struct DuelSetupView: View {
                     if side == 0 { Circle().fill(colour) } else { Diamond().fill(colour) }
                 }
                 .frame(width: 24, height: 24)
-                Text("PLAYER \(side + 1)").font(Theme.title(16)).foregroundStyle(colour)
+                Text(tx("setup.player_label", ["n": side + 1]).uppercased()).font(Theme.title(16)).foregroundStyle(Theme.sideInk(side, model.save.settings.colourSet))
                     .lineLimit(1).fixedSize()
-                TextField("Player \(side + 1)", text: nameBinding(side))
+                TextField(tx("setup.player_label", ["n": side + 1]), text: nameBinding(side))
                     .font(Theme.label(18))
                     .frame(minWidth: 60)
                     .textFieldStyle(.roundedBorder)
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
-                    .accessibilityLabel("Player \(side + 1) name")
+                    .accessibilityLabel(tx("setup.player_name", ["n": side + 1]))
                 Button {
-                    options.names[side] = Self.sillyNames.randomElement() ?? "Player \(side + 1)"
+                    options.names[side] = Self.rollName(not: options.names)
                 } label: {
-                    Image(systemName: "dice.fill").font(.system(size: 20)).foregroundStyle(Theme.ink).frame(width: 44, height: 44)
+                    Image(systemName: "dice.fill").font(.system(size: 20)).foregroundStyle(Theme.ink).frame(width: 48, height: 48)
                 }
-                .accessibilityLabel("Silly name for player \(side + 1)")
+                .accessibilityLabel(tx("setup.silly_name_hint", ["n": side + 1]))
             }
-            Picker("Fort", selection: Binding(get: { options.forts[side] }, set: { options.forts[side] = $0 })) {
-                Text("Box 1").tag("box_1")
-                Text("Box 2").tag("box_2")
-                Text("Box 3").tag("box_3")
+            Picker(tx("setup.fort"), selection: Binding(get: { options.forts[side] }, set: { options.forts[side] = $0 })) {
+                Text(model.catalog.kitName("box_1")).tag("box_1")
+                Text(model.catalog.kitName("box_2")).tag("box_2")
+                Text(model.catalog.kitName("box_3")).tag("box_3")
+                if model.workshopFortRows(minSeats: 4) != nil {
+                    Text(model.save.fort?.name ?? tx("workshop.my_fort")).tag("workshop")
+                }
             }
             .pickerStyle(.segmented)
-            .accessibilityLabel("Fort for player \(side + 1)")
+            .accessibilityLabel(tx("setup.fort") + ", " + tx("setup.player_label", ["n": side + 1]))
             HStack {
-                Text("Help").font(Theme.label(15)).foregroundStyle(Theme.ink)
-                Picker("Help", selection: Binding(get: { options.help[side] }, set: { options.help[side] = $0 })) {
+                Text(tx("setup.help.label")).font(Theme.label(15)).foregroundStyle(Theme.ink)
+                Picker(tx("setup.help.label"), selection: Binding(get: { options.help[side] }, set: { options.help[side] = $0 })) {
                     ForEach(HelpLevel.allCases) { h in Text(h.label).tag(h) }
                 }
                 .pickerStyle(.segmented)
-                .accessibilityLabel("Help for player \(side + 1)")
+                .accessibilityLabel(tx("setup.help.label") + ", " + tx("setup.player_label", ["n": side + 1]))
             }
         }
         .padding(14)
@@ -150,31 +163,31 @@ struct DuelSetupView: View {
 
     private var rulesCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker("Map", selection: $options.map) {
+            Picker(tx("setup.map"), selection: $options.map) {
                 ForEach(model.catalog.maps) { m in Text(m.name).tag(m.id) }
             }
-            row("Win by") {
-                Picker("Win by", selection: $options.winBy) {
+            row(tx("setup.win_by.label")) {
+                Picker(tx("setup.win_by.label"), selection: $options.winBy) {
                     ForEach(WinBy.allCases) { w in Text(w.label).tag(w) }
                 }.pickerStyle(.segmented)
             }
-            row(options.winBy == .volley ? "Shots" : "Rounds") {
-                Picker("Rounds", selection: $options.rounds) {
+            row(options.winBy == .volley ? tx("setup.shots_each") : tx("setup.rounds")) {
+                Picker(tx("setup.rounds"), selection: $options.rounds) {
                     ForEach(options.winBy == .volley ? BattleSetup.volleyChoices : [12, 15, 18], id: \.self) { r in Text("\(r)").tag(r) }
                 }.pickerStyle(.segmented)
             }
-            row("Wind") {
-                Picker("Wind", selection: $options.wind) {
+            row(tx("setup.wind.label")) {
+                Picker(tx("setup.wind.label"), selection: $options.wind) {
                     ForEach(WindSetting.allCases) { w in Text(w.label).tag(w) }
                 }.pickerStyle(.segmented)
             }
-            row("Shells") {
-                Picker("Shells", selection: $options.shells) {
+            row(tx("setup.shells.label")) {
+                Picker(tx("setup.shells.label"), selection: $options.shells) {
                     ForEach(ShellRule.allCases) { s in Text(s.label).tag(s) }
                 }.pickerStyle(.segmented)
             }
-            row("Seats") {
-                Picker("Seats", selection: $options.seats) {
+            row(tx("setup.seats.label")) {
+                Picker(tx("setup.seats.label"), selection: $options.seats) {
                     ForEach(Seats.allCases) { s in Text(s.label).tag(s) }
                 }.pickerStyle(.segmented)
             }
@@ -197,6 +210,12 @@ struct DuelSetupView: View {
         )
     }
 
+    /// A name from the one list, never the one either player has now.
+    static func rollName(not taken: [String]) -> String {
+        let pool = sillyNames.filter { !taken.contains($0) }
+        return pool.randomElement() ?? sillyNames.randomElement() ?? ""
+    }
+
     private func swapSides() {
         options.names.reverse()
         options.help.reverse()
@@ -206,7 +225,7 @@ struct DuelSetupView: View {
     private func cleaned() -> DuelOptions {
         var o = options
         for i in 0..<2 where o.names[i].trimmingCharacters(in: .whitespaces).isEmpty {
-            o.names[i] = "Player \(i + 1)"
+            o.names[i] = tx("setup.player_label", ["n": i + 1])
         }
         if o.winBy == .knockout && ![12, 15, 18].contains(o.rounds) { o.rounds = 15 }
         if o.winBy == .volley && !BattleSetup.volleyChoices.contains(o.rounds) { o.rounds = 10 }
@@ -219,7 +238,9 @@ extension DuelOptions {
     static func quickStart(names: [String]) -> DuelOptions {
         var o = DuelOptions()
         if names.count == 2 {
-            o.names = names.map { $0.trimmingCharacters(in: .whitespaces).isEmpty ? "Player" : $0 }
+            o.names = names.enumerated().map { i, name in
+                name.trimmingCharacters(in: .whitespaces).isEmpty ? tx("setup.player_label", ["n": i + 1]) : name
+            }
         }
         o.shells = .quick
         return o

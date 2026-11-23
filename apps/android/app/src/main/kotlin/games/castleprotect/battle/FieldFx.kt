@@ -1,7 +1,10 @@
 package games.castleprotect.battle
 
+import games.castleprotect.core.Text
+
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import games.castleprotect.core.Castle
 import games.castleprotect.core.Frame
@@ -9,10 +12,54 @@ import games.castleprotect.core.GameEvent
 import games.castleprotect.core.Ghost
 import games.castleprotect.core.Hob
 import games.castleprotect.core.Phase
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.math.sqrt
+
+/**
+ * Pure-Kotlin 2D collision separation for simultaneous floating damage numbers and callouts
+ * (Part 2 Plate 2: eliminates unreadable Round 10 Fatigue number stacks).
+ */
+object FloatLayout {
+    /**
+     * Finds a non-overlapping world position `[x, y]` near ([wx], [wy]) given [count] active
+     * floating texts at ([xs], [ys]). Fans out vertically and horizontally so bursts stay legible.
+     */
+    fun place(
+        wx: Float, wy: Float,
+        xs: FloatArray, ys: FloatArray, count: Int,
+        out: FloatArray,
+        minDx: Float = 30f, minDy: Float = 20f,
+    ) {
+        var x = wx
+        var y = wy
+        var lateralStep = 0
+        for (pass in 0 until 8) {
+            var hit = false
+            for (i in 0 until count) {
+                if (abs(xs[i] - x) < minDx && abs(ys[i] - y) < minDy) {
+                    hit = true
+                    break
+                }
+            }
+            if (!hit) break
+            // Alternate gentle horizontal fan-out on even passes and vertical lift on odd passes.
+            if (pass % 2 == 1) {
+                lateralStep++
+                val sign = if (lateralStep % 2 == 1) 1f else -1f
+                x = wx + sign * ((lateralStep + 1) / 2) * (minDx * 0.72f)
+            } else {
+                y -= minDy
+            }
+        }
+        out[0] = x
+        out[1] = y
+    }
+}
 
 /** Where sprites come from. [Sprites] in the app; a stand-in in unit tests. */
 interface SpriteSource {
@@ -80,6 +127,12 @@ class FieldFx(
     var anims: Anims = Anims.EMPTY
         set(v) { if (v !== field) { field = v; clear() } }
 
+    /** The shout for a big drop (`notes.big_drop`), drawn as a starburst. */
+    private val dropWord: String by lazy { Text.t("notes.big_drop") }
+
+    /** Mixed into each idle's start point, so two views of the same crew do not breathe alike. */
+    private val seedSalt = System.nanoTime()
+
     /** One looping or one shot effect at a world point. [ambient]: leaves, never a reason to draw at full rate. */
     private class Fx(val clip: AnimClip, var x: Float, var y: Float, var vx: Float = 0f, var vy: Float = 0f, val g: Float = 0f,
                      val k: Float = 1f, var life: Float = 10_000f, val fadeMs: Float = 0f, var rot: Float = 0f, val spin: Float = 0f,
@@ -114,11 +167,19 @@ class FieldFx(
     private class Walk(val side: Int, val dx: Float, val ms: Float) { var t = 0f }
     private class Rubble(val sprite: String, val x: Float, val y: Float) { var age = 0f; var sp: Sprites.Sprite? = null; var spGen = -1 }
     private class PinDrop(val key: Long, val clip: AnimClip)
+    /** Pooled floating damage number or field callout ("Drop!", "Threaded") (Android-M12). */
+    private class FloatText {
+        var active = false
+        var x = 0f; var y = 0f; var vy = 0f
+        var age = 0f; var life = 950f
+        var text = ""; var color = 0; var callout = false
+    }
 
     private val fx = ArrayList<Fx>()
     private val hobs = ArrayList<HobPose>()
     private val pieces = ArrayList<Piece>()
     private val rubble = ArrayList<Rubble>()
+    private val floats = Array(MAX_FLOATS) { FloatText() }
     private val walks = arrayOfNulls<Walk>(2)
     private val legs = arrayOfNulls<AnimClip>(4)
     private val kettle = arrayOfNulls<AnimClip>(2)
@@ -138,7 +199,16 @@ class FieldFx(
     private val trailNames = HashMap<String, String>()
     private val paint by lazy(LazyThreadSafetyMode.NONE) { Paint(Paint.FILTER_BITMAP_FLAG) }
     private val line by lazy(LazyThreadSafetyMode.NONE) { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE } }
+    private val floatFill by lazy(LazyThreadSafetyMode.NONE) { Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = android.graphics.Typeface.DEFAULT_BOLD } }
+    private val floatStroke by lazy(LazyThreadSafetyMode.NONE) { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFF2C221E.toInt(); strokeJoin = Paint.Join.ROUND; textAlign = Paint.Align.CENTER; typeface = android.graphics.Typeface.DEFAULT_BOLD } }
+    private val burstFill by lazy(LazyThreadSafetyMode.NONE) { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = 0xFFFFE04A.toInt() } }
+    private val burstStroke by lazy(LazyThreadSafetyMode.NONE) { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = 0xFF2C221E.toInt(); strokeJoin = Paint.Join.ROUND } }
+    private val burstPath by lazy(LazyThreadSafetyMode.NONE) { Path() }
     private val r by lazy(LazyThreadSafetyMode.NONE) { RectF() }
+    private val tmpBox by lazy(LazyThreadSafetyMode.NONE) { RectF() }
+    private val sepX = FloatArray(MAX_FLOATS)
+    private val sepY = FloatArray(MAX_FLOATS)
+    private val sepOut = FloatArray(2)
 
     /** The shared clip event sink: reads the clip's current name when an event fires. */
     private inner class Sink : ClipEvents {
@@ -156,9 +226,13 @@ class FieldFx(
      * rate. Wind leaves, shimmer and the Squall do not count (review 2 N-M2, M6): they run
      * at the idle rate.
      */
+    /** True while collapse pieces are actively animating on screen (used for settle wait and shake gating). */
+    val collapseShowing: Boolean get() = pieces.isNotEmpty()
+
     val busy: Boolean get() {
         for (i in fx.indices) if (!fx[i].ambient) return true
         if (pieces.isNotEmpty() || rubble.isNotEmpty()) return true
+        for (fl in floats) if (fl.active) return true
         for (s in 0..1) { if (walks[s] != null) return true; val k = kettle[s]; if (k != null && !k.done) return true }
         for (a in flaps) if (a != null && !a.done) return true
         for (a in lids) if (a != null && !a.done) return true
@@ -169,13 +243,43 @@ class FieldFx(
     /** A new battle or a new view: nothing of the old one is kept (review 2 N-L4). */
     fun clear() {
         fx.clear(); hobs.clear(); pieces.clear(); rubble.clear(); walks.fill(null); legs.fill(null); kettle.fill(null)
+        for (fl in floats) fl.active = false
         flaps.fill(null); lids.fill(null); kettleLids.fill(null); pins.clear(); prev = null
         flapState.clear(); lidState.clear(); pinKnown.clear(); lastStateFrame = null
         squall = null; shimmerClip = null; shimmerT = 0f; leafT = 0f; trailT = 0f
     }
 
+    private fun spawnFloat(wx: Float, wy: Float, label: String, color: Int, callout: Boolean) {
+        var nActive = 0
+        for (fl in floats) if (fl.active) {
+            sepX[nActive] = fl.x
+            sepY[nActive] = fl.y
+            nActive++
+        }
+        FloatLayout.place(
+            wx, wy, sepX, sepY, nActive, sepOut,
+            minDx = if (callout) 42f else 30f,
+            minDy = if (callout) 26f else 20f,
+        )
+        var slot: FloatText? = null
+        var oldest = floats[0]
+        for (fl in floats) {
+            if (!fl.active) { slot = fl; break }
+            if (fl.age > oldest.age) oldest = fl
+        }
+        val t = slot ?: oldest
+        t.active = true; t.x = sepOut[0]; t.y = sepOut[1]; t.vy = if (callout) -0.026f else -0.034f
+        t.age = 0f; t.life = if (callout) 1300f else 950f
+        t.text = label; t.color = color; t.callout = callout
+    }
+
+    private fun dmgText(dmg: Int): String = if (dmg in 1 until DMG_LABELS.size) DMG_LABELS[dmg] else "-$dmg"
+
     private fun def(name: String): AnimDef? = anims[name]
-    private fun team(side: Int) = if (side == 0) "blue" else "orange"
+    private fun team(f: Frame, side: Int) = Sprites.team(side, f.hud.human(side))
+
+    /** True when assets/animations.json has a clip by this name. */
+    fun hasAnim(name: String): Boolean = anims[name] != null
 
     private fun spawn(name: String, x: Float, y: Float, k: Float = 1f, vx: Float = 0f, vy: Float = 0f, g: Float = 0f, life: Float = 10_000f,
                       fadeMs: Float = 0f, spin: Float = 0f, sound: Boolean = true, ambient: Boolean = false) {
@@ -213,9 +317,33 @@ class FieldFx(
             }
             "carve" -> spawn("fx_impact_dirt", e.x.toFloat(), e.y.toFloat(), 1.4f, sound = false)
             "hit" -> when (e.target) {
-                "block" -> blockAt(p ?: f, e.side, e.c, e.r)?.let { b -> spawn("fx_impact_${b.third}", b.first + 8f, b.second + 8f, sound = false) }
-                "hob" -> if (e.dmg > 0) pose(f, e.hob, "hit")
-                "kettle" -> f.castles.getOrNull(e.side)?.kettle?.let { k -> if (k.box.size >= 4) spawn("fx_impact_footing", (k.box[0] + k.box[2]) / 2f, (k.box[1] + k.box[3]) / 2f, sound = false) }
+                "block" -> blockAt(p ?: f, e.side, e.c, e.r)?.let { b ->
+                    spawn("fx_impact_${b.third}", b.first + 8f, b.second + 8f, sound = false)
+                    // Wall/block breaks: crisp cream (#FFF4DE) with espresso stroke (Part 2 Plate 2).
+                    if (e.dmg > 0) spawnFloat(b.first + 8f, b.second, dmgText(e.dmg), 0xFFFFF4DE.toInt(), false)
+                }
+                "hob" -> if (e.dmg > 0) {
+                    pose(f, e.hob, "hit")
+                    // Hob hits: rich amber-gold (#FFC23D) with espresso stroke (Part 2 Plate 2).
+                    f.hobs.firstOrNull { it.id == e.hob }?.let { h -> spawnFloat(h.x.toFloat(), h.y - 26f, dmgText(e.dmg), 0xFFFFC23D.toInt(), false) }
+                }
+                "kettle" -> f.castles.getOrNull(e.side)?.kettle?.let { k ->
+                    if (k.box.size >= 4) {
+                        val kx = (k.box[0] + k.box[2]) / 2f; val ky = (k.box[1] + k.box[3]) / 2f
+                        spawn("fx_impact_footing", kx, ky, sound = false)
+                        if (e.dmg > 0) spawnFloat(kx, k.box[1] - 8f, dmgText(e.dmg), 0xFFFF5A5F.toInt(), false)
+                    }
+                }
+                "prop" -> if (e.dmg > 0) spawnFloat(e.x.toFloat(), e.y - 10f, dmgText(e.dmg), 0xFFFFD23F.toInt(), false)
+            }
+            "big_drop" -> if (e.callout) {
+                val k = f.castles.firstOrNull { it.side == e.side } ?: f.castles.firstOrNull { it.side == 1 - f.side } ?: f.castles.firstOrNull()
+                if (k != null) spawnFloat(k.x + k.cols * 8f, k.topY - 26f, dropWord, 0xFFFFE04A.toInt(), true)
+            }
+            "threaded" -> {
+                val h = f.hobs.firstOrNull { it.id == e.hob }
+                if (h != null) spawnFloat(h.x.toFloat(), h.y - 34f, Text.t("notes.threaded"), 0xFF4FE3C1.toInt(), true)
+                else f.castles.firstOrNull { it.side == e.side }?.let { k -> spawnFloat(k.x + k.cols * 8f, k.topY - 22f, Text.t("notes.threaded"), 0xFF4FE3C1.toInt(), true) }
             }
             "break" -> if (key(e.side, e.c, e.r) !in collapsed) blockAt(p ?: f, e.side, e.c, e.r)?.let { b -> breakBlock(b.third, b.first, b.second, 1) }
             "collapse" -> collapse(f, e)
@@ -241,14 +369,44 @@ class FieldFx(
             "mend", "rebuild" -> {
                 val k = f.castles.getOrNull(e.side)
                 var i = 0
-                if (k != null) while (i + 1 < e.blocks.size) {
-                    spawn("fx_fizz_pop", k.x + 16f * e.blocks[i] + 8f, k.baseY - 16f * (e.blocks[i + 1] + 1) + 4f)
-                    i += 3
+                if (k != null) {
+                    if (e.blocks.size >= 2) spawnFloat(k.x + 16f * e.blocks[0] + 8f, k.baseY - 16f * (e.blocks[1] + 1) - 8f, Text.t(if (e.t == "rebuild") "notes.rebuild" else "notes.mend"), 0xFF8BD888.toInt(), false)
+                    while (i + 1 < e.blocks.size) {
+                        spawn("fx_fizz_pop", k.x + 16f * e.blocks[i] + 8f, k.baseY - 16f * (e.blocks[i + 1] + 1) + 4f)
+                        i += 3
+                    }
                 }
             }
             "squall" -> beat("squall", 1, 0f, 0f)
         }
+        notes(f)
         prev = f
+    }
+
+    /**
+     * Small words by the action (`notes.<event>` in content/text.json). Only Bonk!, Thump!, Drop!,
+     * Snip! and Kettle Pop! shout; the rest are small and quiet. An empty line shows nothing.
+     * Drop and Threaded have their own callouts above.
+     */
+    private fun notes(f: Frame) {
+        for (e in f.events) {
+            if (e.t !in NOTE_EVENTS) continue
+            val word = when (e.t) {
+                "prop_break" -> Text.opt("notes.prop_break.${e.kind}") ?: Text.opt("notes.prop_break.default")
+                "prop" -> Text.opt("notes.prop.${e.kind}")
+                else -> Text.opt("notes.${e.t}")
+            }?.takeIf { it.isNotEmpty() } ?: continue
+            val h = if (e.hob >= 0) f.hobs.firstOrNull { it.id == e.hob } else null
+            val k = f.castles.firstOrNull { it.side == e.side }
+            val (x, y) = when {
+                h != null -> h.x.toFloat() to h.y - 40f
+                e.x != 0 || e.y != 0 -> e.x.toFloat() to e.y - 14f
+                k != null -> k.x + k.cols * 8f to k.topY - 30f
+                else -> continue
+            }
+            val shout = e.t in SHOUTS
+            spawnFloat(x, y, word, if (shout) 0xFFFFE04A.toInt() else 0xFFF3EAD8.toInt(), shout)
+        }
     }
 
     private fun key(side: Int, c: Int, r: Int): Long = (side.toLong() shl 40) or ((c + 1000).toLong() shl 20) or (r + 1000).toLong()
@@ -262,7 +420,7 @@ class FieldFx(
 
     private fun hobPose(id: Int): HobPose? { for (i in hobs.indices) if (hobs[i].id == id) return hobs[i]; return null }
 
-    private fun newPose(h: Hob): HobPose = HobPose(h.id, "hob_${Sprites.hobKey(h.def)}_${team(h.side)}_").also { hobs.add(it) }
+    private fun newPose(f: Frame, h: Hob): HobPose = HobPose(h.id, "hob_${Sprites.hobKey(h.def)}_${team(f, h.side)}_").also { hobs.add(it) }
 
     /** The def for [pose] of this Hob, looked up once (no name is built per frame). */
     private fun HobPose.def(f: Frame?, pose: String): AnimDef? {
@@ -279,7 +437,7 @@ class FieldFx(
         var h: Hob? = null
         for (x in f.hobs) if (x.id == id) { h = x; break }
         if (h == null) return
-        val hp = hobPose(id) ?: newPose(h)
+        val hp = hobPose(id) ?: newPose(f, h)
         val d = hp.def(f, pose) ?: return
         hp.clipFor(d).play(d); hp.pose = pose; hp.poseDef = d; hp.shot = shot; hp.silent = false
         if (pose == "bonked") cue(d.name, "start", h.x.toFloat(), null)
@@ -395,12 +553,14 @@ class FieldFx(
             val want = basePose(f, h)
             var hp = hobPose(h.id)
             if (hp == null || hp.clip == null) {
-                val p = hp ?: newPose(h)
+                val p = hp ?: newPose(f, h)
                 p.seen = frameNo
                 val d = p.def(f, want) ?: continue
                 p.clip = AnimClip(anims, d); p.pose = want; p.poseDef = d
                 // A pose that began before this view (an old Bonk) starts in its loop, with no sounds.
                 if (want == "bonked") p.clip?.skipToLoop()
+                // Idles start somewhere in their loop, so a crew never breathes in step (animations.json random_start, start_offset_ms).
+                if (want == "idle") p.clip?.seek(AnimClip.idleStart(d, h.id * 7919L + h.side * 104729L + seedSalt))
                 continue
             }
             hp.seen = frameNo
@@ -461,6 +621,13 @@ class FieldFx(
         }
         i = rubble.size - 1
         while (i >= 0) { val rb = rubble[i]; rb.age += dt; if (rb.age > c.rubbleHoldMs + 400f) rubble.removeAt(i); i-- }
+        // Floating damage numbers and field callouts (Android-M12).
+        for (fl in floats) {
+            if (!fl.active) continue
+            fl.age += dt
+            if (!still) fl.y += fl.vy * dt
+            if (fl.age >= fl.life) fl.active = false
+        }
         // Walks
         for (s in 0..1) {
             val w = walks[s] ?: continue
@@ -594,18 +761,25 @@ class FieldFx(
         return holder.sp?.also { it.usedAt = stamp }
     }
 
+    private fun drawSpBox(c: Canvas, sp: Sprites.Sprite, box: RectF, p: Paint) {
+        val spr = sprites as? Sprites
+        if (spr != null) spr.drawBox(c, sp, box, r, p)
+        else c.drawBitmap(sp.bmp, sp.src, box, p)
+    }
+
     /** Draws collapse pieces, rubble and every effect through lens [l]. */
     fun draw(c: Canvas, l: Lens, f: Frame) {
         stamp = Sprites.now()
         val col = anims.collapse
         val gen = sprites.generation
+        val spr = sprites as? Sprites
         for (i in rubble.indices) {
             val rb = rubble[i]
             val sp = memo(rb.sprite, gen, rb) ?: continue
             val a = if (rb.age < col.rubbleHoldMs) 1f else (1f - (rb.age - col.rubbleHoldMs) / 400f).coerceIn(0f, 1f)
             paint.alpha = (a * 255).toInt()
-            r.set(l.sx(rb.x), l.sy(rb.y), l.sx(rb.x + 16f), l.sy(rb.y + 16f))
-            c.drawBitmap(sp.bmp, null, r, paint)
+            tmpBox.set(l.sx(rb.x), l.sy(rb.y), l.sx(rb.x + 16f), l.sy(rb.y + 16f))
+            drawSpBox(c, sp, tmpBox, paint)
         }
         paint.alpha = 255
         for (i in pieces.indices) drawPiece(c, l, pieces[i], col, gen)
@@ -618,15 +792,57 @@ class FieldFx(
             val u = e.k * l.scale
             val fade = if (e.fadeMs > 0f && e.life - e.age < e.fadeMs) ((e.life - e.age) / e.fadeMs).coerceIn(0f, 1f) else 1f
             paint.alpha = (fade * 255).toInt()
-            r.set(x - d.ax * u, y - d.ay * u, x + (d.w - d.ax) * u, y + (d.h - d.ay) * u)
-            if (e.rot != 0f) { c.save(); c.rotate(e.rot * 57.3f, x, y); c.drawBitmap(sp.bmp, null, r, paint); c.restore() } else c.drawBitmap(sp.bmp, null, r, paint)
+            if (e.rot != 0f) {
+                c.save(); c.rotate(e.rot * 57.3f, x, y)
+                if (spr != null && (sp.trim != null || sp.overlays.isNotEmpty())) spr.drawAnchored(c, sp, x, y, u, flip = false, dst = r, paint = paint)
+                else { r.set(x - d.ax * u, y - d.ay * u, x + (d.w - d.ax) * u, y + (d.h - d.ay) * u); c.drawBitmap(sp.bmp, sp.src, r, paint) }
+                c.restore()
+            } else {
+                if (spr != null && (sp.trim != null || sp.overlays.isNotEmpty())) spr.drawAnchored(c, sp, x, y, u, flip = false, dst = r, paint = paint)
+                else { r.set(x - d.ax * u, y - d.ay * u, x + (d.w - d.ax) * u, y + (d.h - d.ay) * u); c.drawBitmap(sp.bmp, sp.src, r, paint) }
+            }
         }
         paint.alpha = 255
+        // Pooled floating damage numbers and callouts (Android-M12 + Part 2 Plate 2 starburst Drop!).
+        for (fl in floats) {
+            if (!fl.active) continue
+            val x = l.sx(fl.x); val y = l.sy(fl.y)
+            if (x < l.rect.left - 80 || x > l.rect.right + 80) continue
+            val rem = fl.life - fl.age
+            val alpha = (if (rem < 250f) (rem / 250f).coerceIn(0f, 1f) else 1f) * 255f
+            val alphaInt = alpha.toInt().coerceIn(0, 255)
+            val sz = (if (fl.callout) 17f else 13.5f) * dp
+            if (fl.callout && fl.text == dropWord) {
+                drawStarburst(c, x, y - sz * 0.32f, 28f * dp, 16f * dp, alphaInt)
+            }
+            floatStroke.textSize = sz; floatStroke.strokeWidth = (if (fl.callout) 3.8f else 2.8f) * dp; floatStroke.alpha = alphaInt
+            floatFill.textSize = sz; floatFill.color = fl.color; floatFill.alpha = alphaInt
+            c.drawText(fl.text, x, y, floatStroke)
+            c.drawText(fl.text, x, y, floatFill)
+        }
+    }
+
+    private fun drawStarburst(c: Canvas, cx: Float, cy: Float, rx: Float, ry: Float, alpha: Int) {
+        burstPath.rewind()
+        val points = 12
+        for (i in 0 until points * 2) {
+            val a = i * PI / points
+            val k = if (i % 2 == 0) 1.0f else 0.68f
+            val px = cx + (cos(a) * rx * k).toFloat()
+            val py = cy + (sin(a) * ry * k).toFloat()
+            if (i == 0) burstPath.moveTo(px, py) else burstPath.lineTo(px, py)
+        }
+        burstPath.close()
+        burstFill.alpha = (alpha * 0.92f).toInt()
+        burstStroke.alpha = alpha; burstStroke.strokeWidth = 2f * dp
+        c.drawPath(burstPath, burstFill)
+        c.drawPath(burstPath, burstStroke)
     }
 
     private fun drawPiece(c: Canvas, l: Lens, p: Piece, col: CollapseData, gen: Int) {
         if (p.spGen != gen) { p.spGen = gen; p.sp = sprites.get("block_${p.mat}_scuffed") ?: sprites.get("block_${p.mat}_fresh") }
         val sp = p.sp
+        if (sp != null) sp.usedAt = stamp
         var dx = 0f; var dy = 0f; var deg = 0f; var sy = 1f
         val still = reduceMotion()
         val dropAt = col.creakMs + col.leanMs + p.delay
@@ -645,11 +861,11 @@ class FieldFx(
             }
         }
         val x0 = l.sx(p.x + dx); val y1 = l.sy(p.y + dy + 16f); val w = 16f * l.scale; val h = 16f * l.scale * sy
-        r.set(x0, y1 - h, x0 + w, y1)
+        tmpBox.set(x0, y1 - h, x0 + w, y1)
         c.save()
         if (deg != 0f) c.rotate(deg, x0 + w / 2f, y1)
-        if (sp != null) c.drawBitmap(sp.bmp, null, r, paint) else { line.color = 0xFF2B1E2E.toInt(); line.strokeWidth = dp; c.drawRect(r, line) }
-        p.crack?.let { cr -> spriteOf(cr)?.let { c.drawBitmap(it.bmp, null, r, paint) } }
+        if (sp != null) drawSpBox(c, sp, tmpBox, paint) else { line.color = 0xFF2C221E.toInt(); line.strokeWidth = dp; c.drawRect(tmpBox, line) }
+        p.crack?.let { cr -> spriteOf(cr)?.let { drawSpBox(c, it, tmpBox, paint) } }
         c.restore()
     }
 
@@ -660,9 +876,9 @@ class FieldFx(
         var i = 0
         while (i + 1 < k.shimmer.size) {
             val bx = k.x + 16f * k.shimmer[i]; val by = k.baseY - 16f * (k.shimmer[i + 1] + 1)
-            r.set(l.sx(bx), l.sy(by), l.sx(bx + 16f), l.sy(by + 16f))
-            if (sp != null) c.drawBitmap(sp.bmp, null, r, paint)
-            else if (reduceMotion()) { line.color = 0xFFFFF4DE.toInt(); line.strokeWidth = 1.5f * dp; line.pathEffect = dash; c.drawRect(r, line); line.pathEffect = null }
+            tmpBox.set(l.sx(bx), l.sy(by), l.sx(bx + 16f), l.sy(by + 16f))
+            if (sp != null) drawSpBox(c, sp, tmpBox, paint)
+            else if (reduceMotion()) { line.color = 0xFFFFF4DE.toInt(); line.strokeWidth = 1.5f * dp; line.pathEffect = dash; c.drawRect(tmpBox, line); line.pathEffect = null }
             i += 2
         }
     }
@@ -673,7 +889,7 @@ class FieldFx(
         val s = max(160f * dp, l.rect.width() / 3f)
         paint.alpha = 150
         var y = l.rect.top
-        while (y < l.rect.bottom) { var x = l.rect.left; while (x < l.rect.right) { r.set(x, y, x + s, y + s); c.drawBitmap(sp.bmp, null, r, paint); x += s }; y += s }
+        while (y < l.rect.bottom) { var x = l.rect.left; while (x < l.rect.right) { tmpBox.set(x, y, x + s, y + s); drawSpBox(c, sp, tmpBox, paint); x += s }; y += s }
         paint.alpha = 255
     }
 
@@ -681,10 +897,19 @@ class FieldFx(
         /** Gravity for view falls, in cells per ms squared (16 cells in about 150 ms). */
         const val FALL_G = 0.0014f
         const val MAX_FX = 160
+        private const val MAX_FLOATS = 24
+        private val DMG_LABELS = Array(301) { "-$it" }
         /** Room ids per side kept for flaps and lids. */
         private const val ROOMS = 64
         private val ONE_SHOT = setOf("fire", "hit", "dig", "land", "cheer", "blink")
         private val NONE = Any()
+        /** Core events that show their `notes` line by the action. */
+        private val NOTE_EVENTS = setOf(
+            "bonk", "kettle_pop", "thump", "shears_snip", "lid", "lid_block", "buried", "dug_out", "split", "regrow",
+            "column", "prop", "prop_break", "prop_wake", "relight", "kettle_crack", "grudge", "clatter",
+        )
+        /** The five lines that shout. */
+        private val SHOUTS = setOf("bonk", "kettle_pop", "thump", "shears_snip")
         private val WALK = arrayOf("stomper_blue_walk", "stomper_orange_walk")
         private val FLAP = arrayOf("loophole_flap_blue_close", "loophole_flap_orange_close")
 

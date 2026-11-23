@@ -39,20 +39,20 @@ class QaPlaytestTwoTest {
     private fun hob(id: Int, state: String, hp: Int, canFire: Boolean = true, side: Int = 0, max: Int = 100) =
         Hob(id, side, "marge", "Hob $id", "lobber", hp, max, state, 0, 0, 0, 0, null, 0, "clodpot", false, false, false, false, false, canFire, 0, 0)
 
-    // ---- Rules version 4 ------------------------------------------------------------
+    // ---- Rules version 5 (bundle patch 02) ----------------------------------------------------
 
-    @Test fun savesFromRulesThreeAreRefusedWithAPlainMessage() {
+    @Test fun savesFromRulesFourAreRefusedWithAPlainMessage() {
+        val v5 = """{"sim":"0.2.0","rules":5,"tick_hz":120}"""
         val v4 = """{"sim":"0.2.0","rules":4,"tick_hz":120}"""
-        val v3 = """{"sim":"0.2.0","rules":3,"tick_hz":120}"""
-        assertEquals(4, SaveCompat.RULES)
-        assertNull(SaveCompat.refusal(v4, v4, standIn = false))
-        val msg = SaveCompat.refusal(v3, v4, standIn = false)!!
-        assertTrue(msg, msg.contains("older game rules (version 3)"))
-        assertTrue(msg.contains("Your progress and Buttons are kept"))
+        assertEquals(5, SaveCompat.RULES)
+        assertNull(SaveCompat.refusal(v5, v5, standIn = false))
+        val msg = SaveCompat.refusal(v4, v5, standIn = false)!!
+        assertEquals(games.castleprotect.core.Text.t("errors.saved_fight_old"), msg)
+        assertTrue(msg.contains("Your progress and Pennants are safe"))
         assertFalse(msg.contains("_")); assertFalse(msg.contains("{"))
-        // No version from the core: this app's own rules version (4) is assumed.
-        assertNotNull(SaveCompat.refusal(v3, null, standIn = false))
-        assertNull(SaveCompat.refusal(v4, null, standIn = false))
+        // No version from the core: this app's own rules version (5) is assumed.
+        assertNotNull(SaveCompat.refusal(v4, null, standIn = false))
+        assertNull(SaveCompat.refusal(v5, null, standIn = false))
     }
 
     // ---- N2: Squashed is not Bonked -------------------------------------------------------
@@ -81,10 +81,11 @@ class QaPlaytestTwoTest {
         assertTrue(HobLook.pipFill("seated", 0) > 0f)
         assertFalse(HobLook.pipOut("squashed")); assertTrue(HobLook.pipOut("bonked"))
         assertTrue(HobLook.pipSquashed("squashed", 1)); assertFalse(HobLook.pipSquashed("seated", 1))
-        assertEquals("Squashed, back up soon", HobLook.words(hob(0, "squashed", 1)))
-        assertEquals("Dropped, 1 HP", HobLook.words(hob(0, "dropped", 1)))
+        assertEquals("Squashed. Back up soon.", HobLook.words(hob(0, "squashed", 1)))
+        assertEquals("Fell a floor", HobLook.words(hob(0, "dropped", 1)))
         assertEquals("Bonked", HobLook.words(hob(0, "bonked", 0)))
-        assertEquals("80 of 100 HP", HobLook.words(hob(0, "seated", 80)))
+        // A Hob that is fine has no state words: its chip line already says its HP (hud.hob_chip).
+        assertEquals("", HobLook.words(hob(0, "seated", 80)))
     }
 
     @Test fun aSquashedHobFromTheSnapshotIsLiveAndMayBePicked() {
@@ -106,7 +107,7 @@ class QaPlaytestTwoTest {
     @Test fun fatigueGetsABannerAtRoundNineAndARedOneAtRoundTenAndYourTurnWaits() {
         val beat = FatigueBeat()
         val warn = beat.onEvent("fatigue_warning", "", 9, 1000L)!!
-        assertEquals("Fatigue next round: hurt blocks hold less", warn.text)
+        assertEquals("The Creaks start next round. Cracked blocks hold less.", warn.text)
         assertFalse(warn.danger)
         assertEquals(FatigueBeat.WARN_MS, beat.turnBannerWait(1000L))
         assertEquals(0L, beat.turnBannerWait(1000L + FatigueBeat.WARN_MS))
@@ -114,7 +115,7 @@ class QaPlaytestTwoTest {
         assertNull(beat.onTurnStart(1, 9, 1200L))
         assertFalse(beat.holdHome)
         val start = beat.onEvent("fatigue", "", 10, 10_000L)!!
-        assertEquals("Fatigue! Battered blocks give way", start.text)
+        assertEquals("The fort creaks. Cracked blocks let go.", start.text)
         assertEquals(HudText.FATIGUE_ON, start.text)
         assertTrue(start.danger)
         assertTrue(beat.turnBannerWait(10_500L) > 0)
@@ -154,7 +155,7 @@ class QaPlaytestTwoTest {
     @Test fun theRivalMarkerIsAOneTapPeek() {
         val p = RivalPeek()
         p.onFrame(3, false)
-        assertFalse(p.on); assertEquals("View Rival fort", p.label())
+        assertFalse(p.on); assertEquals("Look at the Rival's fort", p.label())
         p.tap()
         assertTrue(p.on); assertEquals("Back to my fort", p.label())
         p.onFrame(3, false); assertTrue(p.on)
@@ -177,7 +178,7 @@ class QaPlaytestTwoTest {
     }
 
     @Test fun aSkyDragSaysDragFromYourFortOncePerBattle() {
-        assertEquals("Drag from your fort to aim", OwnerRule.NUDGE)
+        assertEquals("Drag back to aim", OwnerRule.NUDGE)
         assertTrue(OwnerRule.nudge(humanTurn = true, hasHob = true, inAimLens = true, shownThisBattle = false))
         assertFalse(OwnerRule.nudge(humanTurn = true, hasHob = true, inAimLens = true, shownThisBattle = true))
         assertFalse(OwnerRule.nudge(humanTurn = false, hasHob = true, inAimLens = true, shownThisBattle = false))
@@ -204,16 +205,17 @@ class QaPlaytestTwoTest {
         val f = parse(ended)
         val last = f.result!!.broke!!.last!!
         assertEquals("hob", last.by)
-        assertEquals("Last blow: Clodpot from Marge Dumpling, round 1", BrokeText.last(last))
+        // The Hob by its short name (text.json hobs.<id>.short); field blows in the table's words, never the core's English.
+        assertEquals("Last blow: Marge's Clodpot, Round 1", BrokeText.last(last, { if (it == 0) "Marge" else null }))
         fun field(by: String, shot: String, name: String, shotName: String) = Blow(shot, shotName, -1, name, 12, 30, by)
-        assertEquals("Last blow: The Squall, round 16", BrokeText.last(Blow("squall", "Squall", -1, "The Squall", 16, 0, "squall")))
-        assertEquals("A fall", BrokeText.blow(field("ground", "ground", "A fall", "Fall")))
-        assertEquals("Fatigue", BrokeText.blow(field("fatigue", "fatigue", "Fatigue", "Fatigue collapse")))
-        assertEquals("Your own shot", BrokeText.blow(field("self", "clodpot", "Your own shot", "Clodpot")))
-        assertEquals("The shears", BrokeText.blow(field("shears", "shears", "The shears", "Big Snip")))
-        assertEquals("A Tick-Tock Crock", BrokeText.blow(field("prop", "tick_tock_crock", "A Tick-Tock Crock", "Tick-Tock Crock")))
+        assertEquals("Last blow: the Squall, Round 16", BrokeText.last(Blow("squall", "Squall", -1, "The Squall", 16, 0, "squall")))
+        assertEquals("a fall", BrokeText.blow(field("ground", "ground", "A fall", "Fall")))
+        assertEquals("the Creaks", BrokeText.blow(field("fatigue", "fatigue", "Fatigue", "Fatigue collapse")))
+        assertEquals("your own shot", BrokeText.blow(field("self", "clodpot", "Your own shot", "Clodpot")))
+        assertEquals("the shears", BrokeText.blow(field("shears", "shears", "The shears", "Big Snip")))
+        assertEquals("Tick-Tock Crock", BrokeText.blow(field("prop", "tick_tock_crock", "A Tick-Tock Crock", "Tick-Tock Crock")))
         // An older core with no `by` and no Hob name still reads.
-        assertEquals("The Squall", BrokeText.blow(Blow("squall", "", -1, "", 3, 0)))
+        assertEquals("the Squall", BrokeText.blow(Blow("squall", "", -1, "", 3, 0)))
         assertEquals("Clodpot", BrokeText.blow(Blow("clodpot", "Clodpot", 0, "", 3, 0)))
     }
 
@@ -225,15 +227,15 @@ class QaPlaytestTwoTest {
         val r = parse(o.toString()).result!!
         assertEquals("fatigue", r.broke!!.last!!.by)
         assertEquals(-1, r.broke!!.last!!.hob)
-        assertEquals("Last blow: Fatigue, round 1", BrokeText.last(r.broke!!.last!!))
+        assertEquals("Last blow: the Creaks, Round 1", BrokeText.last(r.broke!!.last!!))
         assertEquals("", r.broke!!.top[0].hobName)
-        assertEquals("Clodpot from Marge Dumpling", BrokeText.blow(r.broke!!.top[0].copy(hobName = "Marge Dumpling")))
+        assertEquals("Marge Dumpling's Clodpot", BrokeText.blow(r.broke!!.top[0].copy(hobName = "Marge Dumpling")))
     }
 
     @Test fun aDoublePopSaysHowTheWinnerWasPicked() {
         val note = BrokeText.doublePop("double_pop")!!
-        assertTrue(note.contains("Both kettles popped in the same Squall round"))
-        assertTrue(note.contains("more left before that round wins"))
+        assertEquals(games.castleprotect.core.Text.t("results.double_pop_rule"), note)
+        assertTrue(note.contains("before it wins"))
         assertNull(BrokeText.doublePop("kettle_pop"))
         assertNull(BrokeText.doublePop(null))
     }
@@ -247,9 +249,9 @@ class QaPlaytestTwoTest {
         while (JSONObject(g.step(0)).getString("phase").let { it == "resolve" || it == "settle" } && n++ < 40) g.step(600)
     }
 
-    @Test fun nativeCoreIsRulesFour() {
+    @Test fun nativeCoreIsRulesFive() {
         assumeTrue(ready())
-        assertEquals(4, SaveCompat.rulesOf(NativeCore.version()))
+        assertEquals(5, SaveCompat.rulesOf(NativeCore.version()))
         assertEquals(SaveCompat.RULES, SaveCompat.rulesOf(NativeCore.version()))
     }
 

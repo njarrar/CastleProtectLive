@@ -23,10 +23,10 @@ Concept art lives in `docs/art/` (SVG source) and `docs/art/png/` (2x renders). 
 2. **Kettle warning states match the HUD and the sound:** hurt at 50%, critical at 25%. The concept sheet's 70% and 40% states are retired (section 3.6) [audit C84].
 3. **Team colours confirmed:** you blue `#2F6FDE`, Rival orange `#E8730C`, with shape, side and pattern cues (section 3.2).
 4. **Lobber hat stays brick red** `#D9483B`, clear of the Rival orange (section 3.4).
-5. **Moonbrick is U3.** It keeps its palette row but is not in the launch block kit. Frost art is U2 and Zap art is U3. The Peeper Class is U2.
+5. **Mossbrick is U3.** It keeps its palette row but is not in the launch block kit. Frost art is U2 and Zap art is U3. The Lookout Class is U2.
 6. **Asset counts cut to launch scope** (section 11): 16 Hobs, 14 Flattener unit types, 4 regions, 4 Grand Forts, about 61 shot sprites and cards, 5 block materials with Footing. A second table lists what each update adds.
 7. **Tinker Tree has four branches,** not five boughs: Aim, Fort, Crew, Kit (section 8) [rulings B13].
-8. **Statuses and states trimmed.** Launch status overlays are Burn and Soaked. Chill is gone; a resting Hob shows one cog. Ground effects share one "patch" look with a turn count. Hob states are Open, Dropped, Tumbled, Squashed, Bonked [rulings B7, B16].
+8. **Statuses and states trimmed.** Launch status overlays are Burn and Soaked. Chill is gone; a resting Hob shows one cog. Ground effects share one "patch" look with a turn count. Hob states are Open, Fell a floor, Tumbled, Squashed, Bonked [rulings B7, B16].
 9. **New art for new rules:** Sudden Squall (section 7.1), the "what broke you" replay frame, Rival habit tag, collapse view (creak, lean, staggered rows) [rulings B5, B17, C1].
 10. **Brickabrac Map shows four regions at launch,** with two signposted roads for the wings that got away.
 11. **Human-made art** is now decided by the owner (revision 3). The 1.25 max zoom [rulings D7] and a trademark search before production starts [rulings D9] stand.
@@ -139,10 +139,10 @@ The Dusk and Ink colour sets from `07 §7.1` swap only these team values. Art mu
 | Timber | `#B9733A` | `#87491F` | `#D9985A` | `#4A2A16` | Three planks, grain, nail heads |
 | Cobble | `#A9A39A` (mortar `#8A8378`) | `#77716B` | `#CFCAC0` | `#3B3633` | Seven rounded stones |
 | Brassbound | plate `#6B7A86`, brass `#E0AE3E` | `#47525C`, `#A9781E` | `#8C9BA6`, `#F7D57A` | `#2A3036` | Brass bands, rivets |
-| Moonbrick `[U3]` | `#E6E9F5` | `#AEB5D6` | `#FFFFFF`, emboss `#CDD3EE` | `#3A3F66` | Crescent emboss, pale violet veins `#B9A8FF` |
+| Mossbrick `[U3]` | `#E6E9F5` | `#AEB5D6` | `#FFFFFF`, emboss `#CDD3EE` | `#3A3F66` | Crescent emboss, pale violet veins `#B9A8FF` |
 | Footing | `#5A4A42` | `#3F332D` | `#7A6A60` | `#241C19` | Chevron stitching, four bolts `#A3938A` |
 
-Per `07 §7.1`, materials differ by texture and outline first, hue second. Launch ships Wicker, Timber, Cobble, Brassbound and Footing. Moonbrick ships with Clankmouth Mines in U3; its veins moved from cyan to pale violet so that nothing near a fort glows close to the kettle teal. Material HP is now a flat ladder (30, 50, 80, 110, 140) [rulings B1], so art must sell each material by its quirk, not by looking twice as thick: Wicker burns and flutters, Timber burns and splinters, Cobble crushes, Brassbound shrugs off fire.
+Per `07 §7.1`, materials differ by texture and outline first, hue second. Launch ships Wicker, Timber, Cobble, Brassbound and Footing. Mossbrick ships with Wheal Clank in U3; its veins moved from cyan to pale violet so that nothing near a fort glows close to the kettle teal. Material HP is now a flat ladder (30, 50, 80, 110, 140) [rulings B1], so art must sell each material by its quirk, not by looking twice as thick: Wicker burns and flutters, Timber burns and splinters, Cobble crushes, Brassbound shrugs off fire.
 
 ### 3.4 Hobs
 
@@ -161,13 +161,13 @@ Class colours sit on the hat only and back up the hat shape:
 | Lobber | Round dome or pot, with a knob | `#D9483B` brick red (fixed: keeps clear of Rival orange) |
 | Zinger | Low cap with a long bill and a tall plume | `#3FA9F5` sky |
 | Scatterjack | Wide floppy brim, low crown | `#8BCB3A` lime |
-| Delver | Hard dome with a headlamp | `#9A6A3A` umber |
-| Boinker | Beanie with a spring and ball on top | `#F06EAA` pink |
-| Sizzler | Tall puffy toque with a smoke puff | `#B8325A` wine |
+| Digger | Hard dome with a headlamp | `#9A6A3A` umber |
+| Bouncer | Beanie with a spring and ball on top | `#F06EAA` pink |
+| Stoker | Tall puffy toque with a smoke puff | `#B8325A` wine |
 | Patcher | Puffy flat cap with a trowel tucked behind | `#2FB7A6` teal |
-| Peeper `[U2]` | Pointed hood that curls back, big brass lens | `#F2E05A` lemon |
+| Lookout `[U2]` | Pointed hood that curls back, big brass lens | `#F2E05A` lemon |
 
-Seven Classes ship at launch. The Peeper joins in U2, in lemon so that it does not match Pennant gold. Named Hobs [03 §3] keep their own hats, but each stays inside its Class family. Example: Marge Dumpling's floppy cook's hat is a soft round dome, which fits the Lobber family.
+Seven Classes ship at launch. The Lookout joins in U2, in lemon so that it does not match Pennant gold. Named Hobs [03 §3] keep their own hats, but each stays inside its Class family. Example: Marge Dumpling's floppy cook's hat is a soft round dome, which fits the Lobber family.
 
 ### 3.5 Flatteners
 
@@ -230,11 +230,11 @@ Names and palette notes follow `05 §2`. Thumbnails: `[art: 14]`.
 | Region | Sky top / bottom | Far hills | Ground cap | Ground body | Accents |
 |---|---|---|---|---|---|
 | 1. Puddingstone Downs | `#9ED8EC` / `#FFF1D0` | `#B7DDA8` | meadow `#7CC46A`, `#5AA555` | loam `#9A6440`, `#7A4A2E` | butter `#FFE08A`, jam `#D9483B`, puddingstone `#C9A27A` |
-| 2. Crumblecrag | `#D6E2EA` / `#F7F9FA` | slate `#B9C0C8` | lichen `#9DB35A` | slate `#8E96A0`, rust bands `#A8502E` | ochre Clay `#D9A441` (marks where Dig works) |
-| 3. Soggybottom Fen | `#BFD9C8` / `#F1F4E2` | moss `#A9C8A0` | reed `#8FAE4A` | mud `#6E5A3E`, `#55452E` | pond teal `#5FA8A0`, reed gold `#C9A84A`, lily `#E27FA0` |
+| 2. Crag End | `#D6E2EA` / `#F7F9FA` | slate `#B9C0C8` | lichen `#9DB35A` | slate `#8E96A0`, rust bands `#A8502E` | ochre Clay `#D9A441` (marks where Dig works) |
+| 3. Soggy Bottom Fen | `#BFD9C8` / `#F1F4E2` | moss `#A9C8A0` | reed `#8FAE4A` | mud `#6E5A3E`, `#55452E` | pond teal `#5FA8A0`, reed gold `#C9A84A`, lily `#E27FA0` |
 | 4. The Flats | `#DCD6E4` / `#F7F4F0` | plate `#E1DED8` | plate `#A8ABB2` | rivets `#6E727A` | off-white `#F2EEE6`, hazard `#F2C200`; freed hills bring back `#7CC46A` |
-| 5. Frostwhisker Peaks `[U2]` | `#8FC6EE` / `#EAF6FF` | snow `#DDEBF8` | snow `#F4FAFF` | rock `#6F7E9A`, `#4E5A72` | ice `#9FD8EE`, pine `#3F6E73`, lamp amber `#FFC857` |
-| 6. Clankmouth Mines `[U3]` | `#1E222B` / `#3A3A44` | cave `#4A4440` | ore floor `#8C7A5A` | blue-brown `#4A4440`, `#2A2E38` | lamp `#FFC857`, lava `#E5402A`, brass `#E0AE3E` |
+| 5. Nithering Heights `[U2]` | `#8FC6EE` / `#EAF6FF` | snow `#DDEBF8` | snow `#F4FAFF` | rock `#6F7E9A`, `#4E5A72` | ice `#9FD8EE`, pine `#3F6E73`, lamp amber `#FFC857` |
+| 6. Wheal Clank `[U3]` | `#1E222B` / `#3A3A44` | cave `#4A4440` | ore floor `#8C7A5A` | blue-brown `#4A4440`, `#2A2E38` | lamp `#FFC857`, lava `#E5402A`, brass `#E0AE3E` |
 
 Regions 1 to 4 ship at launch [05 §2]. The Flats is now Region 4. It starts grey; each freed hill adds back the colours of Regions 1 to 3, so colour returns as the level goes [05 §2.5]. The Mines (U3) have no level dark enough to hide a shell: forts and crews carry their own lamps, and shells get a 1 px light rim there.
 
@@ -253,8 +253,8 @@ Regions 1 to 4 ship at launch [05 §2]. The Flats is now Region 4. It starts gre
 
 | Test | Size | Pass rule |
 |---|---|---|
-| Hob Class | 24 px tall, solid ink | All 7 launch Classes named correctly by 4 of 5 testers (8 once the Peeper ships) |
-| Hob Class, worst case | 16 px tall (zoom 0.6 at @1x) | Lobber, Zinger, Sizzler distinct; the rest by colour plus context |
+| Hob Class | 24 px tall, solid ink | All 7 launch Classes named correctly by 4 of 5 testers (8 once the Lookout ships) |
+| Hob Class, worst case | 16 px tall (zoom 0.6 at @1x) | Lobber, Zinger, Stoker distinct; the rest by colour plus context |
 | Hob vs Flattener | 24 px, solid | 5 of 5 testers tell the sides apart |
 | Shells | 12 px, solid | Each family reads by outline: round pot, bolt, ball, jar, spike |
 | Blocks | 19 px (zoom 0.6 at @2x) | Material named by texture in greyscale |
@@ -266,7 +266,7 @@ The tests are drawn in `[art: 09]` and `[art: 10]`. CI should render each new ch
 - HUD glyphs at least 3:1 on any ground; text at least 4.5:1 [07 §7.1]. Every HUD element sits on a paper plate or has an ink outline.
 - Terrain body and forts differ by at least 25 L* (CIELAB). Forts are lighter than the strata behind them.
 - The trajectory preview is white dots with an ink ring. Nothing else on the field uses white dots.
-- At most one bright accent per region background. No background prop may be orange, blue, teal or gold. Crumblecrag's rust bands are a dull brown-red `#A8502E` for this reason.
+- At most one bright accent per region background. No background prop may be orange, blue, teal or gold. Crag End's rust bands are a dull brown-red `#A8502E` for this reason.
 - Enemy Class icons stay on screen all battle [rulings B10]. Each is the Class icon in a diamond frame with the orange hatched edge; yours sit in round frames.
 - Debris fades within 1.5 s after the settle. Particle caps by quality tier (section 8).
 
@@ -355,12 +355,12 @@ Paper-doll rigs in the engine, not frame-by-frame, for Hobs and Flatteners (part
 | Hit | 0.3 s | squash 15%, white flash 60 ms, stars |
 | Needs a rest | loop | one cog over the head turns. The same cog serves every cause of a rest [rulings B16] |
 | Tumble | 0.8 s | spin, bounce, climb back. A Tumble never costs a shot [rulings B9], so the Hob is back on its feet before the next turn |
-| Dropped | 0.5 s | falls one floor with its Nook, lands in a squash |
+| Fell a floor | 0.5 s | falls one floor with its Nook, lands in a squash |
 | Squashed | 0.4 s | flat as a pancake for a beat, pops back with a squeak |
 | Bonk | 1.2 s | x eyes, balloon pops from the hat, float up |
 | Cheer | 0.8 s | jump, hat flies 10 units |
 
-Faces swap as small sprites. No skeletal tool (Spine) is needed at launch [04-tech §10]. Hob states to draw are five: Open, Dropped, Tumbled, Squashed, Bonked [rulings B7]. There is no seat, perk or neighbour art.
+Faces swap as small sprites. No skeletal tool (Spine) is needed at launch [04-tech §10]. Hob states to draw are five: Open, Fell a floor, Tumbled, Squashed, Bonked [rulings B7]. There is no seat, perk or neighbour art.
 
 ### 5.5 Couch Duel: Player 2's look [art: 25]
 
@@ -411,7 +411,7 @@ Couch Duel ships at launch [07 §4.9]. Player 2 is a second Hob clan, not the Fl
 |---|---|---|
 | 0 Fresh | 100 to 67% | Clean tile |
 | 1 Scuffed | 66 to 34% | One crack or dent, one small hole or popped detail |
-| 2 Battered | 33 to 1% | Two or three cracks, a knocked-off corner, soot, a missing part |
+| 2 Cracked | 33 to 1% | Two or three cracks, a knocked-off corner, soot, a missing part |
 | Broken | 0 | Rubble sprite at the block's base for 1.5 s, then it fades. The sim has already removed the block |
 
 Per material:
@@ -422,7 +422,7 @@ Per material:
 | Timber | Split along the grain, a nail pops | One plank snapped off with splinters | Plank pieces and splinters | Burns |
 | Cobble | Hairline crack across two stones | One stone gone, crack web | Pile of round stones and a dust ring | Dust ring on landing; heavy thud |
 | Brassbound | Dent, scratches, a missing rivet | Two dents, a buckle, bent strap | Bent plate, loose strap curl, rivets | Zap arcs jump strap to strap |
-| Moonbrick `[U3]` | Glowing crack, heal sparkle and `+` | Two glowing cracks, chipped corner, veins dim | Three pale shards with fading glow | Cracks seal a little at turn start, but not on a turn it was hit [rulings B1] |
+| Mossbrick `[U3]` | Glowing crack, heal sparkle and `+` | Two glowing cracks, chipped corner, veins dim | Three pale shards with fading glow | Cracks seal a little at turn start, but not on a turn it was hit [rulings B1] |
 | Footing | One crack | Crack web and soot | Stub: a low dark slab that still holds the row | Never falls [00 §2.8] |
 
 Status overlays (shared, tinted per block): Burn (3-frame flame loop, ember red) and Soaked (drip lines) at launch; Brittle (frost rim plus snow tag) in U2. Each overlay also shows its icon once [07 §6.3]. There is no Chill overlay: a Hob that needs a rest shows the cog.
@@ -460,8 +460,8 @@ From the lessons of the reference games [review 06 G5, G6; 07 §3.11].
 - **Same rules as everything:** flat fills, 3 tones, ink outline on solid bits (shells, debris, flames), no outline on soft smoke and glows.
 - **Impact anatomy:** frame 1 white flash on the hit target (60 ms); frames 2 to 8 an 8 to 10 point rounded starburst (gold rim, warm white core), scaled by blast band; debris chunks in the struck material; soot puffs that drift with the wind; the damage number pops [07 §6.3].
 - **Blast sizes:** match the bands in `00 §9.3` (Tiny 10 cells to Huge 64). The burst radius equals the blast radius so players learn the reach.
-- **Trails:** white soft streak behind fast shells; light shells leave dotted puffs; Zinger bolts leave a sky streak. The trail's thin rim shows the owner (section 3.7). Chalk arcs (Peeper, U2) are dashed white lines that stay all battle.
-- **Per family, launch:** Pot bombs (round, fuse spark), bolts (arrowhead), fans (split ring at apex), bores (drill spike, dirt spray, tunnel), bouncers (squash on each hop, ring under the ball), fire pots (ember-red flames, embers, soot cloud), mortar globs (blob plus repair sparkle and `+`). **U2:** frost jars (six-arm shards, frost rim), chalk (dashed arc, Nook outline in Peeper lemon). **U3:** zap coils (zigzag arcs). Shot names follow the weapons doc [audit C50].
+- **Trails:** white soft streak behind fast shells; light shells leave dotted puffs; Zinger bolts leave a sky streak. The trail's thin rim shows the owner (section 3.7). Chalk arcs (Lookout, U2) are dashed white lines that stay all battle.
+- **Per family, launch:** Pot bombs (round, fuse spark), bolts (arrowhead), fans (split ring at apex), bores (drill spike, dirt spray, tunnel), bouncers (squash on each hop, ring under the ball), fire pots (ember-red flames, embers, soot cloud), mortar globs (blob plus repair sparkle and `+`). **U2:** frost jars (six-arm shards, frost rim), chalk (dashed arc, Nook outline in Lookout lemon). **U3:** zap coils (zigzag arcs). Shot names follow the weapons doc [audit C50].
 - **Timing:** bursts 8 frames at 30 fps (about 0.27 s); smoke 0.8 s; debris settles in under 1 s; everything idle-clean within the 3 s settle cap [00 §2.2].
 - **Budgets:** Low tier 40 particles on screen, Mid 120, High 250. Debris uses pooled sprites, never physics bodies that the sim reads [04-tech §5].
 - **Comfort:** Reduce flashes swaps the white frame for a 2 pt rim [07 §6.2]. No full-screen white flashes ever.
@@ -491,7 +491,7 @@ After a loss the game replays the shot that did the most harm in slow motion ove
 - **HUD plates:** the top strip is one paper band 36 pt tall in landscape [07 §2.3] and a two-row band 56 pt tall on phones in portrait [07 §2.6]. Every cluster sits on its own plate. Plates fade to 25% during Aim Drag [07 §2.3].
 - **Portrait battle:** stacked lenses, drawn in `[art: 24]`. The Field Strip is a paper band with ink edges; the tray and the crew row share one dock plate; Fire sits bottom right in its gold pill (section 4.5).
 - **Couch Duel:** setup and the hand-off card are drawn in `[art: 25]` (section 5.5).
-- **Map:** one long painted strip of four regions at launch [07 §4.5]. Won ground has hills and sleepy hill faces; regions not yet won look ironed flat with roller stripes. After the Baron falls, two signposted roads lead off the strip: north to a flat, shiny peak and south to a smoking mine mouth [05 §8]. The Peaks and Mines paintings join as spurs in U2 and U3.
+- **Map:** one long painted strip of four regions at launch [07 §4.5]. Won ground has hills and sleepy hill faces; regions not yet won look ironed flat with roller stripes. After the Baron falls, two signposted roads lead off the strip: north to a flat, shiny peak and south to a smoking mine mouth [05 §8]. The Heights and Mines paintings join as spurs in U2 and U3.
 - **Pre-battle screen:** one sheet with the Rival, map thumb, goals, crew, Blueprint, a draft strip and Doodads [07 §4.1]. The Rival's habit sits on a cream tag with a small diamond pin, next to the portrait. In the draft the Rival's portrait glances at the shell it wants, and that chip carries a small diamond eye tag [review 06 G9]. A Hob with no shot that can reach the enemy on this map carries a **No line** mark: an arc with a bar through it on a paper disc at the portrait's corner [review 06 G10].
 - **Tinker Tree:** a crooked brass pipe tree that grows out of a workbench, trunk at left, four branches to the right: Aim (leaf shaped like an arrowhead), Fort (a brick), Crew (a hat), Kit (a kettle). Nodes are brass cogs; 36 at launch, 9 per branch. Each branch has one fork, drawn as a split pipe with a two-way valve [07 §4.4, rulings B13]. In portrait the same pipe kit is laid out with the bench at the bottom and the branches rising (section 4.5).
 - **Motion:** pop to 110% and settle in 120 ms on press; panels slide 200 ms with an ease-out; nothing bounces more than once.
@@ -522,7 +522,7 @@ All fonts are free under the SIL Open Font License, from Google Fonts.
 
 - 24 x 24 grid, 2 px inner padding. Export at 24, 48 and 72 px.
 - Filled shapes with a 1.5 px ink outline (at 24 px). One flat colour plus white. No shading inside icons.
-- Shape carries meaning; colour is a bonus. Class icons sit in a coloured disc: Lobber bomb, Zinger bolt, Scatterjack three dots, Delver drill, Boinker ball with hops, Sizzler flame, Patcher plus; Peeper eye in U2 [art: 09].
+- Shape carries meaning; colour is a bonus. Class icons sit in a coloured disc: Lobber bomb, Zinger bolt, Scatterjack three dots, Digger drill, Bouncer ball with hops, Stoker flame, Patcher plus; Lookout eye in U2 [art: 09].
 - Damage-type icons follow `07 §6.3`: eight-point burst, arrowhead, spade, flame, six-arm flake, bolt, down chevron, plus.
 - Status icons at launch: flame (Burn), drop (Soaked), cog with number (needs a rest), balloon (Bonked), dizzy stars (Tumbled), patch tag with a turn count, storm cloud (Sudden Squall), flap (Loophole Flap), barred arc (No line), diamond eye (the Rival's wish). U2 adds flake with crack (Brittle).
 - Shell cards have no rarity frame, no family tag and no per-Class lock [rulings B6, B16]. One small Class icon marks the Class that fires the shell best.
@@ -547,11 +547,11 @@ Sizes are the largest export (@2x) unless noted. Counts are **launch** targets u
 | Hob base parts | Body, 6 coats, boots, hands, 6 skins as tints | 1 rig | 104 px tall | Shared by all Hobs |
 | Hob hats and tools | 16 named Hobs in 7 Classes [03] | 16 hats, 16 tools | 64 px | Inside Class hat families |
 | Hob faces | 6 expressions x 2 eye styles | 12 | 32 px | Swapped sprites |
-| Flattener parts | Uniform body, caps, 14 unit tools and toppers [04 §2.2] | 1 rig + 14 | 104 px | Four wings: Neat Brigade, Chisel Corps, Drain Fleet, Level Guard |
-| Lieutenants | Trimm, Scree, Drainwell, Plumb: full body + 3 expressions. Glaze and Bolt: one cameo pose each | 4 rigs, 12 faces, 2 poses | 160 px | Glaze and Bolt get full rigs in U2 and U3 |
+| Flattener parts | Uniform body, caps, 14 unit tools and toppers [04 §2.2] | 1 rig + 14 | 104 px | Four wings: Parks and Verges, Steps and Slopes, Drainage Board, Weights and Measures |
+| Lieutenants | Trimm, Scree, Sluice, Plumb: full body + 3 expressions. Glaze and Bolt: one cameo pose each | 4 rigs, 12 faces, 2 poses | 160 px | Glaze and Bolt get full rigs in U2 and U3 |
 | Baron Levelwell | Rig, 3 expressions, the Grand Roller, the Level Engine | 1 + 3 + 2 | 256 px, set pieces to 1024 | The two Stages of the Last Level |
 | Grand Forts | Topiary Keep, Sanding Stair, Great Sump (the Last Level is counted above) | 3 | up to 1024 px | |
-| Machines, hazards and level props | Tumblestone, Springy Hedge, Molehill, Rockfall Shelf, Updraft Vent, goats, Burp Vent, Marsh Gas, Sink Mud, Fog Bank, Hoisted Hill with chain and crane, Big Smoothie, Stamper, Bellows Tower, Cage, Bell Target, Outpost, pump, scaffold, barge, Ironing Board, Plumb Line, Tidy Balloon, Rockslide Rex, Sergeant Squeegee | about 26 | 64 to 512 px | [05 §2, §3] |
+| Machines, hazards and level props | Tumblestone, Springy Hedge, Molehill, Rockfall Shelf, Updraft Vent, goats, Burp Vent, Marsh Gas, Sink Mud, Fog Bank, Hoisted Hill with chain and crane, Big Ethel, Stamper, Bellows Tower, Cage, Bell Target, Outpost, pump, scaffold, barge, Ironing Board, Plumb Line, Tidy Balloon, Rockslide Rex, Sergeant Squeegee | about 26 | 64 to 512 px | [05 §2, §3] |
 | Portraits | 16 Hobs, 14 Flattener units, 7 leaders (4 lieutenants, the Baron, 2 cameos) | 37 | 96 px (48 pt) | Named Rivals reuse their unit's portrait with one accessory and a name plate: about 23 accessories [05 §3.10] |
 | Shots in flight | 7 Plain Shots, 16 Knacks, 30 Trick Shells, 8 Doodads [01] | about 61 | 24 to 48 px | Many Knacks share a body with a Plain Shot |
 | Shot card art | One per shot | about 61 | 256 px | Almanac and the draft strip. No rarity frames |
@@ -575,15 +575,15 @@ Sizes are the largest export (@2x) unless noted. Counts are **launch** targets u
 
 ### 11.1 What each update adds
 
-| Group | U1 Long Siege | U2 Frostwhisker Peaks | U3 Clankmouth Mines |
+| Group | U1 Long Siege | U2 Nithering Heights | U3 Wheal Clank |
 |---|---|---|---|
-| Hobs (hat, tool, portrait) | +2 | +5, with the Peeper Class and its icon | +5 |
-| Flattener units | +2 | +5 (Rink Wardens) | +5 (Pressworks) |
+| Hobs (hat, tool, portrait) | +2 | +5, with the Lookout Class and its icon | +5 |
+| Flattener units | +2 | +5 (Rink Committee) | +5 (Stamp Office) |
 | Leaders | | Countess Glaze full rig, the Glidehall | Ironmaster Bolt full rig, the Stampmill |
-| Blocks | | | Moonbrick: 4 states, 2 variants, rubble, heal sparkle |
+| Blocks | | | Mossbrick: 4 states, 2 variants, rubble, heal sparkle |
 | Damage type art | | Frost: shards, rim, Brittle overlay, flake icon | Zap: arcs, chain, bolt icon |
 | Shots and cards | +8 shells, +2 Doodads | +10 shells, +2 Doodads | +10 shells, +2 Doodads |
-| Region art | 12 Siege maps reuse launch regions | Peaks: 3 background layers, 15 props, map spur x2 states, Ice and snow textures, 4 hazards | Mines: 3 background layers, 15 props, map spur x2 states, Lava texture, 5 hazards |
+| Region art | 12 Siege maps reuse launch regions | Heights: 3 background layers, 15 props, map spur x2 states, Ice and snow textures, 4 hazards | Mines: 3 background layers, 15 props, map spur x2 states, Lava texture, 5 hazards |
 | Level props | Scrap and boon icons (12) | Pedlar Fort, sled, hidden-crew `?` pips | Cart, Switch Lever, Lodestone, Hilltop zone marker |
 | Tinker Tree | | +12 node icons | +12 node icons |
 | Cutscene panels | | about 8 | about 8 |
@@ -639,11 +639,11 @@ The concept SVGs in this repo were hand-built as code from simple shapes. No ima
 | `[art: 12]` Heartkettle | States at 50% and 25%, not 70% and 40% |
 | `[art: 15]` Shots and VFX | Weapons doc names (Clodpot, Hatpin and so on) [audit C50]; Fire in ember red |
 | `[art: 19]` Tinker Tree mockup | Four branches (Aim, Fort, Crew, Kit) with the tech tree doc's node names |
-| `[art: 20]` Palette and style | Fire ember red, Zap violet, Peeper lemon, Moonbrick veins violet |
-| `[art: 14]` Biomes | Order: Downs, Crag, Fen, Flats, then Peaks (U2) and Mines (U3) |
+| `[art: 20]` Palette and style | Fire ember red, Zap violet, Lookout lemon, Mossbrick veins violet |
+| `[art: 14]` Biomes | Order: Downs, Crag, Fen, Flats, then Heights (U2) and Mines (U3) |
 | `[art: 16]` HUD mockup | Enemy Class icons shown, no hidden `?` pips at launch, 5 Hobs at most |
 | `[art: 17]` Campaign map mockup | Four regions and two wing signposts |
-| `[art: 09]` Hob lineup | Mark the Peeper as U2 |
+| `[art: 09]` Hob lineup | Mark the Lookout as U2 |
 
 **Owner decisions.** Item 1 is decided; the rest are recommendations.
 
@@ -670,7 +670,7 @@ Cut by the rulings or by this revision. None of it is in a phase plan.
 | Grey "cannot fire" card state and the deny stamp | Same ruling |
 | Hidden-crew `?` pips at launch | Enemy Class icons stay shown; hidden crew returns in U2 [rulings B10] |
 | Last Bell art (swinging bell banner, tiebreak tally card) | Replaced by Sudden Squall [rulings B5] |
-| Peeper hat in Pennant gold `#FFD23F` | Moved to lemon so it never matches a reward |
-| Moonbrick cyan veins `#7FE0FF` | Too close to the kettle teal |
+| Lookout hat in Pennant gold `#FFD23F` | Moved to lemon so it never matches a reward |
+| Mossbrick cyan veins `#7FE0FF` | Too close to the kettle teal |
 | Lieutenant rigs for Glaze and Bolt at launch | Cameo poses only until their updates |
 | Turncoat Hob art per Grand Fort | Outfits only at launch [audit C32] |

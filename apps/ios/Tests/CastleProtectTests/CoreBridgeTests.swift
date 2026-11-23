@@ -120,6 +120,7 @@ final class CoreProtocolTests: XCTestCase {
 }
 
 /// The view model built from core snapshots.
+@MainActor
 final class FrameAssemblerTests: XCTestCase {
     func testPlanFrameFlipsYAndBuildsTheHud() throws {
         let raw = try XCTUnwrap(CoreSnapshot.decode(try fixtureText("snapshot_plan")))

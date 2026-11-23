@@ -49,21 +49,20 @@ struct PropView: Equatable, Sendable {
     var hpFraction: Double { Double(max(0, hp)) / Double(max(1, hpMax)) }
     var broken: Bool { hp <= 0 }
 
-    /// Words for the screen reader.
+    /// Words for the screen reader (`hud.objects.<kind>`; a shell on the field says its shot).
     var spoken: String {
-        switch kind {
-        case "cage_bar": return "Cage bar"
-        case "captive": return "Captive"
-        case "shell": return shot.isEmpty ? "Shell on the field" : shot.replacingOccurrences(of: "_", with: " ").capitalized
-        default: return kind.replacingOccurrences(of: "_", with: " ").capitalized
-        }
+        let text = GameText.shared
+        if kind == "shell", !shot.isEmpty { return ContentCatalog.shared.shotName(shot) }
+        if let line = text.complete("hud.objects.\(kind)") { return line }
+        return kind.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }
 
 /// The terrain cell grid the core sends in dirty chunks (one material byte a
 /// cell, row major, y down). A reference type: the assembler writes the
-/// chunks, the renderer turns changed chunks into textures. Main thread only.
-final class TerrainGrid: @unchecked Sendable, Equatable {
+/// chunks, the renderer turns changed chunks into textures. Main actor isolated.
+@MainActor
+final class TerrainGrid: Equatable {
     let w: Int
     let h: Int
     let chunk: Int
@@ -75,7 +74,7 @@ final class TerrainGrid: @unchecked Sendable, Equatable {
     private(set) var hasData = false
 
     /// Largest map the app accepts (cells a side).
-    static let maxSide = 8192
+    nonisolated static let maxSide = 8192
 
     init(w: Int, h: Int, chunk: Int) {
         self.w = max(1, min(w, Self.maxSide))
@@ -88,7 +87,7 @@ final class TerrainGrid: @unchecked Sendable, Equatable {
     var cols: Int { (w + chunk - 1) / chunk }
     var rows: Int { (h + chunk - 1) / chunk }
 
-    static func == (a: TerrainGrid, b: TerrainGrid) -> Bool { a === b }
+    nonisolated static func == (a: TerrainGrid, b: TerrainGrid) -> Bool { a === b }
 
     func cell(_ x: Int, _ y: Int) -> UInt8 {
         guard x >= 0, y >= 0, x < w, y < h else { return 0 }
@@ -133,8 +132,9 @@ final class TerrainGrid: @unchecked Sendable, Equatable {
     }
 
     /// RGBA bytes for one chunk, bottom row first (SpriteKit textures start at
-    /// the lower left), or nil when the chunk is all air. Grass on Loam that
-    /// has air above it.
+    /// the lower left), or nil when the chunk is all air. Paints stratified painterly
+    /// earth textures per material (pebbled Loam with lush grass turf, terracotta Clay
+    /// strata, cool faceted slate Rock veins, basalt Bedrock, marsh Mud, rippling Water).
     func rgba(chunkIndex i: Int) -> (data: Data, w: Int, h: Int)? {
         let c = i % cols, r = i / cols
         let x0 = c * chunk, y0 = r * chunk
@@ -145,14 +145,103 @@ final class TerrainGrid: @unchecked Sendable, Equatable {
         for row in 0..<ch {
             let gy = y0 + row
             let outRow = ch - 1 - row
+            let rowBase = gy * w
             for col in 0..<cw {
                 let gx = x0 + col
-                let m = cells[gy * w + gx]
+                let m = cells[rowBase + gx]
                 guard m != 0 else { continue }
                 solid = true
-                var rgb = Self.colour(m)
-                if m == 1, gy > 0, cells[(gy - 1) * w + gx] == 0 || (gy > 2 && cells[(gy - 3) * w + gx] == 0) {
-                    rgb = (0x8B, 0xCB, 0x3A)
+                // Fast deterministic spatial hash for organic pebbles & mineral grain.
+                let h0 = UInt32(bitPattern: Int32(truncatingIfNeeded: gx &* 374_761_393 &+ gy &* 668_265_263))
+                let hash = ((h0 ^ (h0 >> 13)) &* 1_274_126_177) >> 24
+                let rgb: (UInt8, UInt8, UInt8)
+                switch m {
+                case 1: // Loam: lush 2-tone turf cap, dark root rim, warm pebbled earth
+                    let air1 = gy > 0 && cells[(gy - 1) * w + gx] == 0
+                    let air3 = gy > 2 && cells[(gy - 3) * w + gx] == 0
+                    let air5 = gy > 4 && cells[(gy - 5) * w + gx] == 0
+                    let air7 = gy > 6 && cells[(gy - 7) * w + gx] == 0
+                    if air1 || air3 {
+                        if air1 || (hash & 7) == 0 {
+                            rgb = (0x9C, 0xD8, 0x46) // sunlit turf highlight
+                        } else if (hash & 3) == 1 {
+                            rgb = (0x74, 0xB4, 0x2F) // grass blade shadow
+                        } else {
+                            rgb = (0x8B, 0xCB, 0x3A) // meadow turf
+                        }
+                    } else if air5 || air7 {
+                        rgb = (hash & 3) == 0 ? (0x6B, 0x43, 0x22) : (0x7B, 0x4E, 0x29) // rich sub-turf root edge
+                    } else {
+                        // Organic pebbled loam cross-section
+                        let pebble = ((gx >> 1) &* 31 ^ (gy >> 1) &* 17) & 31
+                        if pebble == 3 {
+                            rgb = (0xB6, 0x86, 0x54) // light sand pebble
+                        } else if pebble == 19 || (hash & 15) == 0 {
+                            rgb = (0x74, 0x4A, 0x26) // dark humus fleck
+                        } else if ((gy + (gx >> 4)) & 7) == 0 {
+                            rgb = (0x8D, 0x5E, 0x34) // subtle soil bed seam
+                        } else {
+                            rgb = (0x9A, 0x6A, 0x3A)
+                        }
+                    }
+                case 2: // Clay: warm terracotta horizontal wavy sedimentary bands
+                    let wave = ((gx >> 3) & 3) ^ ((gx >> 5) & 1)
+                    let band = (gy + wave) & 7
+                    if band == 0 {
+                        rgb = (0x9D, 0x4A, 0x2B) // deep ochre bedding crease
+                    } else if band == 3 || band == 4 {
+                        rgb = (0xCE, 0x7A, 0x50) // warm terracotta highlight band
+                    } else if (hash & 15) == 1 {
+                        rgb = (0xA8, 0x56, 0x35) // clay fleck
+                    } else {
+                        rgb = (0xBA, 0x64, 0x3E)
+                    }
+                case 3: // Rock: cool faceted slate-grey angular veins (high contrast vs warm forts)
+                    let diagA = (gx + gy * 2) & 15
+                    let diagB = (gx * 2 - gy) & 15
+                    let facet = ((gx >> 2) ^ (gy >> 2)) & 3
+                    if diagA == 0 || diagB == 0 {
+                        rgb = (0x53, 0x5B, 0x66) // angular fracture vein
+                    } else if diagA == 1 {
+                        rgb = (0x9B, 0xA4, 0xAE) // faceted crystal edge highlight
+                    } else if facet == 0 {
+                        rgb = (0x6D, 0x75, 0x80)
+                    } else if facet == 3 {
+                        rgb = (0x88, 0x90, 0x9B)
+                    } else {
+                        rgb = (0x7A, 0x82, 0x8D)
+                    }
+                case 4: // Bedrock: deep espresso-basalt strata with heavy fault lines
+                    let strata = (gy + ((gx >> 4) & 1)) % 6
+                    if strata == 0 {
+                        rgb = (0x2A, 0x22, 0x26)
+                    } else if strata == 3 && (hash & 7) < 4 {
+                        rgb = (0x4D, 0x44, 0x49)
+                    } else {
+                        rgb = (0x3B, 0x33, 0x38)
+                    }
+                case 5: // Mud: dark marsh speckle with wet sheen pebbles
+                    if (hash & 15) == 2 {
+                        rgb = (0x84, 0x62, 0x42) // wet specular fleck
+                    } else if (hash & 7) == 0 {
+                        rgb = (0x4E, 0x35, 0x20)
+                    } else {
+                        rgb = (0x66, 0x47, 0x2D)
+                    }
+                case 6: // Water: storybook teal-blue with surface ripples
+                    let nearTop = gy > 0 && cells[(gy - 1) * w + gx] == 0
+                    let nearTop3 = gy > 2 && cells[(gy - 3) * w + gx] == 0
+                    if nearTop {
+                        rgb = (0xC9, 0xED, 0xFA) // foam crest
+                    } else if nearTop3 && ((gx + gy * 2) & 7) < 3 {
+                        rgb = (0x6F, 0xB4, 0xEC) // surface shimmer
+                    } else if (gy & 5) == 0 && ((gx >> 2) & 3) == 1 {
+                        rgb = (0x3D, 0x80, 0xC6)
+                    } else {
+                        rgb = (0x4A, 0x90, 0xD9)
+                    }
+                default:
+                    rgb = Self.colour(m)
                 }
                 let o = (outRow * cw + col) * 4
                 out[o] = rgb.0; out[o + 1] = rgb.1; out[o + 2] = rgb.2; out[o + 3] = 255
@@ -163,7 +252,7 @@ final class TerrainGrid: @unchecked Sendable, Equatable {
 
     /// Material colours from content/materials.json codes: 1 Loam, 2 Clay,
     /// 3 Rock, 4 Bedrock, 5 Mud, 6 Water.
-    static func colour(_ m: UInt8) -> (UInt8, UInt8, UInt8) {
+    nonisolated static func colour(_ m: UInt8) -> (UInt8, UInt8, UInt8) {
         switch m {
         case 1: return (0x9A, 0x6A, 0x3A)
         case 2: return (0xB8, 0x62, 0x3E)
@@ -200,17 +289,20 @@ struct HobView: Equatable, Sendable, Identifiable {
     /// and `tumbled` Hobs are hurt but alive and may act.
     var isOut: Bool { bonked || hp <= 0 }
 
-    /// Crushed by a falling chunk (`squashed`, or `dropped` down to 1 HP, as the round 10 Fatigue
-    /// collapse leaves them): drawn flattened with stars, still live, back up at the end of its
-    /// side's turn (QA playtest 2, N2).
-    var isCrushed: Bool { !isOut && (state == "squashed" || (state == "dropped" && hp <= 1)) }
+    /// Crushed by a falling chunk (`squashed` in core/API.md, rules 4): drawn flattened with stars,
+    /// still live, back up at the end of its side's turn.
+    var isCrushed: Bool { !isOut && state == "squashed" }
 
-    /// Words for the screen reader and the portrait label.
+    /// Words for the screen reader and the portrait label (`hobs.states`).
     var stateWords: String {
-        if isOut { return "Bonked" }
-        if isCrushed { return "Squashed, back up soon" }
+        if isOut { return GameText.shared.t("hobs.states.bonked") }
+        if isCrushed { return GameText.shared.t("hobs.states.squashed") }
         return ""
     }
+
+    /// The Hob's short name for chips, banners and spoken lines (`hobs.<id>.short`). Never the
+    /// content name cut at the first space.
+    var shortName: String { GameText.shared.hobShort(def, name: name) }
 }
 
 /// A Nook (or the Kettle Room) as the renderer needs it: world boxes, y up.
@@ -306,23 +398,20 @@ struct ShotChip: Equatable, Sendable, Identifiable {
     var uses: Int = -1
     var weight: Int = 0
     var best: Bool = false
+    /// Match class id for Trick Shells (`"scatterjack"`, `"lobber"`, `"all"`, ...), or nil.
+    var matchClass: String? = nil
     var ready: Bool = true
     /// Why `fire` would refuse it (from `hud.shots`), or nil.
     var why: String?
     /// The same in plain words, shown on an unready chip (rules 3), or nil.
     var text: String?
 
-    /// A word or two for an unready chip, from the core's `why`.
+    /// A word or two for an unready chip, from the core's `why` (`hud.why_short`).
     static func shortReason(why: String?) -> String {
-        switch why {
-        case "resting_plain_only", "resting": return "Resting"
-        case "no_knack_uses": return "Used up"
-        case "no_heavy_first_turn": return "Not yet"
-        case "buried": return "Dug in"
-        case "no_actions_left": return "No shots"
-        case "not_in_hand", "no_shot": return "Spent"
-        default: return "Not ready"
-        }
+        let text = GameText.shared
+        let id = why == "no_shot" ? "not_in_hand" : (why ?? "")
+        if let line = text.complete("hud.why_short.\(id)") { return line }
+        return text.t("hud.why_short.not_planning")
     }
 }
 
@@ -342,6 +431,7 @@ struct PinView: Equatable, Sendable {
 }
 
 struct ShellView: Equatable, Sendable {
+    var id: Int = 0
     var x: Double
     var y: Double
     var kind: String = ""
@@ -447,7 +537,7 @@ struct BattleSnapshot: Equatable, Sendable {
     var turnSeq = 0
     var wind = 0
     var forecast = 0
-    var names = ["You", "Rival"]
+    var names = [GameText.shared.t("common.you"), GameText.shared.t("common.rival")]
     var humans = [true, false]
     var world = WorldSize()
     /// Ground height per column, evenly spaced across the world width.
@@ -502,7 +592,9 @@ struct BattleSnapshot: Equatable, Sendable {
     var fatigueIn: Int?
 
     func fort(_ side: Int) -> FortView? { forts.first { $0.side == side } }
-    func name(_ side: Int) -> String { side >= 0 && side < names.count ? names[side] : (side == 0 ? "You" : "Rival") }
+    func name(_ side: Int) -> String {
+        side >= 0 && side < names.count ? names[side] : GameText.shared.t(side == 0 ? "common.you" : "common.rival")
+    }
     func isHuman(_ side: Int) -> Bool { side >= 0 && side < humans.count ? humans[side] : side == 0 }
 
     /// True when a person, not the AI, may act right now.
@@ -536,6 +628,8 @@ struct LevelInfo: Equatable, Sendable, Identifiable, Hashable {
     var goals: [String] = []
     var hasDraft: Bool = false
     var roundCap: Int = 15
+    var squall: Bool = true
+    var crewSize: Int = 4
 
     var isLocked: Bool { state == "locked" }
     var number: String { id.split(separator: "-").last.map(String.init) ?? id }

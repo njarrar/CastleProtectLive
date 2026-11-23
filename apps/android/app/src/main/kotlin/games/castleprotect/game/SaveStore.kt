@@ -94,7 +94,7 @@ class SaveStore(dir: File, name: String) {
             dir0.mkdirs()
             FileOutputStream(tmp).use { out -> out.write(bytes); out.fd.sync() }
             if (main.exists()) {
-                prev.delete()
+                // On POSIX/Android renameTo replaces prev atomically without an unprotected delete window (Android-L10).
                 if (!main.renameTo(prev)) main.copyTo(prev, overwrite = true)
             }
             if (!tmp.renameTo(main)) { tmp.copyTo(main, overwrite = true); tmp.delete() }
@@ -130,6 +130,8 @@ data class SaveData(
     val fort: List<String> = emptyList(),
     /** Aims started from the fort so far, up to [OwnerRule.TEACH]: the gold ring teaches the owner rule until then. */
     val aimStarts: Int = 0,
+    /** Local date (YYYY-MM-DD) of the last Daily Dust-up win whose reward was paid (Android-M11). */
+    val dailyDate: String = "",
 ) {
     fun toJson(): String {
         val o = JSONObject().put("v", VERSION)
@@ -139,6 +141,7 @@ data class SaveData(
         o.put("buttons", buttons)
         if (fort.isNotEmpty()) o.put("fort", JSONArray(fort))
         if (aimStarts > 0) o.put("aim_starts", aimStarts)
+        if (dailyDate.isNotEmpty()) o.put("daily_date", dailyDate)
         return o.toString()
     }
 
@@ -153,7 +156,10 @@ data class SaveData(
             val pen = HashMap<String, Int>()
             o.optJSONObject("pennants")?.let { p -> for (k in p.keys()) pen[k] = p.getInt(k) }
             val fort = o.optJSONArray("fort")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList()
-            return SaveData(pen, o.optJSONObject("battle")?.let { battle(it) }, o.optJSONObject("last")?.let { battle(it) }, o.optInt("buttons", 0), fort, o.optInt("aim_starts", 0))
+            return SaveData(
+                pen, o.optJSONObject("battle")?.let { battle(it) }, o.optJSONObject("last")?.let { battle(it) },
+                o.optInt("buttons", 0), fort, o.optInt("aim_starts", 0), o.optString("daily_date", ""),
+            )
         }
 
         private fun battle(b: JSONObject) = SavedBattle(

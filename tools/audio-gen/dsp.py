@@ -74,13 +74,14 @@ def curve(points, n):
     return np.interp(np.linspace(0, 1, n), xs, ys)
 
 
-def smooth(x, ms):
+def smooth(x, ms, circular=False):
     k = max(1, n_of(ms / 1000))
     if k <= 1:
         return x
     w = np.hanning(k + 2)[1:-1]
     w /= w.sum()
-    return np.convolve(np.pad(x, (k // 2, k - k // 2 - 1), mode='edge'), w, mode='valid')
+    mode = 'wrap' if circular else 'edge'
+    return np.convolve(np.pad(x, (k // 2, k - k // 2 - 1), mode=mode), w, mode='valid')
 
 
 # ---------- sources ----------
@@ -167,6 +168,40 @@ def low_shelf(x, gain_db=-6.0, f_lo=110.0, f_hi=260.0, circular=False):
     f = np.maximum(np.fft.rfftfreq(m, 1 / SR), 1.0)
     pos = np.clip((np.log(f) - np.log(f_lo)) / (np.log(f_hi) - np.log(f_lo)), 0, 1)
     return np.fft.irfft(X * 10 ** (gain_db * (1 - pos) / 20), m)[:n]
+
+
+def high_shelf(x, gain_db=-6.0, f_lo=3800.0, f_hi=5500.0, circular=False):
+    """Shelf the top end: flat under f_lo, gain_db above f_hi (damps harsh phone highs)."""
+    n = len(x)
+    m = n if circular else n + SR // 10
+    X = np.fft.rfft(x, m)
+    f = np.maximum(np.fft.rfftfreq(m, 1 / SR), 1.0)
+    pos = np.clip((np.log(f) - np.log(f_lo)) / (np.log(f_hi) - np.log(f_lo)), 0, 1)
+    return np.fft.irfft(X * 10 ** (gain_db * pos / 20), m)[:n]
+
+
+def overlap_wrap(x, tail_samples):
+    """Seamless loop wrap: crossfade extra rendered tail back over sample 0.
+
+    Expects `x` of shape `(..., loop_len + tail_samples)` where the last
+    `tail_samples` samples continue naturally past `loop_len - 1`. Uses an
+    equal-power sin/cos crossfade across `[0, tail_samples)` so sample `0`
+    equals sample `loop_len` (zero waveform pop and flat edge RMS).
+    """
+    t = int(tail_samples)
+    if t <= 0:
+        return x.copy()
+    total = x.shape[-1]
+    if total <= t:
+        raise ValueError(f'overlap_wrap: signal length {total} must exceed tail_samples {t}')
+    n = total - t
+    span = min(t, n)
+    out = x[..., :n].copy()
+    u = np.arange(span, dtype=float) / span
+    w_head = np.sin(0.5 * np.pi * u)
+    w_tail = np.cos(0.5 * np.pi * u)
+    out[..., :span] = out[..., :span] * w_head + x[..., n:n + span] * w_tail
+    return out
 
 
 def noise(dur, r, lo=None, hi=None, order=2):
@@ -269,16 +304,16 @@ def soft_clip(x, drive=1.0):
     return np.tanh(x * drive) / np.tanh(drive)
 
 
-def limiter(x, ceiling=0.9, win_ms=4.0):
+def limiter(x, ceiling=0.9, win_ms=4.0, circular=False):
     """Look-ahead peak limiter. Keeps peaks under the ceiling with no hard clip."""
     mono = np.max(np.abs(x), axis=0) if x.ndim > 1 else np.abs(x)
     k = max(3, n_of(win_ms / 1000) | 1)
-    padded = np.pad(mono, (k // 2, k // 2), mode='edge')
+    padded = np.pad(mono, (k // 2, k // 2), mode='wrap' if circular else 'edge')
     # running max over the window
     win = np.lib.stride_tricks.sliding_window_view(padded, k)
     env = win.max(axis=1)
     g = np.minimum(1.0, ceiling / np.maximum(env, 1e-9))
-    g = smooth(g, win_ms)
+    g = smooth(g, win_ms, circular=circular)
     g = np.minimum(g, ceiling / np.maximum(mono, 1e-9))
     return x * g
 
@@ -337,7 +372,7 @@ def lufs(x):
     return float(-0.691 + 10 * np.log10(ms[keep2].mean()))
 
 
-def normalise(x, target_lufs, ceiling_db=-2.0):
+def normalise(x, target_lufs, ceiling_db=-2.0, circular=False):
     """Gain to the target loudness, then hold peaks under the ceiling."""
     g = db(target_lufs - lufs(x))
     y = x * g
@@ -346,5 +381,5 @@ def normalise(x, target_lufs, ceiling_db=-2.0):
     if pk > c:
         if pk > c * db(4):          # far over: turn down so the limiter only shaves 4 dB
             y *= c * db(4) / pk
-        y = limiter(y, c)
+        y = limiter(y, c, circular=circular)
     return y

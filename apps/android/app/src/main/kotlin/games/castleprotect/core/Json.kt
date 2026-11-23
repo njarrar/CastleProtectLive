@@ -127,12 +127,18 @@ class JsonReader(private val b: ByteArray, private var p: Int = 0, private val e
             val x = b[i]
             if (x != '\\'.code.toByte()) { raw.write(x.toInt()); i++; continue }
             flush()
+            if (i + 1 >= stop) fail("unterminated escape")
             val e = b[i + 1].toInt().toChar()
             i += 2
             when (e) {
                 'n' -> sb.append('\n'); 't' -> sb.append('\t'); 'r' -> sb.append('\r')
                 'b' -> sb.append('\b'); 'f' -> sb.append('\u000C')
-                'u' -> { sb.append(String(b, i, 4, Charsets.US_ASCII).toInt(16).toChar()); i += 4 }
+                'u' -> {
+                    if (i + 4 > stop) fail("truncated unicode escape")
+                    val code = String(b, i, 4, Charsets.US_ASCII).toIntOrNull(16) ?: fail("bad unicode escape")
+                    sb.append(code.toChar())
+                    i += 4
+                }
                 else -> sb.append(e)
             }
         }
@@ -155,7 +161,15 @@ class JsonReader(private val b: ByteArray, private var p: Int = 0, private val e
         when (peek()) {
             '{' -> { beginObject(); while (hasNext()) { nextName(); skipValue() }; endObject() }
             '[' -> { beginArray(); while (hasNext()) skipValue(); endArray() }
-            '"' -> { p++; while (p < end && b[p] != '"'.code.toByte()) { if (b[p] == '\\'.code.toByte()) p++; p++ }; p++ }
+            '"' -> {
+                p++
+                while (p < end && b[p] != '"'.code.toByte()) {
+                    if (b[p] == '\\'.code.toByte()) { p++; if (p >= end) fail("unterminated string") }
+                    p++
+                }
+                if (p >= end) fail("unterminated string")
+                p++
+            }
             't' -> literal("true")
             'f' -> literal("false")
             'n' -> literal("null")

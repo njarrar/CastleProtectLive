@@ -38,7 +38,7 @@ class NativeHostTest {
         val plan = p.parse(g.snapshot())
         val golden = SnapshotParser().parse(Fixtures.bytes("core/fixtures/snapshot_plan.json"))
         assertEquals(golden.hash, plan.hash)
-        assertTrue(Reply.parse(g.command(Cmd.FIRE)).ok)
+        assertTrue(Reply.parse(g.command(Cmd.fire())).ok)
         g.step(30)
         val lean = p.parse(g.snapshot())
         assertEquals(Phase.RESOLVE, lean.phase)
@@ -68,7 +68,7 @@ class NativeHostTest {
         assumeTrue(ready())
         val f = NativeCore.factory()!!
         val a = f.newGame("""{"level":"1-1"}""", 11)
-        a.command(Cmd.aim(430, 72)); a.command(Cmd.FIRE); a.step(2400)
+        a.command(Cmd.aim(430, 72)); a.command(Cmd.fire()); a.step(2400)
         a.command(Cmd.AI_TURN); a.step(2400)
         val hash = JSONObject(a.command(Cmd.HASH)).getString("hash")
         val log = JSONObject(a.command(Cmd.LOG)).getJSONArray("log")

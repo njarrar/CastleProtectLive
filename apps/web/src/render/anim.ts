@@ -20,6 +20,10 @@ export interface Clip {
   w: number;
   h: number;
   anchor: [number, number];
+  /** Idle loops: start at a random time in the loop, so a crew never breathes in step. */
+  randomStart?: boolean;
+  /** Idle loops: where to start when the app does not randomise (differs per Hob and team). */
+  startOffsetMs?: number;
 }
 
 type Track = [number, number][];
@@ -27,6 +31,7 @@ type Track = [number, number][];
 interface RawClip {
   frames: string[]; ms: number[]; loop: boolean; loop_from?: number; events?: Record<string, number>;
   next?: string; hold?: string; pick?: string; w: number; h: number; anchor: [number, number];
+  random_start?: boolean; start_offset_ms?: number;
 }
 
 /** Motion data with no frames (animations.json `data`). Shapes as in the file. */
@@ -70,6 +75,7 @@ class AnimLib {
       this.clips.set(name, {
         name, frames: a.frames, ms: a.ms, total: a.ms.reduce((x, y) => x + y, 0), loop: a.loop, loopFrom: a.loop_from ?? 0,
         ev, next: a.next, hold: a.hold, pick: a.pick, w: a.w, h: a.h, anchor: a.anchor,
+        randomStart: a.random_start, startOffsetMs: a.start_offset_ms,
       });
     }
     this.data = json.data;
@@ -116,6 +122,22 @@ export class AnimPlayer {
     this.lastIdx = -1;
     this.done = false;
     this.reverse = reverse;
+    return this;
+  }
+
+  /**
+   * Jump to `ms` into the clip (a loop wraps), with no frame events fired for the frames skipped.
+   * Used to start idle loops at a random point (animations.json `random_start`, `start_offset_ms`).
+   */
+  seek(ms: number): this {
+    const c = this.clip;
+    if (!c || c.pick || c.total <= 0) return this;
+    let t = c.loop ? ((ms % c.total) + c.total) % c.total : Math.max(0, Math.min(ms, c.total));
+    let i = 0;
+    while (i < c.ms.length - 1 && t >= c.ms[i]) { t -= c.ms[i]; i++; }
+    this.idx = i;
+    this.t = t;
+    this.lastIdx = i;
     return this;
   }
 

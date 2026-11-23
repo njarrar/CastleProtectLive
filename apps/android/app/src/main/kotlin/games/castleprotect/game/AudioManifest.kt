@@ -14,26 +14,67 @@ class SoundDef(
     fun frames(rate: Int): Int = if (samples > 0) samples else (durationS * rate).toInt()
 }
 
-/** Hob-speak subtitles from assets/audio/barks.json, by sound id. */
-class BarkLines(val lines: Map<String, List<String>>, val chance: Map<String, Float>) {
+/** One bark's lines from assets/audio/barks.json. */
+class BarkEntry(
+    /** Lines that fit any fight. */
+    val subtitles: List<String>,
+    /** Lines that name a crewmate, by that Hob's content id: only when that Hob is on the crew. */
+    val withMate: Map<String, List<String>> = emptyMap(),
+    /** Lines with `{rival}`: only against a named Rival. */
+    val withRival: List<String> = emptyList(),
+    /** This bark's own chance, or null for the event's. */
+    val chance: Float? = null,
+) {
+    /** The pool for a fight: plain lines, mate lines for [mates] on the crew, Rival lines with [rival] filled in. */
+    fun pool(mates: Set<String>, rival: String?): List<String> {
+        val out = ArrayList<String>(subtitles)
+        for ((mate, lines) in withMate) if (mate in mates) out.addAll(lines)
+        if (!rival.isNullOrEmpty()) for (l in withRival) out.add(l.replace("{rival}", rival))
+        return out
+    }
+}
+
+/** Hob-speak subtitles from assets/audio/barks.json, by sound id (`old_thumper` still sounds as `bark_thumper_*`). */
+class BarkLines(
+    val entries: Map<String, BarkEntry>,
+    val chance: Map<String, Float>,
+    /** `crew.win`: said once by the winning crew after the Hob's win line. */
+    val crewWinLines: List<String> = emptyList(),
+) {
+    /** Plain lines by sound id. */
+    val lines: Map<String, List<String>> get() = entries.mapValues { it.value.subtitles }
+    /** One crew win line, or null. */
+    val crewWin: String? get() = games.castleprotect.core.Text.pickFrom("barks.crew.win", crewWinLines)
+
+    /** The chance that [event] barks for sound [id]: the bark's own, else the event's, else 0.4. */
+    fun chanceOf(id: String, event: String): Float = entries[id]?.chance ?: chance[event] ?: 0.4f
+
     companion object {
         val EMPTY = BarkLines(emptyMap(), emptyMap())
+
+        private fun strings(a: org.json.JSONArray?): List<String> = (0 until (a?.length() ?: 0)).map { a!!.optString(it) }.filter { it.isNotEmpty() }
+
         fun parse(text: String?): BarkLines {
             if (text == null) return EMPTY
             return try {
                 val o = JSONObject(text)
-                val lines = HashMap<String, List<String>>(); val chance = HashMap<String, Float>()
+                val entries = HashMap<String, BarkEntry>(); val chance = HashMap<String, Float>()
                 o.optJSONObject("events")?.let { e -> for (k in e.keys()) chance[k] = e.optJSONObject(k)?.optDouble("chance", 0.4)?.toFloat() ?: 0.4f }
                 val hobs = o.optJSONObject("hobs") ?: JSONObject()
                 for (h in hobs.keys()) {
                     val b = hobs.optJSONObject(h)?.optJSONObject("barks") ?: continue
                     for (ev in b.keys()) {
                         val one = b.optJSONObject(ev) ?: continue
-                        val subs = one.optJSONArray("subtitles")
-                        lines[one.optString("sound", "bark_${h}_$ev")] = (0 until (subs?.length() ?: 0)).map { subs!!.optString(it) }
+                        val mates = HashMap<String, List<String>>()
+                        one.optJSONObject("with_mate")?.let { m -> for (k in m.keys()) mates[k] = strings(m.optJSONArray(k)) }
+                        entries[one.optString("sound", "bark_${Cues.barkKey(h)}_$ev")] = BarkEntry(
+                            strings(one.optJSONArray("subtitles")), mates, strings(one.optJSONArray("with_rival")),
+                            if (one.has("chance")) one.optDouble("chance", 0.4).toFloat() else null,
+                        )
                     }
                 }
-                BarkLines(lines, chance)
+                val crew = strings(o.optJSONObject("crew")?.optJSONObject("win")?.optJSONArray("subtitles"))
+                BarkLines(entries, chance, crew)
             } catch (e: Exception) { EMPTY }
         }
     }
@@ -122,11 +163,14 @@ object Cues {
         "mound" -> listOf("gnd_mound_grow")
         "split" -> listOf("fly_split")
         "castle_drop", "thump" -> listOf("cas_thump")
-        "threaded" -> listOf("hit_pierce", "cas_loophole_flap")
-        "lid", "lid_block" -> listOf("doo_pot_lid_clang")
+        "threaded" -> listOf("hit_threaded_zip", "cas_loophole_flap")
+        "lid" -> listOf("doo_pot_lid_clang")
+        "lid_block" -> listOf("doo_lid_bounce")
+        "buried" -> listOf("hob_buried_thlup")
         "mend" -> listOf(if (e.kind.isNotEmpty()) "doo_mend_bucket_slosh" else "ket_patch")
         "rebuild" -> listOf("ket_patch")
-        "front" -> listOf("wx_wind_shift")
+        "front" -> listOf("wx_front_chime")
+        // The bell is the Squall's alone (assets/audio/README.md "One sound per event").
         "squall_warning" -> listOf("wx_squall_bell")
         "draft_start" -> listOf("ui_card_flip")
         "draft_pick" -> listOf("ui_card_take")
@@ -134,9 +178,16 @@ object Cues {
         "miss" -> listOf("hit_miss_thud")
         "relight" -> listOf("ket_patch")
         "shears_snip" -> listOf("mat_timber_break")
-        "boss_phase" -> listOf("wx_squall_bell")
+        "shears_jam" -> listOf("doo_shears_jam")
+        "boss_phase" -> listOf("cas_boss_horn")
+        "roller", "roller_stop", "roller_done" -> listOf("doo_roller_rumble")
+        "bounce" -> listOf("fly_bounce_hop")
+        "walk" -> listOf("cas_steam")
         else -> emptyList()
     }
+
+    /** Pitch for an event's cue in semitones: Little Ethel stopping or going home rumbles 3 semitones down. */
+    fun semis(e: GameEvent): Float = when (e.t) { "roller_stop", "roller_done" -> -3f; else -> 0f }
 
     /** Sound for an animation event (assets/audio/README.md "Sounds that follow animations"). */
     fun forAnim(anim: String, event: String, m: AudioManifest, shot: String? = null): String? {
@@ -155,6 +206,7 @@ object Cues {
             anim == "kettle_pop" -> when (event) { "crack" -> "ket_crack"; "pop" -> "ket_pop"; "sit" -> "ket_sit_down"; else -> null }
             anim.startsWith("fx_impact_") && event == "flash" -> anim.removePrefix("fx_impact_").let { if (it == "dirt") "hit_miss_thud" else m.materialHit[it] }
             anim.startsWith("fx_crack_") && event == "start" -> "col_creak"
+            anim.startsWith("fx_crack_") && event == "crack" -> "col_crack"
             anim.startsWith("fx_chunk_") && event == "start" -> "col_chunk_fall"
             anim == "collapse_land" -> "col_chunk_land"
             anim.startsWith("fx_rubble_") && event == "start" -> "col_debris_patter"

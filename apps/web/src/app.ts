@@ -1,4 +1,6 @@
+import { t } from './ui/text';
 import type { BattleSetup, CoreApi, LevelInfo, ResultView } from './core/types';
+import { SaveError } from './core/types';
 import { setMusic, setVolume } from './audio/sfx';
 import {
   askPersist, loadBattleSave, loadProgress, loadSettings, saveProgress, saveSettings, type Progress, type Settings,
@@ -41,6 +43,8 @@ export class App {
   private back: Route[] = [];
   lastSetup?: BattleSetup;
   lastResult?: ResultView;
+  /** Last drafted Trick Shell picks per level id, so "Same again" reuses them. */
+  lastDraftPicks = new Map<string, string[]>();
   /** Couch Duel wins tonight, by side. Swap sides swaps it. */
   duelScore: [number, number] = [0, 0];
   layout: 'wide' | 'tall' = 'wide';
@@ -56,7 +60,7 @@ export class App {
     this.core = core;
     this.settings = await loadSettings();
     this.progress = await loadProgress();
-    setVolume(this.settings.sound, this.settings.mute, this.settings.music);
+    setVolume(this.settings.sound, this.settings.mute, this.settings.music, this.settings.voices, this.settings.mono);
     this.applyMotion();
     this.updateLayout(true);
     let raf = 0;
@@ -95,6 +99,11 @@ export class App {
   go(r: Route, opt: { history?: boolean } = {}): void {
     const f = this.factories.get(r.to);
     if (!f) throw new Error(`no screen ${r.to}`);
+    // Destroy outgoing screen BEFORE constructing the incoming one so Retry frees WebKit canvases
+    // first and never releases the new battle's preloaded barks (Web-C2).
+    const prev = this.cur;
+    this.cur = undefined;
+    prev?.destroy?.();
     let s: Screen;
     try {
       s = f(this, r);
@@ -102,11 +111,11 @@ export class App {
       // A screen that cannot be built never leaves the app stuck: say why and go to the map.
       console.error(e);
       if (r.to === 'map' || r.to === 'title') throw e;
-      this.notice(e instanceof Error ? e.message : String(e));
+      // Only lines from the table reach the player (a SaveError carries one); never an exception's own words.
+      this.notice(e instanceof SaveError ? e.message : r.to === 'battle' || r.to === 'prebattle' ? t('errors.fight_cannot_start') : t('errors.core_stopped'));
       this.go({ to: 'map' }, opt);
       return;
     }
-    this.cur?.destroy?.();
     // A battle route on the back stack is stale once a fight is entered again (it would start a new one).
     if (r.to === 'battle') this.back = this.back.filter((b) => b.to !== 'battle');
     if (opt.history !== false && this.route.to !== r.to && r.to !== 'battle' && r.to !== 'results') {
@@ -145,13 +154,13 @@ export class App {
     const calm: Route['to'][] = ['title', 'map', 'modes'];
     if (!this.pendingUpdate || !calm.includes(this.route.to)) return;
     const apply = this.pendingUpdate;
-    this.updateChip = h('div', { class: 'update-chip', role: 'status' }, h('span', {}, 'Update ready'), btn('Update', () => apply(), 'primary small'));
+    this.updateChip = h('div', { class: 'update-chip', role: 'status' }, h('span', {}, t('common.update_ready')), btn(t('common.update'), () => apply(), 'primary small'));
     this.root.append(this.updateChip);
   }
 
   async setSettings(p: Partial<Settings>): Promise<void> {
     Object.assign(this.settings, p);
-    setVolume(this.settings.sound, this.settings.mute, this.settings.music);
+    setVolume(this.settings.sound, this.settings.mute, this.settings.music, this.settings.voices, this.settings.mono);
     this.applyMotion();
     this.updateLayout(true);
     this.cur?.relayout?.();
@@ -219,7 +228,7 @@ export class App {
       const chk = this.core.checkFort(this.progress.blueprint, seats.length);
       if (!chk.ok) {
         blueprint = LEVEL_FORT;
-        fortNote = `Your fort cannot take this crew (${chk.why}). Using the level's fort.`;
+        fortNote = t('level_card.fort_too_small');
       }
     }
     return {
@@ -230,7 +239,7 @@ export class App {
       windOff: this.settings.windOff,
       progress: { cleared: (this.progress.levels[levelId]?.wins ?? 0) > 0, pennants: [...(this.progress.levels[levelId]?.pennants ?? [false, false, false])] },
       sides: [
-        { name: 'You', human: true, crew: seats, blueprint, doodads: levelAtLeast(levelId, RULES.campaign.doodads_from) ? lvl.doodads : undefined },
+        { name: t('common.you'), human: true, crew: seats, blueprint, doodads: levelAtLeast(levelId, RULES.campaign.doodads_from) ? lvl.doodads : undefined },
         { name: lvl.rival, human: false, crew: [] },
       ],
       fortNote,

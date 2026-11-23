@@ -6,8 +6,8 @@ kettles, toy springs. No real blasts, no cries of hurt. Big sounds carry a
 """
 import numpy as np
 from dsp import (SR, TAU, n_of, tt, db, midi, note, decay, ar, fade, curve, smooth, osc, glide,
-                 modal, white, filt, peak, reson, noise, loop_noise, sweep_noise, tv_filter,
-                 verb, mix, soft_clip, convolve)
+                 modal, white, filt, peak, reson, high_shelf, overlap_wrap, noise, loop_noise,
+                 sweep_noise, tv_filter, verb, mix, soft_clip, convolve)
 
 # ---------------- building blocks ----------------
 
@@ -144,8 +144,12 @@ def ui_slider_tick(r):
 
 
 def ui_denied(r):
-    d = knock(r, 196, 0.11, 0.022, (1, 1.5, 2.9), (1, 0.6, 0.2))
-    return mix(d, (d, 0.1, 0.8))
+    def hit(q):
+        body = knock(q, 196, 0.11, 0.022, (1, 1.5, 2.9, 4.8, 7.6), (0.85, 0.65, 0.45, 0.45, 0.3))
+        snap = modal([(980, 0.7, 0.014), (1540, 0.55, 0.011), (2280, 0.35, 0.008)], 0.06, q)
+        click = noise(0.035, q, 900, 2800) * decay(n_of(0.035), 0.005) * 0.45
+        return mix(body, (snap, 0, 0.7), (click, 0, 1.0))
+    return mix(hit(r), (hit(r), 0.1, 0.85))
 
 
 def ui_card_flip(r):
@@ -183,13 +187,27 @@ def aim_drag_start(r):
 
 def aim_band_stretch(r):
     """1 s loop. The game raises the pitch with power."""
-    n = SR
+    dur = 1.0
+    tail = n_of(0.5)
+    n = n_of(dur)
+    n_ext = n + tail
     t = np.arange(n) / SR
-    f = 196.0   # 196 whole cycles in 1 s: no seam
-    tone = osc(np.full(n, f), harm=(1, 0.55, 0.4, 0.25, 0.15, 0.1))
-    grain = 0.6 + 0.4 * np.sin(TAU * 23 * t) * np.sin(TAU * 3 * t)
-    fibre = loop_noise(1.0, r, 900, 3200) * (0.5 + 0.5 * np.sin(TAU * 23 * t + 1.0)) * 0.25
-    return tone * grain * 0.5 + fibre
+    t_ext = np.arange(n_ext) / SR
+    f = 196.0   # 196 whole cycles in 1 s; pi/2 phase keeps wrap slope near zero
+    tone = osc(np.full(n, f), harm=(0.6, 0.55, 0.5, 0.45, 0.5, 0.45, 0.4, 0.35, 0.28, 0.22, 0.16, 0.12), phase0=np.pi / 2)
+    grain = 0.65 + 0.35 * np.sin(TAU * 23 * t) * np.sin(TAU * 3 * t)
+    # Resinous cord fibre + stick-slip upper-harmonic creaks (800 Hz - 2.8 kHz) for phone clarity
+    mod_ext = 0.5 + 0.5 * np.sin(TAU * 23 * t_ext + 1.0)
+    fibre_ext = filt(white(n_ext, r), 850, 2800) * mod_ext * 0.45
+    creaks_ext = np.zeros(n_ext)
+    for i in range(36):
+        a = int((i + 0.35 + r.uniform(-0.15, 0.15)) / 24 * SR)
+        s = modal([(r.uniform(900, 1450), 0.7, 0.008), (r.uniform(1650, 2550), 0.5, 0.006)], 0.035, r) * ar(n_of(0.035), 0.002, 0.008)
+        if 0 <= a < n_ext:
+            e = min(len(s), n_ext - a)
+            creaks_ext[a:a + e] += s[:e] * r.uniform(0.35, 0.75)
+    texture = overlap_wrap(fibre_ext + creaks_ext * 0.4, tail)
+    return tone * grain * 0.42 + texture
 
 
 def aim_set(r):
@@ -263,10 +281,12 @@ def launch_beam(r):
 
 
 def launch_heavy(r):
-    drum = modal([(98, 0.6, 0.3), (147, 0.7, 0.25), (196, 0.8, 0.2), (294, 0.6, 0.14), (392, 0.5, 0.1), (588, 0.3, 0.07)], 0.9)
-    kn = mix(modal([(440, 1, 0.04), (700, 0.6, 0.03)], 0.2), puff(r, 0.1, 300, 3000, 0.012))
-    air = whoosh(r, 0.5, [(0, 300), (1, 1400)], 1.2, ((0, 0), (0.2, 1), (1, 0)))
-    return soft_clip(mix(drum, (kn, 0, 1.2), (air, 0.03, 0.6)), 1.3)
+    drum = modal([(98, 0.5, 0.3), (147, 0.65, 0.25), (196, 0.75, 0.2), (294, 0.6, 0.14), (392, 0.55, 0.1), (588, 0.45, 0.07)], 0.9)
+    kn = mix(modal([(440, 1.0, 0.04), (700, 0.75, 0.03), (1120, 0.8, 0.024), (1760, 0.65, 0.016), (2420, 0.45, 0.011)], 0.22),
+             puff(r, 0.1, 800, 2800, 0.014) * 1.1)
+    snap = creak_line(r, 0.14, 180, 420, (880, 1520, 2450), jit=0.2) * 0.75
+    air = whoosh(r, 0.5, [(0, 400), (1, 1900)], 1.2, ((0, 0), (0.2, 1), (1, 0)))
+    return soft_clip(mix(drum, (kn, 0, 1.25), (snap, 0, 0.85), (air, 0.03, 0.65)), 1.3)
 
 
 def launch_glob(r):
@@ -285,10 +305,13 @@ def launch_roll(r):
 def fly_whistle_loop(r):
     """1 s loop. The game bends the pitch with the shell's height."""
     n = SR
+    tail = n_of(0.5)
+    n_ext = n + tail
     t = np.arange(n) / SR
     f = 1200 * (1 + 0.006 * np.sin(TAU * 6 * t))
-    tone = osc(f, harm=(1, 0.12, 0.04)) * (0.85 + 0.15 * np.sin(TAU * 6 * t + 0.7))
-    air = reson(white(n, r), 1200, 6, circular=True) * 2.5 + loop_noise(1.0, r, 2500, 7000) * 0.05
+    tone = osc(f, harm=(1, 0.12, 0.04), phase0=np.pi / 2) * (0.85 + 0.15 * np.sin(TAU * 6 * t + 0.7))
+    air_ext = reson(white(n_ext, r), 1200, 6) * 2.5 + filt(white(n_ext, r), 2500, 7000) * 0.05
+    air = overlap_wrap(air_ext, tail)
     return tone * 0.6 + air * 0.25
 
 
@@ -312,15 +335,19 @@ def fly_bounce_hop(r):
 
 def fly_roll_loop(r):
     n = SR
-    t = np.arange(n) / SR
+    tail = n_of(0.5)
+    n_ext = n + tail
+    t = np.arange(n_ext) / SR
     bumps = 0.45 + 0.55 * np.abs(np.sin(TAU * 7 * t)) ** 3
-    body = loop_noise(1.0, r, 110, 700) * bumps
-    knocks = np.zeros(n)
-    for i in range(14):
+    body = filt(white(n_ext, r), 110, 700) * bumps
+    knocks = np.zeros(n_ext)
+    for i in range(21):
         s = knock(r, r.uniform(280, 520), 0.05, 0.01)
-        a = int((i / 14) * n)
-        knocks[a:a + len(s)] += s[: n - a] * r.uniform(0.3, 0.8)
-    return body + 0.35 * knocks
+        a = int(((i + 0.5) / 14) * n)
+        if a < n_ext:
+            e = min(len(s), n_ext - a)
+            knocks[a:a + e] += s[:e] * r.uniform(0.3, 0.8)
+    return overlap_wrap(body + 0.35 * knocks, tail)
 
 
 # ---------------- impact ----------------
@@ -402,8 +429,10 @@ def mat_cobble_break(r):
 
 
 def mat_footing_hit(r):
-    return mix(thump(130, 78, 0.2, 0.045, (1, 0.7, 0.4, 0.2)), (modal([(420, 1, 0.015), (640, 0.5, 0.01)], 0.08), 0, 0.6),
-               (puff(r, 0.06, 200, 1500, 0.008), 0, 0.5))
+    base = thump(130, 78, 0.2, 0.045, (0.85, 0.7, 0.45, 0.3))
+    clink = modal([(420, 0.9, 0.016), (640, 0.6, 0.012), (960, 0.85, 0.014), (1480, 0.75, 0.010), (2180, 0.55, 0.007), (2680, 0.35, 0.005)], 0.10, r)
+    grit = puff(r, 0.065, 850, 2800, 0.009)
+    return mix(base, (clink, 0, 0.85), (grit, 0, 0.75))
 
 
 def col_creak(r):
@@ -439,8 +468,9 @@ def col_debris_patter(r):
 
 def col_dust_settle(r):
     n = n_of(0.75)
-    air = noise(0.75, r, 1200, 6500) * curve([(0, 0), (0.12, 1), (1, 0)], n) ** 2
-    return mix(air, (scatter(r, 0.6, 6, lambda q: tick(q, q.uniform(1500, 3000), 0.003, 0.02), 1.0, 0.5), 0.1, 0.25))
+    air = noise(0.75, r, 700, 5500) * curve([(0, 0), (0.12, 1), (1, 0)], n) ** 2
+    out = mix(air, (scatter(r, 0.6, 6, lambda q: tick(q, q.uniform(1200, 2600), 0.003, 0.02), 1.0, 0.5), 0.1, 0.25))
+    return high_shelf(out, -6.0, 3800.0, 5500.0)
 
 
 # ---------------- ground and weather ----------------
@@ -461,12 +491,13 @@ def _gusts(n, dur, r, k=(1, 2, 3)):
 
 def wx_wind_loop(r):
     dur = 4.0
-    n = n_of(dur)
-    g = _gusts(n, dur, r)
-    low = loop_noise(dur, r, 250, 900) * (0.4 + 0.6 * g)
-    wn = white(n, r)
-    hiss = (reson(wn, 950, 5, circular=True) * (1 - g) + reson(wn, 1400, 5, circular=True) * g) * (0.3 + 0.7 * g) * 2
-    return low + hiss
+    tail = n_of(0.5)
+    n_ext = n_of(dur) + tail
+    g = _gusts(n_ext, dur, r)
+    low = filt(white(n_ext, r), 250, 900) * (0.4 + 0.6 * g)
+    wn = white(n_ext, r)
+    hiss = (reson(wn, 950, 5) * (1 - g) + reson(wn, 1400, 5) * g) * (0.3 + 0.7 * g) * 2
+    return overlap_wrap(low + hiss, tail)
 
 
 def wx_wind_shift(r):
@@ -478,18 +509,19 @@ def wx_wind_shift(r):
 
 def wx_squall_loop(r):
     dur = 4.0
-    n = n_of(dur)
-    g = _gusts(n, dur, r, (1, 3))
-    rumble = loop_noise(dur, r, 60, 300) * (0.6 + 0.4 * _gusts(n, dur, r, (2, 5)))
-    knockband = loop_noise(dur, r, 380, 800) * (0.5 + 0.5 * g) * 0.5
-    rain = loop_noise(dur, r, 2500, 9000) * (0.5 + 0.5 * g) * 0.25
-    drops = np.zeros(n)
-    for _ in range(170):
+    tail = n_of(0.5)
+    n_ext = n_of(dur) + tail
+    g = _gusts(n_ext, dur, r, (1, 3))
+    rumble = filt(white(n_ext, r), 60, 300) * (0.6 + 0.4 * _gusts(n_ext, dur, r, (2, 5)))
+    knockband = filt(white(n_ext, r), 380, 800) * (0.5 + 0.5 * g) * 0.5
+    rain = filt(white(n_ext, r), 2500, 9000) * (0.5 + 0.5 * g) * 0.25
+    drops = np.zeros(n_ext)
+    for _ in range(191):
         s = tick(r, r.uniform(1800, 5000), 0.002, 0.012, 0.8) * r.uniform(0.1, 0.5)
-        a = r.integers(0, n - len(s))
+        a = r.integers(0, n_ext - len(s))
         drops[a:a + len(s)] += s
-    wind = reson(white(n, r), 700, 3, circular=True) * (0.3 + 0.7 * g) * 1.5
-    return rumble * 1.0 + knockband + rain + drops + wind
+    wind = reson(white(n_ext, r), 700, 3) * (0.3 + 0.7 * g) * 1.5
+    return overlap_wrap(rumble * 1.0 + knockband + rain + drops + wind, tail)
 
 
 def wx_squall_bell(r):
@@ -512,7 +544,8 @@ def cas_step(r):
 
 
 def cas_steam(r):
-    return steam(r, 0.55, 2200, ((0, 0), (0.06, 1), (0.3, 0.5), (1, 0)), 1.3)
+    out = steam(r, 0.55, 1500, ((0, 0), (0.06, 1), (0.3, 0.5), (1, 0)), 1.3)
+    return high_shelf(out, -6.0, 3800.0, 5500.0)
 
 
 def cas_thump(r):
@@ -671,6 +704,81 @@ def doo_mend_bucket_slosh(r):
     return mix(water, (drips, 0.08, 0.4), (pail, 0, 0.25))
 
 
+# ---------------- event cues (one sound per event, so the field reads by ear) ----------------
+
+def doo_lid_bounce(r):
+    """A shell bounces off a Pot Lid: a bright tin 'bwang' that wobbles, higher and shorter than the lid going on."""
+    n = n_of(0.5)
+    t = np.arange(n) / SR
+    cl = metal(740, (1, 2.27, 3.71, 5.52), (1, 0.7, 0.45, 0.25), (0.2, 0.15, 0.1, 0.06), 0.5)
+    cl *= 1 + 0.4 * np.sin(TAU * 14 * t) * np.exp(-t / 0.18)
+    hit = mix(knock(r, 900, 0.04, 0.006), (puff(r, 0.03, 1500, 7000, 0.005), 0, 0.6))
+    return verb(mix(hit, (cl, 0, 0.9)), r, 0.08, 0.3, 0.08)
+
+
+def hob_buried_thlup(r):
+    """A Loophole is buried (Dug in): a wet mud 'thlup', a drop then a little suck."""
+    n = n_of(0.32)
+    drop = thump(420, 150, 0.2, 0.05, (1, 0.6, 0.35)) * 0.8
+    mud = noise(0.24, r, 250, 1400) * curve([(0, 0), (0.05, 1), (0.5, 0.4), (1, 0)], n_of(0.24))
+    suck = osc(glide(380, 820, n_of(0.08), 1.6)) * ar(n_of(0.08), 0.01, 0.05) * 0.45
+    clods = scatter(r, 0.14, 5, lambda q: knock(q, q.uniform(450, 800), 0.04, 0.008), 1.2, 0.5) * 0.4
+    return fade(mix(drop, (mud, 0, 0.8), (suck, 0.17), (clods, 0.04)), 0.001, 0.03)[:n + SR // 10]
+
+
+def cas_boss_horn(r):
+    """Grand Fort phase: a homemade tin horn, two toots going up. Not a fanfare."""
+    def toot(f, d, up=1.03):
+        n = n_of(d)
+        t = np.arange(n) / SR
+        fr = glide(f * 0.94, f * up, n, 0.25) * (1 + 0.012 * np.sin(TAU * 5.5 * t))
+        tone = osc(fr, harm=(1, 0.8, 0.65, 0.5, 0.35, 0.22, 0.12))
+        return tone * curve([(0, 0), (0.06, 1), (0.8, 0.8), (1, 0)], n)
+    buzz = noise(0.85, r, 600, 2400) * curve([(0, 0), (0.05, 0.25), (0.3, 0.1), (1, 0)], n_of(0.85))
+    out = mix(toot(233, 0.26, 1.0), (toot(311, 0.55), 0.3), (buzz, 0, 0.3))
+    return verb(out, r, 0.16, 0.6, 0.18, 4000)
+
+
+def wx_front_chime(r):
+    """A new Weather Front: a gust and a few wind chimes."""
+    n = n_of(0.95)
+    gust = sweep_noise(0.95, r, [(0, 500), (0.4, 1500), (1, 700)], 1.4) * curve([(0, 0), (0.12, 1), (0.5, 0.7), (1, 0)], n)
+    chimes = []
+    for i, m in enumerate((84, 88, 91, 86, 93)):
+        bell = modal([(midi(m), 1, 0.35), (midi(m) * 2.76, 0.3, 0.12), (midi(m) * 5.4, 0.12, 0.05)], 0.7)
+        chimes.append((bell, 0.02 + 0.13 * i + r.uniform(0, 0.04), 0.55 - 0.05 * i))
+    return verb(mix(gust * 0.8, *chimes), r, 0.14, 0.5, 0.14)
+
+
+def hit_threaded_zip(r):
+    """Threaded: a shot slips through a Loophole. A thin rising zip and a pin tink."""
+    n = n_of(0.16)
+    zip_ = sweep_noise(0.16, r, [(0, 900), (1, 3400)], 4.0) * curve([(0, 0), (0.15, 1), (0.85, 0.8), (1, 0)], n)
+    tone = osc(glide(700, 2000, n, 1.3), harm=(1, 0.2)) * curve([(0, 0), (0.2, 0.6), (1, 0)], n) * 0.5
+    tink = modal([(2093, 1, 0.05), (2093 * 2.4, 0.2, 0.02)], 0.1)
+    return mix(zip_, (tone, 0), (tink, 0.14, 0.5))
+
+
+def doo_roller_rumble(r):
+    """Big Smoothie Jr. rolls out: a heavy wooden drum rumbling over the turf, with knocks as it goes."""
+    n = n_of(1.0)
+    t = np.arange(n) / SR
+    bed = noise(1.0, r, 180, 900) * (0.7 + 0.3 * np.sin(TAU * 7 * t)) * curve([(0, 0), (0.06, 1), (0.75, 0.8), (1, 0)], n)
+    hum = osc(np.full(n, 196.0) * (1 + 0.02 * np.sin(TAU * 3 * t)), harm=(0.6, 1, 0.5, 0.3)) * curve([(0, 0), (0.1, 1), (1, 0)], n) * 0.25
+    knocks = mix(*[(knock(r, 330 + 40 * (i % 3), 0.1, 0.02), 0.04 + 0.16 * i, 0.7 - 0.06 * i) for i in range(6)])
+    creak = creak_line(r, 0.5, 220, 160) * 0.25
+    return mix(bed, (hum, 0), (knocks, 0), (creak, 0.3))
+
+
+def doo_shears_jam(r):
+    """The shears jam: a snip that sticks halfway, a clunk and a rattle."""
+    snip = mix(metal(2400, (1, 1.6, 2.7), (1, 0.6, 0.3), (0.02, 0.015, 0.01), 0.06), (sweep_noise(0.08, r, [(0, 3000), (1, 1800)], 3.0) * 0.6, 0))
+    grind = creak_line(r, 0.16, 900, 520) * 0.5
+    clunk = mix(knock(r, 380, 0.12, 0.025), (metal(620, (1, 1.47, 2.3), (1, 0.5, 0.3), (0.05, 0.04, 0.03), 0.15), 0, 0.5))
+    rattle = _lid_rattle(r, 0.22, 1800, 0.05) * 0.4
+    return mix(snip, (grind, 0.05), (clunk, 0.2), (rattle, 0.24))
+
+
 # ---------------- meta ----------------
 
 def meta_pennant_stamp(r):
@@ -707,7 +815,7 @@ SFX = {
     'ui_fire_press': S(ui_fire_press, 'ui', -18, 'Fire button goes down', 'ui_fire_press:fire', pitch_var=0),
 
     'aim_drag_start': S(aim_drag_start, 'ui', -24, 'Aim Drag starts, band appears'),
-    'aim_band_stretch': S(aim_band_stretch, 'ui', -27, 'While dragging. Pitch 0 to +12 semitones with power 0 to 100', loop=True, vol=0.6, pitch_var=0),
+    'aim_band_stretch': S(aim_band_stretch, 'ui', -20, 'While dragging. Pitch 0 to +12 semitones with power 0 to 100', loop=True, vol=0.6, pitch_var=0),
     'aim_set': S(aim_set, 'ui', -23, 'Finger up, aim set. Play 5 semitones down for a cancel', pitch_var=0),
     'aim_tick': S(aim_tick, 'ui', -25, 'Fine Tune step. Angle at pitch 0, power 5 semitones down', pitch_var=0),
     'aim_limit': S(aim_limit, 'ui', -24, 'Aim or power at its limit', pitch_var=0),
@@ -791,6 +899,14 @@ SFX = {
 
     'doo_pot_lid_clang': S(doo_pot_lid_clang, 'impact', -15, 'Core events lid (set) and lid_block (a shell bounces off)', 'pot_lid_raise:up'),
     'doo_mend_bucket_slosh': S(doo_mend_bucket_slosh, 'world', -19, 'Mend Bucket used (core event mend from the Doodad)'),
+
+    'doo_lid_bounce': S(doo_lid_bounce, 'impact', -16, 'Core event lid_block: a shell bounces off a Pot Lid. Pot Lid going on (lid) keeps doo_pot_lid_clang', pitch_var=1.5),
+    'hob_buried_thlup': S(hob_buried_thlup, 'hob', -17, 'Core event buried: a Loophole is dug in on a Hob', pitch_var=1.5),
+    'cas_boss_horn': S(cas_boss_horn, 'world', -16, 'Core event boss_phase (Grand Fort, 1-10). Not for the Squall', pitch_var=0, note='Caption [horn]'),
+    'wx_front_chime': S(wx_front_chime, 'world', -19, 'Core event front: a new Weather Front. wx_wind_shift can play under it', pitch_var=1, note='Caption [wind chimes]'),
+    'hit_threaded_zip': S(hit_threaded_zip, 'impact', -17, 'Core event threaded (and hit with threaded set): a shot slips through a Loophole', pitch_var=1),
+    'doo_roller_rumble': S(doo_roller_rumble, 'world', -17, 'Core event roller: the roller rolls out. Also roller_stop and roller_done, 3 semitones down', pitch_var=0),
+    'doo_shears_jam': S(doo_shears_jam, 'world', -17, 'Core event shears_jam: the shears stick', pitch_var=1),
 
     'meta_pennant_stamp': S(meta_pennant_stamp, 'ui', -17, 'A Pennant is earned on Results', 'ui_pennant_earn:ding', pitch_var=0,
                             note='Play 2 semitones higher for each next Pennant'),

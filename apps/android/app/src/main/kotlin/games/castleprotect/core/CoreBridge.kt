@@ -62,7 +62,13 @@ object Cmd {
     fun recall(ghost: Int) = """{"cmd":"recall","ghost":$ghost}"""
     fun walk(dx: Int) = """{"cmd":"walk","dx":$dx}"""
     fun shoveOff(hob: Int) = """{"cmd":"shove_off","hob":$hob}"""
-    const val FIRE = """{"cmd":"fire"}"""
+    /** Fire the selected shot, optionally with a shot [dial] ("puff_up", "rebuild", "hops3") or own-fort block [target] (c, r). */
+    fun fire(dial: String? = null, target: Pair<Int, Int>? = null): String {
+        val sb = StringBuilder("""{"cmd":"fire"""")
+        if (!dial.isNullOrEmpty()) sb.append(""","dial":${q(dial)}""")
+        if (target != null) sb.append(""","target":[${target.first},${target.second}]""")
+        return sb.append('}').toString()
+    }
     fun doodad(id: String) = """{"cmd":"doodad","doodad":${q(id)}}"""
     fun doodadRoom(id: String, room: String) = """{"cmd":"doodad","doodad":${q(id)},"room":${q(room)}}"""
     const val PASS = """{"cmd":"pass"}"""
@@ -78,6 +84,7 @@ object Cmd {
     const val LOG = """{"cmd":"log"}"""
     const val HASH = """{"cmd":"hash"}"""
     const val TERRAIN_ALL = """{"cmd":"terrain_all"}"""
+    fun leanLines(side: Int, c: Int, r: Int) = """{"cmd":"lean_lines","side":$side,"c":$c,"r":$r}"""
     /** Workshop: does this fort stand? [rows] top down, Footing row last. */
     fun validateBlueprint(rows: List<String>, seats: Int) = """{"cmd":"validate_blueprint","rows":[${rows.joinToString(",") { q(it) }}],"seats":$seats}"""
 }
@@ -90,12 +97,24 @@ data class SideOpts(
     val previewPct: Int = -1,
     /** Crew size handicap 1 to 5, or 0 for all. */
     val crewSize: Int = 0,
+    /** Custom fort rows (Workshop, top down, Footing last), or null for default. */
+    val rows: List<String>? = null,
+    /** Explicit blueprint id, or null for default. */
+    val blueprint: String? = null,
+    /** Explicit crew Hob ids (max 5), or null for default. */
+    val crew: List<String>? = null,
+    /** Doodad ids (max 2), or null for default. */
+    val doodads: List<String>? = null,
 ) {
     fun json(): String {
         val sb = StringBuilder()
         if (help != "none") sb.append(""","help":${JsonText.quote(help)}""")
         if (previewPct in 0..100) sb.append(""","preview_pct":$previewPct""")
         if (crewSize in 1..5) sb.append(""","crew_size":$crewSize""")
+        if (!rows.isNullOrEmpty()) sb.append(""","rows":[${rows.joinToString(",") { JsonText.quote(it) }}]""")
+        else if (!blueprint.isNullOrEmpty()) sb.append(""","blueprint":${JsonText.quote(blueprint)}""")
+        if (!crew.isNullOrEmpty()) sb.append(""","crew":[${crew.take(5).joinToString(",") { JsonText.quote(it) }}]""")
+        if (!doodads.isNullOrEmpty()) sb.append(""","doodads":[${doodads.take(2).joinToString(",") { JsonText.quote(it) }}]""")
         return sb.toString()
     }
 }
@@ -141,6 +160,18 @@ data class BattleSpec(
         return copy(setup = base.substring(0, end) + ""","attempt":${n.coerceAtMost(1_000_000)}""" + base.substring(end))
     }
 
+    /** Returns a copy with side 0's `rows` replaced (or removed when null/empty). */
+    fun withSide0Rows(rows: List<String>?): BattleSpec = try {
+        val o = org.json.JSONObject(setup)
+        val sides = o.optJSONArray("sides")
+        val s0 = sides?.optJSONObject(0)
+        if (s0 != null) {
+            if (rows.isNullOrEmpty()) s0.remove("rows")
+            else { s0.remove("blueprint"); s0.put("rows", org.json.JSONArray(rows)) }
+            copy(setup = o.toString())
+        } else this
+    } catch (e: Exception) { this }
+
     companion object {
         private val ATTEMPT = Regex("\"attempt\"\\s*:\\s*(\\d+)")
         private val ATTEMPT_FIELD = Regex(",\\s*\"attempt\"\\s*:\\s*\\d+")
@@ -166,23 +197,39 @@ data class BattleSpec(
             seed, "campaign", level,
         )
 
+        /** Daily Dust-up (core/API.md): one seeded Skirmish per local date, never carries an attempt. */
+        fun daily(
+            seed: Long, level: String = "d1", preset: String = "fair",
+            help: SideOpts = SideOpts(), dailyPaid: Boolean = false,
+        ) = BattleSpec(
+            """{"level":${JsonText.quote(level)},"mode":"daily","sides":[{"control":"human"${help.json()}},{"control":"ai","preset":${JsonText.quote(preset)}}],"progress":${Progress(false, listOf(false, false, false), dailyPaid).json()}}""",
+            seed, "daily", level,
+        )
+
         /**
-         * wind: 0 calm, 1 light, 2 gusty. Plain only turns the Rummage off.
+         * wind: 0 off, 1 light, 2 full. Plain only turns the Rummage off.
          * volley: Actions per side for Volley Points (6, 10, 14), or 0 for Knockout.
          */
-        fun skirmish(level: String, preset: String, roundCap: Int, wind: Int, plainOnly: Boolean, seed: Long = newSeed(), help: SideOpts = SideOpts(), volley: Int = 0) = BattleSpec(
+        fun skirmish(
+            level: String, preset: String, roundCap: Int, wind: Int, plainOnly: Boolean,
+            seed: Long = newSeed(), help: SideOpts = SideOpts(), volley: Int = 0,
+            windRange: Pair<Int, Int>? = null,
+        ) = BattleSpec(
             """{"level":${JsonText.quote(level)},"mode":"skirmish","sides":[{"control":"human"${help.json()}},{"control":"ai","preset":${JsonText.quote(preset)}}],""" +
                 (if (volley > 0) """"volley":$volley""" else """"round_cap":$roundCap""") +
-                ""","wind":${windJson(wind)}${if (plainOnly) ""","rummage":{"pool":0,"picks":0}""" else ""}}""",
+                ""","wind":${windJson(wind, windRange)}${if (plainOnly) ""","rummage":{"pool":0,"picks":0}""" else ""}}""",
             seed, "skirmish", level,
         )
 
-        fun couch(level: String, names: List<String>, roundCap: Int, wind: Int, plainOnly: Boolean, seats: String, seed: Long = newSeed(),
-                  help: List<SideOpts> = listOf(SideOpts(), SideOpts()), volley: Int = 0) = BattleSpec(
+        fun couch(
+            level: String, names: List<String>, roundCap: Int, wind: Int, plainOnly: Boolean, seats: String,
+            seed: Long = newSeed(), help: List<SideOpts> = listOf(SideOpts(), SideOpts()), volley: Int = 0,
+            windRange: Pair<Int, Int>? = null,
+        ) = BattleSpec(
             """{"level":${JsonText.quote(level)},"mode":"couch","sides":[""" +
                 names.take(2).mapIndexed { i, n -> """{"control":"human","name":${JsonText.quote(JsonText.takeCodePoints(n, 12))}${help.getOrElse(i) { SideOpts() }.json()}}""" }.joinToString(",") +
                 "]," + (if (volley > 0) """"volley":$volley""" else """"round_cap":$roundCap""") +
-                ""","wind":${windJson(wind)}${if (plainOnly) ""","rummage":{"pool":0,"picks":0}""" else ""}}""",
+                ""","wind":${windJson(wind, windRange)}${if (plainOnly) ""","rummage":{"pool":0,"picks":0}""" else ""}}""",
             seed, "couch", level, seats,
         )
 
@@ -193,6 +240,9 @@ data class BattleSpec(
             else -> SideOpts()
         }
 
-        private fun windJson(w: Int) = when (w) { 0 -> """{"min":0,"max":0}"""; 2 -> """{"min":2,"max":6}"""; else -> """{"min":0,"max":3}""" }
+        private fun windJson(w: Int, range: Pair<Int, Int>? = null): String {
+            val (lo, hi) = range ?: when (w) { 0 -> 0 to 0; 2 -> 0 to 6; else -> 0 to 3 }
+            return """{"min":$lo,"max":$hi}"""
+        }
     }
 }

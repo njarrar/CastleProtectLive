@@ -1,21 +1,67 @@
 // Render assets/svg/*.svg to PNG at @1x and @2x, pack the atlases, and draw the contact sheet.
 // Needs Playwright chromium (same as render.mjs). Run gen-sprites.mjs first.
-//   node tools/art-gen/render-sprites.mjs            all steps
-//   node tools/art-gen/render-sprites.mjs sheet      only the contact sheets and the previews
-//   node tools/art-gen/render-sprites.mjs anim       only the animation sheet and the previews
+//   node tools/art-gen/render-sprites.mjs                all steps (untrimmed legacy atlas schema)
+//   node tools/art-gen/render-sprites.mjs --trim         tight alpha-bbox atlas trimming (4 -> 2 pages)
+//   node tools/art-gen/render-sprites.mjs --dedup-hobs   neutral Hob + 16x16 scarf overlay dedup + aliases/overlays
+//   node tools/art-gen/render-sprites.mjs --v2           enables --trim --dedup-hobs together (4 -> 1 @2x page, ~16 MB VRAM)
+//   node tools/art-gen/render-sprites.mjs sheet          only the contact sheets and the previews
+//   node tools/art-gen/render-sprites.mjs anim           only the animation sheet and the previews
+//
+// NOTE on --trim / --v2 (opt-in until all 3 clients read frame.trim / frame.sourceSize / aliases / overlays):
+//   When --trim is passed, each atlas page sets `"trimmed": true` and each frame emits:
+//     { x, y, w, h, trim: [tx, ty, tw, th], sourceSize: [origW, origH], scale?: frameScale }
+//   When --dedup-hobs (or --v2) is passed, castle@1x.json and castle@2x.json emit:
+//     { scale, v2?, trimmed?, dedupHobs: true, pages: [...], scarfOverlays: [...], aliases: {...}, overlays: {...} }
+//   Clients drawing a trimmed frame anchored at (ax, ay) in @1x px draw subrect (x, y, w, h)
+//   using fs = frame.scale ?? page.scale to destination ((tx / fs - ax) * drawScale, (ty / fs - ay) * drawScale,
+//   (tw / fs) * drawScale, (th / fs) * drawScale) and then composite overlays[name] if present.
 import { createRequire } from 'module';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
+import { pngAlphaBbox, packShelf, packMaxRects, buildDedupTables, recompressDir, DEFAULT_PAGE, DEFAULT_PAD } from './atlas-pack.mjs';
+const mib = ([a, b]) => `${(a / 1048576).toFixed(1)} -> ${(b / 1048576).toFixed(1)} MiB`;
 const require = createRequire(process.env.PLAYWRIGHT_ROOT || '/opt/node22/lib/node_modules/');
 const { chromium } = require('playwright');
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
-const ASSETS = path.join(ROOT, 'assets');
+const args = process.argv.slice(2);
+const V2 = args.includes('--v2');
+const TRIM = V2 || args.includes('--trim');
+const DEDUP_HOBS = V2 || args.includes('--dedup-hobs');
+const charScaleArg = args.find(a => a.startsWith('--char-scale='));
+const CHAR_SCALE_2X = charScaleArg ? Number(charScaleArg.split('=')[1]) : (DEDUP_HOBS ? 1 : 2);
+if (CHAR_SCALE_2X !== 1 && CHAR_SCALE_2X !== 2) throw new Error('--char-scale must be 1 or 2');
+const assetsIdx = args.indexOf('--assets-dir');
+const ASSETS = assetsIdx >= 0 && args[assetsIdx + 1] ? path.resolve(args[assetsIdx + 1]) : path.join(ROOT, 'assets');
 const SPR = path.join(ASSETS, 'sprites'), ATL = path.join(ASSETS, 'atlas');
 const manifest = JSON.parse(fs.readFileSync(path.join(ASSETS, 'manifest.json'), 'utf8'));
-const only = process.argv[2] || 'all';
-const PAGE = 2048, PAD = 2;
+const only = args.find((a, i) => !a.startsWith('--') && (assetsIdx < 0 || i !== assetsIdx + 1)) || 'all';
+const PAGE = DEFAULT_PAGE, PAD = DEFAULT_PAD;
+
+const manByName = Object.fromEntries(manifest.sprites.map(s => [s.name, s]));
+// Split an SVG file into its viewBox and inner markup.
+const svgParts = (name) => {
+  const txt = fs.readFileSync(path.join(ASSETS, manByName[name].svg), 'utf8');
+  const m = /<svg[^>]*viewBox="([^"]+)"[^>]*>([\s\S]*)<\/svg>/.exec(txt);
+  const [vx, vy, vw, vh] = m[1].split(/\s+/).map(Number);
+  return { vx, vy, vw, vh, inner: m[2], head: txt.slice(0, txt.indexOf('>') + 1) };
+};
+// One SVG: the base sprite with overlays placed as the apps do it ({ sprite, dx, dy, rot, scale } in @1x px from the base anchor).
+function compositeSvg(baseName, ovs) {
+  const b = svgParts(baseName), bm = manByName[baseName];
+  const kb = b.vw / bm.w, ax = b.vx + bm.anchor[0] * kb, ay = b.vy + bm.anchor[1] * kb;
+  let inner = b.inner;
+  for (const ov of ovs) {
+    const om = manByName[ov.sprite];
+    if (!om) throw new Error(`overlay sprite ${ov.sprite} is not in the manifest`);
+    const o = svgParts(ov.sprite), ko = o.vw / om.w;
+    const oax = o.vx + om.anchor[0] * ko, oay = o.vy + om.anchor[1] * ko;
+    const k = (ov.scale ?? 1) * kb / ko;
+    inner += `<g transform="translate(${ax + ov.dx * kb} ${ay + ov.dy * kb}) rotate(${ov.rot || 0}) scale(${k}) translate(${-oax} ${-oay})">${o.inner}</g>`;
+  }
+  return `${b.head}${inner}</svg>`;
+}
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ deviceScaleFactor: 1 });
@@ -44,40 +90,98 @@ if (only === 'all') {
   }
   console.log('rendered', manifest.sprites.length, 'sprites');
 
-  // ---- atlases: shelf pack, tallest first, 2 px gap
+  // ---- legacy files for aliased names (--dedup-hobs / --v2). The atlas only holds the neutral Hob, but
+  // the old per-team names (hob_marge_blue_idle_0, portrait_jax_orange, icon_gravel, ...) still get their
+  // own PNG files, drawn as base + overlays exactly as the apps composite them. Not packed in the atlas.
+  if (manifest.dedup && manifest.dedup.aliases) {
+    let n = 0;
+    for (const [alias, target] of Object.entries(manifest.dedup.aliases)) {
+      const base = manByName[target];
+      if (!base || !base.files['1x']) continue;
+      const svg = compositeSvg(target, manifest.dedup.overlays?.[alias] || []);
+      const sized = (w, h) => svg.replace(/width="[\d.]+" height="[\d.]+"/, `width="${w}" height="${h}"`);
+      await shot(sized(base.w, base.h), base.w, base.h, path.join(SPR, `${alias}.png`));
+      await shot(sized(base.w * 2, base.h * 2), base.w * 2, base.h * 2, path.join(SPR, `${alias}@2x.png`));
+      n++;
+    }
+    console.log('rendered', n, 'legacy alias files (not in the atlas)');
+  }
+
+  console.log('sprites recompressed', mib(recompressDir(SPR)));
+
+  // ---- atlases: shelf pack (legacy) or MaxRects BSSF (--trim / --dedup-hobs / --v2), 2 px gap
   fs.rmSync(ATL, { recursive: true, force: true });
   fs.mkdirSync(ATL, { recursive: true });
+  const dedupInfo = DEDUP_HOBS
+    ? (manifest.dedup
+      ? { ...manifest.dedup, packedSprites: manifest.sprites.filter(s => s.atlas) }
+      : buildDedupTables(manifest.sprites.filter(s => s.atlas)))
+    : null;
+  const atlasSprites = dedupInfo ? dedupInfo.packedSprites.filter(s => s.atlas) : manifest.sprites.filter(s => s.atlas);
+
   for (const [tag, k] of [['1x', 1], ['2x', 2]]) {
-    const items = manifest.sprites.filter(s => s.atlas).map(s => ({ name: s.name, w: s.w * k, h: s.h * k, file: s.files[tag] }));
-    items.sort((a, b) => b.h - a.h || b.w - a.w || a.name.localeCompare(b.name));
-    const pages = [];
-    let pg = null, x = 0, y = 0, rowH = 0;
-    const newPage = () => { pg = { frames: {}, items: [] }; pages.push(pg); x = PAD; y = PAD; rowH = 0; };
-    newPage();
-    for (const it of items) {
-      if (x + it.w + PAD > PAGE) { x = PAD; y += rowH + PAD; rowH = 0; }
-      if (y + it.h + PAD > PAGE) newPage();
-      pg.frames[it.name] = { x, y, w: it.w, h: it.h };
-      pg.items.push({ ...it, x, y });
-      x += it.w + PAD; rowH = Math.max(rowH, it.h);
-    }
+    let rawPx = 0, packedPx = 0;
+    const items = atlasSprites.map(s => {
+      // Character sprites (hobs/flatteners) are drawn at HOB_SCALE=0.4 (72x80 @1x is already 2.5x display size).
+      // In --dedup-hobs / --v2 @2x mode, packing oversampled characters at CHAR_SCALE_2X (default 1) keeps all UI/props/blocks
+      // at crisp @2x while fitting the entire cast + Part 2 props on 1 single 2048x2048 @2x page (~16 MB VRAM).
+      const isOversampledChar = k === 2 && DEDUP_HOBS && (s.group === 'hobs' || s.group === 'flatteners') && !/^hob_(scarf|patch)_/.test(s.name);
+      const frameScale = isOversampledChar ? CHAR_SCALE_2X : k;
+      const srcTag = frameScale === 1 ? '1x' : tag;
+      const origW = s.w * frameScale, origH = s.h * frameScale;
+      rawPx += (s.w * k) * (s.h * k);
+      if (TRIM) {
+        const { trim, sourceSize } = pngAlphaBbox(fs.readFileSync(path.join(ASSETS, s.files[srcTag])));
+        const sw = sourceSize[0] || origW, sh = sourceSize[1] || origH;
+        packedPx += trim[2] * trim[3];
+        return { name: s.name, w: trim[2], h: trim[3], sourceW: sw, sourceH: sh, trim, frameScale, file: s.files[srcTag] };
+      }
+      packedPx += origW * origH;
+      return { name: s.name, w: origW, h: origH, sourceW: origW, sourceH: origH, trim: null, frameScale, file: s.files[srcTag] };
+    });
+    const pages = (TRIM || DEDUP_HOBS)
+      ? packMaxRects(items, PAGE, PAD, k)
+      : packShelf(items, PAGE, PAD, k);
     for (let i = 0; i < pages.length; i++) {
       const base = `castle@${tag}-${i}`;
-      const html = pages[i].items.map(it => `<img src="file://${path.join(ASSETS, it.file)}" style="left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px">`).join('');
+      const html = pages[i].items.map(it => it.trim
+        ? `<div class="crop" style="left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px"><img src="file://${path.join(ASSETS, it.file)}" style="left:${-it.trim[0]}px;top:${-it.trim[1]}px;width:${it.sourceW}px;height:${it.sourceH}px"></div>`
+        : `<img src="file://${path.join(ASSETS, it.file)}" style="left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px">`).join('');
       await page.setViewportSize({ width: PAGE, height: PAGE });
-      await openHtml(`<!doctype html><html><head><style>html,body{margin:0;background:transparent}img{position:absolute;display:block}</style></head><body>${html}</body></html>`);
+      await openHtml(`<!doctype html><html><head><style>html,body{margin:0;background:transparent}.crop{position:absolute;overflow:hidden}img{position:absolute;display:block}</style></head><body>${html}</body></html>`);
       await page.screenshot({ path: path.join(ATL, base + '.png'), omitBackground: true });
       const sorted = Object.fromEntries(Object.entries(pages[i].frames).sort(([a], [b]) => a.localeCompare(b)));
-      fs.writeFileSync(path.join(ATL, base + '.json'), JSON.stringify({ image: base + '.png', size: PAGE, scale: k, frames: sorted }, null, 1) + '\n');
+      const pageJson = TRIM
+        ? { image: base + '.png', size: PAGE, scale: k, trimmed: true, ...(DEDUP_HOBS ? { dedupHobs: true } : {}), frames: sorted }
+        : { image: base + '.png', size: PAGE, scale: k, ...(DEDUP_HOBS ? { dedupHobs: true } : {}), frames: sorted };
+      fs.writeFileSync(path.join(ATL, base + '.json'), JSON.stringify(pageJson, null, 1) + '\n');
       console.log('atlas', base, Object.keys(sorted).length, 'frames');
     }
-    fs.writeFileSync(path.join(ATL, `castle@${tag}.json`), JSON.stringify({ scale: k, pages: pages.map((_, i) => `castle@${tag}-${i}.json`) }, null, 1) + '\n');
+    if (TRIM || DEDUP_HOBS) {
+      const savedPct = ((1 - packedPx / Math.max(1, rawPx)) * 100).toFixed(1);
+      console.log(`atlas @${tag}${V2 ? ' v2' : ''}: ${pages.length} page(s), ${savedPct}% pixel footprint reduced`);
+    }
+    const indexJson = {
+      scale: k,
+      ...(V2 ? { v2: true } : {}),
+      ...(TRIM ? { trimmed: true } : {}),
+      ...(DEDUP_HOBS ? { dedupHobs: true } : {}),
+      pages: pages.map((_, i) => `castle@${tag}-${i}.json`),
+      ...(dedupInfo ? {
+        scarfOverlays: dedupInfo.scarfOverlays,
+        aliases: dedupInfo.aliases,
+        overlays: dedupInfo.overlays,
+      } : {}),
+    };
+    fs.writeFileSync(path.join(ATL, `castle@${tag}.json`), JSON.stringify(indexJson, null, 1) + '\n');
   }
 }
 
+if (only === 'all') console.log('atlas recompressed', mib(recompressDir(ATL)));
+
 // ---- contact sheet: every sprite at @2x on paper, grouped
 if (only !== 'anim') {
-  const order = ['blocks', 'fort', 'kettle', 'stompers', 'hobs', 'portraits', 'shells', 'icons', 'effects', 'ui', 'terrain', 'backgrounds', 'app'];
+  const order = ['blocks', 'fort', 'kettle', 'stompers', 'hobs', 'flatteners', 'portraits', 'props', 'shells', 'icons', 'effects', 'ui', 'terrain', 'backgrounds', 'app'];
   let html = '';
   for (const grp of order) {
     const list = manifest.sprites.filter(s => s.group === grp);
@@ -88,9 +192,9 @@ if (only !== 'anim') {
       let w = s.files['2x'] ? s.w * 2 : 512, h = s.files['2x'] ? s.h * 2 : 512;
       // small sprites are shown bigger so they can be checked; big ones smaller
       let z = w < 40 ? 3 : w < 80 ? 2 : 1;
-      if (grp === 'hobs') z = .75;
+      if (grp === 'hobs' || grp === 'flatteners') z = .75;
       if (w > 1000) z = 0.45;
-      const label = grp === 'hobs' ? s.name.replace('hob_', '') : s.name;
+      const label = grp === 'hobs' ? s.name.replace('hob_', '') : grp === 'flatteners' ? s.name.replace('flattener_', '') : s.name;
       html += `<figure><div class="cell" style="width:${w * z}px;height:${h * z}px"><img src="file://${path.join(ASSETS, file)}" style="width:${w * z}px;height:${h * z}px"></div><figcaption>${label}</figcaption></figure>`;
     }
     html += '</div>';
@@ -101,7 +205,7 @@ h1{font-size:28px;margin:0 0 4px}h2{font-size:18px;margin:22px 0 8px;border-bott
 .cell{background-color:#EADFC6;background-image:linear-gradient(45deg,#DCCFB2 25%,transparent 25%,transparent 75%,#DCCFB2 75%),linear-gradient(45deg,#DCCFB2 25%,transparent 25%,transparent 75%,#DCCFB2 75%);background-size:16px 16px;background-position:0 0,8px 8px;border-radius:4px;overflow:hidden}
 img{display:block;image-rendering:auto}figcaption{max-width:150px;margin:2px auto 0;overflow-wrap:anywhere;opacity:.8;font-size:9px}`;
   await page.setViewportSize({ width: 2400, height: 1200 });
-  await openHtml(`<!doctype html><html><head><style>${css}</style></head><body><h1>Castle Protect v0.1 sprites</h1><div>${manifest.count} sprites, shown at @2x (small ones enlarged). Made by tools/art-gen.</div>${html}</body></html>`);
+  await openHtml(`<!doctype html><html><head><style>${css}</style></head><body><h1>Castle Protect ${manifest.v2 ? 'v2' : 'v0.1'} sprites</h1><div>${manifest.count} sprites, shown at @2x (small ones enlarged). Made by tools/art-gen.</div>${html}</body></html>`);
   await page.screenshot({ path: path.join(ASSETS, 'contact-sheet.png'), fullPage: true });
   console.log('contact sheet done');
 }
@@ -109,9 +213,17 @@ img{display:block;image-rendering:auto}figcaption{max-width:150px;margin:2px aut
 // ---- animation contact sheet: every animation as a strip of frames in play order
 const ANIM = JSON.parse(fs.readFileSync(path.join(ASSETS, 'animations.json'), 'utf8'));
 const byName = Object.fromEntries(manifest.sprites.map(s => [s.name, s]));
+if (manifest.dedup && manifest.dedup.aliases) {
+  for (const [alias, target] of Object.entries(manifest.dedup.aliases)) {
+    // Use the composited legacy file (base + scarf) when it exists, so previews show the team colours.
+    if (!byName[alias] && byName[target]) byName[alias] = fs.existsSync(path.join(SPR, `${alias}@2x.png`))
+      ? { ...byName[target], name: alias, files: { '1x': `sprites/${alias}.png`, '2x': `sprites/${alias}@2x.png` } }
+      : byName[target];
+  }
+}
 const CHECK = `background-color:#EADFC6;background-image:linear-gradient(45deg,#DCCFB2 25%,transparent 25%,transparent 75%,#DCCFB2 75%),linear-gradient(45deg,#DCCFB2 25%,transparent 25%,transparent 75%,#DCCFB2 75%);background-size:16px 16px;background-position:0 0,8px 8px`;
 {
-  const SECT = [['Hobs', k => k.startsWith('hob_')], ['Fort', k => /^(stomper|kettle|fx_kettle|loophole|pot_lid)/.test(k)], ['Collapse pieces', k => /^fx_(crack|chunk|dustcloud|rubble)/.test(k)], ['Shots and effects', k => k.startsWith('fx_')], ['UI motion', k => k.startsWith('ui_')]];
+  const SECT = [['Hobs', k => k.startsWith('hob_')], ['Flatteners', k => k.startsWith('flattener_')], ['Fort', k => /^(stomper|kettle|fx_kettle|loophole|pot_lid)/.test(k)], ['Collapse pieces', k => /^fx_(crack|chunk|dustcloud|rubble)/.test(k)], ['Shots and effects', k => k.startsWith('fx_')], ['UI motion', k => k.startsWith('ui_')]];
   const seen = new Set();
   let html = '';
   for (const [title, test] of SECT) {
@@ -122,9 +234,9 @@ const CHECK = `background-color:#EADFC6;background-image:linear-gradient(45deg,#
     for (const k of keys) {
       const a = ANIM.animations[k];
       const w = a.w * 2, h = a.h * 2;
-      const z = title === 'Hobs' ? .6 : w < 40 ? 3 : w < 80 ? 2 : 1;
-      // one line per Hob and team
-      const who = title === 'Hobs' ? k.split('_').slice(0, 3).join('_') : '';
+      const z = (title === 'Hobs' || title === 'Flatteners') ? .6 : w < 40 ? 3 : w < 80 ? 2 : 1;
+      // one line per Hob/team or Flattener
+      const who = title === 'Hobs' ? k.split('_').slice(0, 3).join('_') : title === 'Flatteners' ? k.split('_').slice(0, 2).join('_') : '';
       if (who && who !== last) { html += `</div><h3>${who}</h3><div class="row">`; last = who; }
       const cells = a.frames.map((n, i) => `<div class="cell${a.events && Object.values(a.events).includes(i) ? ' ev' : ''}" style="width:${w * z}px;height:${h * z}px"><img src="file://${path.join(ASSETS, byName[n].files['2x'])}" style="width:${w * z}px;height:${h * z}px"></div>`).join('');
       const total = a.ms.reduce((x, y) => x + y, 0);
@@ -141,6 +253,7 @@ img{display:block}figcaption{margin:2px auto 0;opacity:.8;font-size:9px}`;
   await openHtml(`<!doctype html><html><head><style>${css}</style></head><body><h1>Castle Protect animation frames</h1><div>${ANIM.count} animations from animations.json, frames in play order. A red bar marks a frame with an event. Made by tools/art-gen.</div>${html}</body></html>`);
   await page.screenshot({ path: path.join(ASSETS, 'contact-sheet-anim.png'), fullPage: true });
   console.log('animation contact sheet done');
+  console.log('contact sheets recompressed', mib(recompressDir(ASSETS, f => f.startsWith('contact-sheet'))));
 }
 
 // ---- previews: animated PNG (APNG) files in assets/previews/. Any browser plays them

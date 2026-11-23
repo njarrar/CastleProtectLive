@@ -24,8 +24,8 @@ const require = createRequire(import.meta.url);
 const mod = require(resolve(join(pkgDir, entry)));
 
 if (typeof mod.golden_hashes !== "function") {
-  console.log("::notice::castle-wasm has no golden_hashes() export yet, skipping wasm goldens.");
-  process.exit(0);
+  console.error("::error::castle-wasm has no golden_hashes() export.");
+  process.exit(1);
 }
 
 const lines = String(mod.golden_hashes())

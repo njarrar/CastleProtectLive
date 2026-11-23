@@ -133,7 +133,7 @@ jobs:
         run: npm run build
 
       # Desktop Chromium plus two phones: iPhone 15 portrait (WebKit) and Pixel 7 landscape
-      # (Chromium). See apps/web/playwright.config.ts.
+      # (Chromium). The long 20-minute WebKit soak runs in its own job so web-dist always uploads (Web-L9).
       - name: Playwright tests (desktop and phones)
         if: steps.check.outputs.web == 'true'
         working-directory: apps/web
@@ -143,7 +143,7 @@ jobs:
             exit 0
           fi
           npx playwright install --with-deps chromium webkit
-          npx playwright test
+          npx playwright test --project=chromium --project=iphone --project=pixel-landscape
 
       - name: Upload Playwright report
         if: failure() && steps.check.outputs.web == 'true'
@@ -171,6 +171,52 @@ jobs:
         with:
           path: apps/web/dist
 
+  webkit-long:
+    needs: build
+    if: github.repository == 'njarrar/CastleProtectLive' && needs.build.outputs.built == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      VITE_BASE: /${{ github.event.repository.name }}/
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache npm
+        uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('apps/web/package-lock.json') }}
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+
+      - name: Playwright WebKit long soak
+        working-directory: apps/web
+        run: |
+          npx playwright install --with-deps webkit
+          npx playwright test --project=webkit-long --retries=0
+
+      - name: Upload WebKit soak report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-webkit-long
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          if-no-files-found: ignore
+
   deploy:
     needs: build
     if: >-
@@ -189,13 +235,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # Pages may be off or unavailable (private repo on a free plan). The run stays green
-      # for that, but the failure shows as a warning, not hidden; web-dist is the fallback.
       - name: Deploy to GitHub Pages
         id: deployment
-        continue-on-error: true
         uses: actions/deploy-pages@v5
 
       - name: Report a failed deploy
-        if: steps.deployment.outcome == 'failure'
-        run: echo "::warning title=Pages deploy failed::The site was not deployed. Download the web-dist artifact from this run (see docs/RELEASE.md)."
+        if: failure()
+        run: echo "::error title=Pages deploy failed::The site was not deployed. Download the web-dist artifact from this run (see docs/RELEASE.md)."

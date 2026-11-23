@@ -31,7 +31,9 @@ class ContractTest {
     @Test fun commandsMatchTheSchema() {
         listOf(
             Cmd.pickShell("pudding_bomb"), Cmd.QUICK_PICK, Cmd.END_DRAFT, Cmd.pickHob(0), Cmd.pickShot("plain"), Cmd.aim(450, 62),
-            Cmd.recall(0), Cmd.walk(-4), Cmd.shoveOff(1), Cmd.FIRE, Cmd.PASS, Cmd.AI_TURN, Cmd.LOG, Cmd.HASH, Cmd.TERRAIN_ALL,
+            Cmd.recall(0), Cmd.walk(-4), Cmd.shoveOff(1), Cmd.fire(), Cmd.fire(dial = "hops3"), Cmd.fire(dial = "puff_up"),
+            Cmd.fire(target = 2 to 3), Cmd.fire(dial = "rebuild", target = 1 to 1), Cmd.leanLines(0, 2, 1),
+            Cmd.PASS, Cmd.AI_TURN, Cmd.LOG, Cmd.HASH, Cmd.TERRAIN_ALL,
             Cmd.giveUp(), Cmd.giveUp(1), Cmd.setWind(-3), Cmd.resume("""[{"cmd":"pass"}]"""), Cmd.doodad("mend_bucket"), Cmd.doodadRoom("pot_lid", "kettle"),
         ).forEach(::checkCommand)
     }
@@ -59,9 +61,26 @@ class ContractTest {
         checkSetup(BattleSpec.campaign("1-1", "fair").setup)
         checkSetup(BattleSpec.skirmish("d1", "cozy", 15, 2, plainOnly = true).setup)
         checkSetup(BattleSpec.couch("d2", listOf("Mabel", "Otis"), 10, 0, plainOnly = false, seats = "side_by_side").setup)
-        // v0.2: Help, preview share, Volley Points and progress.
+        // v0.2: Help, preview share, Volley Points, progress, Doodads, custom rows, crew, and Daily Dust-up.
         checkSetup(BattleSpec.campaign("1-3", "cozy", help = SideOpts("lots"), progress = Progress(true, listOf(true, false, true))).setup)
-        checkSetup(BattleSpec.skirmish("d1", "fair", 15, 1, false, help = SideOpts("some"), volley = 10).setup)
+        val withExtras = BattleSpec.campaign(
+            "1-10", "fair",
+            help = SideOpts("some", rows = Fixtures.homeRows, crew = listOf("marge", "quill", "jax"), doodads = listOf("mend_bucket", "pot_lid")),
+            progress = Progress(false, listOf(false, false, false)),
+        )
+        checkSetup(withExtras.setup)
+        val extraSide0 = JSONObject(withExtras.setup).getJSONArray("sides").getJSONObject(0)
+        assertEquals(Fixtures.homeRows.size, extraSide0.getJSONArray("rows").length())
+        assertEquals(3, extraSide0.getJSONArray("crew").length())
+        assertEquals(2, extraSide0.getJSONArray("doodads").length())
+        val daily = BattleSpec.daily(12345L, "d1", "fair", SideOpts("none"), dailyPaid = true)
+        checkSetup(daily.setup)
+        assertEquals("daily", JSONObject(daily.setup).getString("mode"))
+        assertTrue(JSONObject(daily.setup).getJSONObject("progress").getBoolean("daily_paid"))
+        val gusty = BattleSpec.skirmish("d1", "fair", 15, 2, false, help = SideOpts("some"), volley = 10)
+        checkSetup(gusty.setup)
+        assertEquals(0, JSONObject(gusty.setup).getJSONObject("wind").getInt("min"))
+        assertEquals(6, JSONObject(gusty.setup).getJSONObject("wind").getInt("max"))
         val couch = BattleSpec.couch("d1", listOf("A", "B"), 15, 1, false, "one_seat", help = listOf(BattleSpec.duelHelp(2), BattleSpec.duelHelp(1)), volley = 6)
         checkSetup(couch.setup)
         val o = JSONObject(couch.setup)

@@ -1,7 +1,10 @@
 // Builds public/art from assets/ for the web app: what the game draws and nothing else.
 //
-// - Atlas pages are converted to lossless WebP (about a third of the PNG size, pixel exact).
-//   The page JSON is rewritten to name the .webp. With no `sharp` the PNG pages are copied.
+// - Atlas pages are converted to WebP. The @2x page and the backgrounds are lossless (pixel
+//   exact). The @1x page is near-lossless at quality 60: no channel moves by more than 2 of 255,
+//   which no eye can see, and it keeps the first load under its 2 MB budget now that the page
+//   also holds the Rival look (QA playtest 1, m12). The page JSON is rewritten to name the .webp.
+//   With no `sharp` the PNG pages are copied.
 // - manifest.json (350 KB) becomes sprites.json: name -> [w, h, anchorX, anchorY] only.
 // - animations.json is copied as it is (the play order, times, events and motion data).
 // - Backgrounds go out at @1x and @2x (the app loads @2x later, and only on high-DPI screens).
@@ -29,16 +32,16 @@ async function sharp() {
   return sharpMod;
 }
 
-/** src PNG -> dest WebP (lossless). Returns false when no encoder is there. */
-async function toWebp(src, dest) {
+/** src PNG -> dest WebP (lossless, or near-lossless at `near` quality). Returns false when no encoder is there. */
+async function toWebp(src, dest, near = 0) {
   const buf = readFileSync(src);
-  const key = createHash('sha1').update(buf).update('webp-lossless-e6').digest('hex');
+  const key = createHash('sha1').update(buf).update(near ? `webp-near${near}-e6` : 'webp-lossless-e6').digest('hex');
   const hit = join(CACHE, `${key}.webp`);
   if (!existsSync(hit)) {
     const sh = await sharp();
     if (!sh) return false;
     mkdirSync(CACHE, { recursive: true });
-    await sh(buf).webp({ lossless: true, effort: 6 }).toFile(hit);
+    await sh(buf).webp(near ? { nearLossless: true, quality: near, effort: 6 } : { lossless: true, effort: 6 }).toFile(hit);
   }
   copyFileSync(hit, dest);
   return true;
@@ -80,7 +83,8 @@ export async function buildArt(src, dest, log = console.log) {
       const name = page.image.replace(/\.png$/, '.webp');
       const tmp = join(dest, 'atlas', `.tmp-${name}`);
       let made = name;
-      if (await toWebp(png, tmp)) made = name;
+      // @1x: near-lossless (max 2 of 255 per channel) for the first-load budget; @2x: lossless.
+      if (await toWebp(png, tmp, list === 'castle@1x.json' ? 60 : 0)) made = name;
       else { webp = false; copyFileSync(png, tmp); made = page.image; }
       page.image = hashInto(tmp, join(dest, 'atlas'), made);
       rmSync(tmp);

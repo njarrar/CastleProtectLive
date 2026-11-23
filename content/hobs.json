@@ -14,7 +14,7 @@
   },
   {
     "id": "quill",
-    "name": "Quill Needlesworth",
+    "name": "Miss Quill",
     "class": "zinger",
     "hp": 80,
     "knack": "sunspear",
@@ -27,7 +27,7 @@
   },
   {
     "id": "jax",
-    "name": "Jax Peppercorn",
+    "name": "Jax Pepper",
     "class": "scatterjack",
     "hp": 100,
     "knack": "pepper_rain",
@@ -36,7 +36,7 @@
       "kind": "plain_override",
       "shot": "extra_shake"
     },
-    "passive_name": "Extra Shake"
+    "passive_name": "Fourth Stone"
   },
   {
     "id": "grub",
@@ -61,7 +61,7 @@
       "kind": "hop_dial",
       "max": 3
     },
-    "passive_name": "Extra Hop"
+    "passive_name": "One More Hop"
   },
   {
     "id": "hetty",
@@ -77,7 +77,7 @@
   },
   {
     "id": "old_thumper",
-    "name": "Old Thumper Grumbleby",
+    "name": "Old Thumper",
     "class": "lobber",
     "hp": 130,
     "knack": "tick_tock_crock",
@@ -89,7 +89,7 @@
   },
   {
     "id": "nan",
-    "name": "Nan Clatterpot",
+    "name": "Nan",
     "class": "scatterjack",
     "hp": 100,
     "knack": "pan_parade",
@@ -98,11 +98,11 @@
       "kind": "clatter_call",
       "pct": 15
     },
-    "passive_name": "Clatter Call"
+    "passive_name": "Dinner Bell"
   },
   {
     "id": "hedge_snipper",
-    "name": "Hedge Snipper",
+    "name": "Hedger",
     "class": "lobber",
     "hp": 120,
     "knack": "grand_dumpling",
@@ -110,7 +110,7 @@
   },
   {
     "id": "rake_hand",
-    "name": "Rake Hand",
+    "name": "Raker",
     "class": "scatterjack",
     "hp": 100,
     "knack": "pepper_rain",
@@ -118,7 +118,7 @@
   },
   {
     "id": "mower_minder",
-    "name": "Mower Minder",
+    "name": "Mower",
     "class": "boinker",
     "hp": 90,
     "knack": "rolypoly",
@@ -126,7 +126,7 @@
   },
   {
     "id": "pebble_pitcher",
-    "name": "Pebble Pitcher",
+    "name": "Pitcher",
     "class": "zinger",
     "hp": 80,
     "knack": "sunspear",
@@ -134,7 +134,7 @@
   },
   {
     "id": "straw_stuffer",
-    "name": "Straw Stuffer",
+    "name": "Dummy",
     "class": "dummy",
     "hp": 60,
     "knack": null,

@@ -146,9 +146,9 @@ jobs:
           mkdir -p hashes
           shopt -s nullglob
           files=(hashes/*.txt)
-          if [ "${#files[@]}" -lt 2 ]; then
-            echo "::notice::Fewer than 2 platforms wrote golden hashes (${#files[@]}), nothing to compare yet."
-            exit 0
+          if [ "${#files[@]}" -ne 3 ] || [ ! -f hashes/wasm32.txt ]; then
+            echo "::error::Expected 3 platform hash files including hashes/wasm32.txt, found ${#files[@]}: ${files[*]}"
+            exit 1
           fi
           ref="${files[0]}"
           fail=0

@@ -5,7 +5,7 @@ import { AnimPlayer, anims, type Clip } from './anim';
 import { sprites } from './sprites';
 import { type Cam, type Rect, sx, sy } from './view';
 
-const INK = '#2B1E2E';
+const INK = '#2C221E';
 
 /** 06 §7 budgets: Mid tier is 120 particles on screen (plus 20 for trails). Debris over the cap is dropped. */
 export const FX_CAP = 140;
@@ -57,8 +57,12 @@ export class DmgNum {
   ox = 0;
 }
 
-/** Screen boxes of the numbers this frame (x0, y0, x1, y1), and of things words must keep off. */
-const BOX = new Float64Array(4 * 32);
+/** Screen boxes of the numbers and words this frame (x0, y0, x1, y1), and of things words must keep off. */
+const BOX = new Float64Array(4 * 64);
+/** Placed screen coords for numbers (indexed parallel to `this.nums`), local to each `drawNums` pass (never mutating shared state across portrait lenses). */
+const NUM_X = new Float64Array(32);
+const NUM_Y = new Float64Array(32);
+const NUM_VIS = new Uint8Array(32);
 
 const TYPE_COLOR: Record<DmgType, string> = {
   blast: '#FFF4DE', pierce: '#FFF2A6', dig: '#D9B27C', fire: '#E0392B', crush: '#C9C3BA', heal: '#7BD36A', frost: '#BFE6FF', zap: '#B48CFF',
@@ -138,7 +142,13 @@ export class FxPool {
     if (!n) return;
     n.active = true; n.key = key; n.x = x; n.y = y; n.val = val; n.str = String(Math.round(val));
     n.size = bandSize(val); n.font = font(n.size); n.type = type; n.kind = kind; n.age = 0; n.bump = 999; n.dir = dir; n.burst = burst;
-    n.life = 700; n.color = TYPE_COLOR[type];
+    n.life = 700;
+    // Part 2 Plate 2 color-coding: warm gold (#FFC23D) for Hob hits, bright cream (#FFF4DE) for
+    // wall/block hits, emerald-gold (#7FF5D8) for Kettle hits, while keeping heal/fire/frost/zap clear.
+    if (type === 'heal' || type === 'fire' || type === 'frost' || type === 'zap') n.color = TYPE_COLOR[type];
+    else if (kind === 1) n.color = '#FFC23D';
+    else if (kind === 2) n.color = '#7FF5D8';
+    else n.color = type === 'dig' ? '#E8C48C' : '#FFF4DE';
   }
 
   /** A word in the number font: Bonk!, Drop!, Kettle Pop!, Threaded!, a note. */
@@ -225,29 +235,54 @@ export class FxPool {
   }
 
   /**
-   * Damage numbers and words, in screen space over the field (never shaken with it). Words are
-   * laid out in screen px: anchored in the world, then pushed sideways off any number and off the
-   * `avoid` boxes (kettles, world cells as x, y, w, h). Words are drawn first, numbers on top.
+   * Damage numbers and words, in screen space over the field (never shaken with it). Both damage
+   * numbers and words dodge overlapping boxes using local per-lens screen offsets (never mutating
+   * shared `n.ox` across portrait lenses). Words are drawn first, numbers on top.
    */
   drawNums(ctx: CanvasRenderingContext2D, r: Rect, c: Cam, avoid?: readonly { room?: { x: number; y: number; w: number; h: number } }[]): void {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
-    // Boxes: the numbers as drawn this frame, then the avoid boxes.
+    // Step 1: place all damage numbers with overlap avoidance against already-placed numbers.
     let nb = 0;
-    for (const n of this.nums) {
+    for (let idx = 0; idx < this.nums.length; idx++) {
+      NUM_VIS[idx] = 0;
+      const n = this.nums[idx];
       if (!n.active || n.kind === 3 || nb >= 24) continue;
       const k = scaleOf(n);
       const drift = Math.min(1, n.age / 700);
-      const x = sx(r, c, n.x) + n.dir * 10 * drift, y = sy(r, c, n.y) - 24 * drift;
+      let x = sx(r, c, n.x) + n.dir * 10 * drift;
+      let y = sy(r, c, n.y) - 24 * drift;
+      if (x < r.x - 60 || x > r.x + r.w + 60 || y < r.y - 40 || y > r.y + r.h + 40) continue;
       ctx.font = n.font;
-      const hw = (measure(ctx, n) / 2 + n.size * 0.6) * k, hh = n.size * 0.6 * k;
+      const hw = (measure(ctx, n) / 2 + n.size * 0.6) * k;
+      const hh = n.size * 0.6 * k;
+      for (let tries = 0; tries < 6; tries++) {
+        let hit = -1;
+        for (let i = 0; i < nb; i++) {
+          if (x + hw > BOX[i * 4] && x - hw < BOX[i * 4 + 2] && y + hh > BOX[i * 4 + 1] && y - hh < BOX[i * 4 + 3]) { hit = i; break; }
+        }
+        if (hit < 0) break;
+        // Fan multi-target hits cleanly upward first, then sideways if near top of lens.
+        const above = BOX[hit * 4 + 1] - hh - 4;
+        if (above >= r.y + hh + 4) {
+          y = above;
+        } else {
+          const bx = (BOX[hit * 4] + BOX[hit * 4 + 2]) / 2;
+          x += x <= bx ? BOX[hit * 4] - (x + hw) - 4 : BOX[hit * 4 + 2] - (x - hw) + 4;
+        }
+      }
+      x = Math.max(r.x + hw + 2, Math.min(r.x + r.w - hw - 2, x));
+      y = Math.max(r.y + hh + 2, Math.min(r.y + r.h - hh - 2, y));
+      NUM_X[idx] = x;
+      NUM_Y[idx] = y;
+      NUM_VIS[idx] = 1;
       BOX[nb * 4] = x - hw; BOX[nb * 4 + 1] = y - hh; BOX[nb * 4 + 2] = x + hw; BOX[nb * 4 + 3] = y + hh;
       nb++;
     }
     if (avoid) {
       for (const k of avoid) {
-        if (nb >= 32) break;
+        if (nb >= 40) break;
         const a = k.room;
         if (!a) continue;
         const x0 = sx(r, c, a.x), x1 = sx(r, c, a.x + a.w), y0 = sy(r, c, a.y + a.h), y1 = sy(r, c, a.y);
@@ -257,34 +292,43 @@ export class FxPool {
     }
     for (let pass = 0; pass < 2; pass++) {
       const words = pass === 0;
-      for (const n of this.nums) {
+      for (let idx = 0; idx < this.nums.length; idx++) {
+        const n = this.nums[idx];
         if (!n.active || (n.kind === 3) !== words) continue;
         const t = n.age;
-        // Pop to 120% in 80 ms, settle; a merge bumps it again. Drift 24 pt up (and to the side) over 700 ms.
         const k = scaleOf(n);
-        const drift = Math.min(1, t / (words ? 1000 : 700));
-        let x = sx(r, c, n.x) + n.dir * 10 * drift;
-        const y = sy(r, c, n.y) - (words ? 16 : 24) * drift;
-        if (x < r.x - 60 || x > r.x + r.w + 60 || y < r.y - 40 || y > r.y + r.h + 40) continue;
-        ctx.font = n.font;
+        let x: number;
+        let y: number;
         if (words) {
-          // Half size of the word as drawn (with its burst), then step sideways until it is clear.
+          const drift = Math.min(1, t / 1000);
+          x = sx(r, c, n.x) + n.dir * 10 * drift;
+          y = sy(r, c, n.y) - 16 * drift;
+          if (x < r.x - 60 || x > r.x + r.w + 60 || y < r.y - 40 || y > r.y + r.h + 40) continue;
+          ctx.font = n.font;
           const hw = Math.max(measure(ctx, n) / 2 + 4, n.burst ? n.size * (0.55 + 0.11 * n.str.length) * 1.3 : 0) * k;
           const hh = (n.burst ? n.size * 0.9 : n.size * 0.6) * k;
+          let ox = 0;
           for (let tries = 0; tries < 6; tries++) {
-            const cx = x + n.ox;
+            const cx = x + ox;
             let hit = -1;
             for (let i = 0; i < nb; i++) {
               if (cx + hw > BOX[i * 4] && cx - hw < BOX[i * 4 + 2] && y + hh > BOX[i * 4 + 1] && y - hh < BOX[i * 4 + 3]) { hit = i; break; }
             }
             if (hit < 0) break;
-            // Away from the box's centre, by just enough (plus a 6 px gap); the shift is kept, so the word never jumps back.
             const bx = (BOX[hit * 4] + BOX[hit * 4 + 2]) / 2;
-            n.ox += cx <= bx ? BOX[hit * 4] - (cx + hw) - 6 : BOX[hit * 4 + 2] - (cx - hw) + 6;
+            ox += cx <= bx ? BOX[hit * 4] - (cx + hw) - 6 : BOX[hit * 4 + 2] - (cx - hw) + 6;
           }
-          x += n.ox;
-          // Keep the whole word inside the lens (a subtitle near the edge is not cut off).
+          x += ox;
           x = Math.max(r.x + hw + 2, Math.min(r.x + r.w - hw - 2, x));
+          if (nb < 64) {
+            BOX[nb * 4] = x - hw; BOX[nb * 4 + 1] = y - hh; BOX[nb * 4 + 2] = x + hw; BOX[nb * 4 + 3] = y + hh;
+            nb++;
+          }
+        } else {
+          if (!NUM_VIS[idx]) continue;
+          x = NUM_X[idx];
+          y = NUM_Y[idx];
+          ctx.font = n.font;
         }
         if (DEBUG_BOXES) recordBox(this.lastWords, n, x, y, ctx);
         const fadeFrom = n.life - (words ? 300 : 200);
@@ -293,14 +337,13 @@ export class FxPool {
         ctx.translate(x, y);
         ctx.scale(k, k);
         if (n.burst) burst(ctx, n.size * (words ? 0.55 + 0.11 * n.str.length : 1.2));
-        ctx.lineWidth = 4;
+        ctx.lineWidth = words && n.burst ? 4.5 : 4.2;
         ctx.strokeStyle = INK;
         const tx = words ? 0 : n.size * 0.45;
         if (!words) typeIcon(ctx, n.type, -measure(ctx, n) / 2 - n.size * 0.1, 0, n.size * 0.42);
         ctx.strokeText(n.str, tx, 0);
         ctx.fillStyle = n.color;
         ctx.fillText(n.str, tx, 0);
-        if (n.type === 'heal' && !words) { ctx.strokeText('+', tx - measure(ctx, n) / 2 - n.size * 0.25, 0); ctx.fillText('+', tx - measure(ctx, n) / 2 - n.size * 0.25, 0); }
         ctx.restore();
       }
     }
@@ -333,7 +376,7 @@ function measure(ctx: CanvasRenderingContext2D, n: DmgNum): number {
   return w;
 }
 
-/** The gold burst frame behind Bonk! and Kettle Pop! (the same build as Drop!). */
+/** The gold burst frame behind Bonk!, Drop!, and Kettle Pop!. */
 function burst(ctx: CanvasRenderingContext2D, rad: number) {
   ctx.beginPath();
   for (let i = 0; i < 20; i++) {
@@ -344,9 +387,18 @@ function burst(ctx: CanvasRenderingContext2D, rad: number) {
   ctx.closePath();
   ctx.fillStyle = '#FFC23D';
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 3.2;
   ctx.fill();
   ctx.stroke();
+  ctx.beginPath();
+  for (let i = 0; i < 20; i++) {
+    const a = (i / 20) * Math.PI * 2;
+    const rr = (i % 2 ? rad * 0.48 : rad * 0.78);
+    if (i) ctx.lineTo(Math.cos(a) * rr * 1.24, Math.sin(a) * rr * 0.74); else ctx.moveTo(Math.cos(a) * rr * 1.24, Math.sin(a) * rr * 0.74);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#FFE08A';
+  ctx.fill();
 }
 
 /** One shape per damage type (07 §6.3), so colour is a bonus. */

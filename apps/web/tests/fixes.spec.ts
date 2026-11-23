@@ -29,7 +29,7 @@ test('H1: Settings from Pause while a shot flies, then Back, carries on with the
   expect(after.tick).toBeLessThan(before.tick + 240);
   // Back lands on the Pause card (QA playtest 1, m2); Resume lets the shot fly on.
   await expect(page.locator('.pause-card')).toBeVisible();
-  await page.getByRole('button', { name: 'Resume' }).click();
+  await page.getByRole('button', { name: 'Keep fighting' }).click();
   await expect.poll(async () => (await snap(page)).pins.length, { timeout: 20_000 }).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
@@ -129,8 +129,11 @@ test('words never sit on damage numbers or a kettle: they are laid out in screen
     const k = s.kettles.find((q) => q.side === 1)!.room!;
     c.fx.word('Drop!', k.x + k.w / 2, k.y + k.h / 2, 20, '#FFF4DE', true, 1400);
   });
-  await page.waitForTimeout(250);
-  const boxes = await page.evaluate(() => (window as unknown as { __castle: { wordBoxes: () => number[][] } }).__castle.wordBoxes());
+  // Wait for a drawn frame that has them: a slow WebKit can stall a few hundred ms as the fight
+  // opens (sound decoding), and a fixed 250 ms wait then read the boxes before any frame drew.
+  const read = () => page.evaluate(() => (window as unknown as { __castle: { wordBoxes: () => number[][] } }).__castle.wordBoxes());
+  await expect.poll(async () => { const b = await read(); return b.some((x) => x[0] === 3) && b.some((x) => x[0] !== 3); }, { timeout: 1200, intervals: [50] }).toBe(true);
+  const boxes = await read();
   const words = boxes.filter((b) => b[0] === 3), nums = boxes.filter((b) => b[0] !== 3);
   expect(words.length).toBeGreaterThanOrEqual(1);
   expect(nums.length).toBeGreaterThanOrEqual(1);

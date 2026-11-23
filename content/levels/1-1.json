@@ -32,6 +32,22 @@
         300
       ],
       [
+        1090,
+        296
+      ],
+      [
+        1099,
+        270
+      ],
+      [
+        1113,
+        270
+      ],
+      [
+        1122,
+        295
+      ],
+      [
         1200,
         292
       ],
@@ -43,10 +59,10 @@
   },
   "pads": [
     {
-      "x": 400
+      "x": 412
     },
     {
-      "x": 1300
+      "x": 1293
     }
   ],
   "player": {
@@ -59,9 +75,11 @@
   "rival": {
     "name": "Sir Pudge",
     "habit": "Shoots wide first. Then a bit closer.",
+    "habit_id": "balanced",
+    "think_ms": 1800,
     "blueprint": "bp_r1_box_wicker",
     "crew": [
-      "hedge_snipper",
+      "mower_minder",
       "straw_stuffer"
     ],
     "aim": 1
@@ -83,7 +101,7 @@
   "pennants": [
     {
       "type": "win",
-      "text": "Win"
+      "text": "Send Pudge home"
     },
     {
       "type": "hits_in_a_row",
@@ -91,11 +109,15 @@
       "value": 2
     },
     {
-      "type": "win_by_round",
-      "text": "Win by Round 5",
-      "value": 5
+      "type": "ground_kept",
+      "text": "Leave the round hill its hump",
+      "value": 90,
+      "area": [
+        680,
+        920
+      ]
     }
   ],
-  "map_note": "You on a low knoll, one round hill mid-field, Rival 40 cells lower in the open.",
+  "map_note": "You on a low knoll, one round hill mid-field, a ditch in front of the Rival, who sits 40 cells lower in the open.",
   "new_thing": "Marge alone. Aim Drag, Fire, Ghost, Pin, Bonk."
 }

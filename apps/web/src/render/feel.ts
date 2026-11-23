@@ -6,7 +6,8 @@ import { AnimPlayer, anims, frameIndexAt, type Clip } from './anim';
 import { Collapses } from './collapse';
 import { FxPool, type DmgType } from './fx';
 import { Juice, blastBand, blastTrauma, hobHitStop } from './juice';
-import { hobSpriteName } from './sprites';
+import { flattenerSpriteName, hobSpriteName, hobTeam, isCrewHob, sprites } from './sprites';
+import { hobContentId, t } from '../ui/text';
 import type { TerrainLayer } from './terrain';
 import { matKey, stage } from './view';
 
@@ -32,6 +33,8 @@ class HobAnim {
   still = 0;
   tumbleMs = 0;
   nextdoorMs = 0;
+  hurtMs = 0;
+  flattener = false;
   cheering = false;
   barked = false;
   cheerGap = 0;
@@ -57,8 +60,10 @@ export class Feel {
   time = 0;
   reduceMotion = false;
   you: Side = 0;
-  sound: (c: Cue, arg?: string, gain?: number) => void = () => undefined;
-  /** A bark: sprite name, event, side, turn step, and the Hob id (for the subtitle tag). */
+  /** The fight's mode (the Rival look is for campaign and Skirmish, orange for a Couch Duel). */
+  private mode = 'campaign';
+  sound: (c: Cue, arg?: string, gain?: number, pan?: number) => void = () => undefined;
+  /** A bark: content Hob id, event, side, turn step, and the Hob's snapshot id (for the subtitle tag). */
   bark: (hob: string, ev: Bark, side: number, step: number, id: string) => void = () => undefined;
   private shotN = 0;
   private lastShot = '';
@@ -109,6 +114,7 @@ export class Feel {
         if (g.count >= 3 && g.landed === g.count) this.juice.hitStop(50);
         // Rumble by block count: 1 block 0.5, 6 or more 1.0.
         this.sound('land', '', Math.min(1, 0.4 + 0.1 * g.count));
+        this.sound('dust', '', 0.65);
       }
     };
   }
@@ -121,11 +127,12 @@ export class Feel {
 
   /** One core event, already turned into a view event by the adapter. */
   onEvent(e: BattleEvent, snap: Snapshot, viewCenterX: number, viewW: number): void {
+    const panOf = (x: number) => (viewW > 0 ? Math.max(-0.85, Math.min(0.85, (x - viewCenterX) / (viewW * 0.5))) : 0);
     switch (e.t) {
       case 'turn':
         this.juice.newTurn();
-        // The core's settle is shorter than the show: a collapse still creaking skips to its drop.
-        this.col.hurry();
+        // Let active collapse choreography finish cleanly on normal speed; only hurry when fast/reduced-motion.
+        if (this.juice.fast || this.reduceMotion) this.col.hurry();
         this.fireTick = -1;
         break;
       case 'fire': {
@@ -148,7 +155,7 @@ export class Feel {
         this.shakeAt(tr, decay, e.x, e.y, viewCenterX, viewW);
         this.boom(e.x, e.y, e.r);
         this.impact(e.x, e.y, snap);
-        this.sound('boom', blastBand(e.r));
+        this.sound('boom', blastBand(e.r), 1, panOf(e.x));
         // Near miss on a kettle under 25% (07 §6.4).
         for (const k of snap.kettles) {
           if (k.hp <= 0 || k.hp > k.maxHp * 0.25 || this.kettleHitThisShot) continue;
@@ -160,13 +167,15 @@ export class Feel {
       case 'hit': {
         const dir = (e.side ?? (e.x < (snap.forts[0].x + snap.forts[1].x) / 2 ? 0 : 1)) === 0 ? -1 : 1;
         const type = dmgType(e.dtype);
+        const pan = panOf(e.x);
         if (e.dmg > 0) {
           if (e.what === 'hob') {
             this.fx.number(`h${e.hob ?? e.x}`, e.x, e.y + 10, e.dmg, 1, type, dir);
             this.juice.hitStop(hobHitStop(e.dmg));
             const a = e.hob ? this.hobs.get(e.hob) : undefined;
+            if (a) a.hurtMs = 650;
             if (a?.clips.hit && a.mode !== 'bonked' && a.mode !== 'tumble') { a.p.play(a.clips.hit); a.mode = 'act'; }
-            this.sound('hit_hob');
+            this.sound('hit_hob', '', 1, pan);
             if (a) this.bark(a.nm, 'takes_hit', a.side, this.shotN, a.id);
             const sh = this.shooter;
             if (sh && a && sh.side !== a.side) this.bark(sh.nm, 'hit_lands', sh.side, this.shotN, sh.id);
@@ -174,18 +183,18 @@ export class Feel {
             this.kettleHitThisShot = true;
             this.fx.number(`k${e.side ?? 0}`, e.x, e.y + 16, e.dmg, 2, type, dir);
             this.fx.spawnName('fx_impact_cobble', e.x, e.y, 1);
-            this.sound('hit', 'kettle');
+            this.sound('hit', 'kettle', 1, pan);
           } else {
             this.fx.number(`b${e.side ?? 0}`, e.x, e.y + 8, e.dmg, 0, type, dir);
             this.fx.spawnName(`fx_impact_${matKey(e.mat ?? 'timber')}`, e.x, e.y - 8, 1);
-            this.sound('hit', e.mat ?? 'timber');
+            this.sound('hit', e.mat ?? 'timber', 1, pan);
           }
           this.impact(e.x, e.y, snap);
         } else {
           // A miss: a puff of dirt, or a splash in water.
           const water = this.waterAt(e.x, e.y);
           this.fx.spawnName(water ? 'fx_splash' : 'fx_impact_dirt', e.x, e.y + (water ? 2 : 4), 1);
-          this.sound(water ? 'splash' : 'thud');
+          this.sound(water ? 'splash' : 'thud', '', 1, pan);
           this.impact(e.x, e.y, snap);
         }
         break;
@@ -202,17 +211,18 @@ export class Feel {
         }
         const r = this.fx.spawnName(`fx_rubble_${matKey(e.mat)}`, e.x - 8, e.y + 8, 1, 1);
         if (r) { r.hold = 1500; r.fade = 500; }
-        this.sound('break', e.mat);
+        this.sound('break', e.mat, 1, panOf(e.x));
+        if (this.breaksThisBatch === 2) this.sound('debris', '', 0.7, panOf(e.x));
         break;
       }
       case 'collapse':
         this.col.start(e);
         break;
       case 'fall':
-        this.fx.word('Drop!', e.x, e.y - 14, 20, '#FFF4DE', true, 1400); // at the base of the fall, under the numbers
+        this.fx.word(t('notes.big_drop'), e.x, e.y - 14, 20, '#FFF4DE', true, 1400); // at the base of the fall, under the numbers
         break;
       case 'bonk': {
-        this.fx.word('Bonk!', e.x, e.y + 44, 22, '#FFF4DE', true, 1400);
+        this.fx.word(t('notes.bonk'), e.x, e.y + 44, 22, '#FFF4DE', true, 1400);
         this.juice.hitStop(80);
         // A plain Bonk slow. Whether it ended the fight is the core's call: the win event
         // (how: clean_sweep) turns it into the Clean Sweep slow below. In Volley Points a side
@@ -234,7 +244,7 @@ export class Feel {
         if (k) {
           const kx = k.x + k.size / 2, ky = k.y + k.size / 2;
           this.juice.slow('kettle_pop', true, [kx, ky], 1.4);
-          this.fx.word('Kettle Pop!', kx, ky + 60, 24, '#4FE3C1', true, 2000);
+          this.fx.word(t('notes.kettle_pop'), kx, ky + 60, 24, '#4FE3C1', true, 2000);
           this.boom(kx, ky, 42);
         }
         break;
@@ -285,7 +295,9 @@ export class Feel {
   }
 
   private shakeAt(tr: number, decay: number, x: number, y: number, cx: number, vw: number): void {
-    if (this.juice.shakeScale <= 0 || this.reduceMotion) { this.juice.rimAt(x, y, 30 * tr + 10); return; }
+    // Reduce Motion suppresses both screen shake and impact white rim flashes (Web-M17).
+    if (this.reduceMotion) return;
+    if (this.juice.shakeScale <= 0) { this.juice.rimAt(x, y, 30 * tr + 10); return; }
     const d = vw > 0 ? Math.abs(x - cx) / vw : 0;
     this.juice.shake(tr, decay, d, cx - x, 0);
     void y;
@@ -364,34 +376,70 @@ export class Feel {
     }
   }
 
-  private hobAnim(h: HobView): HobAnim {
+  private hobAnim(h: HobView, isFlattener: boolean): HobAnim {
     let a = this.hobs.get(h.id);
-    if (a && a.def === h.def && a.cls === h.cls && a.side === h.side) return a;
-    const key = `hob_${hobSpriteName(h.def ?? h.id, h.cls)}_${h.side === 0 ? 'blue' : 'orange'}_`;
+    if (a && a.def === h.def && a.cls === h.cls && a.side === h.side && a.flattener === isFlattener) return a;
+    const fnm = flattenerSpriteName(h.def ?? h.id, h.cls);
+    // A crew Hob on the Rival side wears the Rival look (hob_<name>_rival_*); a Couch Duel
+    // player 2 stays orange; Rival units are Flatteners.
+    const key = isFlattener
+      ? `flattener_${fnm}_`
+      : `hob_${hobSpriteName(h.def ?? h.id, h.cls)}_${this.team(h)}_`;
     a = new HobAnim(h.id);
-    a.def = h.def; a.cls = h.cls; a.side = h.side; a.nm = hobSpriteName(h.def ?? h.id, h.cls);
+    a.def = h.def; a.cls = h.cls; a.side = h.side; a.flattener = isFlattener;
+    a.nm = hobContentId(h.def ?? h.id); // barks are keyed by content Hob id (barks.json)
     a.key = key;
-    for (const c of HOB_CLIPS) a.clips[c] = anims.get(key + c);
-    a.p.play(a.clips.idle);
+    for (const c of HOB_CLIPS) {
+      const clip = anims.get(key + c);
+      if (clip && (!isFlattener || sprites.has(clip.frames[0]))) a.clips[c] = clip;
+    }
+    this.playIdle(a, a.clips.idle);
     a.lastY = h.y;
     a.nextBlink = 3000 + this.rand() * 2000;
     this.hobs.set(h.id, a);
     return a;
   }
 
+  /** Sprite team for a crew Hob: blue, a Couch Duel orange, or the Rival look. */
+  private team(h: HobView): 'blue' | 'orange' | 'rival' {
+    const t = hobTeam(h.side, this.mode);
+    // An atlas built before the Rival look has no rival frames: fall back to orange.
+    return t === 'rival' && !anims.get(`hob_${hobSpriteName(h.def ?? h.id, h.cls)}_rival_idle`) ? 'orange' : t;
+  }
+
+  /**
+   * Start an idle loop somewhere inside it, so a crew never breathes in step: a random point when
+   * the clip says `random_start`, else its `start_offset_ms`.
+   */
+  private playIdle(a: HobAnim, clip: Clip | undefined): void {
+    a.p.play(clip);
+    if (!clip || !clip.loop) return;
+    if (clip.randomStart) a.p.seek(this.rand() * clip.total);
+    else if (clip.startOffsetMs) a.p.seek(clip.startOffsetMs);
+  }
+
   private stepHobs(dt: number, snap: Snapshot): void {
     const rm = this.reduceMotion;
+    this.mode = snap.mode;
+    const enemyFlattener = snap.mode !== 'duel';
     for (const h of snap.hobs) {
-      const a = this.hobAnim(h);
+      // Rival units are Flatteners; a crew Hob on the Rival side (Skirmish) wears the Rival look.
+      const a = this.hobAnim(h, h.side === 1 && enemyFlattener && !isCrewHob(h.def ?? h.id));
+      if (a.hurtMs > 0) a.hurtMs = Math.max(0, a.hurtMs - dt);
       if (h.state === 'bonked') {
-        if (a.mode !== 'bonked' && a.clips.bonked) { a.p.play(a.clips.bonked); a.mode = 'bonked'; a.lift = 0; a.lifting = false; }
+        if (a.mode !== 'bonked') {
+          a.mode = 'bonked';
+          a.lift = 0;
+          a.lifting = !a.clips.bonked;
+          if (a.clips.bonked) a.p.play(a.clips.bonked);
+        }
         this.cur = a;
-        a.p.step(rm ? 0 : dt, this.bonkSink);
-        if (rm && a.p.clip) a.lifting = true;
+        if (a.clips.bonked) a.p.step(rm ? 0 : dt, this.bonkSink);
+        if (rm && (a.p.clip || !a.clips.bonked)) a.lifting = true;
         if (a.lifting) a.lift = Math.min(36, a.lift + (dt / 1000) * 24);
         continue;
       }
-      if (a.mode === 'bonked') { a.mode = 'idle'; a.lift = 0; a.p.play(a.clips.idle); }
+      if (a.mode === 'bonked') { a.mode = 'idle'; a.lift = 0; this.playIdle(a, a.clips.idle); }
       a.nextdoorMs = Math.max(0, a.nextdoorMs - dt);
       if (a.mode === 'tumble') {
         a.tumbleMs += dt;
@@ -418,7 +466,7 @@ export class Feel {
         } else {
           const nd = a.clips.nextdoor && (a.nextdoorMs > 0 || (h.def === 'hetty' && this.held[h.side]));
           const want = nd ? a.clips.nextdoor : a.clips.idle;
-          if (a.p.clip !== want || a.mode === 'aim') { a.p.play(want); a.mode = nd ? 'nextdoor' : 'idle'; }
+          if (a.p.clip !== want || a.mode === 'aim') { if (nd) a.p.play(want); else this.playIdle(a, want); a.mode = nd ? 'nextdoor' : 'idle'; }
           // Reduce motion: loops hold their first frame; idle bobbing stops.
           if (!rm) a.p.step(dt);
           a.nextBlink -= dt;
@@ -454,13 +502,20 @@ export class Feel {
   hobSprite(h: HobView): string | undefined {
     const a = this.hobs.get(h.id);
     this.outDy = 0;
-    if (!a || !a.p.clip) return undefined;
+    if (!a) return undefined;
     if (a.mode === 'bonked') {
       this.outDy = a.lift + (a.lift >= 36 && !this.reduceMotion ? Math.sin(this.time / 400) * 2 : 0);
-      return a.p.frame();
+      return a.p.clip ? a.p.frame() : undefined;
     }
+    if (!a.p.clip) return undefined;
     if (a.blinkLeft > 0 && a.mode === 'idle' && a.clips.blink) return a.clips.blink.frames[0];
     return a.p.frame();
+  }
+
+  /** True briefly after a unit takes a hit (tilts Flattener spirit-level bubble). */
+  hobHurt(id: string): boolean {
+    const a = this.hobs.get(id);
+    return !!a && a.hurtMs > 0;
   }
 
   private stepFort(dt: number, snap: Snapshot): void {
@@ -485,10 +540,11 @@ export class Feel {
           }
         }
       } else { this.walkT[s] = 0; this.walkFrame[s] = -1; }
-      // Kettle: the pop plays on, then holds kettle_popped. Steam puffs at 25% or less.
+      // Kettle: the pop plays on, then holds kettle_popped; reset if Volley Points relights it (Web-H3).
       const k = this.kettles[s];
-      if (k.on) k.p.step(dt, this.kettleSink);
       const kv = snap.kettles[s];
+      if (kv && kv.hp > 0 && k.on) { k.on = false; k.p.clip = null; }
+      if (k.on) k.p.step(dt, this.kettleSink);
       if (kv && kv.hp > 0 && kv.hp <= kv.maxHp * 0.25) {
         if (!this.steam[s].clip) this.steam[s].play(anims.get('fx_kettle_steam'));
         if (!rm) this.steam[s].step(dt);
@@ -558,7 +614,9 @@ export class Feel {
   }
 
   private stepPins(dt: number, snap: Snapshot): void {
+    const liveIds = new Set<string>();
     for (const p of snap.pins) {
+      liveIds.add(p.id);
       let a = this.pins.get(p.id);
       if (!a) {
         a = new AnimPlayer();
@@ -569,6 +627,7 @@ export class Feel {
       }
       a.step(dt, this.pinSink);
     }
+    for (const id of this.pins.keys()) if (!liveIds.has(id)) this.pins.delete(id);
   }
   pinSprite(p: PinView): string {
     const a = this.pins.get(p.id);

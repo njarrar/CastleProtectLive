@@ -55,15 +55,22 @@
         400,
         340,
         "rock"
+      ],
+      [
+        614,
+        626,
+        380,
+        350,
+        "clay"
       ]
     ]
   },
   "pads": [
     {
-      "x": 420
+      "x": 427
     },
     {
-      "x": 1800
+      "x": 1806
     }
   ],
   "player": {
@@ -71,20 +78,24 @@
       "marge",
       "quill",
       "jax",
-      "grub"
+      "grub",
+      "hetty",
+      "nan"
     ],
     "crew_size": 4,
     "blueprint": "bp_home_4"
   },
   "rival": {
-    "name": "Sergeant Posy Rakewell",
+    "name": "Sergeant Posy Rake",
     "habit": "Grabs the biggest shell in the Rummage.",
+    "habit_id": "kettle_hunter",
+    "think_ms": 900,
     "blueprint": "bp_r1_orchard",
     "crew": [
-      "hedge_snipper",
       "pebble_pitcher",
       "rake_hand",
-      "mower_minder"
+      "mower_minder",
+      "pebble_pitcher"
     ],
     "aim": 2,
     "knack_uses": 1,
@@ -104,7 +115,7 @@
   "pennants": [
     {
       "type": "win",
-      "text": "Win"
+      "text": "Send Posy home empty-handed"
     },
     {
       "type": "bonk_with_trick",
@@ -116,7 +127,7 @@
       "value": 2
     }
   ],
-  "map_note": "Two orchards on two low hills, a stream gully between, a low stone ridge in front of the Rival.",
+  "map_note": "Two orchards on two low hills, an old stump in the near one, a stream gully between, a low stone ridge in front of the Rival.",
   "new_thing": "The Rummage. +Bobbin on clear.",
   "water": [
     {

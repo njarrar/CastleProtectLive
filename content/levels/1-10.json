@@ -39,14 +39,30 @@
         2400,
         320
       ]
+    ],
+    "patches": [
+      [
+        2238,
+        2262,
+        340,
+        316,
+        "rock"
+      ],
+      [
+        2244,
+        2256,
+        347,
+        322,
+        "rock"
+      ]
     ]
   },
   "pads": [
     {
-      "x": 520
+      "x": 523
     },
     {
-      "x": 1850
+      "x": 1847
     }
   ],
   "player": {
@@ -64,6 +80,8 @@
   "rival": {
     "name": "Marshal Mowbray Trimm",
     "habit": "Hedges regrow while the Sprinkler Root stands.",
+    "habit_id": "roof_wrecker",
+    "think_ms": 1100,
     "blueprint": "bp_gf1_topiary",
     "crew": [
       "hedge_snipper",
@@ -71,7 +89,9 @@
       "rake_hand",
       "mower_minder"
     ],
-    "aim": 2
+    "aim": 2,
+    "knack_uses": 0,
+    "hp_pct": 75
   },
   "rules": {
     "round_cap": 18,
@@ -86,7 +106,7 @@
     "regrow": true,
     "boss": {
       "phase2_pct": 70,
-      "phase3_pct": 35,
+      "phase3_pct": 40,
       "roller": {
         "x": 1200,
         "hp": 60,
@@ -104,7 +124,7 @@
   "pennants": [
     {
       "type": "win",
-      "text": "Win"
+      "text": "Send Marshal Trimm home"
     },
     {
       "type": "root_by_round",
@@ -117,7 +137,7 @@
       "value": 50
     }
   ],
-  "map_note": "You and the boss across one gentle hill with a lawn roller on top. A stream behind you.",
+  "map_note": "You and the boss across one gentle hill with a lawn roller on top. A stream behind you, a boulder behind him.",
   "new_thing": "Grand Fort.",
   "water": [
     {

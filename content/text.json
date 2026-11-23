@@ -1,0 +1,1311 @@
+{
+  "_readme": {
+    "what": "Every line a player can read or hear read out, for web, Android and iOS. One file, one voice. Names and card lines of Hobs, Classes, shots and Doodads are not here: read those from the other content files.",
+    "keys": "Join the path with dots: results.loss.title.kettle_pop. Keys are stable. Add keys, do not rename them.",
+    "placeholders": "Curly braces round a plain word: {hob}, {rival}, {n}. Swap each one for its value. A line never holds a placeholder it does not need, and no line nests them.",
+    "pools": "A list is a pool. Pick one line at random, and not the one you showed last time.",
+    "plurals": "Where the count changes the words there are two keys, one and other. Use one when the count is 1.",
+    "ids": "Sub-keys under how, why, by, state and notes are the ids the rules core sends. Look the id up as it comes.",
+    "notes": "Keys that start with an underscore are notes for people. Do not show them.",
+    "more": "See content/text.md."
+  },
+
+  "app": {
+    "title": "Castle Protect",
+    "subtitle": "The Unflattening",
+    "tagline": "Keep Brickabrac lumpy.",
+    "promise": "Free forever. No ads.",
+    "promise_long": "Free forever. No ads. Nothing to buy."
+  },
+
+  "common": {
+    "back": "Back",
+    "close": "Close",
+    "done": "Done",
+    "cancel": "Cancel",
+    "next": "Next",
+    "play": "Play",
+    "fight": "Fight",
+    "map": "Map",
+    "again": "Again",
+    "rematch": "Rematch",
+    "settings": "Settings",
+    "save": "Save",
+    "undo": "Undo",
+    "redo": "Redo",
+    "revert": "Put it back",
+    "use": "Use",
+    "clear": "Clear",
+    "swap": "Swap",
+    "on": "On",
+    "off": "Off",
+    "you": "You",
+    "yours": "Yours",
+    "theirs": "Theirs",
+    "rival": "The Rival",
+    "dummy": "Dummy",
+    "nobody": "Nobody",
+    "loading": "Putting the kettle on",
+    "loading_fight": "Getting the field ready",
+    "percent": "{n} percent",
+    "list_and": "{a} and {b}",
+    "update_ready": "A newer version is ready.",
+    "update": "Update"
+  },
+
+  "home": {
+    "play": "Play",
+    "play_hint": "Starts your first fight",
+    "play_next": "Play {id}",
+    "play_next_hint": "Play the next level, {id}, {name}",
+    "carry_on": {
+      "title": "Carry on?",
+      "where": "Round {n}, {name}'s turn",
+      "where_you": "Round {n}, your turn",
+      "yes": "Carry on",
+      "no": "Leave it",
+      "hint": "Picks up the fight you left"
+    },
+    "new_fight": {
+      "title": "Start a new fight?",
+      "body": "The one you left will be gone.",
+      "yes": "Start new",
+      "no": "Keep the old one"
+    },
+    "sound": "Sound",
+    "music": "Music",
+    "voices": "Voices"
+  },
+
+  "map": {
+    "regions": {
+      "downs": { "name": "Puddingstone Downs", "chip": "Downs" },
+      "crag": { "name": "Crag End", "chip": "Crag" },
+      "fen": { "name": "Soggy Bottom Fen", "chip": "Fen" },
+      "flats": { "name": "The Flats", "chip": "Flats" },
+      "heights": { "name": "Nithering Heights", "chip": "Heights" },
+      "wheal": { "name": "Wheal Clank", "chip": "Mines" }
+    },
+    "cleared": "{done} of {total} cleared",
+    "pennants": "Pennants",
+    "pennants_count": "{n} of {total} Pennants",
+    "buttons": "Buttons",
+    "buttons_count": "{n} Buttons",
+    "modes": "Modes",
+    "workshop": "Workshop",
+    "node": "Level {id}, {name}",
+    "node_locked": "Level {id}, {name}. Not open yet.",
+    "node_done": "Level {id}, {name}. {n} of 3 Pennants.",
+    "grand_fort": "Grand Fort",
+    "types": {
+      "siege": "Siege",
+      "rescue": "Rescue",
+      "grand_fort": "Grand Fort",
+      "skirmish": "Skirmish"
+    },
+    "skirmish_maps": {
+      "d1": "Two Lumps",
+      "d2": "Orchard Dip"
+    }
+  },
+
+  "modes": {
+    "duel": {
+      "name": "Couch Duel",
+      "button": "2 players",
+      "line": "Two players, one device."
+    },
+    "skirmish": {
+      "name": "Skirmish",
+      "line": "One fight with a Rival."
+    },
+    "yard": {
+      "name": "Test Yard",
+      "line": "Try any shot. They never run out.",
+      "long": "Shoot at a dummy. Set your own wind.",
+      "rule": "Test Yard. No rounds, no rush."
+    },
+    "workshop": {
+      "name": "Workshop",
+      "line": "Build your fort."
+    },
+    "daily": {
+      "name": "Daily Dust-up",
+      "short": "Daily",
+      "line": "The same fight for everyone today.",
+      "goal": "Win today's Dust-up",
+      "done": "Done today",
+      "done_hint": "Daily Dust-up. You won today's."
+    }
+  },
+
+  "setup": {
+    "skirmish_title": "Skirmish",
+    "duel_title": "Couch Duel",
+    "map": "Map",
+    "rival": "Rival",
+    "rival_is_game": "A Rival (the game plays it)",
+    "rival_plays": "Plays {grade}.",
+    "difficulty": {
+      "label": "Difficulty",
+      "cozy": "Cosy",
+      "fair": "Fair",
+      "stubborn": "Stubborn",
+      "_note": "The id in content and saves is still cozy. Show Cosy."
+    },
+    "win_by": {
+      "label": "Win by",
+      "knockout": "Knockout",
+      "volley": "Volley {n}",
+      "volley_name": "Volley Points",
+      "knockout_rule": "Knockout. Bonk them all, or pop their kettle.",
+      "volley_rule": "Volley Points. {n} shots each. Top score wins. No rounds, no Squall."
+    },
+    "rounds": "Rounds",
+    "shots_each": "Shots each",
+    "wind": {
+      "label": "Wind",
+      "off": "Off",
+      "light": "Light",
+      "full": "Full"
+    },
+    "shells": {
+      "label": "Shells",
+      "draft": "The Rummage",
+      "quick": "Quick Pick",
+      "plain": "Plain only"
+    },
+    "seats": {
+      "label": "Seats",
+      "side_by_side": "Side by side",
+      "one_seat": "One seat"
+    },
+    "help": {
+      "label": "Help",
+      "none": "None",
+      "some": "Some",
+      "lots": "Lots",
+      "what": "More Steam, and a longer aim line.",
+      "mark": "Help: {level}"
+    },
+    "fort": "Fort",
+    "fort_mine": "Mine: {name}",
+    "fort_default_name": "the Wobbly",
+    "crew": "Crew",
+    "pick_crew": "Pick crew",
+    "pick_up_to": "Pick up to {n}.",
+    "player_label": "Player {n}",
+    "player_name": "Player {n}'s name",
+    "player_side_left": "Left fort. Blue, round.",
+    "player_side_right": "Right fort. Orange, diamond.",
+    "silly_name": "Silly name",
+    "silly_name_hint": "A silly name for player {n}",
+    "swap_sides": "Swap sides",
+    "quick_start": "Quick start",
+    "change_setup": "Change setup",
+    "fort_swapped": "{name}'s fort has too few Nooks for {n} Hobs. {fort} is used this time.",
+    "fort_swapped_plain": "Your fort has too few Nooks for this crew. You get a plain one this time."
+  },
+
+  "names": {
+    "_note": "One list for the silly-name dice on every platform. No food, no brands, nobody who shares a name with a Hob.",
+    "player_default": ["Mabel", "Otis"],
+    "duel": [
+      "Mabel", "Otis", "Pru", "Bert", "Dot", "Alf", "Ivy", "Stan", "Nell", "Wilf",
+      "Ada", "Clem", "Hattie", "Winnie", "Bertie", "Tilly", "Lettie", "Moss",
+      "Captain Crumb", "Lady Lump", "Granny Gale", "Uncle Tug"
+    ]
+  },
+
+  "level_card": {
+    "notice": {
+      "title": "Notice of Flattening",
+      "ref": "Ref. {id}",
+      "signed": "Signed, {signature}",
+      "small_print": "The small print"
+    },
+    "goals": "Goals",
+    "their_crew": "Their crew",
+    "your_crew": "Your crew",
+    "crew_of": { "one": "Crew of 1", "other": "Crew of {n}" },
+    "pick_up_to": "Pick up to {n}.",
+    "same_as_last": "Same as last time",
+    "their_aim": "Their aim: {n} of 5",
+    "fort_level": "Fort: the level's own",
+    "fort_yours": "Fort: yours",
+    "fort_too_small": "Your fort has too few Nooks for this crew. You get the level's fort this time.",
+    "rounds_squall": "{n} rounds, then the Squall",
+    "rounds_count": "{n} rounds. Then whoever has more left wins.",
+    "rounds_volley": "{n} shots each. Top score wins.",
+    "rummage": "Rummage: take {picks} of {pool}",
+    "doodads_none": "Doodads: none yet",
+    "doodads": "Doodads: {list}",
+    "wind_none": "No wind",
+    "wind_one": "Wind {n}",
+    "wind_range": "Wind {min} to {max}",
+    "no_level": "That level is not here yet.",
+    "next_level": "Next: {id} {name}"
+  },
+
+  "levels": {
+    "_note": "Level names, Rival names and Habits come from content/levels. This block adds the Notice, the Rival's key in rivals, and goal wording by Pennant type. If a level has no line for a Pennant type, use pennants.<type>, then the text in the level file.",
+    "1-1": {
+      "rival": "pudge",
+      "notice": "The lump known as Home Knoll is to be made level by teatime. Sorry for the mess.",
+      "signature": "Sir Pudge, for the Baron",
+      "win_title": "Sir Pudge has gone home",
+      "goals": {
+        "win": "Send Pudge home",
+        "hits_in_a_row": "Two hits running",
+        "ground_kept": "Leave the round hill its hump"
+      }
+    },
+    "1-2": {
+      "rival": "tuft",
+      "notice": "Hats above the permitted height have been seen on this hill. The hill will come down to match.",
+      "signature": "Private Tuft",
+      "win_title": "Tuft has gone to report",
+      "goals": {
+        "win": "Send Tuft packing",
+        "bonk_nook": "Bonk the Hob up the tower",
+        "bonk_with_each_hob": "Every Hob bags one"
+      }
+    },
+    "1-3": {
+      "rival": "fernsby",
+      "notice": "A kettle has been left on a knoll without a permit. Both are to be removed.",
+      "signature": "Lance Corporal Fernsby, Parks and Verges",
+      "win_title": "Fernsby wants a new plan",
+      "goals": {
+        "win": "Chase Fernsby off the knoll",
+        "kettle_pop": "Pop the kettle by his wall",
+        "win_by_round": "Done by Round {n}"
+      }
+    },
+    "1-4": {
+      "rival": "dibber",
+      "notice": "There are three hills here. The schedule allows for none. Works begin when the wind drops.",
+      "signature": "Corporal Dibber",
+      "win_title": "Dibber blames the wind",
+      "goals": {
+        "win": "See Dibber off the tops",
+        "hits_in_a_row": "Three hits running",
+        "win_by_round": "Done before the third front"
+      }
+    },
+    "1-5": {
+      "rival": "rake",
+      "notice": "Works in this dell go on under a roof, to keep the forms dry. Please do not open it.",
+      "signature": "Sergeant Posy Rake",
+      "win_title": "Sergeant Rake stands down",
+      "goals": {
+        "win": "Send Posy Rake home",
+        "bonk_with_knack": "A Knack does the Bonking, under the roof",
+        "no_hob_bonked": "Nobody Bonked"
+      }
+    },
+    "1-6": {
+      "rival": "snedd",
+      "notice": "Your roofs are over height. The Stamp Tower will see to them, one at a time.",
+      "signature": "Warden Snedd, under protest",
+      "win_title": "Snedd has hedges to do",
+      "goals": {
+        "win": "See Snedd off the slope",
+        "bonk_nook": "Bonk the Hob atop the Stamp Tower",
+        "kettle_above_pct": "Kettle barely scratched"
+      }
+    },
+    "1-7": {
+      "rival": "fernsby_acting",
+      "captive": "Hetty",
+      "notice": "One builder, found building, is held in the Cage on the middle hill. Collection is not advised.",
+      "signature": "Corporal Fernsby (acting)",
+      "win_title": "Hetty's out",
+      "goals": {
+        "win": "Free Hetty",
+        "captive_safe": "Not a mark on Hetty",
+        "win_by_round": "Out by Round {n}"
+      }
+    },
+    "1-8": {
+      "rival": "rake",
+      "notice": "A sale of loose shells will be held between the orchards. The Sergeant will be taking the biggest.",
+      "signature": "Sergeant Posy Rake",
+      "win_title": "Rake took the wrong shell",
+      "goals": {
+        "win": "Send Posy home empty-handed",
+        "bonk_with_trick": "A Trick Shell does the Bonking",
+        "use_tricks": "Fire both Trick Shells"
+      }
+    },
+    "1-9": {
+      "rival": "dibber",
+      "notice": "Loaf Hill spoils the view of High Hill. One of them has to go. We have picked Loaf.",
+      "signature": "Corporal Dibber",
+      "win_title": "Loaf Hill stays",
+      "goals": {
+        "win": "Get Dibber off High Hill",
+        "hits_from_spots": "Hit from two spots",
+        "ground_kept": "Leave Loaf Hill standing"
+      }
+    },
+    "1-10": {
+      "rival": "trimm",
+      "notice": "Keep off the lawn, the hedges and the roller. The hedges have been told to grow back.",
+      "signature": "Marshal Mowbray Trimm, Parks and Verges",
+      "win_title": "The Keep is lumpy again",
+      "goals": {
+        "win": "Send Marshal Trimm home",
+        "root_by_round": "Break the Sprinkler Root by Round {n}",
+        "hill_half": "Save the hill"
+      },
+      "phases": {
+        "1": "The hedges are growing back.",
+        "2": "Little Ethel is out.",
+        "3": "The shears are up."
+      }
+    }
+  },
+
+  "pennants": {
+    "_note": "Goal wording by Pennant type, for any level with no line of its own. {n} is the Pennant's value.",
+    "win": "Win",
+    "win_by_round": "Done by Round {n}",
+    "no_hob_bonked": "Nobody Bonked",
+    "kettle_above_pct": "Kettle over {n}%",
+    "hits_in_a_row": "{n} hits running",
+    "kettle_pop": "Pop {rival}'s kettle",
+    "bonk_with_each_hob": "Every Hob bags one",
+    "bonk_with_knack": "A Knack does the Bonking",
+    "bonk_with_trick": "A Trick Shell does the Bonking",
+    "use_tricks": "Fire {n} Trick Shells",
+    "hits_from_spots": "Hit from {n} spots",
+    "captive_safe": "Not a mark on {captive}",
+    "root_by_round": "Break the Sprinkler Root by Round {n}",
+    "hill_half": "Save the hill",
+    "ground_kept": "Leave the hill standing",
+    "bonk_nook": "Bonk the Hob in the top Nook",
+    "count": "{n} of {total} Pennants",
+    "label": "Pennant {n}",
+    "got": "{goal}. Got it.",
+    "not_got": "{goal}. Not yet.",
+    "new": "New"
+  },
+
+  "rivals": {
+    "_note": "name is the name the level file carries. Find a Rival by levels.<id>.rival, or in Skirmish by matching name. short goes in banners and results. Taunts are pools: start once at the top of the fight, the rest now and then, never two turns running. Flatteners are polite and never gloat.",
+    "pudge": {
+      "name": "Sir Pudge",
+      "short": "Pudge",
+      "taunts": {
+        "start": ["Is it today? Oh. Very well."],
+        "hit": ["Oh. Did I do that?", "There. May I sit down now?"],
+        "miss": ["Wide. I shall try a bit closer.", "Near enough for a Tuesday."],
+        "hurt": ["I was resting on that wall.", "Mind the chair."],
+        "unit_bonked": ["He will want a lie down. So do I."]
+      },
+      "sign_off": ["Lost. I shall sleep on it. Sir Pudge.", "Sent home. Good. Sir Pudge."],
+      "dozed": "Sir Pudge dozed off."
+    },
+    "tuft": {
+      "name": "Private Tuft",
+      "short": "Tuft",
+      "taunts": {
+        "start": ["Reporting as told. Flattening starts at nine."],
+        "hit": ["Top floor first. It says so in the book."],
+        "miss": ["That one does not count, sir.", "Practice shot. Probably."],
+        "hurt": ["Not the hat. The hat is issued.", "I shall have to write that down."]
+      },
+      "sign_off": ["Filed under: lost. Private Tuft."]
+    },
+    "fernsby": {
+      "name": "Lance Corporal Fernsby",
+      "short": "Fernsby",
+      "taunts": {
+        "start": ["Kindly hold still. This is a survey."],
+        "hit": ["Measured, then moved."],
+        "miss": ["Measured wrong. Measuring again."],
+        "hurt": ["That will need a form.", "My crew is further in. You will not find them."],
+        "kettle_hit": ["The kettle was meant to be there. Mostly."]
+      },
+      "sign_off": ["The kettle was where the plan put it. Lance Corporal Fernsby."]
+    },
+    "fernsby_acting": {
+      "name": "Corporal Fernsby",
+      "short": "Fernsby",
+      "taunts": {
+        "start": ["It is Corporal now. Mind the Cage."],
+        "hit": ["Measured, then moved."],
+        "miss": ["Measured wrong. Measuring again."],
+        "hurt": ["That will need a form."],
+        "bar_broke": ["Those bars are on loan.", "One bar. I am counting."]
+      },
+      "sign_off": ["Cage returned, slightly bent. Corporal Fernsby (acting)."]
+    },
+    "dibber": {
+      "name": "Corporal Dibber",
+      "short": "Dibber",
+      "taunts": {
+        "start": ["Lovely still day for it."],
+        "hit": ["There. Got there in the end."],
+        "miss": ["Was that the wind? Nobody said.", "Close. Untidy, but close.", "Further than it looks, that."],
+        "hurt": ["I had only just raked that."],
+        "you_moved": ["Oh, you have moved. I shall start again."]
+      },
+      "sign_off": ["I am told there was wind. Corporal Dibber.", "I had the range. Then you moved. Corporal Dibber."]
+    },
+    "rake": {
+      "name": "Sergeant Posy Rake",
+      "short": "Sergeant Rake",
+      "taunts": {
+        "start": ["Line up, please. Smallest lump first."],
+        "hit": ["Next."],
+        "miss": ["Disregard that one."],
+        "hurt": ["I have moved. Officially.", "Noted."],
+        "rummage": ["The big one is mine. Thank you."]
+      },
+      "sign_off": ["Roof to be invoiced. Sergeant Rake.", "I took the biggest shell. It did not help. Sergeant Rake."]
+    },
+    "snedd": {
+      "name": "Warden Snedd",
+      "short": "Snedd",
+      "taunts": {
+        "start": ["I am a warden, not a soldier. Roofs off."],
+        "hit": ["That roof was over height."],
+        "miss": ["I have hedges to do, you know."],
+        "hurt": ["I shall file a complaint.", "Who do I see about this?"]
+      },
+      "sign_off": ["Not my department anyway. Warden Snedd."]
+    },
+    "trimm": {
+      "name": "Marshal Mowbray Trimm",
+      "short": "Marshal Trimm",
+      "taunts": {
+        "start": ["Marshal Trimm. Do keep off the lawn."],
+        "hit": ["Level. Much better."],
+        "miss": ["The lawn forgives. I do not."],
+        "hurt": ["Not the topiary.", "That was a peacock. It took nine years."],
+        "root_broke": ["That root was watering my hedges."],
+        "unit_bonked": ["Report back to base. Slowly."]
+      },
+      "sign_off": ["Withdrawn in good order. The hedge will remember. Marshal Mowbray Trimm."]
+    },
+    "skirmish": {
+      "_note": "Skirmish picks one of the named Rivals above by seed. This is the fallback if the app cannot.",
+      "name": "A Rival",
+      "short": "The Rival",
+      "taunts": {
+        "start": ["You are on the list. Shall we?"],
+        "hit": ["Noted."],
+        "miss": ["Close. Untidy, but close."],
+        "hurt": ["That will need a form."]
+      },
+      "sign_off": ["Filed under: lost."]
+    },
+    "banner": {
+      "_note": "Now and then, in place of '{rival} aims'. One in four turns at most.",
+      "thinking": ["{rival} files a form.", "{rival} measures twice.", "{rival} checks the list."]
+    }
+  },
+
+  "hobs": {
+    "_note": "short is the name for chips, banners and spoken lines. Do not cut the content name at the first space: that gives Old and Miss.",
+    "marge": { "short": "Marge", "almanac": "Marge Dumpling. Cooks. Fusses. Throws further than she lets on." },
+    "quill": { "short": "Miss Quill", "almanac": "Miss Quill. Mends hats. Cannot bear a crooked thing." },
+    "jax": { "short": "Jax", "almanac": "Jax Pepper. Has a stall. Will sell you your own hat." },
+    "grub": { "short": "Grub", "almanac": "Grub Mudgett. Digs. Has opinions about soil." },
+    "bobbin": { "short": "Bobbin", "almanac": "Bobbin Springheel. Cobbler. Has not stood still since March." },
+    "hetty": { "short": "Hetty", "almanac": "Hetty Mortarboard. Builds. Is marking you as we speak." },
+    "old_thumper": { "short": "Old Thumper", "almanac": "Old Thumper. Sixty years of throwing things at hedges." },
+    "nan": { "short": "Nan", "almanac": "Nan. Nobody recalls whose." },
+    "hedge_snipper": { "short": "Hedger", "almanac": "Hedger. Clips first, then says sorry." },
+    "rake_hand": { "short": "Raker", "almanac": "Raker. Leaves lines in everything." },
+    "mower_minder": { "short": "Mower", "almanac": "Mower. Goes up and down. Mostly down." },
+    "pebble_pitcher": { "short": "Pitcher", "almanac": "Pitcher. Picks out the stones. Sends them back." },
+    "straw_stuffer": { "short": "Dummy", "almanac": "Dummy. Stands there. Does it well." },
+    "states": {
+      "bonked": "Bonked",
+      "squashed": "Squashed. Back up soon.",
+      "tumbled": "Tumbled",
+      "dropped": "Fell a floor",
+      "rest": "Needs a rest",
+      "dug": "Dug in",
+      "open": "Open",
+      "cover": "In Cover"
+    }
+  },
+
+  "rummage": {
+    "title": "The Rummage",
+    "hint": "Tap a shell to look. Tap again to take it.",
+    "shows": "Shows what it does",
+    "take": "Tap again to take it",
+    "your_pick": "Your pick, {n} of {total}",
+    "their_pick": "{name}'s pick",
+    "name_pick": "{name}'s pick, {n} of {total}",
+    "picks_filled": "Picks left are filled for you",
+    "rival_wants": "{rival} wants this",
+    "rival_wants_named": "{rival} wants the {shell}.",
+    "quick_pick": "Quick Pick",
+    "quick_ready": "Quick Pick is ready. Fight takes it as it is.",
+    "open": "Open the Rummage",
+    "open_hint": "Pick your shells yourself",
+    "all_picked": "All picked",
+    "to_pick": "{name} to pick. {n} each.",
+    "yours": "Yours",
+    "theirs": "Theirs",
+    "dud": "Dud",
+    "taken_yours": "{shell}, yours",
+    "taken_theirs": "{shell}, theirs",
+    "fight": "Fight"
+  },
+
+  "shell_card": {
+    "plain": "Plain Shot. Never runs out.",
+    "knack": "{hob}'s Knack. Then a rest.",
+    "knack_rest": { "one": "{hob}'s Knack. Then a turn's rest.", "other": "{hob}'s Knack. Then {n} turns' rest." },
+    "trick": "Any Hob can fire it.",
+    "doodad": "Doodad. This is your go for the turn.",
+    "weight": { "light": "Light", "medium": "Medium", "heavy": "Heavy" },
+    "rest": { "none": "No Rest", "one": "Rest 1 turn", "other": "Rest {n} turns" },
+    "weight_rest": "{weight}. {rest}.",
+    "best_with": "Best with a {class}: no Rest, hits {pct}% harder",
+    "best_with_short": "Best with a {class}",
+    "any_class": "Any Class",
+    "good_at": "Good at: {what}",
+    "own_fort": "Aim it at your own fort",
+    "left": { "one": "1 left", "other": "{n} left" },
+    "stats": {
+      "damage": "Damage",
+      "mend": "Mend",
+      "mend_value": "Mends {n}",
+      "blast": "Blast: {band}",
+      "tunnel": "Tunnel: {n} cells",
+      "splits": "Splits into {n}",
+      "split_damage": "{n} lots of {dmg}",
+      "bounces": { "one": "1 hop", "other": "{n} hops" },
+      "through": { "one": "Goes through 1 wall", "other": "Goes through {n} walls" },
+      "rolls": "Rolls along the ground",
+      "column": "Goes {n} blocks up",
+      "mound": "Heap of dirt",
+      "later": "Goes off next turn",
+      "dud": "Dud",
+      "turnip": "Nothing. It is a turnip.",
+      "threads": "Threads Loopholes",
+      "rebuild_or_puff": "Rebuild {n} blocks, or Puff Up a Hob"
+    },
+    "bands": {
+      "point": "Point", "tiny": "Tiny", "small": "Small", "medium": "Medium", "large": "Large", "huge": "Huge"
+    },
+    "damage_types": {
+      "blast": "Blast", "pierce": "Pierce", "dig": "Dig", "fire": "Fire", "crush": "Crush", "mend": "Mend"
+    },
+    "a11y_open": "Hold for what {shot} does",
+    "a11y_close": "Close the card"
+  },
+
+  "shots": {
+    "_note": "The tail of the Good at line, by shot id. Show it as shell_card.good_at. Names and card lines come from content/shots.json. Move good_at into shots.json once the core accepts the field.",
+    "clodpot": { "good_at": "walls" },
+    "hatpin": { "good_at": "a Hob you can see through its Loophole" },
+    "gravel_sneeze": { "good_at": "Wicker and roofs" },
+    "extra_shake": { "good_at": "Wicker and roofs, a bit wider" },
+    "nibbler": { "good_at": "digging under" },
+    "bouncebean": { "good_at": "getting over a hill" },
+    "mendglob": { "good_at": "your own cracked wall" },
+    "grand_dumpling": { "good_at": "the bottom row" },
+    "sunspear": { "good_at": "a Hob behind one wall" },
+    "pepper_rain": { "good_at": "a wide roof" },
+    "burrowbomb": { "good_at": "a fort on soft ground" },
+    "rolypoly": { "good_at": "a wall at ground level" },
+    "barn_raising": { "good_at": "a fort with holes in it" },
+    "tick_tock_crock": { "good_at": "the foot of a tall tower" },
+    "pan_parade": { "good_at": "a long wall" },
+    "pudding_bomb": { "good_at": "Wicker roofs" },
+    "lid_lifter": { "good_at": "tall towers" },
+    "marble_sack": { "good_at": "a fort in a dip" },
+    "nosy_goose": { "good_at": "a Hob out in the Open" },
+    "mole_mail": { "good_at": "a fort behind a hill" },
+    "old_turnip": { "good_at": "nothing. Rollers trip on it." },
+    "rubber_radish": { "good_at": "a yard with walls round it" },
+    "sod_sack": { "good_at": "burying a Loophole" }
+  },
+
+  "hud": {
+    "field": "The field",
+    "aim_hint": "Drag back to aim",
+    "aim_hint_keys": "Drag back from your fort to aim. Or use Angle and Power, then Fire.",
+    "tap_pin": "Tap the pin",
+    "fire": "Fire",
+    "fire_locked": "Fire is locked. {why}",
+    "angle": "Angle",
+    "power": "Power",
+    "angle_up": "Angle up",
+    "angle_down": "Angle down",
+    "power_up": "Power up",
+    "power_down": "Power down",
+    "aim_readout": "Angle {angle}, power {power}",
+    "no_aim": "No aim yet",
+    "fine_tune": "Opens Fine Tune",
+    "last_aim": "Last aim",
+    "last_aim_hint": "Bring back your last aim",
+    "slow": "Slow",
+    "slow_hint": "Slower, finer drag",
+    "pin_none": "No pins yet. Fire once to drop one.",
+    "pin_used": "Pin used",
+    "pin_faded": "That Pin has faded",
+    "pin_label": "{hob}, Round {n}",
+    "crew": "Crew",
+    "shots": "Shots",
+    "shot_options": "Shot options",
+    "steam": "Steam {n}",
+    "steam_long": "Steam {n} of {max}. {left} left this turn.",
+    "walk_left": "Walk left",
+    "walk_right": "Walk right",
+    "pause": "Pause",
+    "speed_normal": "Normal speed",
+    "speed_double": "Double speed",
+    "reframe": "Re-frame",
+    "view_theirs": "Look at {name}'s fort",
+    "view_rival": "Look at the Rival's fort",
+    "view_mine": "Back to my fort",
+    "round": "Round {n} of {cap}",
+    "round_short": "R{n}/{cap}",
+    "round_plain": "Round {n}",
+    "shots_left": "Shots left: {n} of {total}",
+    "score": "Score {a} to {b}",
+    "test_yard": "Test Yard",
+    "squall": {
+      "in": "Squall in {n}",
+      "on": "Sudden Squall",
+      "count": "Squall {n} of 3",
+      "short": "Squall"
+    },
+    "creaks": {
+      "in": "Creaks in {n}",
+      "short": "Creaks {n}",
+      "next": "Creaks next round",
+      "on": "The Creaks"
+    },
+    "boss": {
+      "phase": "Part {n} of 3",
+      "jammed": "Shears jammed: {n}"
+    },
+    "wind": {
+      "label": "Wind",
+      "none": "No wind",
+      "left": "Wind {n}, blowing left",
+      "right": "Wind {n}, blowing right",
+      "next_none": "Next: no wind",
+      "next_left": "Next: {n}, blowing left",
+      "next_right": "Next: {n}, blowing right",
+      "front_left": { "one": "Changes in 1 round", "other": "Changes in {n} rounds" },
+      "set": "Wind {n}"
+    },
+    "kettle": "{name}'s kettle, {n}%",
+    "kettle_spoken": "{name}'s kettle, {n} percent",
+    "hobs_up": "{n} of {total} Hobs up",
+    "hobs_squashed": "{n} Squashed",
+    "hob_chip": "{hob}, {class}, {hp} of {max} HP",
+    "hob_chip_state": "{hob}, {class}, {hp} of {max} HP. {state}.",
+    "hob_selected": "Picked",
+    "no_hob": "No Hob picked",
+    "shot_chip": "{shot}, {weight}",
+    "shot_chip_left": "{shot}, {weight}, {n} left",
+    "shot_chip_locked": "{shot}. {why}",
+    "doodad_chip": "{doodad}, Doodad. {card}",
+    "dial": {
+      "rebuild": "Rebuild",
+      "rebuild_n": "Rebuild {n}",
+      "puff_up": "Puff Up",
+      "puff_up_hint": "Puff Up a Bonked Hob",
+      "puff_up_none": "Nobody to Puff Up",
+      "puff_up_used": "Puff Up is used",
+      "hops": { "one": "1 hop", "other": "{n} hops" },
+      "hops_hint": "{shot}, {n} hops. Tap for {other}."
+    },
+    "mend": {
+      "prompt": "Tap one of your blocks to mend it. Or drag to shoot.",
+      "prompt_many": "Tap up to {n} of your blocks. Or just press Use.",
+      "picked": "Blocks picked: {n} of {total}",
+      "target": "Mend block {col}, {row}",
+      "clear": "Clear the mend block",
+      "none": "Nothing to mend. Your fort is whole."
+    },
+    "doodad": {
+      "use": "Use {doodad}",
+      "go": "This is your go for the turn.",
+      "used": "Used already.",
+      "none_left": "No Doodads left",
+      "not_now": "{doodad} cannot be used now.",
+      "room_gone": "That room is gone.",
+      "room_lidded": "That room has a lid on.",
+      "no_room": "No room left to lid.",
+      "kettle_room": "Kettle Room",
+      "nook": "Nook {n}",
+      "nook_with": "Nook {n}, {hob}"
+    },
+    "shove_off": {
+      "button": "Shove Off",
+      "cost": "Shove Off {n}",
+      "hint": "Shove Off: dig yourself out, {n} Steam",
+      "no_steam": "Not enough Steam to Shove Off",
+      "not_now": "Cannot Shove Off now",
+      "nothing": "Nothing to shove off"
+    },
+    "pass": {
+      "button": "Skip",
+      "hint": "Skip your go",
+      "confirm": "Skip your go?",
+      "yes": "Skip",
+      "forced": "Nobody can fire and no Doodads are left. Skip your go."
+    },
+    "why": {
+      "_note": "Keyed by the core's refusal id.",
+      "resting_plain_only": "{hob} needs a rest. Plain Shot only.",
+      "resting": "{hob} needs a rest this turn.",
+      "buried": "Dug in. Shove Off first.",
+      "no_knack_uses": "{shot} is used up.",
+      "not_in_hand": "You have no {shot} left.",
+      "no_heavy_first_turn": "{shot} is Heavy. Not on the first turn.",
+      "no_actions_left": "You've had your go.",
+      "already_acted": "You've had your go.",
+      "not_planning": "Not your turn.",
+      "hob_cannot_fire": "{hob} cannot fire.",
+      "no_steam": "Not enough Steam.",
+      "cannot_walk": "Cannot walk there.",
+      "out_of_range": "That aim is out of range.",
+      "no_ghost": "No shot to bring back yet.",
+      "own_block": "Pick one of your own blocks.",
+      "over": "The fight is over.",
+      "default": "{shot} cannot fire now."
+    },
+    "why_short": {
+      "resting_plain_only": "Resting",
+      "resting": "Resting",
+      "buried": "Dug in",
+      "no_knack_uses": "Used up",
+      "not_in_hand": "None left",
+      "no_heavy_first_turn": "Not yet",
+      "no_actions_left": "No shots",
+      "not_planning": "Not ready"
+    },
+    "switched_plain": "Switched to the Plain Shot",
+    "falls": {
+      "with_it": { "one": "1 block falls with it", "other": "{n} blocks fall with it" },
+      "nothing": "Nothing else falls",
+      "if_breaks": { "one": "If that block breaks, 1 more falls", "other": "If that block breaks, {n} more fall" },
+      "if_breaks_nothing": "If that block breaks, nothing else falls"
+    },
+    "objects": {
+      "cage_bar": "Cage bar",
+      "captive": "Captive",
+      "shell": "Shell on the field",
+      "sprinkler_root": "Sprinkler Root",
+      "roller": "Little Ethel",
+      "shears": "The shears"
+    },
+    "signs": ["KEEP OFF THE GRASS", "NO LUMPS", "LEVEL CROSSING", "PLEASE QUEUE"]
+  },
+
+  "banners": {
+    "_note": "Two looks. weather is a chalk weather sign. notice is a Flattener notice with a tea ring. The rest are plain turn banners.",
+    "your_turn": "Your turn",
+    "name_turn": "{name}'s turn",
+    "rival_aims": "{rival} aims",
+    "new_turn": "New turn",
+    "weather": {
+      "squall_in": "Squall in {n}",
+      "squall": "Sudden Squall",
+      "squall_round": "Sudden Squall. Round {n} of 3.",
+      "front_left": "Wind's changed: {n}, blowing left",
+      "front_right": "Wind's changed: {n}, blowing right",
+      "front_none": "Wind's dropped."
+    },
+    "creaks": {
+      "warn": "The Creaks start next round. Cracked blocks hold less.",
+      "start": "The fort creaks. Cracked blocks let go.",
+      "fell": { "one": "The fort creaks. 1 block let go.", "other": "The fort creaks. {n} blocks let go." }
+    },
+    "notice": {
+      "roller_out": "Here comes Little Ethel.",
+      "roller_on": "Ethel rolls on.",
+      "roller_stuck": "Ethel's stuck.",
+      "roller_done": "Ethel's gone home.",
+      "shears_up": "The shears are up.",
+      "shears_open": "Shears open. They cut along the red line next turn.",
+      "shears_jam": { "one": "Shears jammed for 1 turn.", "other": "Shears jammed for {n} turns." },
+      "regrow": "The hedge grows back. Hit the Sprinkler Root.",
+      "boss_phase_default": "The Grand Fort has changed its mind."
+    }
+  },
+
+  "notes": {
+    "_note": "Small words by the action, keyed by core event. Only Bonk!, Thump!, Drop!, Snip! and Kettle Pop! shout. Set the rest small and quiet. An empty line means show nothing.",
+    "bonk": "Bonk!",
+    "kettle_pop": "Kettle Pop!",
+    "thump": "Thump!",
+    "collapse": "Drop!",
+    "big_drop": "Drop!",
+    "shears_snip": "Snip!",
+    "threaded": "Threaded",
+    "drop": {
+      "tumbled": "Tumbled",
+      "dropped": "Fell a floor"
+    },
+    "climb": "Back in.",
+    "castle_drop": "The fort sank.",
+    "mend": "Mended",
+    "rebuild": "Rebuilt",
+    "puff_up": "Puffed up",
+    "pass": "{name} skipped a go",
+    "walk": "",
+    "split": "Split",
+    "lid": "Lid on",
+    "lid_block": "Clang. Off the lid.",
+    "buried": "Dug in. Shove Off first.",
+    "dug_out": "Dug out",
+    "shove_off": "Dug out",
+    "prop_break": {
+      "cage_bar": "One bar down.",
+      "default": "Broke"
+    },
+    "regrow": "The hedge grows back.",
+    "column": "Up the chimney.",
+    "prop": {
+      "turnip": "It is a turnip.",
+      "crock": "Tick-tock..."
+    },
+    "prop_wake": "Ding.",
+    "relight": "Kettle relit",
+    "kettle_crack": "The kettle's cracked.",
+    "grudge": "Now he's cross.",
+    "clatter": "Dinner bell.",
+    "miss": "Over the hedge. Missed.",
+    "shot_switch": "Switched to the Plain Shot"
+  },
+
+  "a11y": {
+    "_note": "Lines for screen readers. Use the Hob's short name, never a side id. {target} is a Hob's short name.",
+    "field": "The field. Drag back from your fort to aim, or use Angle and Power, then Fire.",
+    "fired": "{hob} fired {shot}.",
+    "fired_plain": "{hob} fired.",
+    "hit_hob": "Hit {target} for {n}.",
+    "hit_block": "Hit a wall for {n}.",
+    "hit_kettle": "Hit the kettle for {n}.",
+    "hit_object": "Hit the {object} for {n}.",
+    "missed": "Over the hedge. Missed.",
+    "bonked": "{target} is Bonked.",
+    "kettle_popped": "{name}'s kettle popped.",
+    "shot_summary": { "one": "{hob} broke 1 block and did {dmg} damage.", "other": "{hob} broke {n} blocks and did {dmg} damage." },
+    "shot_summary_bonks": "{hob} did {dmg} damage. {n} Bonked.",
+    "shot_missed": "{hob} missed.",
+    "round_your_turn": "Round {n}. Your turn.",
+    "round_name_turn": "Round {n}. {name}'s turn.",
+    "round_rival_aims": "Round {n}. {rival} aims.",
+    "status": "{left} kettle {left_pct} percent. {right} kettle {right_pct} percent. {round}. {wind}.",
+    "boss_phase": "The Grand Fort is on part {n} of 3.",
+    "used_doodad": "{name} used {doodad}.",
+    "lid_on": "{name} put a Pot Lid on {room}.",
+    "mended": "{name} mended the fort.",
+    "rebuilt": "{name} rebuilt part of the fort.",
+    "puffed": "{name} Puffed Up {target}.",
+    "workshop_cell": "Column {col}, row {row}, {what}",
+    "workshop_cell_empty": "Column {col}, row {row}, empty",
+    "workshop_cell_bad": "Column {col}, row {row}, {what}. {problem}.",
+    "volume": "{label} volume",
+    "wins": "{name} wins."
+  },
+
+  "pause": {
+    "title": "Paused",
+    "rule_knockout": "Bonk them all, or pop their kettle.",
+    "rule_volley": "{n} shots each. Top score wins.",
+    "rule_rounds_squall": "{n} rounds, then the Squall.",
+    "rule_rounds_count": "{n} rounds. Then whoever has more left wins.",
+    "rule_yard": "Test Yard. No rounds, no rush.",
+    "carry_on": "Keep fighting",
+    "settings": "Settings",
+    "again": "Start again",
+    "give_up": "Give up",
+    "skip": "Skip your go",
+    "save_and_leave": "Save and leave",
+    "saved_note": "Saved at the start of every turn.",
+    "give_up_confirm": {
+      "title": "Give up?",
+      "body": "It counts as a loss. You still get the Buttons for trying.",
+      "title_duel": "{name} gives up?",
+      "body_duel": "The other side wins.",
+      "yes": "Give up",
+      "no": "Keep fighting"
+    }
+  },
+
+  "handoff": {
+    "pass_to": "Hand it to",
+    "ready": "Ready",
+    "new_turn": "New turn",
+    "spoken": "Hand it to {name}. Ready.",
+    "last_hit": { "one": "{name} broke 1 block and did {dmg} damage.", "other": "{name} broke {n} blocks and did {dmg} damage." },
+    "last_miss": "{name}: no hits.",
+    "kettle": "Kettle {n}%",
+    "help": "Help: {level}"
+  },
+
+  "results": {
+    "_note": "Win in a campaign level: the title is levels.<id>.win_title and win.how.<how> sits under it, then one line from the Rival's sign_off. Any other win: the title is win.title.<how>. Loss: loss.title.<how>, then loss.cause.<how> if it is not empty, then one Hetty line from loss.verdict. Never show a cause line that says the same as the title.",
+    "win": {
+      "title": {
+        "clean_sweep": "Clean Sweep",
+        "kettle_pop": "Kettle Pop!",
+        "squall": "Blown Out",
+        "double_pop": "Double Pop",
+        "rescue": "{captive}'s out",
+        "round_cap": "{rival} dozed off.",
+        "total_hp": "More of you left standing",
+        "give_up": "{rival} gave up",
+        "volley_points": "Top score",
+        "captive_bonked": "They Bonked {captive}",
+        "default": "You win"
+      },
+      "how": {
+        "clean_sweep": "Clean Sweep. Every one of them Bonked.",
+        "kettle_pop": "Kettle Pop!",
+        "squall": "Blown Out. The Squall got their kettle first.",
+        "double_pop": "Both kettles went. You had more left.",
+        "rescue": "Out of the Cage, hat and all.",
+        "round_cap": "Out of rounds. You had more left standing.",
+        "total_hp": "Out of rounds. You had more left standing.",
+        "give_up": "They gave up.",
+        "volley_points": "Out of shots. You scored more.",
+        "captive_bonked": "That was their shot, so it is your win.",
+        "default": ""
+      },
+      "signed": "Signed, {rival}",
+      "still_standing": "{fort} is still standing."
+    },
+    "loss": {
+      "title": {
+        "clean_sweep": "Swept",
+        "kettle_pop": "Kettle popped",
+        "squall": "Blown over",
+        "double_pop": "Both kettles went",
+        "rescue": "Still in the Cage",
+        "round_cap": "Out of rounds",
+        "total_hp": "Out of rounds",
+        "give_up": "You gave up",
+        "volley_points": "Outscored",
+        "captive_bonked": "{captive} got Bonked",
+        "default": "Flattened"
+      },
+      "cause": {
+        "kettle_pop": "{who}'s {shot} popped your kettle in Round {n}.",
+        "kettle_pop_plain": "Your kettle popped in Round {n}.",
+        "clean_sweep": "They got everyone. {hob} went last, Round {n}.",
+        "clean_sweep_plain": "They got everyone.",
+        "squall": "The Squall took your kettle.",
+        "double_pop": "Both kettles went in the same Squall round. They had more left.",
+        "rescue": "They got there first.",
+        "round_cap": "They had more left standing.",
+        "total_hp": "They had more left standing.",
+        "give_up": "",
+        "volley_points": "Out of shots. They scored more.",
+        "captive_bonked": "That shot was yours.",
+        "default": "Close. Nothing gave way first."
+      },
+      "cost": {
+        "blocks_and_hobs": "It cost you {blocks} blocks and {hobs}.",
+        "blocks": { "one": "It cost you 1 block.", "other": "It cost you {n} blocks." },
+        "hobs": "It cost you {hobs}."
+      },
+      "verdict_by": "Hetty says",
+      "verdict": {
+        "_note": "One line from Hetty, the builder. Pick the pool by the last blow's by id if there is a pool for it (ground, fatigue, self, shears), else by how. Before 1-7 is cleared, show the line with no name on it.",
+        "kettle_pop": [
+          "Kettle was one block from the wall.",
+          "One wall round a kettle is a curtain.",
+          "They knew where it was. Move it.",
+          "Put the kettle further in. I did say."
+        ],
+        "clean_sweep": [
+          "Two Hobs on the top floor. Brave.",
+          "Everyone by the window. Lovely view.",
+          "A Nook wants four walls. Count them.",
+          "Spread them out next time."
+        ],
+        "squall": [
+          "Nothing wrong with the fort. It rained shells.",
+          "Finish sooner. Weather won't wait.",
+          "Thicker roof over the kettle."
+        ],
+        "double_pop": [
+          "Theirs went too. Small comfort."
+        ],
+        "round_cap": [
+          "Still standing. Just less of it.",
+          "They chipped. You admired the view.",
+          "More wall, or quicker hands."
+        ],
+        "total_hp": [
+          "Still standing. Just less of it.",
+          "More wall, or quicker hands."
+        ],
+        "volley_points": [
+          "Hits score. Near misses don't.",
+          "Aim at Hobs. Walls score less."
+        ],
+        "rescue": [
+          "I was in the Cage. I counted the rounds.",
+          "Bars first next time. Then their fort."
+        ],
+        "captive_bonked": [
+          "That was me you hit.",
+          "Aim at the bars. Not at me."
+        ],
+        "give_up": [
+          "I'd have had one more go.",
+          "Fair enough. Kettle's still warm.",
+          "We'll say it was the wind."
+        ],
+        "ground": [
+          "It fell on its own. That's on the builder.",
+          "Your loft had one leg."
+        ],
+        "fatigue": [
+          "It creaked. Then it stopped creaking.",
+          "Cracked blocks let go. Mend them sooner."
+        ],
+        "self": [
+          "That one was yours. I watched.",
+          "Mind which way it's pointing."
+        ],
+        "shears": [
+          "The shears cut on the red line. It says so."
+        ],
+        "default": [
+          "Wobbly, but standing.",
+          "Close. Nothing gave way first."
+        ]
+      },
+      "fix_it": "Fix it"
+    },
+    "duel": {
+      "title": "{name} wins",
+      "draw": "A draw",
+      "tonight": "Tonight",
+      "tally": "{a} {a_wins}, {b} {b_wins}",
+      "good_game": "Good game, both of you.",
+      "what_broke": "What broke {name}"
+    },
+    "double_pop_rule": "Both kettles went in the same Squall round. Whoever had more left standing before it wins.",
+    "round": "Round {n}",
+    "what_broke_you": "What broke you",
+    "last_blow": "Last blow: {blow}, Round {n}",
+    "blow": {
+      "_note": "Keyed by the last blow's by id. hob is the usual case.",
+      "hob": "{who}'s {shot}",
+      "shot_only": "{shot}",
+      "squall": "the Squall",
+      "ground": "a fall",
+      "fatigue": "the Creaks",
+      "self": "your own shot",
+      "shears": "the shears",
+      "prop": "{shot}"
+    },
+    "top_blows": "{rank}. {blow}: {n}",
+    "tally": "Kettle {kettle}. Blocks {blocks}. Bonked: {hobs}.",
+    "tally_nobody": "Kettle {kettle}. Blocks {blocks}. Nobody Bonked.",
+    "best_shot": "Best shot: {hob}, {n}",
+    "best_shot_long": "Best shot: {hob}, {n}. Angle {angle}, power {power}.",
+    "best_shot_yours": "Your best shot",
+    "best_shot_theirs": "Their best shot",
+    "best_shot_none": "Nothing landed.",
+    "score": "Score {a} to {b}",
+    "stats": "Shots {shots}. Hits {hits}. Bonks {bonks}. Blocks broken {blocks}. Best run {streak}.",
+    "kettle_left": "Kettle left {n}%",
+    "kettles": "Kettles: {a} {a_pct}%, {b} {b_pct}%",
+    "buttons": "Buttons +{n}",
+    "buttons_spoken": "{n} Buttons",
+    "buttons_loss_note": "For the kettle fund.",
+    "again": "Again",
+    "rematch": "Rematch",
+    "next": "Next",
+    "map": "Map",
+    "swap_sides": "Swap sides",
+    "change_setup": "Change setup"
+  },
+
+  "workshop": {
+    "title": "Workshop",
+    "your_fort": "Your fort",
+    "grid": "Fort grid",
+    "front": "Front",
+    "front_hint": "This side faces the Rival",
+    "shoots_this_way": "Shoots this way",
+    "palette": "Blocks and rooms",
+    "tools": {
+      "wicker": "Wicker",
+      "timber": "Timber",
+      "cobble": "Cobble",
+      "nook": "Nook",
+      "kettle": "Kettle",
+      "erase": "Rub out"
+    },
+    "tool_pick": "Tool: {tool}",
+    "nooks": "Nooks {n} of {total}",
+    "blocks": "Blocks",
+    "blocks_count": "Blocks {n} of {total}",
+    "cost": "Cost",
+    "kettle_room": "Kettle Room",
+    "nook": "Nook {n}",
+    "nook_with": "Nook {n}, {hob}",
+    "checking": "Checking the fort",
+    "empty": "Put some blocks down.",
+    "ready": "Good to go.",
+    "saved_ready": "Saved. Good to go.",
+    "saved": "Saved.",
+    "to_fix": { "one": "1 thing to fix", "other": "{n} things to fix" },
+    "wont_stand": "Won't stand",
+    "test_yard": "Test Yard",
+    "test_yard_hint": "Try it in the Test Yard. Your saved fort is not touched.",
+    "fix_first": "Fix the red bits first.",
+    "fix": "Fix",
+    "home_fort": "Home fort",
+    "level_fort": "Level fort",
+    "my_fort": "My Fort",
+    "problems": {
+      "needs_wall": "Needs a wall",
+      "nothing_under": "Nothing under it",
+      "no_kettle_room": "Needs a Kettle Room",
+      "kettle_room_size": "The Kettle Room is two blocks by two.",
+      "kettle_room_edge": "Put a wall all the way round the Kettle Room.",
+      "kettle_room_walls": "The Kettle Room needs four walls.",
+      "nook_walls": "Nook {n} needs four walls.",
+      "no_nook": "Needs a Nook",
+      "nooks_short": "Add a Nook for each Hob.",
+      "nooks_for_hobs": "{n} Nooks for {hobs} Hobs. Add a Nook.",
+      "nooks_max": "{n} Nooks at most.",
+      "over_budget": { "one": "1 block too many.", "other": "{n} blocks too many." },
+      "footing_row": "Footing goes on the bottom row.",
+      "too_small": "Too small. Build at least 3 wide and 2 tall.",
+      "too_big": "Too big. Keep it within {cols} wide and {rows} tall.",
+      "check_failed": "The fort could not be checked. Try again."
+    }
+  },
+
+  "settings": {
+    "title": "Settings",
+    "sound": {
+      "title": "Sound",
+      "sound": "Sound",
+      "music": "Music",
+      "voices": "Voices",
+      "mono": "Mono sound",
+      "mute": "Mute all",
+      "subtitles": "Subtitles for Hob-speak",
+      "captions": "Captions for sounds"
+    },
+    "controls": {
+      "title": "Controls",
+      "quick_fire": "Quick Fire: let go to shoot",
+      "drag_mode": "Drag mode",
+      "pull_back": "Pull back",
+      "point": "Point",
+      "rotation": "Rotation",
+      "follow": "Follow device",
+      "wide": "Stay wide",
+      "tall": "Stay tall",
+      "rival_fast": "Rival turns at double speed",
+      "left_hand": "Left-hand layout",
+      "taps_only": "Taps only, no holding"
+    },
+    "help": {
+      "title": "Help",
+      "difficulty": "Difficulty",
+      "more_steam": "Help: more Steam",
+      "wind_off": "Wind off"
+    },
+    "comfort": {
+      "title": "Comfort",
+      "text_size": "Text size",
+      "small": "Small",
+      "normal": "Normal",
+      "large": "Large",
+      "large_text": "Large text",
+      "colour_set": "Colour set",
+      "colours": {
+        "blue": "Blue", "orange": "Orange", "navy": "Navy", "gold": "Gold", "white": "White", "black": "Black"
+      },
+      "reduce_motion": "Less motion",
+      "screen_shake": "Screen shake",
+      "reduce_flashes": "Fewer flashes",
+      "haptics": "Buzz",
+      "full": "Full"
+    },
+    "save": {
+      "title": "Save",
+      "note": "The game saves itself at the start of every turn.",
+      "fight_in_progress": "Fight in progress",
+      "fight_none": "None",
+      "fight_saved": "Saved",
+      "reset": "Reset progress",
+      "reset_confirm": "Type RESET to confirm. Settings are kept.",
+      "reset_field": "Type RESET"
+    },
+    "about": {
+      "title": "About",
+      "promise": "Free forever. No ads. Nothing to buy.",
+      "privacy": "We collect nothing.",
+      "version": "Version {version} (rules {rules})"
+    }
+  },
+
+  "captions": {
+    "_note": "Sound captions for players who have them on. Keyed by sound cue.",
+    "boom": "Boom",
+    "bonk": "Bonk!",
+    "kettle_pop": "Kettle Pop!",
+    "squall": "Squall bell",
+    "wind": "Wind turns",
+    "creaks": "The fort creaks",
+    "collapse": "Drop!",
+    "thump": "Thump!",
+    "lid": "Lid clangs",
+    "buried": "Thud. Dug in.",
+    "boss_phase": "A horn, far off",
+    "shears_open": "Shears open",
+    "snip": "Snip!",
+    "mend": "Mend Bucket sloshes",
+    "relight": "Kettle relit"
+  },
+
+  "errors": {
+    "_note": "Plain, and each one says what is safe. No jokes here.",
+    "fatal_title": "Something went wrong",
+    "fatal_body": "The game stopped and could not carry on. Your progress is saved after every turn.",
+    "load_title": "The game could not load",
+    "load_body": "Check your connection and try again. Once it has loaded one time, it also plays offline.",
+    "start_title": "The game could not start",
+    "start_body": "Your save may be damaged. Try again, or reset the save to start fresh.",
+    "not_installed": "The game did not install properly. Please install it again.",
+    "try_again": "Try again",
+    "reset_save": "Reset save",
+    "fight_stuck_title": "This fight got stuck",
+    "fight_stuck_body": "Try again to pick it up from the last saved turn.",
+    "fight_cannot_start": "This fight could not start. Nothing is lost.",
+    "fight_broke": "This fight broke and had to stop. Your progress is safe.",
+    "fight_broke_saved": "This fight broke. Your last save is kept. Press Carry on to try from there.",
+    "move_failed": "That did not go through. Nothing is lost. Try again.",
+    "turn_reset": "Something slipped. Back to the start of your turn.",
+    "core_stopped": "The game stopped. Try again.",
+    "give_up_failed": "The fight could not be ended. It goes on.",
+    "save_last_unreadable": "Your last save could not be read, so the one before it was loaded.",
+    "save_unreadable": "Your save could not be read. It was kept to one side and a fresh one started.",
+    "saved_fight_damaged": "This saved fight is damaged and was put aside. Your progress is safe.",
+    "saved_fight_old": "The game rules changed since this fight was saved, so it cannot be carried on. Your progress and Pennants are safe.",
+    "saved_fight_differs": "This saved fight replayed a little differently from when it was saved.",
+    "saved_fight_cleared": "Your saved fight could not be loaded, so it was cleared. Your progress is safe.",
+    "no_saved_fight": "There is no fight to carry on.",
+    "fort_did_not_fit": "Your Workshop fort did not fit this fight, so the level's fort was used."
+  }
+}

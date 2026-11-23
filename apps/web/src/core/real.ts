@@ -13,11 +13,24 @@ import type {
   ShellView, ShotChip, Side, SideStats, Snapshot,
 } from './types';
 import { SaveError, TICK_HZ } from './types';
+import { byId, has, hobShort, plural, rivalShort, t } from '../ui/text';
 
+interface BundleShot {
+  id: string;
+  name: string;
+  weight?: string | number;
+  match_class?: string;
+  dud?: boolean;
+  card?: { line?: string } | string;
+  dials?: string[];
+  flight?: { kind?: string; block_dmg?: number };
+  triggers?: { on?: string; do?: { op?: string; dmg?: number; band?: string; hp?: number; radius?: number }[] }[];
+  self_effects?: { op?: string; hp?: number }[];
+}
 interface Bundle {
   materials: { blocks: { id: string; glyph: string; cost: number }[] };
-  hobs: { id: string; name: string; class: string; hp: number; player?: boolean; knack?: string }[];
-  shots: { id: string; name: string; weight?: string | number; match_class?: string; dud?: boolean; card?: { line?: string } | string }[];
+  hobs: { id: string; name: string; class: string; hp: number; player?: boolean; knack?: string; passive?: { kind?: string; max?: number } }[];
+  shots: BundleShot[];
   doodads?: { id: string; name: string; card?: string }[];
   blueprints: { id: string; name: string; rows: string[] }[];
   levels: RawLevel[];
@@ -26,20 +39,17 @@ interface Bundle {
 interface RawLevel {
   id: string; name: string; type: string; width: number; height: number;
   player: { crew: string[]; crew_size: number; blueprint: string };
-  rival: { name: string; habit?: string; crew: string[]; aim?: number };
+  rival: { name?: string; habit?: string; crew: string[]; aim?: number; think_ms?: number; roster?: { name: string; think_ms?: number }[] };
   rules: { round_cap: number; squall?: boolean; wind?: { min: number; max: number }; rummage?: { pool: number; picks: number } };
-  pennants: { type: string; text: string }[];
+  pennants: { type: string; text: string; value?: number }[];
 }
 
 const SAVE_VERSION = 2;
-const THINK_TICKS = Math.round(TICK_HZ * RULES.rival_think_seconds); // the Rival's think pose before ai_turn
+/** The Rival's think pose before ai_turn: the level's `think_ms` (snapshot hud.think_ms), else app.json. */
+const thinkTicks = (ms: number | null | undefined): number =>
+  Math.round(typeof ms === 'number' && ms > 0 ? (TICK_HZ * ms) / 1000 : TICK_HZ * RULES.rival_think_seconds);
 // Content writes Shot Weight as L / M / H; accept the long names too.
 const WEIGHT: Record<string, 0 | 1 | 2> = { l: 0, m: 1, h: 2, light: 0, medium: 1, heavy: 2 };
-const HOW: Record<string, string> = {
-  clean_sweep: 'Clean Sweep', kettle_pop: 'Kettle Pop', squall: 'Squall Pop', double_pop: 'Double Pop',
-  rescue: 'Rescue', round_cap: 'Doze Off', total_hp: 'On points',
-  give_up: 'Gave up', volley_points: 'Volley Points', captive_bonked: 'Captive Bonked',
-};
 const newStats = (): [SideStats, SideStats] => [{ shots: 0, hits: 0, blocks: 0, kettle: 100 }, { shots: 0, hits: 0, blocks: 0, kettle: 100 }];
 
 interface ViewCache {
@@ -75,6 +85,7 @@ export class RealCore implements CoreApi {
   // Best shot per side: the results name the winner's own best shot, never the other side's.
   private best: [ResultView['bestShot'], ResultView['bestShot']] = [undefined, undefined];
   private levelsCache?: LevelInfo[];
+  private ghostWind = new Map<string, number>();
   battleGen = 0;
 
   constructor(private mod: WasmModule) {
@@ -92,14 +103,16 @@ export class RealCore implements CoreApi {
     this.levelsCache = this.bundle.levels.filter((l) => /^\d+-\d+$/.test(l.id)).map((l) => {
       const w = l.rules.wind ?? { min: 0, max: 0 };
       const rum = l.rules.rummage ?? { pool: 0, picks: 0 };
+      const kind: LevelInfo['kind'] = l.type === 'rescue' ? 'rescue' : l.type === 'grand_fort' || l.type === 'boss' ? 'grand_fort' : 'siege';
       return {
-        id: l.id, name: l.name,
-        type: l.type === 'rescue' ? 'Rescue' : l.type === 'grand_fort' || l.type === 'boss' ? 'Grand Fort' : 'Siege',
-        rival: l.rival.name, habit: l.rival.habit ?? '',
+        id: l.id, name: l.name, kind,
+        type: t(`map.types.${kind}`),
+        rival: l.rival.name ?? '', habit: l.rival.habit ?? '',
         rivalCrew: l.rival.crew.map(cls).filter((c) => c !== 'dummy') as HobClass[],
-        aim: l.rival.aim ?? 1, roundCap: l.rules.round_cap,
-        wind: w.max === 0 ? 'No wind' : w.min === w.max ? `Wind ${w.max}` : `Wind ${w.min} to ${w.max}`,
-        goals: [0, 1, 2].map((i) => l.pennants[i]?.text ?? '') as [string, string, string],
+        rivalUnits: l.rival.crew.filter((id) => cls(id) !== 'dummy'),
+        aim: l.rival.aim ?? 1, roundCap: l.rules.round_cap, squall: l.rules.squall !== false,
+        wind: w.max === 0 ? t('level_card.wind_none') : w.min === w.max ? t('level_card.wind_one', { n: w.max }) : t('level_card.wind_range', { min: w.min, max: w.max }),
+        goals: [0, 1, 2].map((i) => (l.pennants[i] ? goalText(l, l.pennants[i]) : '')) as [string, string, string],
         crewSize: l.player.crew_size, draft: rum.pool > 0, draftPool: rum.pool, draftPicks: rum.picks,
         doodads: levelAtLeast(l.id, RULES.campaign.doodads_from) ? [...RULES.campaign.doodads] : [],
       };
@@ -112,6 +125,14 @@ export class RealCore implements CoreApi {
     return this.bundle.levels.filter((l) => /^d\d+$/.test(l.id)).map((l) => [l.id, l.name]);
   }
 
+  /** The Skirmish Rival the core picks for this map and seed: `roster[seed % length]` (core/API.md). */
+  skirmishRival(map: string, seed: number): { name: string; habit: string } | undefined {
+    const l = this.bundle.levels.find((x) => x.id === map);
+    const ro = l?.rival.roster;
+    if (!l || !ro?.length) return l?.rival.name ? { name: l.rival.name, habit: l.rival.habit ?? '' } : undefined;
+    return { name: ro[Number(BigInt(seed >>> 0) % BigInt(ro.length))].name, habit: l.rival.habit ?? '' };
+  }
+
   resendTerrain(): void {
     if (!this.game) return;
     this.game.command(JSON.stringify({ cmd: 'terrain_all' } satisfies PCommand)); // a query: not logged
@@ -121,7 +142,7 @@ export class RealCore implements CoreApi {
   doodadName(id: string): string { return this.bundle.doodads?.find((d) => d.id === id)?.name ?? id; }
 
   hobs(): HobInfo[] {
-    return this.bundle.hobs.filter((h) => h.player).map((h) => ({ id: h.id, name: h.name.split(' ')[0] === 'Old' ? 'Old Thumper' : h.name.split(' ')[0], cls: h.class as HobClass, hp: h.hp, joins: RULES.joins[h.id] }));
+    return this.bundle.hobs.filter((h) => h.player).map((h) => ({ id: h.id, name: hobShort(h.id, h.name), cls: h.class as HobClass, hp: h.hp, joins: RULES.joins[h.id] }));
   }
 
   starterForts(): Blueprint[] {
@@ -133,7 +154,7 @@ export class RealCore implements CoreApi {
 
   defaultBlueprint(): Blueprint {
     const b = this.bundle.blueprints.find((x) => x.id === 'bp_home_3') ?? this.bundle.blueprints[0];
-    return { ...rowsToBlueprint(b.rows, 'Home fort', this.glyphs()), id: undefined };
+    return { ...rowsToBlueprint(b.rows, t('workshop.home_fort'), this.glyphs()), id: undefined };
   }
 
   private glyphs(): Record<string, Material> {
@@ -160,7 +181,8 @@ export class RealCore implements CoreApi {
     const cost = new Map(this.bundle.materials.blocks.map((b) => [b.id, b.cost]));
     const blocks = bp.cells.filter((c) => c.kind !== 'nook' && c.kind !== 'kettle');
     // v0.2: the core sends cost, used and budget; a refusal marks the cells (hanging blocks, open walls).
-    const why = String(rep.detail ?? rep.reason ?? 'Not legal');
+    // The reason id (and the core's own words, for the Workshop to read the problem from).
+    const why = String(rep.detail ?? rep.reason ?? 'invalid_blueprint');
     const cells = Array.isArray(rep.cells) ? (rep.cells as [number, number][]) : [];
     return {
       ok: rep.ok, blocks: typeof rep.used === 'number' ? rep.used : blocks.length,
@@ -172,9 +194,9 @@ export class RealCore implements CoreApi {
 
   checkFort(bp: Blueprint, seats: number): { ok: boolean; why?: string } {
     const rows = this.rowsOf(bp);
-    if (!rows.length) return { ok: false, why: 'No fort' };
+    if (!rows.length) return { ok: false, why: 'no_fort' };
     const rep = this.validate(rows, seats);
-    return rep.ok ? { ok: true } : { ok: false, why: String(rep.detail ?? rep.reason ?? 'Not legal') };
+    return rep.ok ? { ok: true } : { ok: false, why: String(rep.reason ?? rep.detail ?? 'invalid_blueprint') };
   }
 
   fortFor(seats: number): Blueprint | undefined {
@@ -222,6 +244,7 @@ export class RealCore implements CoreApi {
     this.stats = newStats();
     this.best = [undefined, undefined];
     this.shotBy = undefined;
+    this.ghostWind.clear();
     this.pull();
   }
 
@@ -237,7 +260,13 @@ export class RealCore implements CoreApi {
     let pc: PCommand | null = null;
     switch (c.cmd) {
       case 'aim': pc = { cmd: 'aim', angle: c.angle, power: c.power }; break;
-      case 'fire': pc = { cmd: 'fire' }; break;
+      case 'fire': {
+        const f: Extract<PCommand, { cmd: 'fire' }> = { cmd: 'fire' };
+        if (c.dial) f.dial = c.dial;
+        if (c.target) f.target = c.target;
+        pc = f;
+        break;
+      }
       case 'pick_hob': pc = { cmd: 'pick_hob', hob: Number(c.id) }; break;
       case 'pick_shot': pc = { cmd: 'pick_shot', shot: c.id }; break;
       case 'pick_shell': pc = { cmd: 'pick_shell', shell: c.id }; break;
@@ -247,8 +276,10 @@ export class RealCore implements CoreApi {
       case 'pass': pc = { cmd: 'pass' }; break;
       case 'doodad': pc = c.room ? { cmd: 'doodad', doodad: c.id, room: c.room } : { cmd: 'doodad', doodad: c.id }; break;
       case 'recall': {
-        const [side, n] = c.pin.split(':').map(Number);
-        if (!s || side !== s.side) return { ok: false, error: 'no_ghost' };
+        const matched = this.cache?.pins.find((p) => p.id === c.pin || p.slot === c.pin);
+        const key = matched?.slot ?? c.pin;
+        const [side, n] = key.split(':').map(Number);
+        if (!s || !Number.isFinite(side) || !Number.isFinite(n) || side !== s.side) return { ok: false, error: 'no_ghost' };
         pc = { cmd: 'recall', ghost: n };
         break;
       }
@@ -277,7 +308,7 @@ export class RealCore implements CoreApi {
     const s = this.last;
     if (s.phase === 'plan' && s.awaiting === 'ai') {
       this.think += ticks;
-      if (this.think >= THINK_TICKS) { this.think = 0; this.send({ cmd: 'ai_turn' }); }
+      if (this.think >= thinkTicks(s.hud.think_ms?.[s.side])) { this.think = 0; this.send({ cmd: 'ai_turn' }); }
       return;
     }
     if (s.phase === 'plan' && this.walkDir !== 0) {
@@ -285,13 +316,18 @@ export class RealCore implements CoreApi {
       while (this.walkTicks >= RULES.walk.ticks && (this.walkDir as number) !== 0) { this.walkTicks -= RULES.walk.ticks; this.walkStep(); }
       return;
     }
-    this.game.step(ticks);
+    const sr = this.game.step(ticks);
+    if (sr) {
+      const parsed = JSON.parse(sr) as { ok?: boolean; error?: string; reason?: string };
+      if (parsed && parsed.ok === false) throw new Error(String(parsed.error ?? parsed.reason ?? 'core step error'));
+    }
     this.pull();
   }
 
   /** Read a snapshot from the core, merge lean ones into the last full one, gather events and terrain. */
   private pull(): void {
-    const raw = JSON.parse(this.game!.snapshot()) as PSnapshot;
+    const raw = JSON.parse(this.game!.snapshot()) as PSnapshot & { ok?: boolean; error?: string; reason?: string };
+    if (raw && raw.ok === false) throw new Error(String(raw.error ?? raw.reason ?? 'core snapshot error'));
     if (!raw.full && !this.last) throw new Error('the core sent a lean snapshot with no full one before it');
     if (raw.full || !this.last) {
       if (this.last) this.lastCastles = this.last.castles;
@@ -300,13 +336,20 @@ export class RealCore implements CoreApi {
       for (const i of [0, 1] as const) this.steamMax[i] = raw.hud.steam_max?.[i] ?? Math.max(this.steamMax[i], raw.hud.steam[i] ?? 0);
     } else {
       this.last = { ...this.last, tick: raw.tick, phase: raw.phase, side: raw.side, awaiting: raw.awaiting, shells: raw.shells, full: false };
-      // v0.2: a lean snapshot after `aim` carries the new aim and preview; replace those two.
+      // v0.2: a lean snapshot after `aim` carries the new aim and preview; patch preview in-place to avoid full ViewCache rebuilds.
       if (raw.aim) {
         const a = raw.aim;
         this.last.hobs = this.last.hobs.map((h) => (h.id === a.hob && h.side === a.side ? { ...h, aim: { angle: a.angle, power: a.power } } : h));
-        if (raw.preview) this.last.preview = raw.preview;
-        this.rev++;
-        this.cache = undefined;
+        if (raw.preview) {
+          this.last.preview = raw.preview;
+          if (this.cache) {
+            const H0 = this.last.map.h;
+            this.cache.preview = raw.preview.map(([x, y]) => [x, H0 - y] as [number, number]);
+            this.cache.rev = ++this.rev;
+          } else {
+            this.rev++;
+          }
+        }
       }
     }
     const H = this.last.map.h;
@@ -339,7 +382,7 @@ export class RealCore implements CoreApi {
     };
     const n = (k: string) => Number(e[k] ?? 0);
     const note = (text: string, at?: [number, number], sound?: string, status = true): BattleEvent[] =>
-      [{ t: 'note', text, x: at?.[0], y: at?.[1], sound, status }];
+      [{ t: 'note', text, x: at?.[0], y: at?.[1], sound, status, id: e.t }];
     switch (e.t) {
       case 'turn_start': return [{ t: 'turn', side: n('side') as Side, round: n('round') }];
       case 'fire': {
@@ -348,9 +391,9 @@ export class RealCore implements CoreApi {
         this.stats[side].shots++;
         this.shotDmg = 0;
         const h = s.hobs.find((q) => q.id === n('hob'));
-        this.shotBy = { side, hob: h?.name.split(' ')[0] ?? '', round: s.hud.round, angle: n('angle'), power: n('power') };
+        this.shotBy = { side, hob: h ? hobShort(h.def, h.name) : '', round: s.hud.round, angle: n('angle'), power: n('power') };
         const def = this.bundle.shots.find((q) => q.id === String(e.shot));
-        return [{ t: 'fire', side, x, y: y + 10, kind: String(e.shot), hob: String(n('hob')), weight: weightOf(def?.weight) }];
+        return [{ t: 'fire', side, x, y: y + 10, kind: String(e.shot), hob: String(n('hob')), weight: weightOf(def?.weight), shotName: def?.name }];
       }
       case 'explode': return [{ t: 'boom', x: n('x'), y: H - n('y'), r: n('r'), dtype: e.type ? String(e.type) : undefined }];
       case 'miss': return [{ t: 'hit', x: n('x'), y: H - n('y'), dmg: 0, what: 'ground' }];
@@ -366,7 +409,7 @@ export class RealCore implements CoreApi {
         // A view count for the live hand-off card; the result uses the core's own stats.
         if (this.shotBy && e.why !== 'crush' && e.why !== 'fall' && n('side') !== this.shotBy.side) this.stats[this.shotBy.side].hits++;
         const out: BattleEvent[] = [];
-        if (e.threaded) out.push(...note('Threaded!', undefined, 'bonk'));
+        if (e.threaded) out.push(...note(t('notes.threaded'), undefined, undefined, false));
         const dtype = e.type ? String(e.type) : e.why === 'crush' || e.why === 'fall' ? 'crush' : undefined;
         if (tgt === 'hob') { const p = hobAt(n('hob')); if (p) out.push({ t: 'hit', x: p[0], y: p[1] + 26, dmg, what: 'hob', hob: String(n('hob')), side: n('side') as Side, dtype }); return out; }
         if (tgt === 'kettle') {
@@ -425,49 +468,59 @@ export class RealCore implements CoreApi {
       case 'kettle_pop': return [{ t: 'kettle_pop', side: n('side') as Side }];
       case 'squall_warning': return [{ t: 'squall_warn', left: n('n') }];
       case 'squall_round': return [{ t: 'squall', n: n('n') }];
-      case 'win': return [{ t: 'end', winner: n('winner') as Side, how: HOW[String(e.how)] ?? String(e.how), key: String(e.how) }];
+      case 'win': return [{ t: 'end', winner: n('winner') as Side, how: String(e.how), key: String(e.how) }];
       // Everything else gets a short line, and a floating word where it has a place.
-      case 'threaded': { const p = hobAt(n('hob')); return [...note('Threaded!', p, 'bonk'), ...(p ? [{ t: 'threaded' as const, x: p[0], y: p[1] }] : [])]; }
-      case 'front': return note(`New Weather Front: wind ${n('wind')}`, undefined, 'squall');
-      case 'drop': return [...note(e.state === 'tumbled' ? 'Tumble!' : 'Drop!', hobAt(n('hob')), 'thud'), { t: 'hob', hob: String(n('hob')), act: 'tumble' }];
-      case 'climb': return [...note('Climbed back in', hobAt(n('hob'))), { t: 'hob', hob: String(n('hob')), act: 'land' }];
-      case 'castle_drop': return note('The fort sank', fortMid(n('side')), 'thud');
-      case 'thump': return [...note('Thump!', fortMid(n('side')), 'thud'), { t: 'thump', side: n('side') as Side }];
-      case 'mend': return note('Mended', fortMid(n('side')), 'pennant');
-      case 'rebuild': return note('Rebuilt', fortMid(n('side')), 'pennant');
-      case 'puff_up': return note('Puffed up!', hobAt(n('hob')), 'pop');
-      case 'pass': return note(`${s.hud.names[n('side')] || 'Side'} passed`);
-      case 'walk': return note('Walked', undefined, undefined, false);
-      case 'split': return note('Split!', [n('x'), H - n('y')], undefined, false);
-      case 'lid_block': return note('Bounced off the lid!', [n('x'), H - n('y')], 'thud');
-      case 'lid': return note('Pot Lid on', fortMid(n('side')), 'sheet');
-      case 'buried': return note('Loophole buried', hobAt(n('hob')), 'thud');
-      case 'dug_out': case 'shove_off': return [...note('Shoved off', hobAt(n('hob')), 'walk'), { t: 'hob', hob: String(n('hob')), act: 'dig' }];
-      // Passives that act on their own: the next door glow (Old Grudge, Clatter Call).
-      case 'grudge': case 'clatter': return [{ t: 'hob', hob: String(n('hob')), act: 'nextdoor' }];
-      case 'prop_break': return note(e.kind === 'cage_bar' ? 'A bar broke!' : 'Broke!', [n('x'), H - n('y')], 'break');
-      case 'regrow': return note('The hedge grew back', slotAt(n('side'), n('c'), n('r')));
+      case 'threaded': { const p = hobAt(n('hob')); return [...note(t('notes.threaded'), p), ...(p ? [{ t: 'threaded' as const, x: p[0], y: p[1] }] : [])]; }
+      case 'front': {
+        const w = n('wind');
+        return note(w === 0 ? t('banners.weather.front_none') : t(w > 0 ? 'banners.weather.front_right' : 'banners.weather.front_left', { n: Math.abs(w) }), undefined, 'front_chime');
+      }
+      case 'drop': return [...note(byId('notes.drop', String(e.state)), hobAt(n('hob')), 'thud'), { t: 'hob', hob: String(n('hob')), act: 'tumble' }];
+      case 'climb': return [...note(t('notes.climb'), hobAt(n('hob'))), { t: 'hob', hob: String(n('hob')), act: 'land' }];
+      case 'castle_drop': return note(t('notes.castle_drop'), fortMid(n('side')), 'thud');
+      case 'thump': return [...note(t('notes.thump'), fortMid(n('side')), 'thud'), { t: 'thump', side: n('side') as Side }];
+      case 'mend': return note(t('notes.mend'), fortMid(n('side')), 'mend_fizz');
+      case 'rebuild': return note(t('notes.rebuild'), fortMid(n('side')), 'mend_fizz');
+      case 'puff_up': return note(t('notes.puff_up'), hobAt(n('hob')), 'pop');
+      // The Test Yard Dummy passes every turn: no word for it.
+      case 'pass': return e.why === 'dummy' ? [] : note(t('notes.pass', { name: s.hud.names[n('side')] || t('common.rival') }));
+      case 'walk': return [];
+      case 'split': return note(t('notes.split'), [n('x'), H - n('y')], 'split', false);
+      case 'bounce': return [{ t: 'note', text: '', x: n('x'), y: H - n('y'), sound: 'bounce', status: false }];
+      case 'lid_block': return note(t('notes.lid_block'), [n('x'), H - n('y')], 'lid_bounce');
+      case 'lid': return note(t('notes.lid'), fortMid(n('side')), 'sheet');
+      case 'buried': return note(t('notes.buried'), hobAt(n('hob')), 'buried');
+      case 'dug_out': case 'shove_off': return [...note(t('notes.dug_out'), hobAt(n('hob')), 'walk'), { t: 'hob', hob: String(n('hob')), act: 'dig' }];
+      // Passives that act on their own: the next door glow (Old Grudge, Dinner Bell).
+      case 'grudge': case 'clatter': return [...note(t(`notes.${e.t}`), hobAt(n('hob')), undefined, false), { t: 'hob', hob: String(n('hob')), act: 'nextdoor' }];
+      case 'prop_break': return note(byId('notes.prop_break', String(e.kind)), [n('x'), H - n('y')], 'break');
+      case 'regrow': return note(t('notes.regrow'), slotAt(n('side'), n('c'), n('r')));
       // v0.2: the Grand Fort phases on 1-10 and the Volley Points relight.
-      case 'boss_phase': return note(`Grand Fort: phase ${n('phase')}`, undefined, 'squall');
-      case 'roller': return note('Big Smoothie Jr. rolls out!', [n('x'), H - n('y')], 'thud');
-      case 'roller_stop': return note('The roller stopped', undefined, 'thud');
+      case 'boss_phase': {
+        const lv = this.viewSetup?.level ?? s.level;
+        const k = `levels.${lv}.phases.${n('phase')}`;
+        return note(has(k) ? t(k) : t('banners.notice.boss_phase_default'), undefined, 'boss_horn');
+      }
+      case 'roller': return note(t('banners.notice.roller_out'), [n('x'), H - n('y')], 'roller');
+      case 'roller_stop': return note(t('banners.notice.roller_stuck'), undefined, 'roller_low');
       // The roller and the shears move on their own between turns: a sound and a word each, never silent.
-      case 'roller_move': return note(e.why === 'blocked' ? 'The roller bumps to a stop' : 'The roller rolls on', [n('to'), H - n('y')], 'roll', false);
-      case 'roller_done': return note('The roller is done', undefined, 'thud');
-      case 'shears': return note('The shears!', [n('x'), H - n('y')], 'shears');
-      case 'column': return note('Blast up the column!', slotAt(n('side'), n('c'), n('r')), 'boom', false);
-      case 'prop': return note(e.kind === 'turnip' || e.shot === 'turnip' ? 'A turnip!' : 'Tick-tock...', [n('x'), H - n('y')], 'thud', false);
-      case 'prop_wake': return note('The Crock wakes!', [n('x'), H - n('y')], 'crock');
+      case 'roller_move': return note(e.why === 'blocked' ? t('banners.notice.roller_stuck') : t('banners.notice.roller_on'), [n('to'), H - n('y')], 'roller', false);
+      case 'roller_done': return note(t('banners.notice.roller_done'), undefined, 'roller_low');
+      case 'shears': return note(t('banners.notice.shears_up'), [n('x'), H - n('y')], 'shears');
+      case 'column': return note(t('notes.column'), slotAt(n('side'), n('c'), n('r')), 'boom', false);
+      case 'prop': return note(e.kind === 'turnip' || e.shot === 'turnip' || e.shot === 'turnip_prop' ? t('notes.prop.turnip') : t('notes.prop.crock'), [n('x'), H - n('y')], 'thud', false);
+      case 'prop_wake': return note(t('notes.prop_wake'), [n('x'), H - n('y')], 'crock');
       case 'carve': return [{ t: 'note', text: '', x: n('x'), y: H - n('y'), sound: 'carve', status: false }];
       case 'mound': return [{ t: 'note', text: '', x: n('x'), y: H - n('y'), sound: 'mound', status: false }];
-      case 'shears_open': return note('The shears open: the red line is cut next turn', undefined, 'sheet');
-      case 'shears_snip': return note('Snip!', undefined, 'snip');
-      case 'shears_jam': return note(`The shears jam for ${n('turns')} turns`, undefined, 'thud');
-      case 'relight': return note('Kettle relit', fortMid(n('side')), 'pennant');
-      // Rules v3 (QA playtest 1): Fatigue is warned a round ahead and named when it starts; its
+      case 'shears_open': return note(t('banners.notice.shears_open'), undefined, 'sheet');
+      case 'shears_snip': return note(t('notes.shears_snip'), undefined, 'snip');
+      case 'shears_jam': return note(plural('banners.notice.shears_jam', n('turns')), undefined, 'shears_jam');
+      case 'relight': return note(t('notes.relight'), fortMid(n('side')), 'ket_patch');
+      case 'kettle_crack': return note(t('notes.kettle_crack'), fortMid(n('side')), undefined, false);
+      // The Creaks (core id fatigue) are warned a round ahead and named when they start; the
       // collapse comes as ordinary collapse events (why: fatigue) and plays like any other.
-      case 'fatigue_warning': return [{ t: 'fatigue', phase: 'warn', text: typeof e.text === 'string' && e.text ? e.text : 'Fatigue next round' }];
-      case 'fatigue': return [{ t: 'fatigue', phase: 'start', text: 'Fatigue! Battered blocks give way' }];
+      case 'fatigue_warning': return [{ t: 'fatigue', phase: 'warn', text: t('banners.creaks.warn') }];
+      case 'fatigue': return [{ t: 'fatigue', phase: 'start', text: t('banners.creaks.start') }];
       default: return [];
     }
   }
@@ -511,7 +564,7 @@ export class RealCore implements CoreApi {
       return { side: cs.side, x: x0, y: H - y1 - 1, size: x1 - x0 + 1, hp: cs.kettle.hp, maxHp: cs.kettle.max, lid: cs.kettle.lid, room: { x: x0, y: H - y1 - 1, w: x1 - x0 + 1, h: y1 - y0 + 1 } };
     });
     const hobs: HobView[] = s.hobs.map((h) => ({
-      id: String(h.id), def: h.def, side: h.side, name: h.name.split(' ')[0], cls: (h.class === 'dummy' ? 'lobber' : h.class) as HobClass,
+      id: String(h.id), def: h.def, side: h.side, name: hobShort(h.def, h.name), cls: (h.class === 'dummy' ? 'lobber' : h.class) as HobClass,
       x: h.x, y: H - h.y, hp: h.hp, maxHp: h.max, state: hobState(h), rest: h.rest,
     }));
     const props: PropView[] = (s.props ?? []).map((p) => ({ id: p.id, side: p.side, kind: p.kind, tag: p.tag, x: p.x, y: H - p.y, hp: p.hp, maxHp: p.max }));
@@ -520,20 +573,60 @@ export class RealCore implements CoreApi {
     for (const g of s.ghosts) {
       const k = nth[g.side]++;
       if (!g.pin) continue;
-      pins.push({ id: `${g.side}:${k}`, side: g.side, hob: String(g.hob), x: g.pin[0], y: H - g.pin[1], round: g.round, spent: g.recalled, angle: g.angle, power: g.power, path: g.points.map(([x, y]) => [x, H - y] as [number, number]), windAt: hud.wind });
+      const pid = `${g.side}:${g.hob}:${g.round}:${g.pin[0]}:${g.pin[1]}`;
+      if (!this.ghostWind.has(pid)) this.ghostWind.set(pid, hud.wind);
+      pins.push({
+        id: pid, slot: `${g.side}:${k}`, side: g.side, hob: String(g.hob), x: g.pin[0], y: H - g.pin[1],
+        round: g.round, spent: g.recalled, angle: g.angle, power: g.power,
+        path: g.points.map(([x, y]) => [x, H - y] as [number, number]),
+        windAt: this.ghostWind.get(pid) ?? hud.wind,
+      });
     }
     const sel = s.hobs.find((h) => h.id === hud.selected.hob && h.side === active);
     const shotDef = (id: string) => this.bundle.shots.find((x) => x.id === id);
+    const shotMeta = (d: BundleShot | undefined, extraDials?: ('puff_up' | 'rebuild' | 'hops3')[]): Pick<ShotChip, 'dials' | 'selfTarget' | 'canTargetOwn' | 'line' | 'dmg' | 'band'> => {
+      const dials: ('puff_up' | 'rebuild' | 'hops3')[] = [];
+      for (const dl of d?.dials ?? []) if (dl === 'puff_up' || dl === 'rebuild' || dl === 'hops3') dials.push(dl);
+      for (const dl of extraDials ?? []) if (!dials.includes(dl)) dials.push(dl);
+      const card = d?.card;
+      const line = typeof card === 'string' ? card : card?.line;
+      let dmg: number | undefined;
+      let band: string | undefined;
+      for (const tr of d?.triggers ?? []) {
+        for (const eff of tr.do ?? []) {
+          if (typeof eff.dmg === 'number' && (dmg === undefined || eff.dmg > dmg)) dmg = eff.dmg;
+          if (typeof eff.band === 'string' && !band) band = eff.band;
+        }
+      }
+      if (dmg === undefined && typeof d?.flight?.block_dmg === 'number') dmg = d.flight.block_dmg;
+      if (dmg === undefined && typeof d?.self_effects?.[0]?.hp === 'number') dmg = d.self_effects[0].hp;
+      return {
+        dials: dials.length ? dials : undefined,
+        selfTarget: d?.flight?.kind === 'self' || undefined,
+        canTargetOwn: (d?.self_effects?.length ?? 0) > 0 || undefined,
+        line, dmg, band,
+      };
+    };
     const chips: ShotChip[] = [];
     if (sel) {
       const ready = sel.can_fire && s.phase === 'plan';
-      chips.push({ id: 'plain', name: shotDef(sel.plain)?.name ?? 'Plain', icon: sel.plain, kind: 'plain', uses: -1, weight: weightOf(shotDef(sel.plain)?.weight), best: sel.class as HobClass, ready });
-      if (sel.knack) chips.push({ id: 'knack', name: shotDef(sel.knack)?.name ?? 'Knack', icon: sel.knack, kind: 'knack', uses: sel.knack_uses, weight: weightOf(shotDef(sel.knack)?.weight), best: sel.class as HobClass, ready: ready && sel.knack_uses > 0 && sel.rest === 0, why: sel.rest > 0 ? 'Needs a rest' : undefined });
-      for (const t of hud.hands[active] ?? []) chips.push({ id: t.id, name: t.name ?? t.id, icon: t.id, kind: 'shell', uses: 1, weight: weightOf(t.weight ?? shotDef(t.id)?.weight), best: (t.match ?? undefined) as HobClass | undefined, ready: ready && sel.rest === 0 });
+      const hobDef = this.bundle.hobs.find((x) => x.id === sel.def);
+      const hopDial = hobDef?.passive?.kind === 'hop_dial' ? (['hops3'] as ('hops3')[]) : undefined;
+      const plainDef = shotDef(sel.plain);
+      chips.push({ id: 'plain', name: plainDef?.name ?? sel.plain, icon: sel.plain, kind: 'plain', uses: -1, weight: weightOf(plainDef?.weight), best: sel.class as HobClass, ready, ...shotMeta(plainDef, hopDial) });
+      if (sel.knack) {
+        const kDef = shotDef(sel.knack);
+        chips.push({ id: 'knack', name: kDef?.name ?? sel.knack, icon: sel.knack, kind: 'knack', uses: sel.knack_uses, weight: weightOf(kDef?.weight), best: sel.class as HobClass, ready: ready && sel.knack_uses > 0 && sel.rest === 0, why: sel.rest > 0 ? t('hud.why_short.resting') : undefined, ...shotMeta(kDef) });
+      }
+      for (const t of hud.hands[active] ?? []) {
+        const tDef = shotDef(t.id);
+        chips.push({ id: t.id, name: t.name ?? tDef?.name ?? t.id, icon: t.id, kind: 'shell', uses: 1, weight: weightOf(t.weight ?? tDef?.weight), best: (t.match ?? tDef?.match_class ?? undefined) as HobClass | undefined, ready: ready && sel.rest === 0, ...shotMeta(tDef) });
+      }
       // v0.2: the core says which shots are ready and why not (what `fire` would refuse with).
       for (const c of chips) {
         const q = hud.shots?.find((x) => x.shot === c.id || (c.kind === 'shell' && x.id === c.id));
-        if (q) { c.ready = q.ready; c.why = q.ready ? undefined : q.text ?? WHY[q.why ?? ''] ?? (q.why ?? undefined); }
+        // The reason id from the core, in the table's words (never the core's own English).
+        if (q) { c.ready = q.ready; c.why = q.ready ? undefined : whyShort(q.why); }
       }
     }
     let draft: DraftView | undefined;
@@ -572,7 +665,6 @@ export class RealCore implements CoreApi {
     const sel = s.hobs.find((h) => h.id === hud.selected.hob && h.side === active);
     const plan = s.phase === 'plan';
     const aim = sel && human(active) ? { ...sel.aim } : undefined;
-    const mine = s.hobs.filter((h) => h.side === active && h.state !== 'bonked' && h.state !== 'squashed');
     const doodads = (hud.doodads?.[active] ?? []).map((id) => {
       const d = this.bundle.doodads?.find((x) => x.id === id);
       return { id, name: d?.name ?? id, card: d?.card ?? '' };
@@ -582,16 +674,19 @@ export class RealCore implements CoreApi {
     const picked = v.chips.find((c) => c.id === hud.selected.shot);
     // A core that sends hud.fire (v0.3) says it outright; else the picked chip's readiness decides.
     const hf = hud.fire;
+    const whyVars = { hob: sel ? hobShort(sel.def, sel.name) : '', shot: picked?.name ?? '' };
+    const pickedWhy = picked ? hud.shots?.find((x) => x.shot === picked.id || (picked.kind === 'shell' && x.id === picked.id))?.why : undefined;
     const fireWhy = !(plan && human(active)) ? undefined
-      : hf ? (hf.ready ? undefined : hf.text ?? WHY[hf.why ?? ''] ?? hf.why ?? 'That shot is not ready')
-      : picked && !picked.ready ? picked.why ?? 'That shot is not ready' : undefined;
+      : hf ? (hf.ready ? undefined : byId('hud.why', hf.why ?? undefined, whyVars))
+      : picked && !picked.ready ? byId('hud.why', pickedWhy ?? undefined, whyVars) : undefined;
+    const anyCanAct = s.hobs.some((h) => h.side === active && (h.can_fire || h.buried));
     let fire: Snapshot['hud']['fire'];
     if (s.phase === 'resolve' || s.phase === 'settle') fire = s.shells.length ? 'flight' : 'fast';
     else if (!(plan && human(active))) fire = 'flight';
     else if (sel?.buried) fire = 'dug';
-    else if (sel?.can_fire && (aim?.power ?? 0) > 0 && !fireWhy) fire = 'ready';
-    // Nobody can fire, nobody can be shoved off and no Doodad: offer Pass so the turn never locks.
-    else if (!mine.some((h) => h.can_fire || h.buried) && !doodads.length) fire = 'pass';
+    else if (sel?.can_fire && (picked?.selfTarget || (aim?.power ?? 0) > 0) && !fireWhy) fire = 'ready';
+    // Nobody can fire (trusting core `can_fire`, including squashed Hobs), nobody can be shoved off and no Doodad: offer Pass so the turn never locks.
+    else if (!anyCanAct && !doodads.length) fire = 'pass';
     else fire = 'locked';
     const level = this.viewSetup?.level ?? '';
     let result: ResultView | undefined;
@@ -600,13 +695,14 @@ export class RealCore implements CoreApi {
       this.stats[1].kettle = hud.kettle_pct[1];
       // v0.2: the core counts shots and blocks; hits stay a view count.
       const rs = s.result.stats;
-      const statsOf = (i: 0 | 1): SideStats => (rs ? { shots: rs[i].shots, hits: rs[i].hits, blocks: rs[i].blocks_dropped, kettle: hud.kettle_pct[i] } : { ...this.stats[i] });
+      const statsOf = (i: 0 | 1): SideStats => (rs ? { shots: rs[i].shots, hits: rs[i].hits, blocks: rs[i].blocks_dropped, kettle: hud.kettle_pct[i], bonks: rs[i].bonks, streak: rs[i].best_streak } : { ...this.stats[i] });
       const win = s.result.winner === 0;
       result = {
-        winner: s.result.winner, how: HOW[s.result.how] ?? s.result.how, howKey: s.result.how, round: s.result.round, pennants: s.result.pennants,
+        winner: s.result.winner, how: s.result.how, howKey: s.result.how, round: s.result.round, pennants: s.result.pennants,
         goals: this.levels().find((l) => l.id === level)?.goals ?? [], buttons: s.result.buttons ?? 0,
-        stats: [statsOf(0), statsOf(1)], bestShot: s.result.best_shot !== undefined ? fromBlow(s.result.best_shot) : bestOf(this.best, s.result.winner),
-        cause: !win ? brokeLine(s.result) : undefined,
+        stats: [statsOf(0), statsOf(1)], bestShot: s.result.best_shot !== undefined ? fromBlow(s.result.best_shot, s.hobs) : bestOf(this.best, s.result.winner),
+        broke: !win ? this.brokeView(s.result) : undefined,
+        rival: s.hud.names[1] || undefined,
         pennantsNew: s.result.pennants_new, score: s.result.score,
       };
     }
@@ -617,7 +713,13 @@ export class RealCore implements CoreApi {
       round: hud.round, roundCap: hud.round_cap,
       squall: { warn: hud.squall_warning ?? 0, on: hud.squall_round },
       wind: hud.wind, forecast: hud.forecast,
-      sides: [0, 1].map((i) => ({ name: hud.names[i] || (this.viewSetup?.sides[i].name ?? ''), human: human(i), help: this.viewSetup?.sides[i].help ?? 'none' })) as Snapshot['sides'],
+      // One player: side 0 is "You" (the core calls it Left), the Test Yard's far side the Dummy.
+      sides: [0, 1].map((i) => ({
+        name: this.viewSetup?.mode !== 'duel' && i === 0 ? t('common.you')
+          : this.viewSetup?.mode === 'yard' && i === 1 ? t('common.dummy')
+          : hud.names[i] || (this.viewSetup?.sides[i].name ?? ''),
+        human: human(i), help: this.viewSetup?.sides[i].help ?? 'none',
+      })) as Snapshot['sides'],
       terrain: { width: s.map.w, height: H, chunk: s.map.chunk, chunks: this.chunks },
       blocks: v.blocks, kettles: v.kettles, hobs: v.hobs, shells, pins: v.pins, forts: v.forts, rooms: v.rooms, props: v.props,
       fatigue: [!!s.castles[0]?.fatigue, !!s.castles[1]?.fatigue],
@@ -632,6 +734,10 @@ export class RealCore implements CoreApi {
         doodads: plan && human(active) ? doodads : [],
         canPass: plan && human(active),
         volley: hud.volley ?? undefined,
+        score: Array.isArray(hud.score) ? [hud.score[0], hud.score[1]] : undefined,
+        puffUp: Array.isArray(hud.puff_up) ? [!!hud.puff_up[0], !!hud.puff_up[1]] : undefined,
+        shoveOffCost: hud.shove_off_cost,
+        frontRoundsLeft: hud.front_rounds_left,
         handicap: hud.handicap ? [0, 1].map((i) => ({ help: hud.handicap![i].help, steam: hud.handicap![i].steam, previewPct: hud.handicap![i].preview_pct, crew: hud.handicap![i].crew })) as HudView['handicap'] : undefined,
         boss: hud.boss ? { phase: hud.boss.phase, jam: hud.boss.jam, cut: hud.boss.cut ? { x: hud.boss.cut[0], y: H - hud.boss.cut[3] - 1, w: hud.boss.cut[2] - hud.boss.cut[0] + 1, h: hud.boss.cut[3] - hud.boss.cut[1] + 1 } : undefined } : undefined,
       },
@@ -646,6 +752,25 @@ export class RealCore implements CoreApi {
     if (!this.game) return undefined;
     const r = JSON.parse(this.game.command(JSON.stringify(c))) as PReply;
     return r.ok ? (r[key] as T) : undefined;
+  }
+
+  /** "What broke you" (result.broke) as ids and names; the results screen words it from the table. */
+  private brokeView(r: PSnapshot['result']): ResultView['broke'] {
+    const b = r?.broke;
+    if (!b) return undefined;
+    const hobs = this.last?.hobs ?? [];
+    const hobName = (id: number | null, name: string | null) => (id === null ? '' : hobShort(hobs.find((h) => h.id === id)?.def, name ?? ''));
+    const blow = (x: NonNullable<typeof b.last>) => ({
+      by: x.by ?? (x.shot === 'squall' ? 'squall' : x.shot === 'ground' ? 'ground' : 'hob'),
+      hob: hobName(x.hob, x.hob_name),
+      shot: this.bundle.shots.find((q) => q.id === x.shot)?.name ?? x.shot_name ?? '',
+      round: x.round, dmg: x.dmg,
+    });
+    return {
+      how: b.how, last: b.last ? blow(b.last) : undefined, top: (b.top ?? []).map(blow),
+      blocksLost: b.blocks_lost, hobsBonked: b.hobs_bonked,
+      bonkedNames: hobs.filter((h) => h.side === b.side && h.state === 'bonked').map((h) => hobShort(h.def, h.name)),
+    };
   }
 
   saveBattle(): string {
@@ -689,17 +814,17 @@ export class RealCore implements CoreApi {
       if (!d || typeof d !== 'object' || typeof d.setup !== 'string' || !Array.isArray(d.log) || !d.view) throw new Error('shape');
       BigInt(d.seed);
     } catch {
-      throw new SaveError('This saved fight is damaged.', 'corrupt');
+      throw new SaveError(t('errors.saved_fight_damaged'), 'corrupt');
     }
-    if (d.v !== SAVE_VERSION || d.rules !== this.rules) throw new SaveError('This saved fight is from an older version.', 'version');
+    if (d.v !== SAVE_VERSION || d.rules !== this.rules) throw new SaveError(t('errors.saved_fight_old'), 'version');
     this.start(d.setup, BigInt(d.seed));
     this.viewSetup = d.view;
     const g = this.game!;
     // v0.2: the core replays the log itself, stepping between commands as a live app does,
     // and lands on the next stable point after the last command.
     const rep = JSON.parse(g.command(JSON.stringify({ cmd: 'resume', log: d.log } satisfies PCommand))) as PReply & { hash?: string };
-    if (!rep.ok) throw new SaveError('This saved fight no longer replays.', 'mismatch');
-    const note = d.hash && rep.hash !== d.hash ? 'This saved fight replayed a little differently from when it was saved.' : undefined;
+    if (!rep.ok) throw new SaveError(t('errors.saved_fight_damaged'), 'mismatch');
+    const note = d.hash && rep.hash !== d.hash ? t('errors.saved_fight_differs') : undefined;
     // The next snapshot is full with the whole map; its events are the replay's and are dropped.
     this.cache = undefined;
     this.lastCastles = undefined;
@@ -717,11 +842,11 @@ export class RealCore implements CoreApi {
   }
 }
 
-/** Refusal keys from hud.shots[].why, as short chip text. */
 /** The core's best shot (v0.3 result.best_shot) in view form; null stays undefined. */
-function fromBlow(b: PBestShot | null): ResultView['bestShot'] {
+function fromBlow(b: PBestShot | null, hobs: PHob[]): ResultView['bestShot'] {
   if (!b) return undefined;
-  return { side: b.side as Side, hob: b.hob_name ? b.hob_name.split(' ')[0] : '', round: b.round, dmg: b.dmg, angle: b.angle, power: b.power };
+  const def = hobs.find((h) => h.id === b.hob)?.def;
+  return { side: b.side as Side, hob: hobShort(def, b.hob_name ?? ''), round: b.round, dmg: b.dmg, angle: b.angle, power: b.power };
 }
 
 /** The winner's best shot (kept by the view for a core without result.best_shot); on a draw the better of the two. */
@@ -731,33 +856,10 @@ export function bestOf(best: [ResultView['bestShot'], ResultView['bestShot']], w
   return a && b ? (b.dmg > a.dmg ? b : a) : a ?? b;
 }
 
-const WHY: Record<string, string> = {
-  resting_plain_only: 'Needs a rest: Plain Shot only', resting: 'Needs a rest', no_knack_uses: 'No uses left', no_heavy_first_turn: 'No Heavy shot on the first turn',
-  buried: 'Loophole buried', no_actions_left: 'No shots left', not_planning: 'Not your turn',
-};
-
-/** "What broke you" (result.broke): the last blow and what it cost, in one line. */
-function brokeLine(r: PSnapshot['result']): string {
-  const b = r?.broke;
-  if (!b) return lossCause(r?.how ?? '');
-  const BY: Record<string, string> = { squall: 'the Squall', ground: 'a fall', fatigue: 'Fatigue', self: 'your own shot', shears: 'the shears' };
-  const by = b.last ? (b.last.by && BY[b.last.by] ? BY[b.last.by] : b.last.shot === 'squall' ? 'the Squall' : b.last.shot === 'ground' ? 'a fall' : (b.last.hob_name ? `${b.last.hob_name.split(' ')[0]}'s ${b.last.shot_name ?? 'shot'}` : (b.last.shot_name ?? 'a shot'))) : '';
-  const lost = [b.blocks_lost ? `${b.blocks_lost} blocks` : '', b.hobs_bonked ? `${b.hobs_bonked} ${b.hobs_bonked === 1 ? 'Hob' : 'Hobs'} Bonked` : ''].filter(Boolean).join(', ');
-  return `${lossCause(b.how)}${by ? ` The last blow: ${by}${b.last?.round ? ` in round ${b.last.round}` : ''}.` : ''}${lost ? ` Lost ${lost}.` : ''}`;
-}
-
-function lossCause(how: string): string {
-  switch (how) {
-    case 'kettle_pop': return 'Your kettle popped.';
-    case 'clean_sweep': return 'Every Hob of yours was Bonked.';
-    case 'squall': case 'double_pop': return 'The Squall finished your kettle.';
-    case 'total_hp': case 'round_cap': return 'Out of rounds, and they had more left.';
-    case 'rescue': return 'They got there first.';
-    case 'captive_bonked': return 'The captive was Bonked.';
-    case 'give_up': return 'You gave up.';
-    case 'volley_points': return 'Out of shots, and they scored more.';
-    default: return 'A close one.';
-  }
+/** A refusal id from hud.shots, as the short chip word (`hud.why_short`). */
+function whyShort(id: string | null | undefined): string | undefined {
+  if (!id) return undefined;
+  return has(`hud.why_short.${id}`) ? t(`hud.why_short.${id}`) : t('hud.why_short.not_planning');
 }
 
 function hobState(h: PHob): HobView['state'] {
@@ -768,6 +870,14 @@ function hobState(h: PHob): HobView['state'] {
   if (h.rest > 0) return 'rest';
   if (h.state === 'tumbled' || h.state === 'dropped') return 'tumbled';
   return 'ready';
+}
+
+/** A Pennant's goal: `levels.<id>.goals.<type>`, else `pennants.<type>`, else the level file's text (content/text.md). */
+function goalText(l: RawLevel, p: RawLevel['pennants'][number]): string {
+  const vars = { n: p.value, rival: rivalShort(l.rival.name, l.id), captive: has(`levels.${l.id}.captive`) ? t(`levels.${l.id}.captive`) : '' };
+  if (has(`levels.${l.id}.goals.${p.type}`)) return t(`levels.${l.id}.goals.${p.type}`, vars);
+  if (has(`pennants.${p.type}`)) return t(`pennants.${p.type}`, vars);
+  return p.text;
 }
 
 export function weightOf(w: unknown): 0 | 1 | 2 {
@@ -796,9 +906,8 @@ export function toProtocolSetup(s: BattleSetup, glyphs: Record<string, Material>
     if (!dummy && v.crew.length && !(s.mode === 'campaign' && i === 1)) cfg.crew = v.crew.map((c) => c.replace(/^p2_/, '').replace(/^thumper$/, 'old_thumper'));
     const bp = v.blueprint;
     if (bp && bp.id !== 'default') {
-      if (bp.kit && !cfg.crew) cfg.kit = bp.kit;
+      if (bp.kit) cfg.kit = bp.kit;
       else if (bp.id && !bp.rowsText?.length && !bp.cells.length) cfg.blueprint = bp.id;
-      else if (bp.kit && bp.id) cfg.blueprint = bp.id;
       else if (bp.rowsText) cfg.rows = bp.rowsText;
       else if (bp.id) cfg.blueprint = bp.id;
       else if (bp.cells.length) cfg.rows = blueprintToRows(bp, glyphs);
@@ -806,7 +915,7 @@ export function toProtocolSetup(s: BattleSetup, glyphs: Record<string, Material>
     if (v.doodads?.length) cfg.doodads = v.doodads.slice(0, 2);
     // Help, preview share and crew size are handicaps the core applies (Steam from content/app.json).
     if (v.help && v.help !== 'none') cfg.help = v.help;
-    if (v.previewPct !== undefined && v.previewPct < 100) cfg.preview_pct = v.previewPct;
+    if (v.previewPct !== undefined) cfg.preview_pct = v.previewPct;
     if (v.crewSize) cfg.crew_size = v.crewSize;
     return cfg;
   };

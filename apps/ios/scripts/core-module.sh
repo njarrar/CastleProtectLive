@@ -11,8 +11,8 @@ XC="${SRCROOT}/Frameworks/CastleCore.xcframework"
 
 missing() {
   rm -rf "$OUT"
-  if [ "${CONFIGURATION:-Debug}" = "Release" ]; then
-    echo "error: $1 A Release build needs the real core. Run scripts/build-xcframework.sh."
+  if [ "${CONFIGURATION:-Debug}" != "Debug" ]; then
+    echo "error: $1 A ${CONFIGURATION} build needs the real core. Run scripts/build-xcframework.sh."
     exit 1
   fi
   echo "warning: $1 Building with the stand-in core (Debug only)."

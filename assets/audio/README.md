@@ -98,9 +98,27 @@ With all three up the mix sits near -18 LUFS, so impacts stay on top.
 
 "Squall in 3" plays `wx_squall_bell` on the core event `squall_warning`.
 
+## One sound per event
+
+These core events each have their own cue. Do not fall back to a shared thud, `wx_squall_bell` or `hob_bonk` for them.
+
+| Core event | Sound |
+|---|---|
+| `lid_block` (a shell bounces off a Pot Lid) | `doo_lid_bounce`. The lid going on (`lid`) keeps `doo_pot_lid_clang` |
+| `buried` (a Loophole is dug in) | `hob_buried_thlup` |
+| `boss_phase` (Grand Fort, 1-10) | `cas_boss_horn` |
+| `front` (a new Weather Front) | `wx_front_chime`, with `wx_wind_shift` under it if you like |
+| `threaded` | `hit_threaded_zip` |
+| `roller` | `doo_roller_rumble`. `roller_stop` and `roller_done`: the same, 3 semitones down |
+| `shears_jam` | `doo_shears_jam` |
+| `castle_drop`, `thump` | `cas_thump` |
+| `drop` | `hob_tumble_roll` |
+
+`wx_squall_bell` is for the Squall only (`squall_warning`, first `squall_round`).
+
 ## Hob-speak
 
-Barks are gibberish from a small voice model in code: soft syllables such as bo, bim, wub, nok, pip, mum and hoo. There are no real words. The pitch curve carries the mood: up for cheer, down for a groan.
+Barks are gibberish from a small voice model in code: soft syllables such as bo, bim, wub, nok, pip, mum and hoo. There are no real words. The pitch curve carries the mood: up for cheer, down for a groan. Each Hob also has syllables nobody else says (`OWN` in `tools/audio-gen/barks.py`): Marge dum lub mop, Thumper grum gob humf, Quill pin tet tik, Jax trat rrap pep (rolled r), Nan klat nen dit, Grub mmm hmm mub (he only hums), Bobbin ing dib lop, Hetty wel tut dem.
 
 Each Hob has its own pitch and voice, so you can tell them by ear:
 

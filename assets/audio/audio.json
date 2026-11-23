@@ -137,12 +137,12 @@
   "huge": "hit_blast_huge"
  },
  "totals": {
-  "sounds": 140,
-  "ogg_bytes": 2744039,
-  "m4a_bytes": 2798287,
-  "all_bytes": 5542326,
+  "sounds": 147,
+  "ogg_bytes": 3379518,
+  "m4a_bytes": 3315866,
+  "all_bytes": 6695384,
   "budget_bytes": 8388608,
-  "seconds": 342.3
+  "seconds": 349.3
  },
  "sounds": [
   {
@@ -174,10 +174,10 @@
     "anim": null
    },
    "lufs": -21.0,
-   "peak_db": -10.0,
+   "peak_db": -9.1,
    "bytes": {
-    "ogg": 434957,
-    "m4a": 386454
+    "ogg": 435653,
+    "m4a": 386083
    }
   },
   {
@@ -209,10 +209,10 @@
     "anim": null
    },
    "lufs": -23.0,
-   "peak_db": -11.2,
+   "peak_db": -9.8,
    "bytes": {
-    "ogg": 699352,
-    "m4a": 663633
+    "ogg": 709740,
+    "m4a": 664586
    }
   },
   {
@@ -225,7 +225,7 @@
    "duration": 71.111,
    "samples": 3413333,
    "sample_rate": 48000,
-   "channels": 1,
+   "channels": 2,
    "loop": true,
    "layer": "peril",
    "bus": "music",
@@ -244,10 +244,10 @@
     "anim": null
    },
    "lufs": -25.0,
-   "peak_db": -10.2,
+   "peak_db": -11.1,
    "bytes": {
-    "ogg": 480140,
-    "m4a": 448935
+    "ogg": 739084,
+    "m4a": 677382
    }
   },
   {
@@ -260,7 +260,7 @@
    "duration": 71.111,
    "samples": 3413333,
    "sample_rate": 48000,
-   "channels": 1,
+   "channels": 2,
    "loop": true,
    "layer": "stir",
    "bus": "music",
@@ -279,10 +279,10 @@
     "anim": null
    },
    "lufs": -22.0,
-   "peak_db": -9.6,
+   "peak_db": -11.2,
    "bytes": {
-    "ogg": 549016,
-    "m4a": 444502
+    "ogg": 871620,
+    "m4a": 667929
    }
   },
   {
@@ -292,8 +292,8 @@
     "ogg": "music/mus_title_jingle.ogg",
     "m4a": "music/mus_title_jingle.m4a"
    },
-   "duration": 4.528,
-   "samples": 217358,
+   "duration": 4.523,
+   "samples": 217112,
    "sample_rate": 48000,
    "channels": 2,
    "loop": false,
@@ -306,10 +306,10 @@
     "anim": null
    },
    "lufs": -17.0,
-   "peak_db": -6.4,
+   "peak_db": -5.8,
    "bytes": {
-    "ogg": 46890,
-    "m4a": 42641
+    "ogg": 46346,
+    "m4a": 42627
    }
   },
   {
@@ -319,8 +319,8 @@
     "ogg": "music/sting_lose.ogg",
     "m4a": "music/sting_lose.m4a"
    },
-   "duration": 2.106,
-   "samples": 101083,
+   "duration": 2.105,
+   "samples": 101039,
    "sample_rate": 48000,
    "channels": 2,
    "loop": false,
@@ -333,10 +333,10 @@
     "anim": null
    },
    "lufs": -18.0,
-   "peak_db": -7.7,
+   "peak_db": -6.5,
    "bytes": {
-    "ogg": 17638,
-    "m4a": 20471
+    "ogg": 17902,
+    "m4a": 20799
    }
   },
   {
@@ -346,8 +346,8 @@
     "ogg": "music/sting_win.ogg",
     "m4a": "music/sting_win.m4a"
    },
-   "duration": 2.07,
-   "samples": 99356,
+   "duration": 2.044,
+   "samples": 98117,
    "sample_rate": 48000,
    "channels": 2,
    "loop": false,
@@ -360,10 +360,10 @@
     "anim": "hob_<id>_<side>_cheer:jump"
    },
    "lufs": -16.0,
-   "peak_db": -6.5,
+   "peak_db": -3.3,
    "bytes": {
-    "ogg": 23842,
-    "m4a": 19900
+    "ogg": 23237,
+    "m4a": 19874
    }
   },
   {
@@ -386,11 +386,11 @@
     "game": "While dragging. Pitch 0 to +12 semitones with power 0 to 100",
     "anim": null
    },
-   "lufs": -27.0,
-   "peak_db": -15.0,
+   "lufs": -20.0,
+   "peak_db": -5.4,
    "bytes": {
-    "ogg": 8616,
-    "m4a": 9375
+    "ogg": 8735,
+    "m4a": 9471
    }
   },
   {
@@ -556,6 +556,34 @@
    }
   },
   {
+   "id": "cas_boss_horn",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/cas_boss_horn.ogg",
+    "m4a": "sfx/cas_boss_horn.m4a"
+   },
+   "duration": 1.381,
+   "samples": 66294,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "world",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Core event boss_phase (Grand Fort, 1-10). Not for the Squall",
+    "anim": null
+   },
+   "note": "Caption [horn]",
+   "lufs": -16.0,
+   "peak_db": -4.4,
+   "bytes": {
+    "ogg": 9443,
+    "m4a": 12612
+   }
+  },
+  {
    "id": "cas_loophole_flap",
    "kind": "sfx",
    "files": {
@@ -604,10 +632,10 @@
     "anim": "fx_kettle_steam (each loop, 1 in 3)"
    },
    "lufs": -23.0,
-   "peak_db": -7.6,
+   "peak_db": -7.4,
    "bytes": {
-    "ogg": 3342,
-    "m4a": 5610
+    "ogg": 3400,
+    "m4a": 5451
    }
   },
   {
@@ -807,7 +835,7 @@
     "m4a": "sfx/col_dust_settle.m4a"
    },
    "duration": 0.727,
-   "samples": 34914,
+   "samples": 34915,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -820,10 +848,37 @@
     "anim": "fx_dustcloud"
    },
    "lufs": -26.0,
-   "peak_db": -11.8,
+   "peak_db": -11.9,
    "bytes": {
-    "ogg": 4505,
-    "m4a": 7078
+    "ogg": 4495,
+    "m4a": 6975
+   }
+  },
+  {
+   "id": "doo_lid_bounce",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/doo_lid_bounce.ogg",
+    "m4a": "sfx/doo_lid_bounce.m4a"
+   },
+   "duration": 0.629,
+   "samples": 30171,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.5,
+   "trigger": {
+    "game": "Core event lid_block: a shell bounces off a Pot Lid. Pot Lid going on (lid) keeps doo_pot_lid_clang",
+    "anim": null
+   },
+   "lufs": -18.1,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 4738,
+    "m4a": 6347
    }
   },
   {
@@ -878,6 +933,60 @@
    "bytes": {
     "ogg": 6278,
     "m4a": 8439
+   }
+  },
+  {
+   "id": "doo_roller_rumble",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/doo_roller_rumble.ogg",
+    "m4a": "sfx/doo_roller_rumble.m4a"
+   },
+   "duration": 1.0,
+   "samples": 48000,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "world",
+   "volume": 1.0,
+   "pitch_var_semitones": 0,
+   "trigger": {
+    "game": "Core event roller: the roller rolls out. Also roller_stop and roller_done, 3 semitones down",
+    "anim": null
+   },
+   "lufs": -17.0,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 6753,
+    "m4a": 9305
+   }
+  },
+  {
+   "id": "doo_shears_jam",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/doo_shears_jam.ogg",
+    "m4a": "sfx/doo_shears_jam.m4a"
+   },
+   "duration": 0.509,
+   "samples": 24436,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "world",
+   "volume": 1.0,
+   "pitch_var_semitones": 1,
+   "trigger": {
+    "game": "Core event shears_jam: the shears stick",
+    "anim": null
+   },
+   "lufs": -17.2,
+   "peak_db": -3.0,
+   "bytes": {
+    "ogg": 5039,
+    "m4a": 5373
    }
   },
   {
@@ -955,10 +1064,10 @@
     "anim": null
    },
    "lufs": -24.0,
-   "peak_db": -11.6,
+   "peak_db": -8.0,
    "bytes": {
-    "ogg": 6087,
-    "m4a": 9218
+    "ogg": 6043,
+    "m4a": 9240
    }
   },
   {
@@ -1009,10 +1118,10 @@
     "anim": "fx_trail_blast"
    },
    "lufs": -27.0,
-   "peak_db": -21.0,
+   "peak_db": -20.8,
    "bytes": {
-    "ogg": 6519,
-    "m4a": 9248
+    "ogg": 6251,
+    "m4a": 9236
    }
   },
   {
@@ -1286,6 +1395,33 @@
    }
   },
   {
+   "id": "hit_threaded_zip",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hit_threaded_zip.ogg",
+    "m4a": "sfx/hit_threaded_zip.m4a"
+   },
+   "duration": 0.24,
+   "samples": 11520,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "impact",
+   "volume": 1.0,
+   "pitch_var_semitones": 1,
+   "trigger": {
+    "game": "Core event threaded (and hit with threaded set): a shot slips through a Loophole",
+    "anim": null
+   },
+   "lufs": -17.0,
+   "peak_db": -5.8,
+   "bytes": {
+    "ogg": 1658,
+    "m4a": 3078
+   }
+  },
+  {
    "id": "hit_water_splash",
    "kind": "sfx",
    "files": {
@@ -1395,6 +1531,33 @@
    }
   },
   {
+   "id": "hob_buried_thlup",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/hob_buried_thlup.ogg",
+    "m4a": "sfx/hob_buried_thlup.m4a"
+   },
+   "duration": 0.259,
+   "samples": 12444,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "hob",
+   "volume": 1.0,
+   "pitch_var_semitones": 1.5,
+   "trigger": {
+    "game": "Core event buried: a Loophole is dug in on a Hob",
+    "anim": null
+   },
+   "lufs": -17.0,
+   "peak_db": -3.1,
+   "bytes": {
+    "ogg": 1963,
+    "m4a": 3172
+   }
+  },
+  {
    "id": "hob_cheer",
    "kind": "sfx",
    "files": {
@@ -1402,7 +1565,7 @@
     "m4a": "sfx/hob_cheer.m4a"
    },
    "duration": 1.4,
-   "samples": 67203,
+   "samples": 67205,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -1415,10 +1578,10 @@
     "anim": "hob_<id>_<side>_cheer:jump"
    },
    "lufs": -17.0,
-   "peak_db": -3.1,
+   "peak_db": -3.0,
    "bytes": {
-    "ogg": 8597,
-    "m4a": 12636
+    "ogg": 8606,
+    "m4a": 12600
    }
   },
   {
@@ -1878,11 +2041,11 @@
     "game": "Core event fire, shot group heavy",
     "anim": "hob_<id>_<side>_fire:release"
    },
-   "lufs": -15.3,
+   "lufs": -16.1,
    "peak_db": -3.0,
    "bytes": {
-    "ogg": 5672,
-    "m4a": 8478
+    "ogg": 5401,
+    "m4a": 8509
    }
   },
   {
@@ -2013,11 +2176,11 @@
     "game": "Core event hit, target block, Footing",
     "anim": "fx_impact_footing:flash"
    },
-   "lufs": -17.2,
+   "lufs": -20.4,
    "peak_db": -3.0,
    "bytes": {
-    "ogg": 1690,
-    "m4a": 2893
+    "ogg": 1694,
+    "m4a": 2855
    }
   },
   {
@@ -2393,10 +2556,10 @@
     "anim": null
    },
    "lufs": -22.0,
-   "peak_db": -5.5,
+   "peak_db": -4.1,
    "bytes": {
-    "ogg": 1844,
-    "m4a": 2865
+    "ogg": 1257,
+    "m4a": 2840
    }
   },
   {
@@ -2563,6 +2726,34 @@
    }
   },
   {
+   "id": "wx_front_chime",
+   "kind": "sfx",
+   "files": {
+    "ogg": "sfx/wx_front_chime.ogg",
+    "m4a": "sfx/wx_front_chime.m4a"
+   },
+   "duration": 1.549,
+   "samples": 74343,
+   "sample_rate": 48000,
+   "channels": 1,
+   "loop": false,
+   "layer": null,
+   "bus": "world",
+   "volume": 1.0,
+   "pitch_var_semitones": 1,
+   "trigger": {
+    "game": "Core event front: a new Weather Front. wx_wind_shift can play under it",
+    "anim": null
+   },
+   "note": "Caption [wind chimes]",
+   "lufs": -19.0,
+   "peak_db": -6.9,
+   "bytes": {
+    "ogg": 9994,
+    "m4a": 13950
+   }
+  },
+  {
    "id": "wx_squall_bell",
    "kind": "sfx",
    "files": {
@@ -2612,10 +2803,10 @@
    },
    "note": "Caption [squall]",
    "lufs": -24.0,
-   "peak_db": -9.7,
+   "peak_db": -10.5,
    "bytes": {
-    "ogg": 23089,
-    "m4a": 33993
+    "ogg": 23016,
+    "m4a": 34003
    }
   },
   {
@@ -2639,10 +2830,10 @@
     "anim": "fx_wind_leaf"
    },
    "lufs": -28.0,
-   "peak_db": -14.2,
+   "peak_db": -14.5,
    "bytes": {
-    "ogg": 23037,
-    "m4a": 33983
+    "ogg": 23073,
+    "m4a": 33966
    }
   },
   {
@@ -2679,8 +2870,8 @@
     "ogg": "barks/bark_bobbin_bonked.ogg",
     "m4a": "barks/bark_bobbin_bonked.m4a"
    },
-   "duration": 0.781,
-   "samples": 37506,
+   "duration": 0.855,
+   "samples": 41038,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -2695,10 +2886,10 @@
     "anim": "hob_bobbin_<side>_bonked (frame 0)"
    },
    "lufs": -18.0,
-   "peak_db": -8.0,
+   "peak_db": -7.5,
    "bytes": {
-    "ogg": 4690,
-    "m4a": 7022
+    "ogg": 3986,
+    "m4a": 7492
    }
   },
   {
@@ -2708,8 +2899,8 @@
     "ogg": "barks/bark_bobbin_fire.ogg",
     "m4a": "barks/bark_bobbin_fire.m4a"
    },
-   "duration": 0.497,
-   "samples": 23871,
+   "duration": 0.479,
+   "samples": 23000,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -2724,10 +2915,10 @@
     "anim": "hob_bobbin_<side>_fire:release"
    },
    "lufs": -18.0,
-   "peak_db": -8.4,
+   "peak_db": -7.8,
    "bytes": {
-    "ogg": 2470,
-    "m4a": 4831
+    "ogg": 2450,
+    "m4a": 4656
    }
   },
   {
@@ -2737,8 +2928,8 @@
     "ogg": "barks/bark_bobbin_hit_lands.ogg",
     "m4a": "barks/bark_bobbin_hit_lands.m4a"
    },
-   "duration": 0.687,
-   "samples": 32993,
+   "duration": 0.781,
+   "samples": 37500,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -2753,10 +2944,10 @@
     "anim": "hob_bobbin_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -8.2,
+   "peak_db": -7.7,
    "bytes": {
-    "ogg": 3900,
-    "m4a": 6130
+    "ogg": 4412,
+    "m4a": 6911
    }
   },
   {
@@ -2824,8 +3015,8 @@
     "ogg": "barks/bark_bobbin_win.ogg",
     "m4a": "barks/bark_bobbin_win.m4a"
    },
-   "duration": 0.855,
-   "samples": 41055,
+   "duration": 0.916,
+   "samples": 43948,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -2840,10 +3031,10 @@
     "anim": "hob_bobbin_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -6.4,
+   "peak_db": -5.3,
    "bytes": {
-    "ogg": 4251,
-    "m4a": 7413
+    "ogg": 4587,
+    "m4a": 7750
    }
   },
   {
@@ -2853,8 +3044,8 @@
     "ogg": "barks/bark_grub_bonked.ogg",
     "m4a": "barks/bark_grub_bonked.m4a"
    },
-   "duration": 0.862,
-   "samples": 41371,
+   "duration": 0.856,
+   "samples": 41086,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -2869,10 +3060,10 @@
     "anim": "hob_grub_<side>_bonked (frame 0)"
    },
    "lufs": -18.0,
-   "peak_db": -4.2,
+   "peak_db": -4.0,
    "bytes": {
-    "ogg": 4468,
-    "m4a": 7347
+    "ogg": 4390,
+    "m4a": 7385
    }
   },
   {
@@ -2882,8 +3073,8 @@
     "ogg": "barks/bark_grub_fire.ogg",
     "m4a": "barks/bark_grub_fire.m4a"
    },
-   "duration": 0.392,
-   "samples": 18815,
+   "duration": 0.456,
+   "samples": 21910,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -2898,10 +3089,10 @@
     "anim": "hob_grub_<side>_fire:release"
    },
    "lufs": -18.0,
-   "peak_db": -4.7,
+   "peak_db": -3.7,
    "bytes": {
-    "ogg": 2087,
-    "m4a": 3909
+    "ogg": 2478,
+    "m4a": 4508
    }
   },
   {
@@ -2911,8 +3102,8 @@
     "ogg": "barks/bark_grub_hit_lands.ogg",
     "m4a": "barks/bark_grub_hit_lands.m4a"
    },
-   "duration": 0.689,
-   "samples": 33083,
+   "duration": 0.685,
+   "samples": 32902,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -2927,10 +3118,10 @@
     "anim": "hob_grub_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -3.2,
+   "peak_db": -4.1,
    "bytes": {
-    "ogg": 4058,
-    "m4a": 6148
+    "ogg": 3731,
+    "m4a": 6250
    }
   },
   {
@@ -2940,8 +3131,8 @@
     "ogg": "barks/bark_grub_picked.ogg",
     "m4a": "barks/bark_grub_picked.m4a"
    },
-   "duration": 0.471,
-   "samples": 22614,
+   "duration": 0.534,
+   "samples": 25630,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -2956,10 +3147,10 @@
     "anim": "hob_grub_<side>_aim (start)"
    },
    "lufs": -18.0,
-   "peak_db": -5.0,
+   "peak_db": -3.5,
    "bytes": {
-    "ogg": 2507,
-    "m4a": 4360
+    "ogg": 2927,
+    "m4a": 4917
    }
   },
   {
@@ -2969,8 +3160,8 @@
     "ogg": "barks/bark_grub_takes_hit.ogg",
     "m4a": "barks/bark_grub_takes_hit.m4a"
    },
-   "duration": 0.521,
-   "samples": 25027,
+   "duration": 0.529,
+   "samples": 25392,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -2985,10 +3176,10 @@
     "anim": "hob_grub_<side>_hit:flash"
    },
    "lufs": -18.0,
-   "peak_db": -4.5,
+   "peak_db": -4.6,
    "bytes": {
-    "ogg": 2852,
-    "m4a": 4904
+    "ogg": 2851,
+    "m4a": 4937
    }
   },
   {
@@ -2998,8 +3189,8 @@
     "ogg": "barks/bark_grub_win.ogg",
     "m4a": "barks/bark_grub_win.m4a"
    },
-   "duration": 0.927,
-   "samples": 44483,
+   "duration": 0.995,
+   "samples": 47756,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3014,10 +3205,10 @@
     "anim": "hob_grub_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -4.7,
+   "peak_db": -3.0,
    "bytes": {
-    "ogg": 4775,
-    "m4a": 7812
+    "ogg": 5091,
+    "m4a": 8411
    }
   },
   {
@@ -3027,8 +3218,8 @@
     "ogg": "barks/bark_hetty_bonked.ogg",
     "m4a": "barks/bark_hetty_bonked.m4a"
    },
-   "duration": 0.848,
-   "samples": 40724,
+   "duration": 0.81,
+   "samples": 38899,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3043,10 +3234,10 @@
     "anim": "hob_hetty_<side>_bonked (frame 0)"
    },
    "lufs": -18.0,
-   "peak_db": -8.6,
+   "peak_db": -8.4,
    "bytes": {
-    "ogg": 4198,
-    "m4a": 7535
+    "ogg": 4519,
+    "m4a": 7256
    }
   },
   {
@@ -3057,7 +3248,7 @@
     "m4a": "barks/bark_hetty_fire.m4a"
    },
    "duration": 0.37,
-   "samples": 17754,
+   "samples": 17782,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3072,10 +3263,10 @@
     "anim": "hob_hetty_<side>_fire:release"
    },
    "lufs": -18.0,
-   "peak_db": -6.1,
+   "peak_db": -7.3,
    "bytes": {
-    "ogg": 1797,
-    "m4a": 3803
+    "ogg": 1886,
+    "m4a": 3916
    }
   },
   {
@@ -3085,8 +3276,8 @@
     "ogg": "barks/bark_hetty_hit_lands.ogg",
     "m4a": "barks/bark_hetty_hit_lands.m4a"
    },
-   "duration": 0.709,
-   "samples": 34010,
+   "duration": 0.707,
+   "samples": 33938,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3101,10 +3292,10 @@
     "anim": "hob_hetty_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -9.4,
+   "peak_db": -8.7,
    "bytes": {
-    "ogg": 3527,
-    "m4a": 6377
+    "ogg": 3542,
+    "m4a": 6351
    }
   },
   {
@@ -3114,8 +3305,8 @@
     "ogg": "barks/bark_hetty_picked.ogg",
     "m4a": "barks/bark_hetty_picked.m4a"
    },
-   "duration": 0.648,
-   "samples": 31089,
+   "duration": 0.545,
+   "samples": 26178,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3130,10 +3321,10 @@
     "anim": "hob_hetty_<side>_aim (start)"
    },
    "lufs": -18.0,
-   "peak_db": -6.9,
+   "peak_db": -7.3,
    "bytes": {
-    "ogg": 3511,
-    "m4a": 5995
+    "ogg": 2563,
+    "m4a": 5202
    }
   },
   {
@@ -3143,8 +3334,8 @@
     "ogg": "barks/bark_hetty_takes_hit.ogg",
     "m4a": "barks/bark_hetty_takes_hit.m4a"
    },
-   "duration": 0.623,
-   "samples": 29915,
+   "duration": 0.609,
+   "samples": 29242,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3159,10 +3350,10 @@
     "anim": "hob_hetty_<side>_hit:flash"
    },
    "lufs": -18.0,
-   "peak_db": -5.8,
+   "peak_db": -6.8,
    "bytes": {
-    "ogg": 3160,
-    "m4a": 5853
+    "ogg": 3110,
+    "m4a": 5846
    }
   },
   {
@@ -3172,8 +3363,8 @@
     "ogg": "barks/bark_hetty_win.ogg",
     "m4a": "barks/bark_hetty_win.m4a"
    },
-   "duration": 0.885,
-   "samples": 42463,
+   "duration": 0.857,
+   "samples": 41147,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3188,10 +3379,10 @@
     "anim": "hob_hetty_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -8.0,
+   "peak_db": -8.4,
    "bytes": {
-    "ogg": 4703,
-    "m4a": 7718
+    "ogg": 3878,
+    "m4a": 7585
    }
   },
   {
@@ -3201,8 +3392,8 @@
     "ogg": "barks/bark_jax_bonked.ogg",
     "m4a": "barks/bark_jax_bonked.m4a"
    },
-   "duration": 0.735,
-   "samples": 35275,
+   "duration": 0.752,
+   "samples": 36114,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3217,10 +3408,10 @@
     "anim": "hob_jax_<side>_bonked (frame 0)"
    },
    "lufs": -18.0,
-   "peak_db": -5.4,
+   "peak_db": -4.7,
    "bytes": {
-    "ogg": 3398,
-    "m4a": 6664
+    "ogg": 3535,
+    "m4a": 6746
    }
   },
   {
@@ -3230,8 +3421,8 @@
     "ogg": "barks/bark_jax_fire.ogg",
     "m4a": "barks/bark_jax_fire.m4a"
    },
-   "duration": 0.387,
-   "samples": 18556,
+   "duration": 0.572,
+   "samples": 27479,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3246,10 +3437,10 @@
     "anim": "hob_jax_<side>_fire:release"
    },
    "lufs": -18.0,
-   "peak_db": -4.9,
+   "peak_db": -5.7,
    "bytes": {
-    "ogg": 2028,
-    "m4a": 3932
+    "ogg": 2886,
+    "m4a": 5359
    }
   },
   {
@@ -3259,8 +3450,8 @@
     "ogg": "barks/bark_jax_hit_lands.ogg",
     "m4a": "barks/bark_jax_hit_lands.m4a"
    },
-   "duration": 0.486,
-   "samples": 23336,
+   "duration": 0.568,
+   "samples": 27248,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3275,10 +3466,10 @@
     "anim": "hob_jax_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -7.4,
+   "peak_db": -6.6,
    "bytes": {
-    "ogg": 2467,
-    "m4a": 4739
+    "ogg": 2819,
+    "m4a": 5371
    }
   },
   {
@@ -3288,8 +3479,8 @@
     "ogg": "barks/bark_jax_picked.ogg",
     "m4a": "barks/bark_jax_picked.m4a"
    },
-   "duration": 0.52,
-   "samples": 24950,
+   "duration": 0.63,
+   "samples": 30223,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3304,10 +3495,10 @@
     "anim": "hob_jax_<side>_aim (start)"
    },
    "lufs": -18.0,
-   "peak_db": -4.6,
+   "peak_db": -4.5,
    "bytes": {
-    "ogg": 2682,
-    "m4a": 5045
+    "ogg": 3183,
+    "m4a": 5810
    }
   },
   {
@@ -3346,8 +3537,8 @@
     "ogg": "barks/bark_jax_win.ogg",
     "m4a": "barks/bark_jax_win.m4a"
    },
-   "duration": 0.725,
-   "samples": 34799,
+   "duration": 1.037,
+   "samples": 49770,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3362,10 +3553,10 @@
     "anim": "hob_jax_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -6.5,
+   "peak_db": -4.7,
    "bytes": {
-    "ogg": 3614,
-    "m4a": 6438
+    "ogg": 5172,
+    "m4a": 8895
    }
   },
   {
@@ -3375,8 +3566,8 @@
     "ogg": "barks/bark_marge_bonked.ogg",
     "m4a": "barks/bark_marge_bonked.m4a"
    },
-   "duration": 0.864,
-   "samples": 41473,
+   "duration": 0.86,
+   "samples": 41288,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3391,10 +3582,10 @@
     "anim": "hob_marge_<side>_bonked (frame 0)"
    },
    "lufs": -18.0,
-   "peak_db": -6.9,
+   "peak_db": -6.4,
    "bytes": {
-    "ogg": 4501,
-    "m4a": 7735
+    "ogg": 4182,
+    "m4a": 7600
    }
   },
   {
@@ -3449,10 +3640,10 @@
     "anim": "hob_marge_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -8.3,
+   "peak_db": -8.4,
    "bytes": {
-    "ogg": 3337,
-    "m4a": 6433
+    "ogg": 3332,
+    "m4a": 6458
    }
   },
   {
@@ -3462,8 +3653,8 @@
     "ogg": "barks/bark_marge_picked.ogg",
     "m4a": "barks/bark_marge_picked.m4a"
    },
-   "duration": 0.655,
-   "samples": 31443,
+   "duration": 0.64,
+   "samples": 30700,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3478,10 +3669,10 @@
     "anim": "hob_marge_<side>_aim (start)"
    },
    "lufs": -18.0,
-   "peak_db": -8.5,
+   "peak_db": -8.4,
    "bytes": {
-    "ogg": 3130,
-    "m4a": 6090
+    "ogg": 3159,
+    "m4a": 5980
    }
   },
   {
@@ -3520,8 +3711,8 @@
     "ogg": "barks/bark_marge_win.ogg",
     "m4a": "barks/bark_marge_win.m4a"
    },
-   "duration": 0.865,
-   "samples": 41501,
+   "duration": 0.857,
+   "samples": 41123,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3536,10 +3727,10 @@
     "anim": "hob_marge_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -7.9,
+   "peak_db": -8.2,
    "bytes": {
-    "ogg": 4834,
-    "m4a": 7703
+    "ogg": 4082,
+    "m4a": 7509
    }
   },
   {
@@ -3549,8 +3740,8 @@
     "ogg": "barks/bark_nan_bonked.ogg",
     "m4a": "barks/bark_nan_bonked.m4a"
    },
-   "duration": 0.582,
-   "samples": 27946,
+   "duration": 0.633,
+   "samples": 30385,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3565,10 +3756,10 @@
     "anim": "hob_nan_<side>_bonked (frame 0)"
    },
    "lufs": -18.0,
-   "peak_db": -7.8,
+   "peak_db": -6.4,
    "bytes": {
-    "ogg": 2706,
-    "m4a": 5494
+    "ogg": 3239,
+    "m4a": 5798
    }
   },
   {
@@ -3578,8 +3769,8 @@
     "ogg": "barks/bark_nan_fire.ogg",
     "m4a": "barks/bark_nan_fire.m4a"
    },
-   "duration": 0.453,
-   "samples": 21730,
+   "duration": 0.502,
+   "samples": 24114,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3594,10 +3785,10 @@
     "anim": "hob_nan_<side>_fire:release"
    },
    "lufs": -18.0,
-   "peak_db": -5.3,
+   "peak_db": -5.9,
    "bytes": {
-    "ogg": 2370,
-    "m4a": 4381
+    "ogg": 2651,
+    "m4a": 4825
    }
   },
   {
@@ -3607,8 +3798,8 @@
     "ogg": "barks/bark_nan_hit_lands.ogg",
     "m4a": "barks/bark_nan_hit_lands.m4a"
    },
-   "duration": 0.438,
-   "samples": 21045,
+   "duration": 0.489,
+   "samples": 23481,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3623,10 +3814,10 @@
     "anim": "hob_nan_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -7.2,
+   "peak_db": -6.6,
    "bytes": {
-    "ogg": 2270,
-    "m4a": 4379
+    "ogg": 2477,
+    "m4a": 4668
    }
   },
   {
@@ -3636,8 +3827,8 @@
     "ogg": "barks/bark_nan_picked.ogg",
     "m4a": "barks/bark_nan_picked.m4a"
    },
-   "duration": 0.481,
-   "samples": 23108,
+   "duration": 0.48,
+   "samples": 23025,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3652,10 +3843,10 @@
     "anim": "hob_nan_<side>_aim (start)"
    },
    "lufs": -18.0,
-   "peak_db": -7.0,
+   "peak_db": -6.2,
    "bytes": {
-    "ogg": 2444,
-    "m4a": 4662
+    "ogg": 2395,
+    "m4a": 4671
    }
   },
   {
@@ -3665,8 +3856,8 @@
     "ogg": "barks/bark_nan_takes_hit.ogg",
     "m4a": "barks/bark_nan_takes_hit.m4a"
    },
-   "duration": 0.651,
-   "samples": 31240,
+   "duration": 0.625,
+   "samples": 29998,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3681,10 +3872,10 @@
     "anim": "hob_nan_<side>_hit:flash"
    },
    "lufs": -18.0,
-   "peak_db": -5.2,
+   "peak_db": -5.6,
    "bytes": {
-    "ogg": 3473,
-    "m4a": 6068
+    "ogg": 3346,
+    "m4a": 5962
    }
   },
   {
@@ -3694,8 +3885,8 @@
     "ogg": "barks/bark_nan_win.ogg",
     "m4a": "barks/bark_nan_win.m4a"
    },
-   "duration": 0.693,
-   "samples": 33285,
+   "duration": 0.773,
+   "samples": 37126,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3710,10 +3901,10 @@
     "anim": "hob_nan_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -7.7,
+   "peak_db": -6.4,
    "bytes": {
-    "ogg": 3527,
-    "m4a": 6162
+    "ogg": 3905,
+    "m4a": 6830
    }
   },
   {
@@ -3768,10 +3959,10 @@
     "anim": "hob_quill_<side>_fire:release"
    },
    "lufs": -18.0,
-   "peak_db": -5.0,
+   "peak_db": -5.2,
    "bytes": {
-    "ogg": 1629,
-    "m4a": 3222
+    "ogg": 1604,
+    "m4a": 3234
    }
   },
   {
@@ -3781,8 +3972,8 @@
     "ogg": "barks/bark_quill_hit_lands.ogg",
     "m4a": "barks/bark_quill_hit_lands.m4a"
    },
-   "duration": 0.497,
-   "samples": 23866,
+   "duration": 0.473,
+   "samples": 22707,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3797,10 +3988,10 @@
     "anim": "hob_quill_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -6.4,
+   "peak_db": -7.4,
    "bytes": {
-    "ogg": 2842,
-    "m4a": 4747
+    "ogg": 2640,
+    "m4a": 4505
    }
   },
   {
@@ -3810,8 +4001,8 @@
     "ogg": "barks/bark_quill_picked.ogg",
     "m4a": "barks/bark_quill_picked.m4a"
    },
-   "duration": 0.301,
-   "samples": 14449,
+   "duration": 0.299,
+   "samples": 14371,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3826,10 +4017,10 @@
     "anim": "hob_quill_<side>_aim (start)"
    },
    "lufs": -18.0,
-   "peak_db": -5.4,
+   "peak_db": -5.9,
    "bytes": {
-    "ogg": 1614,
-    "m4a": 3307
+    "ogg": 1557,
+    "m4a": 3279
    }
   },
   {
@@ -3868,8 +4059,8 @@
     "ogg": "barks/bark_quill_win.ogg",
     "m4a": "barks/bark_quill_win.m4a"
    },
-   "duration": 0.713,
-   "samples": 34204,
+   "duration": 0.752,
+   "samples": 36118,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3884,10 +4075,10 @@
     "anim": "hob_quill_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -5.8,
+   "peak_db": -6.3,
    "bytes": {
-    "ogg": 3755,
-    "m4a": 6374
+    "ogg": 3915,
+    "m4a": 6682
    }
   },
   {
@@ -3897,8 +4088,8 @@
     "ogg": "barks/bark_thumper_bonked.ogg",
     "m4a": "barks/bark_thumper_bonked.m4a"
    },
-   "duration": 0.838,
-   "samples": 40231,
+   "duration": 0.877,
+   "samples": 42079,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3913,10 +4104,10 @@
     "anim": "hob_thumper_<side>_bonked (frame 0)"
    },
    "lufs": -18.0,
-   "peak_db": -5.0,
+   "peak_db": -3.9,
    "bytes": {
-    "ogg": 3996,
-    "m4a": 7490
+    "ogg": 4184,
+    "m4a": 7723
    }
   },
   {
@@ -3955,8 +4146,8 @@
     "ogg": "barks/bark_thumper_hit_lands.ogg",
     "m4a": "barks/bark_thumper_hit_lands.m4a"
    },
-   "duration": 0.658,
-   "samples": 31587,
+   "duration": 0.823,
+   "samples": 39520,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -3971,10 +4162,10 @@
     "anim": "hob_thumper_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -5.1,
+   "peak_db": -4.9,
    "bytes": {
-    "ogg": 3337,
-    "m4a": 6060
+    "ogg": 4611,
+    "m4a": 7470
    }
   },
   {
@@ -4013,8 +4204,8 @@
     "ogg": "barks/bark_thumper_takes_hit.ogg",
     "m4a": "barks/bark_thumper_takes_hit.m4a"
    },
-   "duration": 0.727,
-   "samples": 34910,
+   "duration": 0.834,
+   "samples": 40016,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -4029,10 +4220,10 @@
     "anim": "hob_thumper_<side>_hit:flash"
    },
    "lufs": -18.0,
-   "peak_db": -5.5,
+   "peak_db": -4.6,
    "bytes": {
-    "ogg": 3579,
-    "m4a": 6574
+    "ogg": 4261,
+    "m4a": 7273
    }
   },
   {
@@ -4042,8 +4233,8 @@
     "ogg": "barks/bark_thumper_win.ogg",
     "m4a": "barks/bark_thumper_win.m4a"
    },
-   "duration": 0.859,
-   "samples": 41213,
+   "duration": 0.87,
+   "samples": 41778,
    "sample_rate": 48000,
    "channels": 1,
    "loop": false,
@@ -4058,10 +4249,10 @@
     "anim": "hob_thumper_<side>_cheer:jump"
    },
    "lufs": -18.0,
-   "peak_db": -4.4,
+   "peak_db": -4.3,
    "bytes": {
-    "ogg": 4265,
-    "m4a": 7639
+    "ogg": 4387,
+    "m4a": 7703
    }
   }
  ]

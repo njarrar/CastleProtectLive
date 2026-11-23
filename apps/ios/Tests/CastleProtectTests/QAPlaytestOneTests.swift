@@ -96,11 +96,12 @@ final class FireStateTests: XCTestCase {
     func testFireIsLitFromHudFireAndUnreadyChipsSayWhy() throws {
         let v = try assemble(try restingPlan())
         XCTAssertFalse(v.canFire, "hud.fire.ready false greys Fire even though the Hob can fire")
-        XCTAssertEqual(v.fireText, "Marge Dumpling needs a rest: Plain Shot only")
+        // text.json `hud.why.<why>` with the Hob's short name, not the core's own words.
+        XCTAssertEqual(v.fireText, "Marge needs a rest. Plain Shot only.")
         let knack = try XCTUnwrap(v.shots.first { $0.id == "knack" })
         XCTAssertFalse(knack.ready)
         XCTAssertEqual(knack.why, "resting_plain_only")
-        XCTAssertEqual(knack.text, "Marge Dumpling needs a rest: Plain Shot only")
+        XCTAssertEqual(knack.text, "Marge needs a rest. Plain Shot only.")
         XCTAssertEqual(ShotChip.shortReason(why: knack.why), "Resting")
         let plain = try XCTUnwrap(v.shots.first { $0.id == "plain" })
         XCTAssertTrue(plain.ready)
@@ -158,7 +159,7 @@ final class FireStateTests: XCTestCase {
         XCTAssertTrue(session.canAct)
         XCTAssertFalse(session.hud.canFire)
         session.fire()
-        XCTAssertEqual(session.banner, "Marge Dumpling needs a rest: Plain Shot only")
+        XCTAssertEqual(session.banner, "Marge needs a rest. Plain Shot only.")
         XCTAssertTrue(bridge.commands.contains(#"{"cmd":"pick_shot","shot":"plain"}"#), "switched to the shot the core named")
         XCTAssertEqual(session.snapshot.selectedShot, "plain")
         XCTAssertTrue(session.hud.canFire)
@@ -196,7 +197,7 @@ final class FireStateTests: XCTestCase {
         game.markDirty()
         session.tick()
         XCTAssertEqual(session.banner, "Your turn")
-        XCTAssertEqual(session.bannerQueue, ["Marge Dumpling needs a rest: Plain Shot only"])
+        XCTAssertEqual(session.bannerQueue, ["Marge needs a rest. Plain Shot only."])
     }
 }
 
@@ -209,12 +210,12 @@ final class FatigueTests: XCTestCase {
         hud.fatigueIn = 9
         XCTAssertNil(hud.fatigueText)
         hud.fatigueIn = 3
-        XCTAssertEqual(hud.fatigueText, "Fatigue in 3")
+        XCTAssertEqual(hud.fatigueText, "Creaks in 3")
         hud.fatigueIn = 1
-        XCTAssertEqual(hud.fatigueText, "Fatigue in 1")
+        XCTAssertEqual(hud.fatigueText, "Creaks in 1")
         hud.fatigueIn = nil
         hud.fatigue = true
-        XCTAssertEqual(hud.fatigueText, "Fatigue")
+        XCTAssertEqual(hud.fatigueText, "The Creaks")
         hud.isYard = true
         XCTAssertNil(hud.fatigueText, "no Fatigue in the Test Yard")
         XCTAssertEqual(hud.roundText, "Test Yard")
@@ -238,7 +239,8 @@ final class FatigueTests: XCTestCase {
             #"[{"round":10,"t":"fatigue_warning","text":"Fatigue next round: hurt blocks hold less","tick":16},{"round":10,"t":"fatigue","tick":18}]"#.utf8))
         let out = list.compactMap { FrameAssembler.event($0, mapHeight: 720) }
         XCTAssertEqual(out.map(\.type), ["fatigue_warn", "fatigue"])
-        XCTAssertEqual(out[0].text, "Fatigue next round: hurt blocks hold less")
+        // The string table's line, not the core's text.
+        XCTAssertEqual(out[0].text, "The Creaks start next round. Cracked blocks hold less.")
     }
 
     /// The warning banner shows one round before Fatigue, and the turn line waits for it
@@ -264,9 +266,9 @@ final class FatigueTests: XCTestCase {
         let session = BattleSession(game: game, setup: setup, title: "1-1")
         game.markDirty()
         session.tick()
-        XCTAssertEqual(session.banner, "Fatigue next round: hurt blocks hold less", "Fatigue comes first")
+        XCTAssertEqual(session.banner, "The Creaks start next round. Cracked blocks hold less.", "the Creaks come first")
         XCTAssertEqual(session.bannerQueue, ["Your turn"], "once a round, not twice for the event too; the turn waits")
-        XCTAssertEqual(session.hud.fatigueText, "Fatigue in 1")
+        XCTAssertEqual(session.hud.fatigueText, "Creaks in 1")
     }
 
     /// The round 10 collapse (`why: "fatigue"`) plays like any collapse.
@@ -302,14 +304,15 @@ final class BestShotTests: XCTestCase {
         XCTAssertEqual(best.side, result.winner)
         XCTAssertEqual(best.shot, "clodpot")
         XCTAssertEqual(best.hobName, "Marge Dumpling")
-        XCTAssertEqual(best.dmg, 29)
+        XCTAssertEqual(best.dmg, 19)
         XCTAssertEqual(result.bestShots.count, 2)
         XCTAssertEqual(result.bestShot(of: 0), best)
         XCTAssertNil(result.bestShot(of: 1), "the losing side had no hit; never borrow the winner's")
         let line = BestShotLine.text(best)
         XCTAssertTrue(line.contains("Clodpot"))
-        XCTAssertTrue(line.contains("Marge Dumpling"))
-        XCTAssertTrue(line.contains("29 damage"))
+        XCTAssertTrue(line.contains("Marge"))
+        XCTAssertFalse(line.contains("Marge Dumpling"), "the short name, from text.json")
+        XCTAssertTrue(line.contains("19"))
         XCTAssertTrue(line.contains("44.0"))
     }
 
@@ -379,7 +382,7 @@ final class RetryAttemptTests: XCTestCase {
     @MainActor
     func testARulesTwoSaveIsRefused() async throws {
         let game = CoreGame(bridge: FakeCoreBridge(), catalog: ContentCatalog.load())
-        XCTAssertEqual(game.rulesVersion, 4)
+        XCTAssertEqual(game.rulesVersion, 5)
         let old = #"{"setup":{"mode":"campaign","level":"1-1","preset":"fair","seed":5,"rounds":15,"wind":"light","shells":"draft","winBy":"knockout","seats":"side_by_side","names":[],"help":[],"forts":[]},"log":"[]","rules":2}"#
         let result = await game.load(Data(old.utf8))
         XCTAssertEqual(result, .rulesChanged)
@@ -596,7 +599,7 @@ final class RealCoreRulesThreeTests: XCTestCase {
     @MainActor
     func testRestTurnOnTheRealCore() throws {
         guard CoreFactory.realCoreLinked else { throw XCTSkip("CastleCore.xcframework is not linked in this build") }
-        XCTAssertEqual(CoreGame(bridge: CoreFactory.make(preferStandIn: false), catalog: ContentCatalog.load()).rulesVersion, 4)
+        XCTAssertEqual(CoreGame(bridge: CoreFactory.make(preferStandIn: false), catalog: ContentCatalog.load()).rulesVersion, 5)
         let game = CoreGame(bridge: CoreFactory.make(preferStandIn: false), catalog: ContentCatalog.load())
         game.thinkMs = 0
         let setup = BattleSetup.campaign("1-1", preset: .fair, seed: 3)
@@ -626,7 +629,7 @@ final class RealCoreRulesThreeTests: XCTestCase {
         session.pickShot("knack")
         XCTAssertEqual(session.snapshot.selectedShot, "knack", "the pick stands")
         XCTAssertFalse(session.hud.canFire)
-        XCTAssertEqual(session.hud.fireText, "Marge Dumpling needs a rest: Plain Shot only")
+        XCTAssertEqual(session.hud.fireText, "Marge needs a rest. Plain Shot only.")
         let knack = try XCTUnwrap(session.hud.shots.first { $0.id == "knack" })
         XCTAssertFalse(knack.ready)
         XCTAssertNotNil(knack.text)
@@ -680,9 +683,9 @@ final class RealCoreRulesThreeTests: XCTestCase {
             session.tick()
             let snap = session.snapshot
             if snap.events.contains(where: { $0.type == "fatigue" }) { started = true }
-            if session.bannerQueue.contains(where: { $0.hasPrefix("Fatigue next round") })
-                || session.banner?.hasPrefix("Fatigue next round") == true { warned = true }
-            if snap.round == 9 && snap.fatigueIn == 1 && session.hud.fatigueText == "Fatigue in 1" { countdown = true }
+            if session.bannerQueue.contains(BattleSession.fatigueWarnText)
+                || session.banner == BattleSession.fatigueWarnText { warned = true }
+            if snap.round == 9 && snap.fatigueIn == 1 && session.hud.fatigueText == "Creaks in 1" { countdown = true }
             if snap.round >= 10 && snap.fatigue && snap.phase == .plan { break }
             if snap.phase == .ended { break }
         }
@@ -690,7 +693,7 @@ final class RealCoreRulesThreeTests: XCTestCase {
         XCTAssertTrue(warned, "the Fatigue next round banner")
         XCTAssertTrue(started, "the fatigue event at round 10")
         XCTAssertTrue(session.snapshot.fatigue)
-        XCTAssertEqual(session.hud.fatigueText, "Fatigue")
+        XCTAssertEqual(session.hud.fatigueText, "The Creaks")
         XCTAssertNotEqual(session.snapshot.phase, .ended, "Fatigue alone never ends a fight")
     }
 

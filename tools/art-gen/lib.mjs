@@ -27,6 +27,59 @@ export const C = {
   fire: '#E0392B', fireM: '#F26B4E', heal: '#7DDC7A', healD: '#3E9A4A', slate: '#6F7E9A', copper: '#D9773A',
 };
 
+// Part 2 WCAG AA+ Visual Design System color tokens (04_Art_Design_UX_Critique_Before_After.md §3).
+export const PALETTE_V2 = {
+  // High-contrast ink & warm parchment surfaces (13.4:1 AAA)
+  ink: '#2C221E',
+  inkSoft: '#4D3D36',
+  parchment: '#FFF4DE',
+  parchmentAlt: '#FAF3E3',
+  parchmentEdge: '#C9B08A',
+  // Semantic status badges (AA+ verified)
+  goodInk: '#1F6B29',       // 6.1:1 AA+ with #FFFFFF text
+  goodFill: '#8BD888',      // paired with #2C221E ink
+  orangeInk: '#A94D00',     // 5.4:1 AA on parchment (text/pills)
+  orangeFill: '#E8730C',    // rival icons/fills with #2C221E border
+  badInk: '#A61C24',        // 6.8:1 AA on #FDECEE
+  badBg: '#FDECEE',         // tinted error card surface
+  badBorder: '#C9363E',     // crisp validation card border
+  // Tactile brass chrome & cutaway fort interiors
+  brass: '#E0AE3E',
+  brassLight: '#F7D57A',
+  brassDark: '#A9781E',
+  copper: '#D9773A',
+  copperDark: '#9A481E',
+  nookBacking: '#3B2D24',   // opaque cutaway recessed timber backing
+  nookBackingD: '#2B1F19',
+  nookBackingL: '#523F33',
+  nookGlaze: '#FFF4DE',     // subtle 18% warm window glaze overlay
+  // Faction silhouette contrast: Rigid Flatteners vs Plump Hobs
+  flattenerSlate: '#5A6572',
+  flattenerSlateD: '#3D4652',
+  flattenerSlateL: '#7E8A98',
+  flattenerBubble: '#4ADE80',
+  flattenerGlove: '#FFFFFF',
+  // Painterly earth cross-section strata & atmospheric haze
+  soilLoam: '#9A6440',
+  soilClay: '#C26D47',
+  soilClayD: '#9E4F2F',
+  soilClayL: '#D98962',
+  soilRock: '#6B7480',
+  soilRockD: '#4B535E',
+  soilRockL: '#8E99A8',
+  soilBedrock: '#3A3D45',
+  soilBedrockD: '#282B32',
+  soilBedrockL: '#505560',
+  // Topiary Keep botanicals & bioluminescent sprinkler root
+  hedgeDeep: '#2E6B38',
+  hedgeMid: '#438F48',
+  hedgeLight: '#68B85F',
+  hedgeTip: '#92D478',
+  bioGlow: '#4FE3C1',
+  bioGlowBright: '#C8FFF0',
+  hazeSky: '#BFE6F2',
+};
+
 export const SKINS = ['#F2C9A0', '#D99A6C', '#A8673F', '#7A4A2E', '#F5D7B8', '#C68457'];
 export const COATS = ['#7D6B5D', '#6F7F5A', '#8A5A4A', '#5F6B7A', '#94785A', '#6A5A7A', '#7A6A4A', '#5A7468'];
 

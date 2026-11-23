@@ -16,6 +16,22 @@
         330
       ],
       [
+        640,
+        336
+      ],
+      [
+        648,
+        314
+      ],
+      [
+        662,
+        314
+      ],
+      [
+        670,
+        337
+      ],
+      [
         800,
         340
       ],
@@ -45,12 +61,19 @@
       ]
     ]
   },
+  "water": [
+    {
+      "x0": 646,
+      "x1": 664,
+      "level": 326
+    }
+  ],
   "pads": [
     {
-      "x": 420
+      "x": 414
     },
     {
-      "x": 1850
+      "x": 1857
     }
   ],
   "player": {
@@ -64,13 +87,15 @@
     "blueprint": "bp_home_4"
   },
   "rival": {
-    "name": "Corporal Fernsby Clip",
-    "habit": "",
-    "blueprint": "bp_r1_timber_3",
+    "name": "Corporal Fernsby",
+    "habit": "Plays it straight. Proud of his new stripe.",
+    "habit_id": "balanced",
+    "think_ms": 1000,
+    "blueprint": "bp_r1_fernsby_post",
     "crew": [
-      "hedge_snipper",
+      "rake_hand",
       "pebble_pitcher",
-      "rake_hand"
+      "mower_minder"
     ],
     "aim": 1
   },
@@ -98,7 +123,7 @@
     },
     {
       "type": "captive_safe",
-      "text": "Captive takes no damage"
+      "text": "Not a scratch on Hetty"
     },
     {
       "type": "win_by_round",
@@ -106,26 +131,26 @@
       "value": 6
     }
   ],
-  "map_note": "A Cage on the middle hill. Rival fort in a hollow beyond.",
+  "map_note": "A wet ditch on your side, a Cage on the middle hill, and the Rival in a hut on stilts in a hollow beyond.",
   "new_thing": "Rescue. Crew of 4. +Hetty.",
   "objects": [
     {
       "kind": "cage_bar",
-      "x": 1182,
-      "hp": 100,
+      "x": 1176,
+      "hp": 75,
       "tag": "cage"
     },
     {
       "kind": "cage_bar",
       "x": 1200,
-      "lift": 14,
-      "hp": 100,
+      "lift": 24,
+      "hp": 75,
       "tag": "cage"
     },
     {
       "kind": "cage_bar",
-      "x": 1218,
-      "hp": 100,
+      "x": 1224,
+      "hp": 75,
       "tag": "cage"
     },
     {

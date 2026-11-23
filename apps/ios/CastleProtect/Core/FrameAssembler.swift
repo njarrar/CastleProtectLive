@@ -6,7 +6,16 @@ import Foundation
 /// and events), keeps the terrain grid that the core sends in dirty chunks,
 /// and flips y from the core's "down" to the view's "up". It decides nothing:
 /// every number comes from the core.
+@MainActor
 final class FrameAssembler {
+    private enum LastTurnAction {
+        case none
+        case fired(side: Int, damage: Int, blocks: Int)
+        case passed(side: Int)
+        /// A Doodad or a self shot: the text.json key and its values, `{name}` filled at turn end.
+        case doodad(side: Int, key: String, vars: [String: String])
+    }
+
     private let catalog: ContentCatalog
     private var lastFull: CoreSnapshot?
     private var lastView: BattleSnapshot?
@@ -18,11 +27,10 @@ final class FrameAssembler {
     private var hasTerrain = false
     private var steamMax = [0, 0]
     private var lastShotLine = ""
-    private var shotDamage = 0
-    private var shotSide = 0
+    private var turnAction: LastTurnAction = .none
 
     /// Columns between ground samples handed to the renderer.
-    static let sampleStep = 8
+    nonisolated static let sampleStep = 8
 
     init(catalog: ContentCatalog) {
         self.catalog = catalog
@@ -38,7 +46,7 @@ final class FrameAssembler {
         hasTerrain = false
         steamMax = [0, 0]
         lastShotLine = ""
-        shotDamage = 0
+        turnAction = .none
     }
 
     /// The line for the Couch Duel hand-off card: who fired, what it hit.
@@ -48,7 +56,7 @@ final class FrameAssembler {
     func assemble(_ raw: CoreSnapshot, handoffTo: Int?, speed: Int) -> BattleSnapshot {
         applyTerrain(raw)
         if !raw.full, var merged = lastFull, var v = lastView {
-            noteShots(raw.events, names: merged.hud.names)
+            noteShots(raw.events, names: displayNames(merged))
             // Merge the lean frame into the last full one (core/API.md: keep everything else,
             // replace `aim` and `preview`), so a later rebuild starts from the newest state.
             merged.tick = raw.tick
@@ -91,7 +99,7 @@ final class FrameAssembler {
             }
             v.canFire = false
             v.preview = []
-            v.shells = raw.shells.map { ShellView(x: Double($0.x), y: H - Double($0.y), kind: $0.shot, rot: $0.rot) }
+            v.shells = raw.shells.map { ShellView(id: $0.id, x: Double($0.x), y: H - Double($0.y), kind: $0.shot, rot: $0.rot) }
             v.speed = speed
             if !raw.terrain.chunks.isEmpty { v.terrain = groundHeights(fallback: merged) }
             v.ground = grid
@@ -100,7 +108,7 @@ final class FrameAssembler {
             return v
         }
         lastFull = raw
-        noteShots(raw.events, names: raw.hud.names)
+        noteShots(raw.events, names: displayNames(raw))
         let v = view(raw, handoffTo: handoffTo, speed: speed)
         lastView = v
         lastHandoff = handoffTo
@@ -147,19 +155,71 @@ final class FrameAssembler {
         return out
     }
 
+    /// The names the screen shows: the core's, with "You" for side 0 outside a Couch Duel and
+    /// the Test Yard. The hand-off line uses the same names as the HUD.
+    private func displayNames(_ s: CoreSnapshot) -> [String] {
+        let text = GameText.shared
+        var names = s.hud.names.count >= 2 ? s.hud.names : [text.t("common.you"), text.t("common.rival")]
+        if s.mode == "campaign" || s.mode == "skirmish" || s.mode == "daily" { names[0] = text.t("common.you") }
+        return names
+    }
+
     // MARK: Hand-off line
 
     private func noteShots(_ events: [CoreEvent], names: [String]) {
+        let text = GameText.shared
+        func sideName(_ side: Int) -> String {
+            side >= 0 && side < names.count ? names[side] : text.t("setup.player_label", ["n": side + 1])
+        }
         for e in events {
             switch e.t {
             case "fire":
-                shotSide = e.side ?? 0
-                shotDamage = 0
+                turnAction = .fired(side: e.side ?? 0, damage: 0, blocks: 0)
             case "hit":
-                shotDamage += e.dmg ?? 0
+                if case .fired(let s, let dmg, let blocks) = turnAction {
+                    turnAction = .fired(side: s, damage: dmg + (e.dmg ?? 0), blocks: blocks)
+                }
+            case "break":
+                if case .fired(let s, let dmg, let blocks) = turnAction, e.side != s {
+                    turnAction = .fired(side: s, damage: dmg, blocks: blocks + 1)
+                }
+            case "pass":
+                turnAction = .passed(side: e.side ?? 0)
+            case "mend":
+                if let id = e.doodad {
+                    turnAction = .doodad(side: e.side ?? 0, key: "a11y.used_doodad", vars: ["doodad": catalog.doodadName(id)])
+                } else {
+                    turnAction = .doodad(side: e.side ?? 0, key: "a11y.mended", vars: [:])
+                }
+            case "rebuild":
+                turnAction = .doodad(side: e.side ?? 0, key: "a11y.rebuilt", vars: [:])
+            case "puff_up":
+                if e.why != "volley" {
+                    turnAction = .doodad(side: e.side ?? 0, key: "a11y.used_doodad",
+                                         vars: ["doodad": text.t("hud.dial.puff_up")])
+                }
+            case "lid":
+                let roomId = e.room.flatMap { $0.split(separator: ":").last }.flatMap { Int($0) } ?? 0
+                let room = (e.room == nil || e.room == "kettle")
+                    ? text.t("hud.doodad.kettle_room")
+                    : text.t("hud.doodad.nook", ["n": roomId + 1])
+                turnAction = .doodad(side: e.side ?? 0, key: "a11y.lid_on", vars: ["room": room])
             case "turn_start":
-                let who = shotSide < names.count ? names[shotSide] : "Player \(shotSide + 1)"
-                lastShotLine = shotDamage > 0 ? "\(who) hit: \(shotDamage) damage" : "\(who) missed"
+                switch turnAction {
+                case .none:
+                    lastShotLine = ""
+                case .fired(let s, let dmg, let blocks):
+                    lastShotLine = dmg > 0 || blocks > 0
+                        ? text.plural("handoff.last_hit", blocks, ["name": sideName(s), "dmg": dmg])
+                        : text.t("handoff.last_miss", ["name": sideName(s)])
+                case .passed(let s):
+                    lastShotLine = text.t("notes.pass", ["name": sideName(s)])
+                case .doodad(let s, let key, let vars):
+                    var all: [String: any CustomStringConvertible] = ["name": sideName(s)]
+                    for (k, v) in vars { all[k] = v }
+                    lastShotLine = text.t(key, all)
+                }
+                turnAction = .none
             default:
                 break
             }
@@ -192,8 +252,8 @@ final class FrameAssembler {
         v.turnSeq = hud.turn
         v.wind = hud.wind
         v.forecast = hud.forecast
-        v.names = hud.names.count >= 2 ? hud.names : ["You", "Rival"]
-        if v.mode == "campaign" || v.mode == "skirmish" || v.mode == "daily" { v.names[0] = "You" }
+        let text = GameText.shared
+        v.names = displayNames(s)
         v.humans = hud.control.count >= 2 ? hud.control.map { $0 == "human" } : [true, false]
         // Test Yard (rules 3): side 1 is always the Dummy side and passes itself, so only side 0
         // is ever a person, whatever the setup said.
@@ -266,9 +326,10 @@ final class FrameAssembler {
         v.score = hud.score
         v.squall = hud.squall
         let side = min(max(0, s.side), 1)
+        let activeCastle = s.castles.first { $0.side == side }
         v.steam = side < hud.steam.count ? hud.steam[side] : 0
         v.steamMax = max(1, steamMax[side])
-        v.steamTurn = max(0, 40 - hud.steamTurnLeft)
+        v.steamTurn = activeCastle?.steamTurn ?? max(0, 40 - hud.steamTurnLeft)
         v.doodads = side < hud.doodads.count ? hud.doodads[side] : []
         v.puffUp = side < hud.puffUp.count ? hud.puffUp[side] : false
         v.props = s.props.map { p in
@@ -292,16 +353,24 @@ final class FrameAssembler {
             }
             let hand = side < hud.hands.count ? hud.hands[side] : []
             for shell in hand {
-                shots.append(ShotChip(id: shell.id, name: shell.dud ? "Dud" : shell.name, kind: "shell", art: shell.id,
-                                      uses: 1, weight: CoreHandShell.cogs(shell.weight), best: shell.match == h.cls))
+                let isBest = !shell.dud && (shell.match == h.cls || shell.match == "all")
+                shots.append(ShotChip(id: shell.id, name: shell.dud ? text.t("rummage.dud") : shell.name, kind: "shell", art: shell.id,
+                                      uses: 1, weight: CoreHandShell.cogs(shell.weight), best: isBest,
+                                      matchClass: shell.dud ? nil : shell.match))
             }
             // v0.2: the core says which chips `fire` would take, and why not.
+            // The words come from text.json by the core's `why`, with the Hob's short name (text.md).
+            let hobShort = text.hobShort(h.def, name: h.name)
             if !hud.shots.isEmpty {
                 for i in shots.indices {
                     if let state = hud.shots.first(where: { $0.shot == shots[i].id }) {
+                        let shotName = shots[i].name
+                        let words: String? = state.why.map {
+                            BattleSession.refusalText($0, hob: hobShort, shot: shotName, detail: state.text)
+                        } ?? state.text
                         shots[i].ready = state.ready
                         shots[i].why = state.ready ? nil : state.why
-                        shots[i].text = state.ready ? nil : (state.text ?? state.why.map(BattleSession.refusalText))
+                        shots[i].text = state.ready ? nil : words
                     }
                 }
             }
@@ -313,7 +382,11 @@ final class FrameAssembler {
         let planning = s.phase == "plan" && s.awaiting == "human" && handoffTo == nil
         v.canFire = planning && fireReady
         if planning, showAim, let fire = hud.fire, !fire.ready {
-            v.fireText = fire.text ?? fire.why.map(BattleSession.refusalText)
+            let hobShort = selected.map { text.hobShort($0.def, name: $0.name) }
+            let shotName = v.shots.first { $0.id == v.selectedShot }?.name
+            v.fireText = fire.why.map {
+                BattleSession.refusalText($0, hob: hobShort, shot: shotName, detail: fire.text)
+            } ?? fire.text
         }
 
         var flat: [Double] = []
@@ -329,16 +402,30 @@ final class FrameAssembler {
                            spent: g.recalled, hob: String(g.hob))
         }
         v.ghostCount = [s.ghosts.filter { $0.side == 0 }.count, s.ghosts.filter { $0.side == 1 }.count]
-        v.shells = s.shells.map { ShellView(x: Double($0.x), y: H - Double($0.y), kind: $0.shot, rot: $0.rot) }
+        v.shells = s.shells.map { ShellView(id: $0.id, x: Double($0.x), y: H - Double($0.y), kind: $0.shot, rot: $0.rot) }
 
         if let d = s.draft {
-            var pool = d.pool.map { id in
-                DraftChip(id: id, name: catalog.shotName(id), weight: CoreHandShell.cogs(catalog.shots[id]?.weight ?? "L"),
-                          hint: catalog.shots[id]?.card ?? "")
+            func makeDraftChip(_ id: String, takenBy: Int) -> DraftChip {
+                let info = catalog.shots[id]
+                let isDud = info?.dud ?? false
+                let match = info?.matchClass ?? ""
+                let bestWith: String
+                if isDud || match.isEmpty {
+                    bestWith = ""
+                } else if match == "all" {
+                    bestWith = "any class"
+                } else {
+                    bestWith = match
+                }
+                return DraftChip(id: id, name: catalog.shotName(id),
+                                 weight: CoreHandShell.cogs(info?.weight ?? "L"),
+                                 hint: info?.card ?? "", bestWith: bestWith,
+                                 dud: isDud, takenBy: takenBy)
             }
+            var pool = d.pool.map { makeDraftChip($0, takenBy: -1) }
             for (pickSide, picks) in d.picks.enumerated() {
                 for id in picks where !pool.contains(where: { $0.id == id }) {
-                    pool.append(DraftChip(id: id, name: catalog.shotName(id), hint: catalog.shots[id]?.card ?? "", takenBy: pickSide))
+                    pool.append(makeDraftChip(id, takenBy: pickSide))
                 }
             }
             v.draft = DraftView(pool: pool, picksEach: d.picksEach, turn: d.next, hands: d.picks,
@@ -348,7 +435,7 @@ final class FrameAssembler {
         if let r = s.result {
             let labels = catalog.level(s.level)?.goals ?? []
             let goals = r.pennants.enumerated().map { i, done in
-                GoalView(label: i < labels.count ? labels[i] : "Pennant \(i + 1)", done: done)
+                GoalView(label: i < labels.count ? labels[i] : text.t("pennants.label", ["n": i + 1]), done: done)
             }
             v.result = BattleResult(winner: r.winner, reason: r.how, pennants: r.pennants.filter { $0 }.count,
                                     buttons: r.buttons, round: r.round, goals: goals, pennantFlags: r.pennants,
@@ -369,7 +456,7 @@ final class FrameAssembler {
     }
 
     /// The core's event in the app's words.
-    static func event(_ e: CoreEvent, mapHeight H: Double) -> BattleEvent? {
+    nonisolated static func event(_ e: CoreEvent, mapHeight H: Double) -> BattleEvent? {
         guard var out = plainEvent(e, mapHeight: H) else { return nil }
         out.raw = e
         if e.x != nil {
@@ -379,7 +466,7 @@ final class FrameAssembler {
         return out
     }
 
-    private static func plainEvent(_ e: CoreEvent, mapHeight H: Double) -> BattleEvent? {
+    nonisolated private static func plainEvent(_ e: CoreEvent, mapHeight H: Double) -> BattleEvent? {
         let x = Double(e.x ?? 0)
         let y = H - Double(e.y ?? 0)
         switch e.t {
@@ -391,11 +478,14 @@ final class FrameAssembler {
         case "collapse", "big_drop": return BattleEvent(type: "fall", side: e.side ?? -1)
         case "bonk": return BattleEvent(type: "bonk", side: e.side ?? -1)
         case "kettle_pop": return BattleEvent(type: "kettle_pop", side: e.side ?? -1)
-        case "squall_warning": return BattleEvent(type: "squall_warn", amount: e.n ?? 0, text: e.text ?? "")
+        case "squall_warning":
+            let n = e.n ?? 0
+            return BattleEvent(type: "squall_warn", amount: n,
+                               text: n > 0 ? GameText.shared.t("banners.weather.squall_in", ["n": n]) : "")
         case "squall", "squall_round": return BattleEvent(type: "squall", amount: e.n ?? 0)
         case "fatigue_warning":
-            let words = e.text.map { $0.isEmpty ? BattleSession.fatigueWarnText : $0 } ?? BattleSession.fatigueWarnText
-            return BattleEvent(type: "fatigue_warn", amount: e.round ?? 0, text: words)
+            // The string table's line, not the core's (naming-pass-report, item 7).
+            return BattleEvent(type: "fatigue_warn", amount: e.round ?? 0, text: BattleSession.fatigueWarnText)
         case "fatigue": return BattleEvent(type: "fatigue", amount: e.round ?? 0, text: BattleSession.fatigueStartText)
         case "shot_switch": return BattleEvent(type: "shot_switch", side: e.side ?? -1, amount: e.hob ?? -1, text: e.why ?? "")
         case "thump": return BattleEvent(type: "thump", side: e.side ?? -1)

@@ -252,7 +252,7 @@ class ReviewTwoTest {
         val busy = ArrayList<Boolean>()
         b.onRebuild = { busy.add(it) }
         b.command(Cmd.pickHob(0))
-        assertFalse(Reply.parse(b.command(Cmd.FIRE)).ok)
+        assertFalse(Reply.parse(b.command(Cmd.fire())).ok)
         assertEquals("fire", b.takeDropped())
         assertNull(b.takeDropped())
         assertTrue("the new handle is closed", made[1].closed)
@@ -267,9 +267,9 @@ class ReviewTwoTest {
             override fun newGame(setupJson: String, seed: Long) = Fake(panicOn = "fire").also { made.add(it) }
         }
         val b = LiveBattle.open(fac, "{}", 1)
-        b.command(Cmd.FIRE)
+        b.command(Cmd.fire())
         assertNull(b.broken)
-        b.command(Cmd.FIRE)
+        b.command(Cmd.fire())
         assertNotNull(b.broken)
         assertEquals("one rebuild, not three", 2, made.size)
     }

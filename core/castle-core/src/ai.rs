@@ -17,12 +17,16 @@ pub enum Preset {
 }
 
 impl Preset {
-    pub fn parse(s: &str) -> Preset {
+    pub fn try_parse(s: &str) -> Option<Preset> {
         match s {
-            "cozy" => Preset::Cozy,
-            "stubborn" => Preset::Stubborn,
-            _ => Preset::Fair,
+            "cozy" => Some(Preset::Cozy),
+            "fair" => Some(Preset::Fair),
+            "stubborn" => Some(Preset::Stubborn),
+            _ => None,
         }
+    }
+    pub fn parse(s: &str) -> Preset {
+        Self::try_parse(s).unwrap_or(Preset::Fair)
     }
     pub fn name(self) -> &'static str {
         match self {
@@ -50,6 +54,11 @@ pub struct Tuning {
     pub jitter: i32,
     pub pick_from: usize,
     pub self_care: bool,
+    pub focus_pct: i64,
+    pub bonk_bonus: i64,
+    pub lethal_override: bool,
+    pub smart_targets: bool,
+    pub sporting: bool,
 }
 
 pub fn tuning(p: Preset) -> Tuning {
@@ -69,6 +78,11 @@ pub fn tuning(p: Preset) -> Tuning {
             jitter: 0,
             pick_from: 4,
             self_care: false,
+            focus_pct: 40,
+            bonk_bonus: 400,
+            lethal_override: false,
+            smart_targets: false,
+            sporting: true,
         },
         Preset::Fair => Tuning {
             angle_sigma: 30,
@@ -85,6 +99,11 @@ pub fn tuning(p: Preset) -> Tuning {
             jitter: 1,
             pick_from: 2,
             self_care: true,
+            focus_pct: 200,
+            bonk_bonus: 1500,
+            lethal_override: true,
+            smart_targets: true,
+            sporting: false,
         },
         Preset::Stubborn => Tuning {
             angle_sigma: 15,
@@ -101,8 +120,95 @@ pub fn tuning(p: Preset) -> Tuning {
             jitter: 2,
             pick_from: 1,
             self_care: true,
+            focus_pct: 200,
+            bonk_bonus: 1500,
+            lethal_override: true,
+            smart_targets: true,
+            sporting: false,
         },
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Habit {
+    Balanced,
+    KettleHunter,
+    RoofWrecker,
+    HobSniper,
+    CautiousMender,
+}
+
+/// The habit this side plays with, read from the level's `habit_id`. The
+/// free text `habit` line is display only, so a copy edit never changes play.
+fn habit_for(b: &Battle, side: u8) -> Habit {
+    let s = if side == 1 {
+        &b.level.rival
+    } else {
+        &b.level.player
+    };
+    habit_from_id(s.habit_id.as_deref().unwrap_or("balanced"))
+}
+
+fn habit_from_id(id: &str) -> Habit {
+    match id {
+        "kettle_hunter" => Habit::KettleHunter,
+        "roof_wrecker" => Habit::RoofWrecker,
+        "hob_sniper" => Habit::HobSniper,
+        "cautious_mender" => Habit::CautiousMender,
+        _ => Habit::Balanced,
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Weights {
+    kettle: i64,
+    kettle_wall: i64,
+    block: i64,
+    drop: i64,
+    focus_pct: i64,
+    bonk_bonus: i64,
+    self_block_mult: i64,
+    mend_mult: i64,
+    lid_best_cap: i64,
+}
+
+fn weights_for(t: &Tuning, preset: Preset, habit: Habit) -> Weights {
+    let mut w = Weights {
+        kettle: KETTLE_WEIGHT,
+        kettle_wall: KETTLE_WALL_WEIGHT,
+        block: BLOCK_WEIGHT,
+        drop: 80,
+        focus_pct: t.focus_pct,
+        bonk_bonus: t.bonk_bonus,
+        self_block_mult: 2,
+        mend_mult: if preset == Preset::Cozy { 4 } else { 6 },
+        lid_best_cap: 300,
+    };
+    match habit {
+        Habit::Balanced => {}
+        Habit::KettleHunter => {
+            w.kettle = 48;
+            w.kettle_wall = 6;
+            w.focus_pct = w.focus_pct * 75 / 100;
+        }
+        Habit::RoofWrecker => {
+            w.block = 3;
+            w.drop = 140;
+            w.kettle_wall = 4;
+        }
+        Habit::HobSniper => {
+            w.focus_pct = w.focus_pct * 140 / 100;
+            w.bonk_bonus = w.bonk_bonus * 130 / 100;
+            w.kettle = 20;
+        }
+        Habit::CautiousMender => {
+            w.mend_mult += 4;
+            w.lid_best_cap = 600;
+            w.kettle = 25;
+            w.self_block_mult = 4;
+        }
+    }
+    w
 }
 
 /// Aim error scale per Rival aim grade, percent of the preset's sigma.
@@ -203,22 +309,39 @@ impl Battle {
     }
 }
 
-fn score_result(before: &Battle, after: &Battle, side: u8, t: &Tuning) -> i64 {
+fn score_result(before: &Battle, after: &Battle, side: u8, t: &Tuning, w: &Weights) -> i64 {
     let s = side as usize;
     let o = 1 - s;
     let mut sc: i64 = 0;
     if let Some(r) = &after.result {
         sc += if r.winner == side { 10_000 } else { -10_000 };
     }
+    let max_enemy_hp = before
+        .hobs
+        .iter()
+        .filter(|h| h.side as usize == o && h.alive() && !h.dummy)
+        .map(|h| h.hp)
+        .max()
+        .unwrap_or(0);
     for (hb, ha) in before.hobs.iter().zip(after.hobs.iter()) {
         let lost = (hb.hp - ha.hp.max(0)) as i64;
         if hb.side as usize == o {
             if !hb.dummy {
-                // focus: damage that leaves a Hob low is worth more
-                let gone = (ha.max - ha.hp.max(0)) as i64 * 100 / ha.max.max(1) as i64;
-                sc += lost * 10 + lost * 10 * FOCUS_PCT / 100 * gone / 100;
+                let sporting_hold = t.sporting && hb.hp * 2 < hb.max && max_enemy_hp > hb.hp;
+                if sporting_hold {
+                    // Sporting: spread fire across healthier Hobs before finishing a low one
+                    sc += lost * 4;
+                } else {
+                    // focus: damage that leaves a Hob low is worth more
+                    let gone = (ha.max - ha.hp.max(0)) as i64 * 100 / ha.max.max(1) as i64;
+                    sc += lost * 10 + lost * 10 * w.focus_pct / 100 * gone / 100;
+                }
                 if hb.alive() && !ha.alive() {
-                    sc += 1500;
+                    sc += if sporting_hold {
+                        w.bonk_bonus / 2
+                    } else {
+                        w.bonk_bonus
+                    };
                 }
             } else {
                 sc += lost * 2;
@@ -229,24 +352,24 @@ fn score_result(before: &Battle, after: &Battle, side: u8, t: &Tuning) -> i64 {
     }
     let kb = before.castles[o].kettle_hp.max(0) as i64;
     let ka = after.castles[o].kettle_hp.max(0) as i64;
-    sc += (kb - ka) * KETTLE_WEIGHT;
+    sc += (kb - ka) * w.kettle;
     // the kettle path: walls of the Kettle Room are worth more
     let cb = &before.castles[o];
     let ca = &after.castles[o];
     for &(c, r) in cb.room_walls(&cb.kettle).iter().flatten() {
         let hb = cb.block(c, r).map(|x| x.hp).unwrap_or(0) as i64;
         let ha = ca.block(c, r).map(|x| x.hp).unwrap_or(0) as i64;
-        sc += (hb - ha).max(0) * KETTLE_WALL_WEIGHT;
+        sc += (hb - ha).max(0) * w.kettle_wall;
     }
     let bb = before.castles[o].standing_hp(&before.content);
     let ba = after.castles[o].standing_hp(&after.content);
-    sc += (bb - ba).max(0) * BLOCK_WEIGHT;
+    sc += (bb - ba).max(0) * w.block;
     let dropped = after.stats[s].blocks_dropped - before.stats[s].blocks_dropped;
-    sc += dropped as i64 * 80;
+    sc += dropped as i64 * w.drop;
     if t.self_care {
         let ob = before.castles[s].standing_hp(&before.content);
         let oa = after.castles[s].standing_hp(&after.content);
-        sc -= (ob - oa).max(0) * 2;
+        sc -= (ob - oa).max(0) * w.self_block_mult;
     }
     sc
 }
@@ -278,16 +401,20 @@ fn shell_cost(b: &Battle, c: &Cand) -> i64 {
 const KNACK_COST: i64 = 30;
 const TRICK_COST_PCT: i64 = 100;
 const REST_COST: i64 = 20;
-/// Extra weight on damage that brings a Hob close to a Bonk (focus fire).
-const FOCUS_PCT: i64 = 200;
 /// Weight on enemy block HP lost (opens walls toward the kettle).
 const BLOCK_WEIGHT: i64 = 1;
 /// Weight on kettle HP and on the Kettle Room walls (the win path).
 const KETTLE_WEIGHT: i64 = 30;
 const KETTLE_WALL_WEIGHT: i64 = 3;
 
-/// Targets: enemy Hobs, the kettle, and the weakest block by Lean Lines.
-fn targets(k: &Battle, side: u8, units: &mut i64) -> Vec<(i32, i32, i32)> {
+/// Targets: enemy Hobs, the kettle, and (on Fair/Stubborn) Lean Lines & Cover walls.
+fn targets(
+    k: &Battle,
+    side: u8,
+    t_cfg: &Tuning,
+    habit: Habit,
+    units: &mut i64,
+) -> Vec<(i32, i32, i32)> {
     let o = 1 - side;
     let mut t = vec![];
     for h in &k.hobs {
@@ -299,38 +426,54 @@ fn targets(k: &Battle, side: u8, units: &mut i64) -> Vec<(i32, i32, i32)> {
     let cs = &k.castles[o as usize];
     let (x0, y0, x1, y1) = cs.kettle_box();
     t.push((100, (x0 + x1) / 2, (y0 + y1) / 2));
-    let held = k.held_slots(o);
-    let mut best: Option<(usize, i32, i32)> = None;
-    for r in 1..cs.rows {
-        for c in 0..cs.cols {
-            if cs.has_block(c, r) {
-                *units += 40;
-                let n = cs.lean_lines(&k.content, c, r, &held).len();
-                if n >= 2 && best.is_none_or(|b| n > b.0) {
-                    best = Some((n, c, r));
+    if t_cfg.smart_targets {
+        let held = k.held_slots(o);
+        let mut best: Option<(usize, i32, i32)> = None;
+        for r in 1..cs.rows {
+            for c in 0..cs.cols {
+                if cs.has_block(c, r) {
+                    *units += 40;
+                    let n = cs.lean_lines(&k.content, c, r, &held).len();
+                    if n >= 2 && best.is_none_or(|b| n > b.0) {
+                        best = Some((n, c, r));
+                    }
                 }
             }
         }
-    }
-    if let Some((_, c, r)) = best {
-        let (bx0, by0, bx1, by1) = cs.slot_box(c, r);
-        t.push((200 + r * 10 + c, (bx0 + bx1) / 2, (by0 + by1) / 2));
+        if let Some((_, c, r)) = best {
+            let (bx0, by0, bx1, by1) = cs.slot_box(c, r);
+            t.push((200 + r * 10 + c, (bx0 + bx1) / 2, (by0 + by1) / 2));
+        }
     }
     // the walls that stand between us and a win: the Kettle Room's front and
-    // ceiling, and the front wall of the weakest Hob's Nook (its Cover)
+    // ceiling, and (on Fair/Stubborn) the front wall of the weakest Hob's Nook
     let mut walls: Vec<(i32, i32)> = vec![];
     let kw = cs.room_walls(&cs.kettle);
     walls.extend(kw[3].iter().copied());
     walls.extend(kw[1].iter().copied());
-    if let Some(h) = k
-        .hobs
-        .iter()
-        .filter(|h| h.side == o && h.alive() && !h.dummy && h.nook.is_some())
-        .min_by_key(|h| (h.hp, h.id))
-    {
-        if let Some(n) = h.nook {
-            let nw = cs.room_walls(&cs.nooks[n as usize]);
-            walls.extend(nw[3].iter().copied());
+    if t_cfg.smart_targets {
+        if let Some(h) = k
+            .hobs
+            .iter()
+            .filter(|h| h.side == o && h.alive() && !h.dummy && h.nook.is_some())
+            .min_by_key(|h| (h.hp, h.id))
+        {
+            if let Some(n) = h.nook {
+                let nw = cs.room_walls(&cs.nooks[n as usize]);
+                walls.extend(nw[3].iter().copied());
+            }
+        }
+    }
+    if habit == Habit::RoofWrecker {
+        let mut roofs: Vec<(i32, i32)> = vec![];
+        for c in 0..cs.cols {
+            if let Some(r) = (1..cs.rows).rev().find(|&r| cs.has_block(c, r)) {
+                roofs.push((r, c));
+            }
+        }
+        roofs.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        for (r, c) in roofs.into_iter().take(2) {
+            walls.push((c, r));
         }
     }
     for (c, r) in walls {
@@ -458,12 +601,12 @@ fn sim_candidate(
     if r["ok"] != json!(true) {
         return None;
     }
-    let n = w.run_until_plan_fast(3000);
-    *units += n as i64 * (1 + w.actors.len() as i64) + 200;
+    let (_, actor_ticks) = w.run_until_plan_fast(3000);
+    *units += actor_ticks + 200;
     Some(w)
 }
 
-pub fn draft_choice(b: &Battle, side: u8) -> Option<String> {
+pub fn draft_choice(b: &mut Battle, side: u8) -> Option<String> {
     let preset = match b.control[side as usize] {
         Control::Ai(p) => p,
         Control::Human => Preset::Fair,
@@ -473,18 +616,6 @@ pub fn draft_choice(b: &Battle, side: u8) -> Option<String> {
         Preset::Fair => 30,
         Preset::Stubborn => 60,
     };
-    let mine: Vec<&String> = b
-        .hobs
-        .iter()
-        .filter(|h| h.side == side)
-        .map(|h| &h.class)
-        .collect();
-    let theirs: Vec<&String> = b
-        .hobs
-        .iter()
-        .filter(|h| h.side != side)
-        .map(|h| &h.class)
-        .collect();
     // the Rival takes its wish at its first chance
     if let Some(w) = &b.draft.wish {
         if b.control[side as usize] != Control::Human
@@ -494,27 +625,55 @@ pub fn draft_choice(b: &Battle, side: u8) -> Option<String> {
             return Some(w.clone());
         }
     }
-    let mut best: Option<(i64, String)> = None;
-    for id in &b.draft.pool {
-        let Some(d) = b.content.shot(id) else {
-            continue;
-        };
-        let val = |classes: &Vec<&String>| -> i64 {
-            let mut v = d.value as i64;
-            if d.match_class.as_ref().is_some_and(|m| classes.contains(&m)) {
-                v += 10;
-            }
-            if d.dud {
-                v -= 50;
-            }
-            v
-        };
-        let sc = val(&mine) * 100 + val(&theirs) * deny;
-        if best.as_ref().is_none_or(|x| sc > x.0) {
-            best = Some((sc, id.clone()));
+    let ranked: Vec<(i64, bool, String)> = {
+        let mine: Vec<&String> = b
+            .hobs
+            .iter()
+            .filter(|h| h.side == side)
+            .map(|h| &h.class)
+            .collect();
+        let theirs: Vec<&String> = b
+            .hobs
+            .iter()
+            .filter(|h| h.side != side)
+            .map(|h| &h.class)
+            .collect();
+        let mut out: Vec<(i64, bool, String)> = vec![];
+        for id in &b.draft.pool {
+            let Some(d) = b.content.shot(id) else {
+                continue;
+            };
+            let val = |classes: &Vec<&String>| -> i64 {
+                let mut v = d.value as i64;
+                if d.match_class.as_ref().is_some_and(|m| classes.contains(&m)) {
+                    v += 10;
+                }
+                if d.dud {
+                    v -= 50;
+                }
+                v
+            };
+            let sc = val(&mine) * 100 + val(&theirs) * deny;
+            out.push((sc, d.dud, id.clone()));
         }
+        out.sort_by(|a, b| b.0.cmp(&a.0).then(a.2.cmp(&b.2)));
+        out
+    };
+    if ranked.is_empty() {
+        return None;
     }
-    best.map(|b| b.1)
+    if preset == Preset::Cozy && b.control[side as usize] != Control::Human {
+        let non_dud: Vec<&(i64, bool, String)> = ranked.iter().filter(|x| !x.1).collect();
+        let pool: Vec<&(i64, bool, String)> = if non_dud.is_empty() {
+            ranked.iter().collect()
+        } else {
+            non_dud
+        };
+        let n = pool.len().min(4);
+        let i = b.rng.ai[side as usize].range(0, n as i32 - 1) as usize;
+        return Some(pool[i].2.clone());
+    }
+    Some(ranked[0].2.clone())
 }
 
 /// Plan a whole turn for `side`. Returns the commands, same format as a player.
@@ -574,8 +733,10 @@ fn plan_turn_with(
     let mut solve_world = k.clone();
     solve_world.wind = solve_world.wind * t.wind_use / 100;
     let front = k.castles[s].front_dir();
+    let habit = habit_for(&k, side);
+    let weights = weights_for(&t, preset, habit);
 
-    let tg = targets(&k, side, &mut units);
+    let tg = targets(&k, side, &t, habit, &mut units);
     let mut hobs: Vec<u8> = k
         .hobs
         .iter()
@@ -741,14 +902,23 @@ fn plan_turn_with(
         }
     }
     order.extend(cands);
-    // 3. run the candidates through the real sim and score them
-    let flaps_before: Vec<bool> = k.castles[1 - s].nooks.iter().map(|n| n.flap).collect();
+    // 3. run the candidates through the real sim and score them (Cozy scores on half-wind)
+    let sim_world = if preset == Preset::Cozy {
+        &solve_world
+    } else {
+        &k
+    };
+    let flaps_before: Vec<bool> = sim_world.castles[1 - s]
+        .nooks
+        .iter()
+        .map(|n| n.flap)
+        .collect();
     let mut scored: Vec<Cand> = vec![];
     for c in order.into_iter() {
         if units > budget && !scored.is_empty() {
             break;
         }
-        let Some(after) = sim_candidate(&k, side, &c, c.angle, c.power, &mut units) else {
+        let Some(after) = sim_candidate(sim_world, side, &c, c.angle, c.power, &mut units) else {
             continue;
         };
         // canon: Cozy never Threads a Loophole
@@ -762,7 +932,7 @@ fn plan_turn_with(
                 continue;
             }
         }
-        let mut sc = score_result(&k, &after, side, &t) - shell_cost(&k, &c);
+        let mut sc = score_result(sim_world, &after, side, &t, &weights) - shell_cost(&k, &c);
         let mut n = 1;
         for j in 0..t.jitter {
             if units > budget {
@@ -778,8 +948,10 @@ fn plan_turn_with(
             } else {
                 (t.power_floor / 10).max(1)
             };
-            if let Some(w2) = sim_candidate(&k, side, &c, c.angle + da, c.power + dp, &mut units) {
-                sc += score_result(&k, &w2, side, &t) - shell_cost(&k, &c);
+            if let Some(w2) =
+                sim_candidate(sim_world, side, &c, c.angle + da, c.power + dp, &mut units)
+            {
+                sc += score_result(sim_world, &w2, side, &t, &weights) - shell_cost(&k, &c);
                 n += 1;
             }
         }
@@ -800,7 +972,7 @@ fn plan_turn_with(
 
     // Doodads: mend when walls are hurt and no shot pays more
     let best_score = scored.first().map(|c| c.score).unwrap_or(-1);
-    if let Some(cmd) = doodad_choice(&k, side, best_score, preset) {
+    if let Some(cmd) = doodad_choice(&k, side, best_score, &weights) {
         out.push(cmd);
         return out;
     }
@@ -856,8 +1028,8 @@ fn pick(scored: &[Cand], t: &Tuning, b: &mut Battle, s: usize) -> Option<Cand> {
     if scored.is_empty() {
         return None;
     }
-    // lethal check on every preset
-    if scored[0].score >= 5_000 {
+    // lethal check on Fair and Stubborn (disabled on Cozy)
+    if t.lethal_override && scored[0].score >= 5_000 {
         return Some(scored[0].clone());
     }
     let n = scored.len().min(t.pick_from).max(1);
@@ -936,7 +1108,7 @@ fn apply_error(b: &mut Battle, side: u8, c: &Cand, t: &Tuning) -> (i32, i32) {
     (angle, power)
 }
 
-fn doodad_choice(k: &Battle, side: u8, best: i64, preset: Preset) -> Option<Value> {
+fn doodad_choice(k: &Battle, side: u8, best: i64, w: &Weights) -> Option<Value> {
     let s = side as usize;
     if k.phase != Phase::Plan {
         return None;
@@ -962,11 +1134,7 @@ fn doodad_choice(k: &Battle, side: u8, best: i64, preset: Preset) -> Option<Valu
                     .take(*count as usize)
                     .map(|x| *x as i64)
                     .sum();
-                let worth = if preset == Preset::Cozy {
-                    gain * 4
-                } else {
-                    gain * 6
-                };
+                let worth = gain * w.mend_mult;
                 if gain >= 60 && worth > best {
                     return Some(json!({"cmd": "doodad", "doodad": d}));
                 }
@@ -983,7 +1151,10 @@ fn doodad_choice(k: &Battle, side: u8, best: i64, preset: Preset) -> Option<Valu
                 if let Some((px, py)) = pin {
                     let (x0, y0, x1, y1) = k.castles[s].room_box(&k.castles[s].kettle);
                     let near = px >= x0 - 32 && px <= x1 + 32 && py >= y0 - 32 && py <= y1 + 32;
-                    if near && best < 300 && k.castles[s].kettle_hp < 200 {
+                    if near
+                        && best < w.lid_best_cap
+                        && k.castles[s].kettle_hp < crate::castle::KETTLE_HP
+                    {
                         return Some(json!({"cmd": "doodad", "doodad": d, "room": "kettle"}));
                     }
                 }

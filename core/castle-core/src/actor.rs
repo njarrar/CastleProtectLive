@@ -171,14 +171,23 @@ impl Battle {
                 if let Some((tx, ty)) = self.guide_target(a.side, cell(a.x), cell(a.y)) {
                     let dx = (tx - cell(a.x)) as i64;
                     let dy = (ty - cell(a.y)) as i64;
-                    let cross = a.vx as i64 * dy - a.vy as i64 * dx;
-                    let step = 10.min(f.guide_tenths - a.bent);
-                    if cross != 0 {
-                        let s = if cross > 0 { step } else { -step };
-                        let (nx, ny) = rotate(a.vx, a.vy, s);
-                        a.vx = nx;
-                        a.vy = ny;
-                        a.bent += step;
+                    if (dx != 0 || dy != 0) && (a.vx != 0 || a.vy != 0) {
+                        let vel_ang = atan2_t(a.vy as i64, a.vx as i64);
+                        let tgt_ang = atan2_t(dy, dx);
+                        let mut diff = (tgt_ang - vel_ang).rem_euclid(3600);
+                        if diff > 1800 {
+                            diff -= 3600;
+                        }
+                        if diff.abs() >= 2 {
+                            let step = diff.abs().min(10).min(f.guide_tenths - a.bent);
+                            if step > 0 {
+                                let s = if diff > 0 { step } else { -step };
+                                let (nx, ny) = rotate(a.vx, a.vy, s);
+                                a.vx = nx;
+                                a.vy = ny;
+                                a.bent += step;
+                            }
+                        }
                     }
                 }
             }
@@ -214,6 +223,21 @@ impl Battle {
             let (cx, cy) = (cx64 as i32, cy64 as i32);
             if (cx, cy) != (px, py) {
                 if let Some(hit) = self.collide(a.side, cx, cy, a.skip, false) {
+                    if a.threads {
+                        if let Hit::Block { side, c, r } = hit {
+                            let cs = &self.castles[side as usize];
+                            if cs.block(c, r).is_some_and(|b| b.peephole) {
+                                let (x0, y0, x1, y1) = cs.slot_box(c, r);
+                                if (cy >= y0 + 2 && cy <= y1 - 2) || (cx >= x0 + 2 && cx <= x1 - 2)
+                                {
+                                    a.skip = Some((side, c, r));
+                                    px = cx;
+                                    py = cy;
+                                    continue;
+                                }
+                            }
+                        }
+                    }
                     a.x = nx as i32;
                     a.y = ny as i32;
                     return FlyOut::Contact {
@@ -224,13 +248,11 @@ impl Battle {
                         py,
                     };
                 }
-                if a.skip.is_some() && beam {
+                if let Some((s, c, r)) = a.skip {
                     // left the skipped block?
-                    if let Some((s, c, r)) = a.skip {
-                        let cs = &self.castles[s as usize];
-                        if cs.slot_at(cx, cy) != Some((c, r)) {
-                            a.skip = None;
-                        }
+                    let cs = &self.castles[s as usize];
+                    if cs.slot_at(cx, cy) != Some((c, r)) {
+                        a.skip = None;
                     }
                 }
                 px = cx;

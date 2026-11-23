@@ -129,6 +129,8 @@ export interface PHud {
   volley?: { actions: number; left: [number, number] } | null;
   boss?: PBoss | null;
   rules?: { objective: { tag: string; count: number } | null; cap_win: 0 | 1 | null };
+  /** Think pose ms per side from the level (null: use app.json rival_think_seconds). Presentation only. */
+  think_ms?: [number | null, number | null];
 }
 export interface PHandicap { help: string; steam: number; preview_pct: number; crew: number }
 export interface PBoss { phase: number; roller: PProp | null; roller_done: boolean; shears: PProp | null; cut: [number, number, number, number] | null; jam: number }

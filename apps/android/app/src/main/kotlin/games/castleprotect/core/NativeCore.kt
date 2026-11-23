@@ -18,7 +18,7 @@ class NativeCore private constructor(private var handle: Long) : CoreGame {
         nativeCommand(h(), z(json))?.let { String(it, Charsets.UTF_8) } ?: """{"ok":false,"reason":"native_null"}"""
 
     override fun step(ticks: Int): String =
-        nativeStep(h(), ticks.coerceAtLeast(0))?.let { String(it, Charsets.UTF_8) } ?: "{}"
+        nativeStep(h(), ticks.coerceAtLeast(0))?.let { String(it, Charsets.UTF_8) } ?: """{"ok":false,"reason":"native_null"}"""
 
     override fun snapshot(): ByteArray = nativeSnapshot(h()) ?: throw IllegalStateException("cp_snapshot returned NULL")
 
@@ -39,6 +39,9 @@ class NativeCore private constructor(private var handle: Long) : CoreGame {
         }
 
         fun version(): String = nativeVersion()?.let { String(it, Charsets.UTF_8) } ?: "{}"
+
+        /** Daily Dust-up seed for a local date such as "2026-11-22", from the core (0 if unavailable). */
+        fun dailySeed(date: String): Long = if (available()) nativeDailySeed(z(date)) else 0L
 
         fun factory(): CoreFactory? {
             if (!available()) return null
@@ -63,6 +66,7 @@ class NativeCore private constructor(private var handle: Long) : CoreGame {
 // app/src/main/cpp/castle_jni.c. content_json is always the built in content (NULL).
 private external fun nativeNew(setup: ByteArray, seed: Long): Long
 private external fun nativeVersion(): ByteArray?
+private external fun nativeDailySeed(date: ByteArray): Long
 private external fun nativeLastError(h: Long): ByteArray?
 private external fun nativeCommand(h: Long, json: ByteArray): ByteArray?
 private external fun nativeStep(h: Long, ticks: Int): ByteArray?

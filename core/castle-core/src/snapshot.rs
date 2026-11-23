@@ -37,6 +37,9 @@ impl Battle {
         if self.rules.full_preview_first_shot && !self.first_shot_done[s] {
             share = 100;
         }
+        if def.flight.kind == FlightKind::Beam {
+            share = 100;
+        }
         let stop_at_apex = def.triggers.iter().any(|t| t.on == TriggerOn::Apex)
             && def.flight.apex_gravity_pct.is_none();
         let a = self.aim_probe(side, sel.hob, ix, h.angle, h.power);
@@ -123,7 +126,7 @@ impl Battle {
                         if let Slot::Block(b) = &cs.slots[cs.idx(c, r)] {
                             let m = &content.materials.blocks[b.mat as usize];
                             let (x0, y0, _, _) = cs.slot_box(c, r);
-                            blocks.push(json!({"c": c, "r": r, "x": x0, "y": y0, "mat": m.id, "hp": b.hp, "max": b.max, "peephole": b.peephole, "root": b.root, "battered": cs.fatigue && b.hp < b.max}));
+                            blocks.push(json!({"c": c, "r": r, "x": x0, "y": y0, "mat": m.id, "hp": b.hp, "max": b.max, "peephole": b.peephole, "root": b.root, "battered": cs.is_battered(b)}));
                         }
                     }
                 }
@@ -171,11 +174,16 @@ impl Battle {
             .iter()
             .map(|p| json!({"id": p.id, "side": p.side, "kind": p.kind, "tag": p.tag, "x": p.x, "y": p.y, "hp": p.hp.max(0), "max": p.max, "shot": p.shot.map(|s| content.shots[s].id.clone())}))
             .collect();
+        let mut side_idx = [0usize; 2];
         let ghosts: Vec<Value> = self
             .ghosts
             .iter()
-            .enumerate()
-            .map(|(i, g)| json!({"index": i, "side": g.side, "hob": g.hob, "shot": g.shot, "angle": g.angle, "power": g.power, "round": g.round, "pin": g.pin.map(|p| json!([p.0, p.1])), "self_hit": g.self_hit, "recalled": g.recalled, "points": g.points.iter().map(|p| json!([p.0, p.1])).collect::<Vec<_>>()}))
+            .map(|g| {
+                let gs = (g.side as usize).min(1);
+                let i = side_idx[gs];
+                side_idx[gs] += 1;
+                json!({"index": i, "side": g.side, "hob": g.hob, "shot": g.shot, "angle": g.angle, "power": g.power, "round": g.round, "pin": g.pin.map(|p| json!([p.0, p.1])), "self_hit": g.self_hit, "recalled": g.recalled, "points": g.points.iter().map(|p| json!([p.0, p.1])).collect::<Vec<_>>()})
+            })
             .collect();
         let preview: Vec<Value> = self.preview().iter().map(|p| json!([p.0, p.1])).collect();
         let s = self.side as usize;
@@ -217,8 +225,11 @@ impl Battle {
             {
                 list.push("knack".into());
             }
-            list.extend(self.hands[s].iter().cloned());
-            list.dedup();
+            for x in &self.hands[s] {
+                if !list.contains(x) {
+                    list.push(x.clone());
+                }
+            }
             list.iter()
                 .map(|w| {
                     let r = if matches!(self.phase, Phase::Plan) && !self.acted {
@@ -251,17 +262,24 @@ impl Battle {
         } else {
             json!(crate::battle::FATIGUE_ROUND - self.round)
         };
+        let kpct = |hp: i32| {
+            if hp > 0 {
+                (hp * 100 / crate::castle::KETTLE_HP).max(1)
+            } else {
+                0
+            }
+        };
         let hud = json!({
             "turn": self.turn, "round": self.round, "round_cap": self.rules.round_cap, "side": self.side,
             "wind": self.wind, "forecast": self.forecast(), "front_rounds_left": self.front_rounds_left(),
             "steam": [self.castles[0].steam, self.castles[1].steam],
             "steam_turn_left": crate::battle::STEAM_PER_TURN - self.castles[s].steam_turn,
-            "kettle_pct": [self.castles[0].kettle_hp.max(0) * 100 / crate::castle::KETTLE_HP, self.castles[1].kettle_hp.max(0) * 100 / crate::castle::KETTLE_HP],
+            "kettle_pct": [kpct(self.castles[0].kettle_hp), kpct(self.castles[1].kettle_hp)],
             "crew": [crew(0), crew(1)],
             "squall_warning": self.squall_warning(), "squall_round": self.squall_round(), "squall": self.rules.squall,
             "hands": [hand(0), hand(1)], "doodads": [self.doodads[0].clone(), self.doodads[1].clone()],
             "selected": {"hob": self.sel[s].hob, "shot": self.sel[s].shot},
-            "names": self.names, "control": [ctl(self.control[0]), ctl(self.control[1])],
+            "names": self.names, "think_ms": self.think_ms, "control": [ctl(self.control[0]), ctl(self.control[1])],
             "score": [self.stats[0].score, self.stats[1].score],
             "puff_up": [self.puff_up_allowed[0] && !self.puff_up_used[0], self.puff_up_allowed[1] && !self.puff_up_used[1]],
             "steam_max": self.steam_max,

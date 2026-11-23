@@ -30,8 +30,10 @@ export default defineConfig({
   projects: [
     { name: 'chromium', testIgnore: /webkit-long/, use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } } },
     { name: 'iphone', testMatch: phoneSpecs, use: { ...devices['iPhone 15'] } },
-    // QA playtest 2, B2: a long WebKit fight past Fatigue (iPhone 13 portrait at 3x).
-    { name: 'webkit-long', testMatch: /webkit-long\.spec\.ts/, timeout: 20 * 60_000, use: { ...devices['iPhone 13'] } },
+    // QA playtest 2, B2: a long WebKit fight past Fatigue (iPhone 13 portrait at 3x); no retry so CI never exceeds job timeout (Web-L9).
+    // Its own WebKit browser (the launch options differ, so a worker never reuses the browser the
+    // phone specs used): run in one command with them, the shared browser's compositor crashed.
+    { name: 'webkit-long', testMatch: /webkit-long\.spec\.ts/, timeout: 20 * 60_000, retries: 0, use: { ...devices['iPhone 13'], launchOptions: { env: { ...process.env, CASTLE_WEBKIT_LONG: '1' } } } },
     { name: 'pixel-landscape', testMatch: phoneSpecs, use: { ...devices['Pixel 7 landscape'] } },
   ],
   webServer: {

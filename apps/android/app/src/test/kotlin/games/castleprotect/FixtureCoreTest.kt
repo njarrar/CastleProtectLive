@@ -24,7 +24,7 @@ class FixtureCoreTest {
         assertNotNull(f.terrain)
         assertTrue(Reply.parse(g.command(Cmd.aim(450, 62))).ok)
         assertFalse(Reply.parse(g.command(Cmd.AI_TURN)).ok)
-        assertTrue(Reply.parse(g.command(Cmd.FIRE)).ok)
+        assertTrue(Reply.parse(g.command(Cmd.fire())).ok)
         f = p.parse(g.snapshot())
         assertEquals(Phase.RESOLVE, f.phase)
         assertEquals(1, f.shells.size)

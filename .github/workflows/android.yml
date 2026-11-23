@@ -101,9 +101,9 @@ jobs:
             -o "$out/libcastle_jni.so"
           echo "dir=$out" >> "$GITHUB_OUTPUT"
 
-      # Unit tests, lint and the APK. When CI built the core, a missing or stale
-      # native core fails the build (castle.requireNative) instead of shipping the stand-in.
-      - name: Gradle test, lint and assembleDebug
+      # Unit tests, lint, debug APK, and unsigned release APK (verifies src/release + R8 shrinking).
+      # When CI built the core, a missing or stale native core fails the build (castle.requireNative).
+      - name: Gradle test, lint, assembleDebug and assembleRelease
         if: steps.check.outputs.app == 'true'
         working-directory: apps/android
         run: |
@@ -113,25 +113,45 @@ jobs:
             args+=("-Pcastle.requireNative=true" "-Pcastle.hostJni=${{ steps.hostjni.outputs.dir }}")
           fi
           ./gradlew testDebugUnitTest lintDebug assembleDebug --stacktrace "${args[@]}"
+          if [ "${{ steps.check.outputs.core }}" = "true" ]; then
+            ./gradlew assembleRelease --stacktrace -Pcastle.requireNative=true
+          fi
 
-      - name: Check the native core is in the APK
+      - name: Check the native core is in the debug and release APKs (all 3 ABIs)
         if: steps.check.outputs.core == 'true'
         working-directory: apps/android
         run: |
-          apk=$(ls app/build/outputs/apk/debug/*.apk | head -n1)
-          for so in lib/arm64-v8a/libcastle_jni.so lib/arm64-v8a/libcastle_ffi.so; do
-            unzip -l "$apk" | grep -q "$so" || { echo "::error::$so is missing from the APK"; exit 1; }
-          done
-          tmp="$RUNNER_TEMP/apk"; rm -rf "$tmp"; mkdir -p "$tmp"; unzip -q "$apk" 'lib/*' -d "$tmp"
+          debug_apk=$(ls app/build/outputs/apk/debug/*.apk | head -n1)
+          release_apk=$(ls app/build/outputs/apk/release/*.apk | head -n1)
+          [ -f "$release_apk" ] || { echo "::error::release APK is missing"; exit 1; }
           readelf_bin="$(find "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt" -name llvm-readelf \( -type f -o -type l \) | head -n1)"
           [ -n "$readelf_bin" ] || { echo "::error::llvm-readelf not found in the NDK"; exit 1; }
-          # The shim must need the core by bare name, never a CI build path.
-          "$readelf_bin" -d "$tmp/lib/arm64-v8a/libcastle_jni.so" | grep NEEDED
-          if "$readelf_bin" -d "$tmp/lib/arm64-v8a/libcastle_jni.so" | grep NEEDED | grep -q '/'; then
-            echo "::error::libcastle_jni.so records a path for a needed library"; exit 1
+          bad=0
+          for apk in "$debug_apk" "$release_apk"; do
+            echo "Checking APK: $apk"
+            for abi in arm64-v8a armeabi-v7a x86_64; do
+              for lib in libcastle_jni.so libcastle_ffi.so; do
+                so="lib/$abi/$lib"
+                unzip -l "$apk" | grep -q "$so" || { echo "::error::$so is missing from $apk"; bad=1; }
+              done
+            done
+          done
+          tmp="$RUNNER_TEMP/apk"; rm -rf "$tmp"; mkdir -p "$tmp"; unzip -q "$debug_apk" 'lib/*' -d "$tmp"
+          # Every ABI shim must need the core by bare name, never a CI build path.
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            jni_so="$tmp/lib/$abi/libcastle_jni.so"
+            [ -f "$jni_so" ] || { echo "::error::$jni_so missing after unzip"; bad=1; continue; }
+            "$readelf_bin" -d "$jni_so" | grep NEEDED
+            if "$readelf_bin" -d "$jni_so" | grep NEEDED | grep -q '/'; then
+              echo "::error::$jni_so records a path for a needed library"; bad=1
+            fi
+          done
+          # Verify R8 kept CoreJni native methods in the release APK DEX.
+          rtmp="$RUNNER_TEMP/release_dex"; rm -rf "$rtmp"; mkdir -p "$rtmp"; unzip -q "$release_apk" 'classes*.dex' -d "$rtmp"
+          if ! grep -qa "Lgames/castleprotect/core/CoreJni;" "$rtmp"/classes*.dex || ! grep -qa "nativeDailySeed" "$rtmp"/classes*.dex; then
+            echo "::error::CoreJni native entry points were stripped by R8 from release DEX"; bad=1
           fi
           # 16 KB pages: the castle libraries on 64-bit ABIs, and the APK's zip alignment.
-          bad=0
           for so in "$tmp"/lib/arm64-v8a/libcastle_*.so "$tmp"/lib/x86_64/libcastle_*.so; do
             [ -f "$so" ] || continue
             if "$readelf_bin" -lW "$so" | awk '$1=="LOAD" {print $NF}' | grep -qv '^0x4000$\|^0x10000$'; then
@@ -140,7 +160,7 @@ jobs:
           done
           zipalign_bin="$(ls -d "${ANDROID_SDK_ROOT:-$ANDROID_HOME}"/build-tools/*/zipalign 2>/dev/null | sort -V | tail -n1 || true)"
           if [ -n "$zipalign_bin" ]; then
-            "$zipalign_bin" -c -P 16 -v 4 "$apk" > /dev/null || { echo "::error::APK is not 16 KB zip aligned"; bad=1; }
+            "$zipalign_bin" -c -P 16 -v 4 "$debug_apk" > /dev/null || { echo "::error::Debug APK is not 16 KB zip aligned"; bad=1; }
           else
             echo "::notice::zipalign not found, APK alignment not checked"
           fi

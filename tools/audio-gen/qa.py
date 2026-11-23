@@ -1,5 +1,6 @@
 """Listen-check by eye. Decodes every shipped file and draws its waveform and
-spectrogram, then tests for clipping, silence, DC, harsh highs and length drift.
+spectrogram, then tests for clipping, silence, DC, harsh highs, length drift,
+and continuous loop seam continuity.
 """
 import os
 import numpy as np
@@ -69,9 +70,39 @@ def sheet(cells, cols, path):
     out.save(path, optimize=True)
 
 
+SEAM_STEP_MAX = 1.8
+SEAM_EDGE_DB_MAX = 3.0
+
+
+def loop_seam(x):
+    """Measure wrap-around waveform jump ratio and 5 ms edge RMS delta on `(ch, n)`."""
+    n = x.shape[1]
+    if n < 4:
+        return 0.0, -120.0, -120.0, 0.0
+    # A click at the wrap shows as more sample-to-sample motion right at the seam than in the rest of
+    # the file. Lossy codecs add a little noise to every step, so one sample jump against the plain RMS
+    # step is not enough: compare the 1 ms window around the seam to the whole file, and the single
+    # seam jump to the 99.9th percentile step.
+    ratios = []
+    w = max(2, min(n // 4, int(round(0.001 * SR))))
+    for c in x:
+        d = np.diff(c)
+        typical_step = float(np.sqrt(np.mean(d ** 2)))
+        local = np.diff(np.concatenate([c[-w:], c[:w]]))
+        local_step = float(np.sqrt(np.mean(local ** 2)))
+        seam_jump = float(abs(c[0] - c[-1]))
+        big_step = float(np.percentile(np.abs(d), 99.9))
+        ratios.append(max(local_step / max(typical_step, 1e-9), seam_jump / max(big_step, 1e-9)))
+    k5 = min(n // 2, max(1, int(round(0.005 * SR))))
+    start_db = float(10.0 * np.log10(max(float(np.mean(x[:, :k5] ** 2)), 1e-12)))
+    end_db = float(10.0 * np.log10(max(float(np.mean(x[:, -k5:] ** 2)), 1e-12)))
+    return max(ratios), start_db, end_db, abs(start_db - end_db)
+
+
 def checks(s, x_ogg, x_m4a):
     """Return a list of problems for one sound."""
     bad = []
+    continuous_loop = bool(s['loop']) and not s.get('repeat_gap_s')
     for name, x in (('ogg', x_ogg), ('m4a', x_m4a)):
         mono = x.mean(axis=0)
         pk = np.max(np.abs(x))
@@ -82,11 +113,19 @@ def checks(s, x_ogg, x_m4a):
         if abs(mono.mean()) > 0.01:
             bad.append(f'{name}: DC offset {mono.mean():.3f}')
         drift = abs(x.shape[1] - s['samples'])
-        lim = 64 if name == 'ogg' else 2200       # AAC pads to whole frames; the manifest holds the true length
+        lim = 64 if name == 'ogg' else 32         # build.decode() cuts m4a to its sample-exact edit list
         if drift > lim:
             bad.append(f'{name}: length off by {drift} samples')
         if s['loop'] and name == 'ogg' and drift != 0:
             bad.append(f'ogg loop: length off by {drift} samples')
+        if s['loop'] and name == 'm4a' and drift > 8:
+            bad.append(f'm4a loop: length off by {drift} samples (> 8)')
+        if continuous_loop:
+            seam_ratio, start_db, end_db, edge_diff = loop_seam(x)
+            if seam_ratio > SEAM_STEP_MAX:
+                bad.append(f'{name} loop seam: jump {seam_ratio:.2f}x step (> {SEAM_STEP_MAX:.1f}x)')
+            if edge_diff > SEAM_EDGE_DB_MAX:
+                bad.append(f'{name} loop seam: edge RMS {start_db:.1f}/{end_db:.1f} dB ({edge_diff:.1f} dB > {SEAM_EDGE_DB_MAX:.1f} dB)')
         env = np.abs(mono)
         thr = pk * 0.02
         on = np.nonzero(env > thr)[0]

@@ -15,15 +15,15 @@
   "joins": {
     "quill": "1-2",
     "jax": "1-4",
-    "grub": "1-5",
-    "hetty": "1-7",
-    "bobbin": "1-8",
-    "old_thumper": "1-9",
-    "nan": "1-10"
+    "old_thumper": "1-6",
+    "grub": "1-7",
+    "hetty": "1-8",
+    "nan": "1-8",
+    "bobbin": "1-9"
   },
   "campaign": {
-    "walk_from": "1-9",
-    "doodads_from": "1-10",
+    "walk_from": "1-5",
+    "doodads_from": "1-7",
     "doodads": [
       "mend_bucket",
       "pot_lid"

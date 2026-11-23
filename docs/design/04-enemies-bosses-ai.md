@@ -12,9 +12,9 @@ This doc builds on `00-core-game-design.md` (cited as `[00 §x]`). It fills in t
 
 **Owners.** Unit stats and Hob rules belong to the units doc (`03`). Shot names and stats belong to the weapons doc (`01`). Level lists belong to the campaign doc (`05`). This doc names enemy units, behaviors and bosses, and owns the AI.
 
-**Tags.** Every content item carries one tag: `[Launch]`, `[U1]` (Long Siege), `[U2]` (Frostwhisker Peaks), `[U3]` (Clankmouth Mines) [review 04 §A].
+**Tags.** Every content item carries one tag: `[Launch]`, `[U1]` (Long Siege), `[U2]` (Nithering Heights), `[U3]` (Wheal Clank) [review 04 §A].
 
-**Regions.** Launch: 1 Puddingstone Downs, 2 Crumblecrag, 3 Soggybottom Fen, 4 The Flats. Updates: 5 Frostwhisker Peaks `[U2]`, 6 Clankmouth Mines `[U3]`. The Flats move up to Region 4 so the Baron ships at launch [review 04 §A].
+**Regions.** Launch: 1 Puddingstone Downs, 2 Crag End, 3 Soggy Bottom Fen, 4 The Flats. Updates: 5 Nithering Heights `[U2]`, 6 Wheal Clank `[U3]`. The Flats move up to Region 4 so the Baron ships at launch [review 04 §A].
 
 ---
 
@@ -25,25 +25,25 @@ This doc builds on `00-core-game-design.md` (cited as `[00 §x]`). It fills in t
 | 1 | Heartkettle 300 HP for every fort, bosses included. Phases gate bosses. The "raise to 400" note is gone. New rule: phase notches hold | [B4] |
 | 2 | The final boss, The Last Level, is 2 Stages: the Grand Roller, then the Level Engine. Hill Call from the first Roller turn. A clan crate before the last phase. Retry from the Stage on every preset. The teacup stays | [B12] |
 | 3 | Steward Prudence Plumb gets her own Flats level, The Square Gate, in place of Stage 1 | Review 02 §1.4 |
-| 4 | Lieutenants and Grand Forts re-mapped to the 4-region launch. The Countess (Peaks) and the Ironmaster (Mines) become `[U2]` and `[U3]`: "the wings that got away" | [review 04 §A] |
-| 5 | 14 launch enemy unit types (13 that fire, plus the Straw Stuffer). The rest are tagged | Review 02 §5.3 |
+| 4 | Lieutenants and Grand Forts re-mapped to the 4-region launch. The Countess (Heights) and the Ironmaster (Mines) become `[U2]` and `[U3]`: "the wings that got away" | [review 04 §A] |
+| 5 | 14 launch enemy unit types (13 that fire, plus the Dummy). The rest are tagged | Review 02 §5.3 |
 | 6 | Every enemy unit fires a Knack from `01` or a Flattener Twist. Old enemy Knack names are retired | [C31] |
 | 7 | Every Rival fort passes the Workshop validator. Archetypes have sizes that fit a covered Heartkettle. Enemy forts have 1 to 5 Nooks | [B3], [C05] |
 | 8 | Rival rooms and Rival perks are defined (section 3.3), so `02`'s references point at something. Each Rival states one habit | [C56], [B17] |
 | 9 | AI think target: p95 400 ms on the 2 GB phone for all presets, budget in work units, hidden by the 0.8 to 1.5 s think pose | [C3] |
 | 10 | Anti Recall lock: the AI walks out of a bracket after being hit twice from the same aim | [B11] |
 | 11 | Sudden Squall replaces Last Bell. New AI rules for the Squall | [B5] |
-| 12 | Enemy crew Class icons stay shown. Hidden crew, enemy Peepers and hidden-info AI tests move to `[U2]` | [B10] |
+| 12 | Enemy crew Class icons stay shown. Hidden crew, enemy Lookouts and hidden-info AI tests move to `[U2]` | [B10] |
 | 13 | No grey shells and no deny refund in the draft AI. Any Hob fires any shell | [B6] |
 | 14 | Turncoats are Outfits. Grand Fort rewards: 500 + 25 per Pennant; the Last Level 1,000 + 25 per Pennant | [C32], [C59] |
 | 15 | Bosses use the region's top Rival grade, not one above | [C74] |
 | 16 | Buried Hobs never skip a turn. Gust Bellows no longer Tumbles a Hob | [B9], [C15], [C44] |
 | 17 | Raid Rehearsal is a Test Yard button run by "the Drill Sergeant" | [B16], [C49] |
 | 18 | Final verification pass: the Sudden Squall hits both sides at once at round end, and the AI's kettle race reads that way (6.14). Enemy forts have 1 to 5 Nooks (crew cap 5). "Reload" reads as Rest and "matching Class" as Match. The Keystone perk is now a Fork pick, since the tree has no keystones. 4 bench Knacks, as `01` lists. Knock-Knock numbers shown | Review 05 |
-| 19 | **Shoring Crew to launch** (Region 2, Crumblecrag, where falls are taught), **Silt Lobber to U1** (its mud mound repeated the Hedge Snipper's Loophole burial). Launch stays 14 types; U1 is +4 and U3 +4. Row numbers are ids and stay fixed when a unit moves | Review 06 U10 |
+| 19 | **Shoring Crew to launch** (Region 2, Crag End, where falls are taught), **Silt Lobber to U1** (its mud mound repeated the Hedger's Loophole burial). Launch stays 14 types; U1 is +4 and U3 +4. Row numbers are ids and stay fixed when a unit moves | Review 06 U10 |
 | 20 | The Great Sump's Mud Rafts carry a Plunger Pete, not a Silt Lobber | Review 06 U10 |
 | 21 | **AI reads Lean Lines data:** its weak-point aim targets come from the same support query the player's Lean Lines use | Review 06 G5 |
-| 22 | **AI respects Loophole Flap.** The hidden "one Thread on Fair" rule is gone. Cozy never Threads, as the preset table always said | Review 06 G6 |
+| 22 | **AI respects Loophole Flap.** The hidden "one Thread on Fair" rule is gone. Cosy never Threads, as the preset table always said | Review 06 G6 |
 | 23 | **AI uses Shove Off** (15 Steam in the Walk step) by the player's rule | Review 06 G7 |
 | 24 | **The Rival shows one wish in the Rummage** (6.8) | Review 06 G9 |
 | 25 | **Never loaded in Couch Duel**, not even for Quick Pick. The AI runs on its own thread over the shared Rust core (native thread on iOS and Android, Web Worker on web) | Review 06 G2, research 04b |
@@ -88,7 +88,7 @@ The player's clan wants Brickabrac lumpy, odd and fun. Each Grand Fort we beat g
 
 - **Fussy, not mean.** Flatteners apologize for the mess they make. They measure craters after a hit. They tut at untidy blocks.
 - **Paperwork.** Rivals hold up signs, stamp forms and file complaints. Battle start often shows a "Notice of Flattening" banner.
-- **Straight lines.** They love right angles and hate curves. A Boinker's bouncing ball upsets them more than damage does.
+- **Straight lines.** They love right angles and hate curves. A Bouncer's bouncing ball upsets them more than damage does.
 - **Running gags.** The Baron's tea. A clipboard that keeps getting knocked off a wall. The square Snooze Balloon. A Flattener who sweeps the debris back into a neat pile mid-battle.
 - **Bloodless and kind.** No one is hurt. Bonked Flatteners float home grumpy. Beaten lieutenants change sides or retire to grow crooked gardens.
 
@@ -98,18 +98,18 @@ Each region has one wing of the Flattener clan, led by one lieutenant. Regular R
 
 | Region | Wing | Lieutenant | Theme | Signature castle style | Personality | Tag |
 |---|---|---|---|---|---|---|
-| 1. Puddingstone Downs (grass hills, tutorial) | **The Neat Brigade** | **Marshal Mowbray Trimm** | Lawn care. Hedges, mowers, rakes, topiary | Wicker and Timber boxes with clipped hedge caps; low, neat, symmetric | A fussy head gardener. Speaks in garden rules. Hates moles more than you. Easily flustered, never truly angry | `[Launch]` |
-| 2. Crumblecrag (cliffs) | **The Chisel Corps** | **Dame Grindella Scree** | Quarry work. Sanding cliffs into steps, then into slopes, then into nothing | Tall Cobble towers set in cliff ledges; terraced like stairs; props and beams under ledges | A stern stonemason with sandpaper gloves. Proud of her craft, respects a good shot, says so | `[Launch]` |
-| 3. Soggybottom Fen (water and mud) | **The Drain Fleet** | **Admiral Dabney Drainwell** | Pumping the fen dry to make it flat. Pumps, pipes, barges | Forts on barges and stilts; pipes on the outside; Timber hulls, Cobble pump rooms; moats | A soggy, cheerful naval type who has never been dry in his life. Loves a good splash. Sings on phase change | `[Launch]` |
-| 4. The Flats (the Baron's rolled land) | **The Level Guard** | **Steward Prudence Plumb**, the Baron's right hand | Perfect order. Rulers, plumb lines, measuring tape | Brassbound and Cobble squares, exact grid, mirrored on both sides; every Nook the same size (Moonbrick faces in `[U3]`) | Quiet, precise, polite. Corrects your grammar in taunts. Secretly likes a little lump | `[Launch]` |
-| 5. Frostwhisker Peaks (ice, strong wind) | **The Rink Wardens** | **Countess Rimelda Glaze** | Ironing the snow into one flat rink. Skates, bellows, polish | Ice palaces on runners; thin spires; Brassbound frames with frost panels; wind bellows on the roof | Cool, elegant, vain about her rink. Scores your shots like a skating judge | `[U2]` |
-| 6. Clankmouth Mines (caves, metal) | **The Pressworks** | **Ironmaster Clatterby Bolt** | Big presses that stamp ore and hills flat. Pistons, rails, rivets | Brassbound mill forts with shutters, rails and dynamo rooms; heavy, wide, lots of metal | Loud, gruff, deaf from the presses, so he shouts every line. Fair in his own way: he rings a bell before each big stamp | `[U3]` |
+| 1. Puddingstone Downs (grass hills, tutorial) | **Parks and Verges** | **Marshal Mowbray Trimm** | Lawn care. Hedges, mowers, rakes, topiary | Wicker and Timber boxes with clipped hedge caps; low, neat, symmetric | A fussy head gardener. Speaks in garden rules. Hates moles more than you. Easily flustered, never truly angry | `[Launch]` |
+| 2. Crag End (cliffs) | **Steps and Slopes** | **Dame Enid Scree** | Quarry work. Sanding cliffs into steps, then into slopes, then into nothing | Tall Cobble towers set in cliff ledges; terraced like stairs; props and beams under ledges | A stern stonemason with sandpaper gloves. Proud of her craft, respects a good shot, says so | `[Launch]` |
+| 3. Soggy Bottom Fen (water and mud) | **The Drainage Board** | **Admiral Dabney Sluice** | Pumping the fen dry to make it flat. Pumps, pipes, barges | Forts on barges and stilts; pipes on the outside; Timber hulls, Cobble pump rooms; moats | A soggy, cheerful naval type who has never been dry in his life. Loves a good splash. Sings on phase change | `[Launch]` |
+| 4. The Flats (the Baron's rolled land) | **Weights and Measures** | **Steward Prudence Plumb**, the Baron's right hand | Perfect order. Rulers, plumb lines, measuring tape | Brassbound and Cobble squares, exact grid, mirrored on both sides; every Nook the same size (Mossbrick faces in `[U3]`) | Quiet, precise, polite. Corrects your grammar in taunts. Secretly likes a little lump | `[Launch]` |
+| 5. Nithering Heights (ice, strong wind) | **The Rink Committee** | **Countess Glaze** | Ironing the snow into one flat rink. Skates, bellows, polish | Ice palaces on runners; thin spires; Brassbound frames with frost panels; wind bellows on the roof | Cool, elegant, vain about her rink. Scores your shots like a skating judge | `[U2]` |
+| 6. Wheal Clank (caves, metal) | **The Stamp Office** | **Ironmaster Josiah Bolt** | Big presses that stamp ore and hills flat. Pistons, rails, rivets | Brassbound mill forts with shutters, rails and dynamo rooms; heavy, wide, lots of metal | Loud, gruff, deaf from the presses, so he shouts every line. Fair in his own way: he rings a bell before each big stamp | `[U3]` |
 
-**The wings that got away** `[U2]` `[U3]`. When the Baron falls, two lieutenants refuse the peace. The Countess takes the Rink Wardens up into the Peaks. The Ironmaster takes the Pressworks down into the Mines. "Flat is fair," they say, "and we are not finished." Each update opens with the clan's map showing one last grey patch, and a "Notice of Flattening" nailed to it.
+**The wings that got away** `[U2]` `[U3]`. When the Baron falls, two lieutenants refuse the peace. The Countess takes the Rink Committee up into the Heights. The Ironmaster takes the Stamp Office down into the Mines. "Flat is fair," they say, "and we are not finished." Each update opens with the clan's map showing one last grey patch, and a "Notice of Flattening" nailed to it.
 
 **Baron Levelwell** leads them all. Look: a tall (for a Hob) Flattener in a long grey coat, the flattest cap in Brickabrac, a monocle shaped like a bubble level, a teacup always in hand. He rides **The Grand Roller**, a fort-sized rolling machine. Personality: pompous, tidy, sure he is right, and in the end a bit sad. In the epilogue he finds a hill is a nice place to sit and drink tea where you can see far. He keeps the cup on a saucer with a lip.
 
-**Regular Rivals.** About 5 named Rivals per launch region (`05` lists them). Examples to set the tone: **Sir Pudge** (Region 1, level 1, lazy, naps between turns [00 §8.3]), **Corporal Fernsby Clip** (Region 1), **Flintwick the Lesser** (Region 2), **Bosun Mopsy Gurgle** (Region 3), **Clerk Tally Evenhand** (Region 4), **Twirla Skatewell** (Region 5, `[U2]`), **Shift Boss Ratchet** (Region 6, `[U3]`). Every Rival is named AI and says so on its card [00 §3]. Every Rival card states one habit to build against (section 3.3) [B17].
+**Regular Rivals.** About 5 named Rivals per launch region (`05` lists them). Examples to set the tone: **Sir Pudge** (Region 1, level 1, lazy, naps between turns [00 §8.3]), **Lance Corporal Fernsby** (Region 1), **Flintwick the Lesser** (Region 2), **Bosun Gurgle** (Region 3), **Clerk Tally Evenhand** (Region 4), **Miss Twirl** (Region 5, `[U2]`), **Shift Boss Ratchet** (Region 6, `[U3]`). Every Rival is named AI and says so on its card [00 §3]. Every Rival card states one habit to build against (section 3.3) [B17].
 
 ---
 
@@ -117,7 +117,7 @@ Each region has one wing of the Flattener clan, led by one lieutenant. Regular R
 
 ### 2.1 Rules for enemy crew
 
-- Every enemy unit is a Flattener Hob built on one of the seven launch **Classes**, or the Peeper in `[U2]` [00 §2.9]. It uses that Class's Plain Shot and HP. The units doc owns Class stats.
+- Every enemy unit is a Flattener Hob built on one of the seven launch **Classes**, or the Lookout in `[U2]` [00 §2.9]. It uses that Class's Plain Shot and HP. The units doc owns Class stats.
 - Each unit fires one Knack from `01 §3` (the 28 crew Knacks or the 4 bench Knacks), or one **Flattener Twist** from `01 §4.16` [C31]. The Knack does not have to be its own Class's. Old 04 Knack names are retired (Parked ideas).
 - Enemy units obey every rule the player's Hobs obey: Rest, Cover, Tumble, Bonk, Footing, Steam, the dug-in rule. No hidden buffs. Exceptions: Rival Patchers never Puff Up [B9].
 - Enemy crew may fire any Trick Shell the Rival drafted, with the same Match bonus as the player: Rest 0 and +10% [B6].
@@ -127,67 +127,67 @@ Each region has one wing of the Flattener clan, led by one lieutenant. Regular R
 
 ### 2.2 Roster
 
-**Launch count: 14 types** (13 that fire, plus the Straw Stuffer). All 7 launch Classes are covered. Later regions reuse earlier units, so Rivals mix wings.
+**Launch count: 14 types** (13 that fire, plus the Dummy). All 7 launch Classes are covered. Later regions reuse earlier units, so Rivals mix wings.
 
-**Region 1: Puddingstone Downs (The Neat Brigade)**
-
-| # | Name | Class | Look | Behavior | Knack | Weakness | Tag |
-|---|---|---|---|---|---|---|---|
-| 1 | **Hedge Snipper** | Lobber | Green apron, huge shears on its back, pancake cap with a leaf on top | Aims at the tallest column on your castle first ("Too tall!"). Steady, predictable | Twist **Topiary Drop**: a big hedge ball that leaves a Wicker bush block where it lands. A bush over your Loophole digs that Hob in [C15] | Slow high arc gives a long tell. Bush blocks are Wicker: one Fire shot clears them | `[Launch]` |
-| 2 | **Rake Hand** | Scatterjack | Lanky, rake held like a fan, leaves in its cap | Sprays your front wall. Likes Open Nooks | **Pepper Rain** (acorns) | Cover halves it. Wind blows it off course; it misses more on windy turns | `[Launch]` |
-| 3 | **Clipboard Clerk** | Peeper | Spectacles, clipboard, pencil behind ear | Marks your Nooks, then the crew aims at what it marked | **Chalk Fan** | 80 HP. Bonk it first and the enemy loses future reveals | `[U2]` |
-| 4 | **Mower Minder** | Boinker | Round, red-faced, pushes a toy mower on its Nook sill | Rolls shots down slopes into your Footing area. Loves downhill maps | Twist **Mow Line**: a roller that shaves small bumps flat, then bursts | Mud and sticky ground stop it. Uphill maps make it useless | `[Launch]` |
-| 5 | **Straw Stuffer** | none (dummy) | A straw Flattener on a stick with a painted face | Does not fire. Sits in a Nook to soak shots. Tutorial and decoy unit | none | Shown as a dummy on every preset (honest). Burns in one Fire hit | `[Launch]` |
-
-**Region 2: Crumblecrag (The Chisel Corps)**
+**Region 1: Puddingstone Downs (Parks and Verges)**
 
 | # | Name | Class | Look | Behavior | Knack | Weakness | Tag |
 |---|---|---|---|---|---|---|---|
-| 6 | **Chiseler** | Delver | Goggles, hammer and chisel, dust on everything | Tunnels at the ground under your castle to cause a Thump | **Burrowbomb** | Footing is immune to Dig [00 §2.8]. Rock ground stops it. Clay maps leave its tunnels open for your return fire | `[Launch]` |
-| 7 | **Pebble Pitcher** | Zinger | Thin, a sling made from a measuring tape | Snipes Hobs in Open Nooks. Waits for a wall to fall, then strikes | **Sunspear** (a gravel beam) | 80 HP. Pierce is weak on Cobble; a Cobble wall in front of a Nook blunts it | `[Launch]` |
+| 1 | **Hedger** | Lobber | Green apron, huge shears on its back, pancake cap with a leaf on top | Aims at the tallest column on your castle first ("Too tall!"). Steady, predictable | Twist **Topiary Drop**: a big hedge ball that leaves a Wicker bush block where it lands. A bush over your Loophole digs that Hob in [C15] | Slow high arc gives a long tell. Bush blocks are Wicker: one Fire shot clears them | `[Launch]` |
+| 2 | **Raker** | Scatterjack | Lanky, rake held like a fan, leaves in its cap | Sprays your front wall. Likes Open Nooks | **Pepper Rain** (acorns) | Cover halves it. Wind blows it off course; it misses more on windy turns | `[Launch]` |
+| 3 | **Clipboard Clerk** | Lookout | Spectacles, clipboard, pencil behind ear | Marks your Nooks, then the crew aims at what it marked | **Chalk Fan** | 80 HP. Bonk it first and the enemy loses future reveals | `[U2]` |
+| 4 | **Mower** | Bouncer | Round, red-faced, pushes a toy mower on its Nook sill | Rolls shots down slopes into your Footing area. Loves downhill maps | Twist **Mow Line**: a roller that shaves small bumps flat, then bursts | Mud and sticky ground stop it. Uphill maps make it useless | `[Launch]` |
+| 5 | **Dummy** | none (dummy) | A straw Flattener on a stick with a painted face | Does not fire. Sits in a Nook to soak shots. Tutorial and decoy unit | none | Shown as a dummy on every preset (honest). Burns in one Fire hit | `[Launch]` |
+
+**Region 2: Crag End (Steps and Slopes)**
+
+| # | Name | Class | Look | Behavior | Knack | Weakness | Tag |
+|---|---|---|---|---|---|---|---|
+| 6 | **Chiseler** | Digger | Goggles, hammer and chisel, dust on everything | Tunnels at the ground under your castle to cause a Thump | **Seed Potato** | Footing is immune to Dig [00 §2.8]. Rock ground stops it. Clay maps leave its tunnels open for your return fire | `[Launch]` |
+| 7 | **Pitcher** | Zinger | Thin, a sling made from a measuring tape | Snipes Hobs in Open Nooks. Waits for a wall to fall, then strikes | **Darning Needle** (a gravel beam) | 80 HP. Pierce is weak on Cobble; a Cobble wall in front of a Nook blunts it | `[Launch]` |
 | 8 | **Grit Spreader** | Scatterjack | Carries a sandbag on its back like a backpack | Sprays wide over roofs | **Clatterline** (bench) | Chip damage barely dents Cobble. Wasted against tall stone forts | `[U1]` |
-| 9 | **Filler** | Patcher | Trowel, bucket of mortar, apron with a level line | Repairs its castle. Fills craters near its own fort so your Delver lanes close | Twist **Fill Up** | Bonk it first: every other unit gets easier. A mortar bucket icon shows over its Nook on turns it plans to repair | `[Launch]` |
+| 9 | **Filler** | Patcher | Trowel, bucket of mortar, apron with a level line | Repairs its castle. Fills craters near its own fort so your Digger lanes close | Twist **Fill Up** | Bonk it first: every other unit gets easier. A mortar bucket icon shows over its Nook on turns it plans to repair | `[Launch]` |
 | 27 | **Shoring Crew** | Patcher | Hard hat, a brace of props under its arm | Props up damaged blocks so they do not fall. Braces the column that holds its tallest tower | Twist **Prop Up** | Braced columns glow yellow. Bonk it and the braces drop at once (a free collapse): "Bonk the prop and the fort falls" | `[Launch]` |
 
-**Region 3: Soggybottom Fen (The Drain Fleet)**
+**Region 3: Soggy Bottom Fen (The Drainage Board)**
 
 | # | Name | Class | Look | Behavior | Knack | Weakness | Tag |
 |---|---|---|---|---|---|---|---|
-| 10 | **Pump Hand** | Sizzler | Rubber boots, a stirrup pump, always damp | Soaks your castle, puts out your fires, turns the ground under you to Mud to drain your Steam | **Drenchbarrel** | Water does nothing to Cobble or Brass. Walking out of the puddle beats it | `[Launch]` |
-| 11 | **Plunger Pete** | Boinker | Holds a giant sink plunger like a lance | Bounces plungers, then plunges straight down on a roof | **Pogo Pot** (bench): bounces straight up 4 times on one spot, breaking a layer each time | The plunger wobbles on the sill one turn before. A Brassbound roof holds it | `[Launch]` |
-| 12 | **Dredger** | Delver | Diving helmet, flippers, snorkel | Digs under water and mud | **Corkscrew** (bench) | Water slows its bore. Footing and Rock stop it | `[U1]` |
+| 10 | **Pump Hand** | Stoker | Rubber boots, a stirrup pump, always damp | Soaks your castle, puts out your fires, turns the ground under you to Mud to drain your Steam | **Water Butt** | Water does nothing to Cobble or Brass. Walking out of the puddle beats it | `[Launch]` |
+| 11 | **Plunger Pete** | Bouncer | Holds a giant sink plunger like a lance | Bounces plungers, then plunges straight down on a roof | **Pogo Pot** (bench): bounces straight up 4 times on one spot, breaking a layer each time | The plunger wobbles on the sill one turn before. A Brassbound roof holds it | `[Launch]` |
+| 12 | **Dredger** | Digger | Diving helmet, flippers, snorkel | Digs under water and mud | **Corkscrew** (bench) | Water slows its bore. Footing and Rock stop it | `[U1]` |
 | 13 | **Silt Lobber** | Lobber | Barrel-shaped, a bucket on a long pole | Lobs mud bombs. Likes to bury your Loopholes | **Molehill Surprise** (a mud mound) | Mud mounds are soft Loam: any blast clears them, and Shove Off clears one for 15 Steam. It must land at your castle face to bury a Loophole, so it misses a lot on high forts | `[U1]` |
 
-**Region 4: The Flats (The Level Guard)**
+**Region 4: The Flats (Weights and Measures)**
 
 | # | Name | Class | Look | Behavior | Knack | Weakness | Tag |
 |---|---|---|---|---|---|---|---|
 | 14 | **Roller Guard** | Lobber | Rolling pin on the shoulder, very flat cap | Pounds the hill between castles flat, then pounds you | Twist **Press Flat** | Its first Knack each battle aims at terrain, not at you (tell: it unrolls a map). Mound shots undo its work | `[Launch]` |
 | 15 | **Ruler Sniper** | Zinger | A long ruler for a rifle stock, square goggles | Fires dead straight lines; the best shot in the clan | **Knock-Knock** (bench): two bolts on one aim, 20 Pierce then 40, so the kettle clamp does not fire on every clean hit [01 §3.10] | It squares its goggles and takes two slow breaths before the Knack. A mound or a scrap wall blocks both bolts | `[Launch]` |
-| 16 | **Level Surveyor** | Peeper | Tripod on its back, bubble-level monocle | Reveals and marks the "lumpiest" part of your castle | **Chalk Fan** | Walk and its old arcs stop lining up | `[U2]` |
-| 17 | **Tamper** | Delver | Pogo stick with a flat foot | Stamps ground flat around your castle to remove your cover | Twist **Tamp Down** | Footing immune. Rock ground ignores it. Clay maps blunt it | `[Launch]` |
-| 18 | **Steam Sweeper** | Sizzler | Big brush, steam pipe on its back | Clears debris and Burns with hot steam (tidy habit) | **Scaldspill** | Fireproof forts ignore most of it. Water and Soaked blocks stop it | `[U1]` |
+| 16 | **Level Surveyor** | Lookout | Tripod on its back, bubble-level monocle | Reveals and marks the "lumpiest" part of your castle | **Chalk Fan** | Walk and its old arcs stop lining up | `[U2]` |
+| 17 | **Tamper** | Digger | Pogo stick with a flat foot | Stamps ground flat around your castle to remove your cover | Twist **Tamp Down** | Footing immune. Rock ground ignores it. Clay maps blunt it | `[Launch]` |
+| 18 | **Steam Sweeper** | Stoker | Big brush, steam pipe on its back | Clears debris and Burns with hot steam (tidy habit) | **Boiled Over** | Fireproof forts ignore most of it. Water and Soaked blocks stop it | `[U1]` |
 | 19 | **Clerk Major** | Patcher | Stacks of forms, a rubber stamp | Stamps "APPROVED" on its own blocks to repair them and "DENIED" on yours | Twist **Red Tape**: one of your Hobs needs a rest (Rest +1, within the cap of 1 extra) [B9] | Its stamp turns tell you which block it will fix. Fire burns the tape off | `[Launch]` |
 
-**Region 5: Frostwhisker Peaks (The Rink Wardens)** `[U2]`
+**Region 5: Nithering Heights (The Rink Committee)** `[U2]`
 
 | # | Name | Class | Look | Behavior | Knack | Weakness | Tag |
 |---|---|---|---|---|---|---|---|
-| 20 | **Glazer** | Sizzler | Skates, a polishing cloth, frost on its cap | Turns ground to Ice so your castle slides when you Walk and rollers zoom at you | **Shiverpuff** | Fire melts its Ice to Water and ends the field. No effect on Footing | `[U2]` |
-| 21 | **Gust Bellows** | Peeper | A tiny Hob behind a huge bellows | Changes next turn's wind. Shown on the forecast icon | Twist **Gust Puff** | No damage at all. The bellows sits outside its Nook: one hit breaks it, and Gust Puff is gone for the battle [C44] | `[U2]` |
-| 22 | **Snowball Roller** | Boinker | Bundled in scarves, pushing a snowball bigger than itself | Rolls snowballs down slopes | **Rolypoly** | Uphill or flat ground keeps it small. Fire melts it mid-roll. A mound stops it | `[U2]` |
-| 23 | **Icicle Zinger** | Zinger | Long icicle lance, cold blue nose | Snipes Hobs and cracks walls for a later big hit | **Sunspear** | Its Plain Shot drifts in strong wind. A Patcher repair clears Brittle | `[U2]` |
+| 20 | **Glazer** | Stoker | Skates, a polishing cloth, frost on its cap | Turns ground to Ice so your castle slides when you Walk and rollers zoom at you | **Shiverpuff** | Fire melts its Ice to Water and ends the field. No effect on Footing | `[U2]` |
+| 21 | **Gust Bellows** | Lookout | A tiny Hob behind a huge bellows | Changes next turn's wind. Shown on the forecast icon | Twist **Gust Puff** | No damage at all. The bellows sits outside its Nook: one hit breaks it, and Gust Puff is gone for the battle [C44] | `[U2]` |
+| 22 | **Snowball Roller** | Bouncer | Bundled in scarves, pushing a snowball bigger than itself | Rolls snowballs down slopes | **Roly-Poly** | Uphill or flat ground keeps it small. Fire melts it mid-roll. A mound stops it | `[U2]` |
+| 23 | **Icicle Zinger** | Zinger | Long icicle lance, cold blue nose | Snipes Hobs and cracks walls for a later big hit | **Darning Needle** | Its Plain Shot drifts in strong wind. A Patcher repair clears Brittle | `[U2]` |
 
-**Region 6: Clankmouth Mines (The Pressworks)** `[U3]`
+**Region 6: Wheal Clank (The Stamp Office)** `[U3]`
 
 | # | Name | Class | Look | Behavior | Knack | Weakness | Tag |
 |---|---|---|---|---|---|---|---|
 | 24 | **Rivet Gunner** | Scatterjack | Welding mask, a belt of rivets | Sprays rivets at your roof and Nook sills | **Pan Parade** (rivets) | Chip damage on Cobble and Brass is poor | `[U3]` |
 | 25 | **Spark Fitter** | Zinger | Copper coat, wire for hair, crackles | Zaps Brassbound walls to chain damage through them | **Glimmerjolt** | Zap does x0.3 to Wicker, Timber and Cobble [00 §2.10]. A fort with no Brass laughs at it | `[U3]` |
 | 26 | **Ore Dropper** | Lobber | Huge, a mine cart for a hat | Lobs heavy ore weights for collapse | **Anvil Bun** | Heavy: two safe turns after it fires. The cart hat tips when it loads (tell) | `[U3]` |
-| 28 | **Lamp Peeper** | Peeper | Miner's lamp on its cap | Lights up your rooms for the whole crew | **Tattle Bell** | Smoke and dark Doodads hide from it. 80 HP | `[U3]` |
+| 28 | **Lamp Lookout** | Lookout | Miner's lamp on its cap | Lights up your rooms for the whole crew | **Tattle Bell** | Smoke and dark Doodads hide from it. 80 HP | `[U3]` |
 
-**Counts.** Launch 14: Hedge Snipper, Rake Hand, Mower Minder, Straw Stuffer, Chiseler, Pebble Pitcher, Filler, Shoring Crew, Pump Hand, Plunger Pete, Roller Guard, Ruler Sniper, Tamper, Clerk Major. U1 +4 (Grit Spreader, Dredger, Steam Sweeper, Silt Lobber). U2 +6 (four Peaks units plus the Clipboard Clerk and Level Surveyor, who wait for the Peeper Class). U3 +4. 28 in all. The Baron is a boss, not a unit type.
+**Counts.** Launch 14: Hedger, Raker, Mower, Dummy, Chiseler, Pitcher, Filler, Shoring Crew, Pump Hand, Plunger Pete, Roller Guard, Ruler Sniper, Tamper, Clerk Major. U1 +4 (Grit Spreader, Dredger, Steam Sweeper, Silt Lobber). U2 +6 (four Heights units plus the Clipboard Clerk and Level Surveyor, who wait for the Lookout Class). U3 +4. 28 in all. The Baron is a boss, not a unit type.
 
 **Flattener Twists.** `01 §4.16` owns their stats. Launch: Topiary Drop, Mow Line, Fill Up, Prop Up, Press Flat, Tamp Down, Red Tape, and the Baron's **Teatime** (Twist 9, [C31]). `[U2]`: Gust Puff. Twists stay enemy-only. Prop Up's brace uses the same sim rule as Hetty's Ridgepole [03], so both sides have a column holder.
 
@@ -229,8 +229,8 @@ Each archetype is a layout pattern the level doc can reskin per wing. Each one t
 | 2 | **The Beanpole** | 4 x 9 Timber tower. Kettle Room at the bottom, 2 Nooks stacked above | Hit the low support blocks and the top falls as one chunk [00 §2.7]. Collapse beats chip | Region 1 | `[Launch]` |
 | 3 | **The Pancake** | 8 x 4: a solid base row, one band with the Kettle Room and 1 Nook, a flat Cobble roof. Later 8 x 7 with a second band (up to 3 Nooks) | Flat shots bounce off the long face; high lobs onto the roof work. The Flatteners' favorite shape | Region 1 | `[Launch]` |
 | 4 | **The Onion** | 8 x 6. Wicker front column, Timber next, Kettle Room in the back of the low band wrapped in Cobble. Up to 3 Nooks | Peel in layers; pick the right damage type per layer | Region 2 | `[Launch]` |
-| 5 | **The Ledge Perch** | 4 x 6 or 7 x 6 on a cliff ledge or stilts over a drop | Carve the ground under it for a Thump; Delvers and Blast on the cliff edge [00 §2.7] | Region 2 | `[Launch]` |
-| 6 | **The Bait Box** | 7 x 9. Two outer Nooks with Straw Stuffers, up to 3 real crew deep inside | Read the icons. Dummies always show as dummies, so do not waste shots on them | Region 2 | `[Launch]` |
+| 5 | **The Ledge Perch** | 4 x 6 or 7 x 6 on a cliff ledge or stilts over a drop | Carve the ground under it for a Thump; Diggers and Blast on the cliff edge [00 §2.7] | Region 2 | `[Launch]` |
+| 6 | **The Bait Box** | 7 x 9. Two outer Nooks with Dummys, up to 3 real crew deep inside | Read the icons. Dummies always show as dummies, so do not waste shots on them | Region 2 | `[Launch]` |
 | 7 | **The Sump Pit** | 7 x 3 (kettle and 1 Nook) or 7 x 6, sunk in a pit so only the roof shows | Lobs and fluids that pool low [00 §2.7]; flat shots hit the pit lip | Region 3 | `[Launch]` |
 | 8 | **The Moat Fort** | 7 x 6 Timber body, pumps on top, water moat in front | Fire does little near water; skippers cross water; Soaked rules | Region 3 | `[Launch]` |
 | 9 | **The Twin Keeps** | A 4 x 6 keep (Kettle Room and 1 Nook) and a 4 x 6 Outpost tower (2 Nooks), joined by a Timber bridge | Choose your win path; break the bridge and the crew tower loses its link | Region 3 | `[Launch]` |
@@ -241,7 +241,7 @@ Each archetype is a layout pattern the level doc can reskin per wing. Each one t
 | 14 | **The Skater** | 7 x 3 small fort that Walks every turn on Ice | Lead your shots; old pins go stale when a target moves | Region 5 | `[U2]` |
 | 15 | **The Brass Net** | 7 x 6 Brassbound shell with all blocks touching | Zap chains through all of it [00 §2.8] | Region 6 | `[U3]` |
 | 16 | **The Overhang Den** | 7 x 6 built under a Clay overhang, roof covered by ground | Bounce and roll shots in under the lip; Dig the overhang to drop it on the fort | Region 6 | `[U3]` |
-| 17 | **The Moon Square** | The Square (11) with Moonbrick faces | Moonbrick heals a little each turn it is not hit [B1]: focus one spot | Region 6 | `[U3]` |
+| 17 | **The Moon Square** | The Square (11) with Mossbrick faces | Mossbrick heals a little each turn it is not hit [B1]: focus one spot | Region 6 | `[U3]` |
 
 **Design rules for enemy castles**
 
@@ -306,7 +306,7 @@ These rules keep boss fights fair and readable.
    - **Mover**: a part or the whole fort that moves along a rail a set number of cells each turn. Its next spot shows as a dotted outline.
    - **Terrain Script**: raises or lowers water, adds or removes ground in a marked zone.
    - **Summon**: puts a new Flattener Hob in an empty Nook or sends in an Outpost (a raft, a cart).
-   - **Set Piece**: a big scripted shot. Always telegraphed at least one full player turn ahead with a target ring on the field (two turns on Cozy).
+   - **Set Piece**: a big scripted shot. Always telegraphed at least one full player turn ahead with a target ring on the field (two turns on Cosy).
 3. **Validator.** Every Grand Fort body and every summoned Outpost passes the validator (3.1). Rig Parts sit outside the grid.
 4. **Phase triggers.** A phase starts when one of these is met: kettle HP under a notch, a Rig Part broken, Hobs left, or a round number. Each trigger shows on the boss bar as a notch.
 5. **Notches hold.** The kettle cannot drop below the next notch until that phase has played at least one boss turn. Damage past the notch is banked as a cracked segment on the bar. It lands the moment the phase turn ends. A big hit is never wasted, and no phase is skipped [B4]. The one exception is the Sudden Squall: there notches do not hold, and a phase the kettle drops through is skipped, so every fight still ends within 3 rounds of the cap [00 §2.11].
@@ -322,21 +322,21 @@ These rules keep boss fights fair and readable.
 
 - **Boss:** Marshal Mowbray Trimm. Personality: Builder with a Tidy streak (6.6).
 - **Castle concept:** An 8 x 8 Timber fort shaped like a clipped hedge peacock. Hedge blocks (Timber skin, green) cover the walls; the tail fan is a Rig Part. A **Sprinkler Root** (Weak Spot) sits low at the back, feeding water to the hedges. Between the forts stands a gentle hill with a lawn roller parked on top.
-- **Phase 1: Evergreen.** Every turn start, one broken hedge block regrows while the Sprinkler Root stands. Crew: 2 Hedge Snippers, 1 Rake Hand, 1 Mower Minder.
+- **Phase 1: Evergreen.** Every turn start, one broken hedge block regrows while the Sprinkler Root stands. Crew: 2 Hedgers, 1 Raker, 1 Mower.
   - Tell: green sparkles on the block that will regrow.
-  - Counter: break the Sprinkler Root (it is low and Timber, so a Boinker or Delver reaches it), or burn hedges, which stops regrowth on burning blocks.
-- **Phase 2: Mowing Day** (kettle under 70% or Root broken). The Marshal releases **Big Smoothie Jr.**, the lawn roller. It rolls 120 cells toward you each turn and shaves the hill flat as it goes. When the hill is gone, your castle loses its cover.
+  - Counter: break the Sprinkler Root (it is low and Timber, so a Bouncer or Digger reaches it), or burn hedges, which stops regrowth on burning blocks.
+- **Phase 2: Mowing Day** (kettle under 70% or Root broken). The Marshal releases **Little Ethel**, the lawn roller. It rolls 120 cells toward you each turn and shaves the hill flat as it goes. When the hill is gone, your castle loses its cover.
   - Tell: the roller's dotted path and the "Keep Off the Grass" sign it drops.
   - Counter: hit its boiler (Weak Spot on its back, 60 HP) to stop it, or raise a mound in its path; it cannot climb a mound taller than 32 cells.
 - **Phase 3: The Big Snip** (kettle under 35%). Giant shears unfold from the roof. Set Piece: next turn they snip across the top 2 rows of your tallest column.
   - Tell: open shears and a red cut line over your castle for one full turn.
   - Counter: Walk out from under the line, or knock the shears' hinge (Weak Spot) with any point shot, which jams them for 2 turns.
 - **How to win:** Break the Sprinkler Root early so damage sticks. Stop the roller before it flattens your cover. Kettle Pop is faster, but four small Hobs make Clean Sweep real.
-- **Rewards:** Keepsake **Golden Shears**. Trick Shell: a hedge-growing shell (`01`). Outfit: Hedge Snipper cap and shears for a Lobber.
+- **Rewards:** Keepsake **Golden Shears**. Trick Shell: a hedge-growing shell (`01`). Outfit: Hedger cap and shears for a Lobber.
 
-### 4.3 Grand Fort 2: The Sanding Stair (Crumblecrag) `[Launch]`
+### 4.3 Grand Fort 2: The Sanding Stair (Crag End) `[Launch]`
 
-- **Boss:** Dame Grindella Scree. Personality: Sniper with a Sapper streak.
+- **Boss:** Dame Enid Scree. Personality: Sniper with a Sapper streak.
 - **Castle concept:** A 7 x 10 Cobble tower built into a cliff with three ledges (high, middle, low). A great **Sanding Wheel** turns on the cliff face beside it. Three **Prop Beams** (Weak Spots, Timber) hold the tower's top section. Stone side support reaches 1 block, so the top is heavy [B2].
 - **Phase 1: High Ledge.** The fort sits on the top ledge, far above you. Her Set Piece **Rockfall** shakes loose boulders from the cliff above your castle.
   - Tell: dust trickles over your castle for one turn, then rocks fall (crush damage on your roof).
@@ -347,12 +347,12 @@ These rules keep boss fights fair and readable.
 - **Phase 3: Down to Gravel** (kettle under 35%). The fort drops to the low ledge. The Wheel now sands the ridge between the forts, lowering it 16 cells each turn (Terrain Script). Your high ground melts away.
   - Tell: grit plume along the ridge, a level line drawn where the ground will stop.
   - Counter: the fort is now low and close: lob over it. Break all three Prop Beams and the top half of the tower falls onto its own Nooks (crush).
-- **How to win:** Use Delvers and Blast on the cliff edge to Thump her ledges. Snipe the Prop Beams. Stop the wheel hub before Phase 3 to keep your ridge.
-- **Rewards:** Keepsake **Chipped Chisel**. Trick Shell: a ledge-cutting bore. Outfit: Pebble Pitcher sling for a Zinger.
+- **How to win:** Use Diggers and Blast on the cliff edge to Thump her ledges. Snipe the Prop Beams. Stop the wheel hub before Phase 3 to keep your ridge.
+- **Rewards:** Keepsake **Chipped Chisel**. Trick Shell: a ledge-cutting bore. Outfit: Pitcher sling for a Zinger.
 
-### 4.4 Grand Fort 3: The Great Sump (Soggybottom Fen) `[Launch]`
+### 4.4 Grand Fort 3: The Great Sump (Soggy Bottom Fen) `[Launch]`
 
-- **Boss:** Admiral Dabney Drainwell. Personality: Gambler with a Builder streak.
+- **Boss:** Admiral Dabney Sluice. Personality: Gambler with a Builder streak.
 - **Castle concept:** An 8 x 6 Timber and Cobble fort on a paddle-wheel barge. The hull is a Rig Part. Three **Pumps** (Weak Spots) stick out of the deck. The **Water Line** across the map is a Terrain Script that the pumps control.
 - **Phase 1: Spray Curtain.** A wall of pumped water stands in front of the barge (Shield: shells pass with heavy drag, Fire goes out). Shots over the top of the curtain are not slowed.
   - Tell: the curtain's height mark shows on screen.
@@ -364,7 +364,7 @@ These rules keep boss fights fair and readable.
   - Tell: a tide mark on your castle where the water will be next turn.
   - Counter: break the last Pump to stop the flood. The barge also sits lower as the water drops back, which exposes its Kettle Room from the side.
 - **How to win:** Break Pumps early, keep Fire for after the curtain falls, Walk before the mud traps you. Skipper shots shine on the open water.
-- **Rewards:** Keepsake **Brass Bilge Bell**. Trick Shell: a skipping shell that splashes. Outfit: Pump Hand boots and pump for a Sizzler.
+- **Rewards:** Keepsake **Brass Bilge Bell**. Trick Shell: a skipping shell that splashes. Outfit: Pump Hand boots and pump for a Stoker.
 
 ### 4.5 The Square Gate: Steward Prudence Plumb (The Flats) `[Launch]`
 
@@ -377,7 +377,7 @@ The Steward is the Flats lieutenant. She gets her own level, not a Stage of the 
   - Counter: Walk; or snap the line by hitting the tower top.
 - **Phase 2: Cut Once** (kettle under 40%). The gate splits in two halves that slide apart (Mover), opening a lane to the kettle and giving the Steward two firing towers. Summon: 2 Ruler Snipers.
 - **End:** At 0 kettle, the Steward bows, steps aside, and says "That was... rather lumpy. Well done." She joins the clan in the epilogue (an Outfit, no new Hob).
-- `[U3]`: an Ironclad version swaps the faces to Moonbrick (The Moon Square).
+- `[U3]`: an Ironclad version swaps the faces to Mossbrick (The Moon Square).
 
 ### 4.6 Grand Fort 4: The Last Level (The Flats), with Baron Levelwell `[Launch]`
 
@@ -421,9 +421,9 @@ The Region 4 Grand Fort is the final battle of the launch game [00 §7.2]. It is
 - **End:** The Engine sputters and lets out one long, sad whistle. The hills of all Brickabrac pop back up. The Baron floats down on a square Snooze Balloon, lands on a new hill, and finds his tea does not spill if you hold it level. Credits roll over him sitting there.
 - **Rewards:** Keepsake **The Baron's Teacup**. 1,000 Buttons + 25 per Pennant [C59]. Outfit: the Steward's tape and rule for a Zinger. Baron Rush and Ironclad tiers follow their update tags [00 §6].
 
-### 4.7 Grand Fort 5: The Glidehall (Frostwhisker Peaks) `[U2]`
+### 4.7 Grand Fort 5: The Glidehall (Nithering Heights) `[U2]`
 
-- **Boss:** Countess Rimelda Glaze. Personality: Coward with a Sniper streak.
+- **Boss:** Countess Glaze. Personality: Coward with a Sniper streak.
 - **Castle concept:** An ice palace, 7 x 9 body, on long runners (Rig Part), on a frozen lake with a snow slope behind your castle. Two **Bellows Towers** (Weak Spots) on its wings blow wind. Frost panels on Brassbound frames.
 - **Phase 1: The Gale.** The Bellows set the wind each turn, not each Weather Front. The forecast shows the next value one turn ahead. The palace glides with the wind 32 to 64 cells per turn (Mover).
   - Tell: forecast icon plus the palace's dotted next spot.
@@ -433,13 +433,13 @@ The Region 4 Grand Fort is the final battle of the launch game [00 §7.2]. It is
   - Tell: frost creeps over the gap one turn before it closes.
 - **Phase 3: Avalanche** (kettle under 35%). Set Piece: the Countess pulls a rope and a snow slab slides down the slope behind your castle, piling snow against your back wall and over low Loopholes.
   - Tell: cracks run across the slope for one full turn; a bell rings.
-  - Counter: Walk forward off the slab's path, or blast the slope first so the slab breaks up small. Buried Hobs are dug in: their Fire button greys until any blast or a Delver clears the snow. No turn is skipped [B9], [C15].
+  - Counter: Walk forward off the slab's path, or blast the slope first so the slab breaks up small. Buried Hobs are dug in: their Fire button greys until any blast or a Digger clears the snow. No turn is skipped [B9], [C15].
 - **How to win:** Lead your shots on the moving palace. Frost, then Blast on its glass panels. Keep a Fire shot for Phase 2.
-- **Rewards:** Keepsake **Silver Skate**. Trick Shell: a gust shell. Outfit: Snowball Roller scarf for a Boinker.
+- **Rewards:** Keepsake **Silver Skate**. Trick Shell: a gust shell. Outfit: Snowball Roller scarf for a Bouncer.
 
-### 4.8 Grand Fort 6: The Stampmill (Clankmouth Mines) `[U3]`
+### 4.8 Grand Fort 6: The Stampmill (Wheal Clank) `[U3]`
 
-- **Boss:** Ironmaster Clatterby Bolt. Personality: Bully with a Gambler streak.
+- **Boss:** Ironmaster Josiah Bolt. Personality: Bully with a Gambler streak.
 - **Castle concept:** An 8 x 6 Brassbound mill fort. Three piston **Stampers** (Rig Parts) hang over the ground between the forts. A rail line runs in front. Two **Dynamo Rooms** (Weak Spots) power the fort's shields. Steel shutters cover the Loopholes.
 - **Phase 1: Shutters.** The Loopholes have shutters (Shield vs all shots on the Nook). They open on the boss's turn to fire and stay open through the player's next turn only if the Hob behind fired a Medium or Heavy shot.
   - Tell: open shutters glow; a shutter icon on each enemy Nook shows open or shut.
@@ -465,7 +465,7 @@ Mini-bosses appear at levels 5 or 6 of a region as a warm-up for the Grand Fort,
 
 | Name | Region | What it is | Mechanic | Tell | How to beat | Tag |
 |---|---|---|---|---|---|---|
-| **Big Smoothie** | 1, 4 | A huge lawn roller with a tiny Flattener driver, rolling across the map between forts | Rolls 96 cells per turn from the far edge, flattening ground. If it reaches a castle, that castle takes a Thump and loses its cover hill. It does not care whose side it is on | Dotted path; driver honks | Hit the boiler on its back (Weak Spot, 120 HP). Mounds stop it for one turn. Steering it into the enemy is a valid trick | `[Launch]` |
+| **Big Ethel** | 1, 4 | A huge lawn roller with a tiny Flattener driver, rolling across the map between forts | Rolls 96 cells per turn from the far edge, flattening ground. If it reaches a castle, that castle takes a Thump and loses its cover hill. It does not care whose side it is on | Dotted path; driver honks | Hit the boiler on its back (Weak Spot, 120 HP). Mounds stop it for one turn. Steering it into the enemy is a valid trick | `[Launch]` |
 | **Rockslide Rex** | 2 | A boulder with a cap that rolls downhill toward the lowest castle | Rolls each turn; big crush on contact | Dotted path | Break it into 4 smaller rocks with Blast; a mound diverts it | `[Launch]` |
 | **The Tidy Balloon** | 2, 4 | A Flattener supply balloon drifting across the top of the map | Carries a Trick Shell crate. Whoever pops it gets the shell. The AI shoots at it too | Crate icon shows which shell is inside | A high Pierce or Scatterjack shot. Race the AI to it | `[Launch]` |
 | **Sergeant Squeegee** | 3 | A huge mop-and-bucket walker that crosses the fen | Mops up all mud and water in its path, then dumps it as a Mud mound in front of the player's castle | Bucket fills as it walks | Tip the bucket (hit it) so the mud lands on the Flatteners' side | `[Launch]` |
@@ -482,7 +482,7 @@ Mini-bosses appear at levels 5 or 6 of a region as a warm-up for the Grand Fort,
 | **Flattening Notice** | A Flattener crew presses the middle hill 16 cells lower each round from round 4 | Mound shots undo it; teaches the Region 4 theme early | `[Launch]` |
 | **Tea Break** | At round 8 the Rival takes one turn off to drink tea (shown on its card) | Free turn for the player. Used once in Region 1 as a joke and a breather | `[Launch]` |
 | **Moving Day** | The Rival's castle Walks every turn on a set path | Teaches leading shots | `[Launch]` |
-| **Fog Bank** | Preview stops at the fog line for both sides; the AI's error is x1.3 into fog (same rule for the player) | Peeper chalk arcs stay visible through fog | `[U2]` |
+| **Fog Bank** | Preview stops at the fog line for both sides; the AI's error is x1.3 into fog (same rule for the player) | Lookout chalk arcs stay visible through fog | `[U2]` |
 | **Night Shift** | Enemy Nooks show only when lit | Fire shots light the area for one turn | `[U2]` |
 | **Thaw** | Ice turns to water at round 6 | Castles on ice sink a step (Thump if over 48 cells) | `[U2]` |
 
@@ -593,7 +593,7 @@ clamp |b| <= 2.5 * sigma0
 | Different shell (different gravity or wind factor) | Grow `b` to 70% of `sigma0`, unless the shells fly alike |
 | Line of sight to the impact pin lost (fog, smoke) | No correction that turn (`c = 0`) |
 
-**Wind use.** The ideal aim accounts for wind at the preset's wind factor (Cozy 50%). That is a bias, so the Cozy AI misses downwind in a steady way, which a player can read.
+**Wind use.** The ideal aim accounts for wind at the preset's wind factor (Cosy 50%). That is a bias, so the Cosy AI misses downwind in a steady way, which a player can read.
 
 **Rival aim grade.** Each Rival card shows "Aim N of 5" [00 §3]. Grade 3 uses the preset's table values. Grades scale `sigma0` and `sigmaFloor`: grade 1 x1.4, grade 2 x1.2, grade 4 x0.85, grade 5 x0.7. The card's number is honest.
 
@@ -606,7 +606,7 @@ clamp |b| <= 2.5 * sigma0
 5. **Never a fake miss.** The AI does not aim off on purpose at a lethal shot to be nice, then hit perfectly the next. Mercy, if any, works through target and shell choice, never through hidden aim changes (6.12).
 6. **Visible learning.** Its pins stay on screen like the player's, so the player can watch it range in.
 7. **Same luck.** Shells with random parts use the same seeded sim RNG for both sides.
-8. **Threads follow Loophole Flap, in the open.** On every preset the AI obeys the same flap rule as the player: after a Thread passes a Loophole, no Thread passes it until the Weather Front changes [00 §2.10]. The old hidden "one Thread per battle on Fair" cap is gone. Cozy never Threads, as the preset table shows on the Rival card.
+8. **Threads follow Loophole Flap, in the open.** On every preset the AI obeys the same flap rule as the player: after a Thread passes a Loophole, no Thread passes it until the Weather Front changes [00 §2.10]. The old hidden "one Thread per battle on Fair" cap is gone. Cosy never Threads, as the preset table shows on the Rival card.
 
 ### 6.6 Personalities
 
@@ -631,7 +631,7 @@ A personality is a set of score weights plus a few habits. Each Rival blends a m
 
 **Habits**
 
-- **Bully.** Picks the lowest-HP Hob it can hit and keeps hitting it. Barks when it Bonks. Easy to read, so easy to bait: put a tough Hob in an exposed Nook.
+- **Bully.** Picks the lowest-HP Hob it can hit and keeps hitting it. Barks when it Bonks. Easy to read, so easy to bait: put a tough Hob in an Open Nook.
 - **Sniper.** Prefers Pierce and beams. Spends early turns opening Nook walls (and revealing Nooks in `[U2]`). Waits for walls to open. Weak to thick Cobble faces.
 - **Builder.** Repairs when its exposure rises. Rebuilds walls in front of Nooks you hit. Slow to win, hard to finish; best beaten with burst damage in one turn.
 - **Gambler.** Loves Heavy shells, splits and bank shots. High variance: big swings both ways. Spends Trick Shells fast, so it runs dry late.
@@ -646,14 +646,14 @@ The score function does most of the work, because shells are simulated, not gues
 
 | Rule | Detail | Presets |
 |---|---|---|
-| Material match | Fire on Wicker and Timber; skip Fire near water or Soaked blocks [00 §2.10]. Frost then Blast on Brittle-prone targets `[U2]`. Zap on Brass `[U3]` | All (Cozy ignores 50% of the time) |
+| Material match | Fire on Wicker and Timber; skip Fire near water or Soaked blocks [00 §2.10]. Frost then Blast on Brittle-prone targets `[U2]`. Zap on Brass `[U3]` | All (Cosy ignores 50% of the time) |
 | Match Class | Prefer to give a shell to its Match Class (Rest 0) when that Hob is free | Fair and up |
 | Rest spread | Never leave fewer than 2 Hobs able to fire next turn if it can help it. Lower score for a Heavy shot when 2 Hobs already rest | Fair and up |
 | Knack saving | Keep at least one Knack until a target is Open, unless in the last 3 rounds or Sudden Squall | Fair and up |
 | Beam in wind | Prefer beams and low wind-factor shots when wind is 6 or more | Fair and up |
 | Combo planning | Plan two-turn combos. Launch: open a Nook wall now, splash or thread it next; dig a lane now, pin through it next; Soak a burning fort's neighbor to stop your own fire spreading. `[U2]` Frost now, Blast next. `[U3]` Soak now, Zap next | Ironclad (Stubborn: the first launch combo only) |
 | Counter-aware | If the player drafted a counter (a shield shell, a repair), the AI pushes damage before it can be used | Stubborn and up |
-| Dud handling | The AI never fires a Dud, except the Gambler on Cozy, as a gag once per battle (it says so) | All |
+| Dud handling | The AI never fires a Dud, except the Gambler on Cosy, as a gag once per battle (it says so) | All |
 | No overkill | Lower score for shells whose damage is mostly beyond a target's remaining HP when a cheaper shot also finishes it | Fair and up |
 
 ### 6.8 Rummage draft AI
@@ -670,11 +670,11 @@ for each shell s in pool:
 - Any Hob may fire any shell, so every shell has use. A shell whose Match Class is in the crew scores higher [B6].
 - `useValue` is a cheap table lookup: shell group, damage type, blast band, the enemy castle's material mix, Match Class present. No sim runs during the draft. It takes under 5 ms.
 - `synergy` adds value for pairs (a Heavy Blast plus a wall opener; a mound shot plus a roller) on Ironclad only.
-- `dDeny` by preset: Cozy 0, Fair 0.3, Stubborn 0.6, Ironclad 0.8.
-- Pick rule by preset: Cozy random of best 4, Fair random of best 2, Stubborn best, Ironclad best with synergy [00 §8.1].
+- `dDeny` by preset: Cosy 0, Fair 0.3, Stubborn 0.6, Ironclad 0.8.
+- Pick rule by preset: Cosy random of best 4, Fair random of best 2, Stubborn best, Ironclad best with synergy [00 §8.1].
 - Personality bias: Gambler +30% to Heavy shells, Builder +30% to builder and shield shells, Sniper +30% to beams and guided shells, Tidy +30% to shells that flatten.
 - No deny refunds [B6].
-- **The wish** [00 §2.15, review 06 G9]. Before the first pick, the Rival glances at its top `pickScore` shell for half a second and pins it: "I want that one." The pin is true: it is the shell it would take first. If the player takes it, the Rival says so ("Hmph. That was mine."). Cozy and Fair always show the wish. Stubborn shows it on half its battles and Ironclad never; the Rival card says "plays its cards close" when it hides it. Its line names why when it can ("Mine. You have two Boinkers.").
+- **The wish** [00 §2.15, review 06 G9]. Before the first pick, the Rival glances at its top `pickScore` shell for half a second and pins it: "I want that one." The pin is true: it is the shell it would take first. If the player takes it, the Rival says so ("Hmph. That was mine."). Cosy and Fair always show the wish. Stubborn shows it on half its battles and Ironclad never; the Rival card says "plays its cards close" when it hides it. Its line names why when it can ("Mine. You have two Bouncers.").
 - The AI's pick shows with a short line ("Mine now. Tidy.") and a 0.5 s pause, so the draft reads like a duel, not a menu.
 - **Quick Pick** for the player runs this draft AI at Fair, with the player's crew, and never takes a Dud for the player [C77].
 
@@ -688,7 +688,7 @@ Walk costs Steam and the AI has the same Steam as the player, max 40 per turn [0
 | **Hit twice from the same aim** [B11] | The player's last two shots used the same aim (within 0.5 degrees and 1 power) and both hit this fort. Walk 20 to 40 Steam worth before firing, in the direction that best breaks the range | All presets, all personalities |
 | Player is bracketing it (last two player pins within 3 blocks either side) | Walk 20 to 40 Steam away; the player's next shot needs a new range | Coward on Fair and up; all personalities on Ironclad |
 | Standing in mud, a pool or a fire zone | Walk out | Fair and up |
-| Its best candidate needs a dug-in Hob | **Shove Off** for 15 Steam in the Walk step, then fire that Hob [00 §2.7]. Scored as a normal candidate with 15 Steam spent | All presets (Cozy at random, 50%) |
+| Its best candidate needs a dug-in Hob | **Shove Off** for 15 Steam in the Walk step, then fire that Hob [00 §2.7]. Scored as a normal candidate with 15 Steam spent | All presets (Cosy at random, 50%) |
 | A Set Piece or event ring covers its castle | Walk out of the ring (bosses only walk if their fort can) | All |
 | A better angle over a hill (score gain over 20%) | Walk toward it | Stubborn and up |
 
@@ -709,13 +709,13 @@ Doodads cost the Action [00 §2.15], so they compete with shots in the score. Ea
 | Steam boost | Steam under 20 and a Walk trigger is active | Value of the Walk it enables |
 | Gust or wind | The player's last shell was a long arc | Damage expected to be lost by the player |
 
-- Cozy uses Doodads at random when a trigger fires (50%). Fair uses them by score. Stubborn and Ironclad also hold one Doodad for a phase change or the last 3 rounds.
+- Cosy uses Doodads at random when a trigger fires (50%). Fair uses them by score. Stubborn and Ironclad also hold one Doodad for a phase change or the last 3 rounds.
 
 ### 6.11 Think time budget
 
 - **Budget in work units, not milliseconds** [C3], [T §1.13]. A time cutoff would make the AI choose differently on fast and slow devices and break replays and the Daily Dust-up. Each preset has a fixed unit budget, the same on every device.
 - **What a unit is.** 1 unit = 1 actor-step at the 120 Hz sim clock [C2]. Carving costs cells / 64. A support solve costs 200. A cluster shell costs what it really costs. An average candidate sim is about 600 units (a lob about 360; clusters and rollers 1k to 3k; beams about 50) [T §4.2].
-- **Budget.** Cozy 48k, Fair 96k, Stubborn 144k, Ironclad 192k units per turn, plus fixed overhead (knowledge view, closed-form solves, 8 support solves, draft and Doodad scoring) [T §4.2].
+- **Budget.** Cosy 48k, Fair 96k, Stubborn 144k, Ironclad 192k units per turn, plus fixed overhead (knowledge view, closed-form solves, 8 support solves, draft and Doodad scoring) [T §4.2].
 - **Target.** p95 under 400 ms of compute on the 2 GB low-end phone for every preset [C3]. Expected: Ironclad about 300 to 350 ms on that phone, Fair about 150 ms, under 100 ms on a mid phone.
 - **Show time.** The AI holds a "thinking" pose for at least 0.8 s and at most 1.5 s [00 §2.12]. Compute ends inside the pose, so the player never waits on it. If compute ends early, the pose fills the rest (scratching its cap, checking a clipboard). If a very slow device runs long, the pose simply lasts longer; the result is still the same.
 - **Order of work.** Cheap closed-form solves first, then sims ranked by a quick estimate, so the most likely winners are simulated first.
@@ -728,7 +728,7 @@ Doodads cost the Action [00 §2.15], so they compete with shots in the score. Ea
 
 **No hidden rubber band. Ever.** The AI never gets better or worse aim, more HP or new shells because the score is close or lopsided. Players spot it and hate it [02c §5.12]. What we allow:
 
-1. **Sporting rule (Cozy and Fair only, shown on the Rival card as a "Sporting" ribbon).** When the AI leads by 2 or more Hobs standing, its target choice shifts: wFocus drops to 0 and wKet rises, so it spreads damage instead of chain-Bonking the player's last Hobs. Aim error is untouched.
+1. **Sporting rule (Cosy and Fair only, shown on the Rival card as a "Sporting" ribbon).** When the AI leads by 2 or more Hobs standing, its target choice shifts: wFocus drops to 0 and wKet rises, so it spreads damage instead of chain-Bonking the player's last Hobs. Aim error is untouched.
 2. **Retry help (opt-in).** After 2 losses on the same level, the result card offers a hint (which personality, which weakness) and the assist toggles [00 §8.1]. The game never changes the AI behind the player's back.
 3. **Onboarding fail-safe** [00 §8.3] lives on the player side (longer preview), not on the AI.
 
@@ -736,7 +736,7 @@ Doodads cost the Action [00 §2.15], so they compete with shots in the score. Ea
 
 **Aim (grade 3 Rival).** The first-shot and bracket values are from `00 §8.1`.
 
-| Knob | Cozy | Fair | Stubborn | Ironclad |
+| Knob | Cosy | Fair | Stubborn | Ironclad |
 |---|---|---|---|---|
 | Angle sigma0 (deg) | 5 | 3 | 1.5 | 0.8 |
 | Power sigma0 (%) | 10 | 6 | 3 | 1.5 |
@@ -753,7 +753,7 @@ Doodads cost the Action [00 §2.15], so they compete with shots in the score. Ea
 
 **Outcome targets** (what bots must measure, section 7):
 
-| Target | Cozy | Fair | Stubborn | Ironclad |
+| Target | Cosy | Fair | Stubborn | Ironclad |
 |---|---|---|---|---|
 | Direct Nook hit, first shot at a new target | 5% or less | 15% or less [00 §3] | 30% or less | 45% or less |
 | Hit the same Nook by the 3rd shot (no walks) | about 30% | about 60% | about 80% | about 90% |
@@ -761,7 +761,7 @@ Doodads cost the Action [00 §2.15], so they compete with shots in the score. Ea
 
 **Brain**
 
-| Knob | Cozy | Fair | Stubborn | Ironclad |
+| Knob | Cosy | Fair | Stubborn | Ironclad |
 |---|---|---|---|---|
 | Work units per turn (fixed) | 48k | 96k | 144k | 192k |
 | About how many average sims | 80 | 160 | 240 | 320 |
@@ -778,7 +778,7 @@ Doodads cost the Action [00 §2.15], so they compete with shots in the score. Ea
 | Sporting rule | on | on | off | off |
 | Enemy crew info for AI | same as player rule | same | same | same |
 
-**Mood.** Rival aim grade ranges by preset: Cozy campaign Rivals are grade 1 to 2, Fair 2 to 4, Stubborn 3 to 4, Ironclad 4 to 5. Grand Fort bosses use the region's top Rival grade. Bosses get hard through phases, not aim [C74].
+**Mood.** Rival aim grade ranges by preset: Cosy campaign Rivals are grade 1 to 2, Fair 2 to 4, Stubborn 3 to 4, Ironclad 4 to 5. Grand Fort bosses use the region's top Rival grade. Bosses get hard through phases, not aim [C74].
 
 ### 6.14 Sudden Squall behavior `[Launch]`
 
@@ -804,25 +804,25 @@ Rivals talk, which makes a solo duel feel alive [02c §5 lesson 13]. Rules:
 - **Kind.** Teasing, never mean. No insults about skill. The AI is the butt of most jokes.
 - **Off switch.** Settings: Rival chatter on, short, off.
 
-**Sample lines**
+**Sample lines** (the lines in the game are in `content/text.json` under `rivals`: each Region 1 Rival has its own taunts and a sign-off for when you win)
 
 | Trigger | Line examples |
 |---|---|
 | Battle start (Flattener generic) | "Notice of Flattening. Sign here." / "Please keep off the lumps." |
 | Own miss | "That was the wind. Probably." / "Measured wrong. Measuring again." |
-| Own hit | "Neatly done, if I say so." / "Straight and true!" |
+| Own hit | "Neatly done, if I say so." / "Level. Much better." |
 | Player near miss | "Ooh. A hair off." / "Close. Untidy, but close." |
 | Player big hit | "My creases!" / "That will need a form." |
 | Same aim, it walks away | "Not twice, thank you." / "I have moved. Officially." |
-| Sudden Squall start | "Oh dear. Weather." / "Hold on to your caps!" |
-| Hob Bonked (theirs) | "Off you float, Fenwick." / "Report back to base. Slowly." |
-| Hob Bonked (yours) | "Sorry! Sorry. Not sorry." |
+| Sudden Squall start | "Oh dear. Weather." / "Hold on to your caps." |
+| Hob Bonked (theirs) | "Off you float, Dobbs." / "Report back to base. Slowly." |
+| Hob Bonked (yours) | "Oh. Sorry about that." (Flatteners never gloat) |
 | Kettle low (theirs) | "The kettle is whistling. That is bad." |
-| Win | "Flat and finished." |
+| Win | "Level. Thank you for your patience." ("Flat and finished." is the Baron's line, used once) |
 | Loss | "I shall file a complaint." |
-| Marshal Trimm | "Hedges must be square!" / "Who planted a lump here?" |
+| Marshal Trimm | "Do keep off the lawn." / "Who planted a lump here?" |
 | Dame Scree | "Good cut. Mine is better." / "Steps, then slopes, then nothing." |
-| Admiral Drainwell | "Splendid splash!" / "Pump harder, lads!" |
+| Admiral Sluice | "Splendid splash!" / "Pump harder, lads!" |
 | Steward Plumb | "Fewer lumps, please." / "That was... rather lumpy." |
 | Baron Levelwell | "A hill spilled my tea once." / "Flat is fair!" / "Not the cup!" |
 | Countess Glaze `[U2]` | "Five point two. Poor landing." / "Mind the ice, darling." |
@@ -861,8 +861,8 @@ Level bands: R1 early (1-1 to 1-4), R1 late (1-5 to 1-9), Mid (Regions 2 and 3),
 
 | Proxy vs preset | R1 early | R1 late | Mid | Flats | Grand Fort (first try) | Wings |
 |---|---|---|---|---|---|---|
-| Newcomer vs Cozy | 95% | 90% | 85% | 80% | 65% | 75% |
-| Regular vs Cozy | 99% | 97% | 95% | 92% | 85% | 90% |
+| Newcomer vs Cosy | 95% | 90% | 85% | 80% | 65% | 75% |
+| Regular vs Cosy | 99% | 97% | 95% | 92% | 85% | 90% |
 | Newcomer vs Fair | 85% | 70% | 55% | 45% | 30% | 40% |
 | Regular vs Fair | 92% | 85% | 75% | 65% | 50% | 60% |
 | Sharp vs Stubborn | 85% | 75% | 65% | 55% | 45% | 50% |
@@ -872,7 +872,7 @@ Level bands: R1 early (1-1 to 1-4), R1 late (1-5 to 1-9), Mid (Regions 2 and 3),
 
 Tolerance: plus or minus 5 points before a tuning change. Each cell runs at least 400 battles across seeds and maps.
 
-**Grand Fort clear targets on Fair (Regular proxy):** median attempts to clear 2 or fewer; 90% clear by attempt 4. On Cozy (Newcomer): 90% clear by attempt 2. For the Last Level, count attempts per Stage.
+**Grand Fort clear targets on Fair (Regular proxy):** median attempts to clear 2 or fewer; 90% clear by attempt 4. On Cosy (Newcomer): 90% clear by attempt 2. For the Last Level, count attempts per Stage.
 
 ### 7.3 Other metrics
 
@@ -905,7 +905,7 @@ Tolerance: plus or minus 5 points before a tuning change. Each cell runs at leas
 - **Rule test.** Assert every AI command passes the same validation as a player command (Rest, Steam, Walk limits, Shove Off, Loophole Flap, one Action, dug-in Hobs).
 - **Wish test.** In every Rummage where the wish shows, the AI's first pick is the wished shell whenever it is still in the pool.
 - **Couch Duel load test.** A Couch Duel run in a release build never loads the AI module.
-- **Rubber-band test.** For fixed seeds, force the score to lopsided and close states and check that aim error draws are identical. Only the Sporting rule's weight change may differ, and only on Cozy and Fair.
+- **Rubber-band test.** For fixed seeds, force the score to lopsided and close states and check that aim error draws are identical. Only the Sporting rule's weight change may differ, and only on Cosy and Fair.
 - **Playtest check.** In human playtests, ask after each battle: "Did the Rival feel fair?" Target 85% yes on Fair. Ask "Did it feel like it was learning?" Target 70% yes.
 
 ---
@@ -928,7 +928,7 @@ Cut by review 04 or replaced. Kept so nothing designed is lost.
 
 **Three-Stage final.** Stage 1 was the Square Gate with the Steward, Stage 2 the Roller, Stage 3 the Engine, 12 rounds each, one draft of 14 with 6 picks, retry from Stage 1 on Stubborn and Ironclad. The Steward now has her own level (4.5).
 
-**Square Gate heal phase.** "Order: every block heals 10% per turn (Moonbrick)." A Plain Shot could not out-damage it. Moonbrick now heals at most a third of a Plain Shot and not on a turn it is hit [B1].
+**Square Gate heal phase.** "Order: every block heals 10% per turn (Mossbrick)." A Plain Shot could not out-damage it. Mossbrick now heals at most a third of a Plain Shot and not on a turn it is hit [B1].
 
 **Last Cup at Stubborn aim on every preset.** Bosses now keep their preset's aim [C74].
 
@@ -938,7 +938,7 @@ Cut by review 04 or replaced. Kept so nothing designed is lost.
 
 **Last Bell tiebreak** for Grand Forts and the "Battles that hit Last Bell" metric. Replaced by Sudden Squall [B5].
 
-**Turncoat Hobs** joining after each Grand Fort (Hedge Snipper, Pebble Pitcher, Pump Hand, Snowball Roller, Shoring Crew, the Steward). Outfits at launch [C32].
+**Turncoat Hobs** joining after each Grand Fort (Hedger, Pitcher, Pump Hand, Snowball Roller, Shoring Crew, the Steward). Outfits at launch [C32].
 
 **Buried Hobs skip a turn and dig out alone** (Avalanche phase). Replaced by the dug-in rule [B9], [C15].
 

@@ -12,9 +12,9 @@ import android.view.SurfaceView
 import androidx.compose.runtime.mutableStateOf
 import games.castleprotect.core.Frame
 import games.castleprotect.core.Phase
+import games.castleprotect.game.FireLight
 import games.castleprotect.game.GameSession
 import games.castleprotect.game.OwnerRule
-import games.castleprotect.game.RivalPeek
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -78,7 +78,20 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     @Volatile private var bottomPan = 0f
     @Volatile private var bottomZoom = 1f
     @Volatile private var topZoom = 1f
-    /** Copies of what input needs from the render thread (review L2). */
+    /** Copies of what input needs from the render thread (review L2, Android-L2). */
+    private class AimLensSnap(
+        val left: Float, val top: Float, val right: Float, val bottom: Float,
+        val cx: Float, val cy: Float, scale: Float, val live: Boolean,
+    ) {
+        val scale = if (scale > 0f) scale else 1f
+        private val midX = (left + right) * 0.5f
+        private val midY = (top + bottom) * 0.5f
+        fun sx(wx: Float) = midX + (wx - cx) * this.scale
+        fun sy(wy: Float) = midY + (wy - cy) * this.scale
+        fun wx(sx: Float) = cx + (sx - midX) / this.scale
+        fun wy(sy: Float) = cy + (sy - midY) / this.scale
+    }
+    @Volatile private var aimSnap = AimLensSnap(0f, 0f, 0f, 0f, 0f, 0f, 1f, false)
     @Volatile private var topLive = false
     @Volatile private var bottomLive = false
     @Volatile private var topBottomEdge = 0f
@@ -107,12 +120,14 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
 
     /** A phone (smallest width under 600 dp): the Wide plan frame may go down to 6 dp blocks (QA playtest 2, N3). */
     private val phone = resources.configuration.smallestScreenWidthDp in 1 until 600
-    /** The Rival fort marker's tap area (screen px: l, t, r, b), or empty when no marker is drawn. */
-    @Volatile private var markL = 0f
-    @Volatile private var markT = 0f
-    @Volatile private var markR = 0f
-    @Volatile private var markB = 0f
-    private var markX = 0f; private var markY = 0f; private var markRight = true
+    /** Wide layout Rival fort peek button state exposed to Compose for TalkBack accessibility (Android-L1, Android-L8). */
+    val rivalPeekVisible = mutableStateOf(false)
+    val rivalPeekRight = mutableStateOf(true)
+    val rivalPeekOn = mutableStateOf(false)
+    @Volatile private var rivalPeekVisFlag = false
+    @Volatile private var rivalPeekRightFlag = true
+    @Volatile private var rivalPeekOnFlag = false
+    private var markX = 0f; private var markY = 0f
     /** Until when "Drag from your fort to aim" shows by your fort (uptime ms). */
     @Volatile private var nudgeUntil = 0L
 
@@ -122,6 +137,27 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     init { holder.addCallback(this); isFocusable = true }
 
     fun reframe() { zoom = 1f; topZoom = 1f; bottomZoom = 1f; panX = 0f; panY = 0f; topPan = 0f; bottomPan = 0f; manual.value = false; manualFlag = false; redraw = true }
+
+    /** Toggles the Wide layout Rival fort peek (called by the Compose Rival Peek button). */
+    fun tapRivalPeek() {
+        if (!session.peek.on) reframe()
+        session.peek.tap()
+        session.audio.play("ui_tap")
+        rivalPeekOnFlag = session.peek.on
+        rivalPeekOn.value = session.peek.on
+        redraw = true
+    }
+
+    private fun updateRivalPeek(vis: Boolean, right: Boolean, on: Boolean) {
+        if (vis != rivalPeekVisFlag || right != rivalPeekRightFlag || on != rivalPeekOnFlag) {
+            rivalPeekVisFlag = vis; rivalPeekRightFlag = right; rivalPeekOnFlag = on
+            post {
+                rivalPeekVisible.value = vis
+                rivalPeekRight.value = right
+                rivalPeekOn.value = on
+            }
+        }
+    }
 
     private fun setManual() { if (!manualFlag) { manualFlag = true; post { manual.value = true } } }
 
@@ -232,11 +268,15 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         fieldFx.anims = session.anims
         renderer.reduceMotion = session.settings.reduceMotion
         renderer.teachRing = session.teachRing
+        renderer.mendTarget = session.mendTargetCell
+        renderer.mendSide = f.side
         session.peek.onFrame(f.hud.turn, f.phase == Phase.RESOLVE || f.shells.isNotEmpty())
         renderer.syncTerrain(f.terrain)
         while (true) { val e = session.fxFrames.poll() ?: break; fieldFx.onFrame(e) }
         fieldFx.update(f, viewDt * 1000f)
-        session.juice.shake(dt * 1000f, aiming = f.phase == Phase.PLAN, shakeOut)
+        session.collapseShowing = fieldFx.collapseShowing
+        // Suppress shake only while aiming calmly; allow Round 10 Fatigue and post-settle collapse shakes (Android-M2).
+        session.juice.shake(dt * 1000f, aiming = draggingFlag || (f.phase == Phase.PLAN && !session.fatigueShaking && !fieldFx.collapseShowing), shakeOut)
         val dragNow = if (draggingFlag) drag.also { it[0] = anchorX; it[1] = anchorY; it[2] = fingerX; it[3] = fingerY } else null
         val hob = f.selectedHob
         if (dragNow != null && hob != null && (hob.angle != readoutA || hob.power != readoutP)) {
@@ -272,13 +312,26 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
             } else {
                 val topH = ((h - stripH) * 0.39f)
                 top.rect.set(0f, 0f, w, topH); strip.set(0f, topH, w, topH + stripH); bottom.rect.set(0f, topH + stripH, w, h)
-                mv = frameFort(top, f, 1 - me, 0.75f * dp * topZoom, 36f * dp, topPan, dt)        // target fort, blocks about 12 pt
-                mv = frameFort(bottom, f, me, 1.0f * dp * bottomZoom, 96f * dp, bottomPan, dt) || mv     // your fort, blocks about 16 pt
+                // Auto-frame Rescue objectives (1-7 Cage + Hetty) in the Top Lens until cleared (Part 2 §1.5).
+                val rescueProp = if (f.hud.rules.objectiveTag == "cage") {
+                    f.props.firstOrNull { it.kind == "captive" } ?: f.props.firstOrNull { it.kind == "cage_bar" }
+                } else null
+                val cageStanding = rescueProp != null && f.props.any { it.kind == "cage_bar" }
+                mv = if (cageStanding && rescueProp != null) {
+                    val s = Camera.clampScale(0.82f * dp * topZoom, dp)
+                    val cy = rescueProp.y.toFloat() - (top.rect.height() / 2f - 44f * dp) / s
+                    ease(top, rescueProp.x.toFloat() + topPan, cy, s, f, dt)
+                } else {
+                    frameFort(top, f, 1 - me, 0.75f * dp * topZoom, 36f * dp, topPan, dt) // target fort, blocks about 12 pt
+                }
+                // Walk rail moved into stitched bottom dock -> lower fort & 3 Stompers sit cleanly unobstructed (Part 2 Plate 2).
+                mv = frameFort(bottom, f, me, 1.0f * dp * bottomZoom, 56f * dp, bottomPan, dt) || mv
                 renderer.drawLens(c, top, f, me, null, null, shakeOut)
                 renderer.drawLens(c, bottom, f, me, dragNow, shown, null) // never shake under the aiming thumb
                 main.live = false
                 renderer.drawStrip(c, strip, f, top, bottom)
             }
+            updateRivalPeek(false, rivalPeekRightFlag, false)
         } else {
             main.rect.set(0f, 0f, w, h)
             val p = hudPad
@@ -294,16 +347,24 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
             mv = ease(main, cx, cy, scale, f, dt)
             renderer.drawLens(c, main, f, me, dragNow, shown, shakeOut)
             top.live = false; bottom.live = false
-            // Your fort is framed and the Rival's does not fit: a marker on the screen edge at its height (M3).
-            // It is a button (N3): one tap peeks at both forts, a second tap brings the camera home.
-            var marked = false
+            // Your fort is framed and the Rival's does not fit: expose Rival Peek button to Compose (M3, N3, Android-L1, Android-L8).
+            var showMark = false
+            var right = rivalPeekRightFlag
             if (!flying) Camera.fortOrNull(f.castles, 1 - me)?.let { k ->
                 val mk = Camera.offscreenMarker(main.sx(k.x.toFloat()), main.sx((k.x + k.cols * k.block).toFloat()), main.sy((k.topY + k.baseY) / 2f),
                     w, h, p[0], p[2], p[1] + 8f * dp, p[3] + 8f * dp)
-                if (mk != null && !peeking) { markX = mk[0]; markY = mk[1]; markRight = mk[2] > 0f; drawRivalMarker(c, markX, markY, markRight, RivalPeek.VIEW); marked = true }
-                else if (peeking) { if (markX == 0f) { markX = w - p[2]; markY = h / 2f }; drawRivalMarker(c, markX, markY, markRight, RivalPeek.HOME); marked = true }
+                if (mk != null && !peeking) {
+                    markX = mk[0].coerceIn(p[0], max(p[0], w - p[2]))
+                    markY = mk[1].coerceIn(p[1] + 24f * dp, max(p[1] + 24f * dp, h - p[3] - 24f * dp))
+                    right = mk[2] > 0f
+                    showMark = true
+                } else if (peeking) {
+                    markX = (if (right) w - p[2] else p[0]).coerceIn(p[0], max(p[0], w - p[2]))
+                    markY = (if (markY > 0f) markY else h / 2f).coerceIn(p[1] + 24f * dp, max(p[1] + 24f * dp, h - p[3] - 24f * dp))
+                    showMark = true
+                }
             }
-            if (!marked) { markL = 0f; markT = 0f; markR = 0f; markB = 0f }
+            updateRivalPeek(showMark, right, peeking)
         }
         if (now < nudgeUntil && !flying) drawNudge(c, f, me)
         // Shake at 0%: a 2 pt white rim flash on the blast in its place, unless Reduce flashes is on.
@@ -313,37 +374,18 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
             c.drawRect(2f * dp, 2f * dp, w - 2f * dp, h - 2f * dp, rim)
         }
         moving = mv || !session.juice.calm
-        // Copies for input on the UI thread.
+        // Immutable snapshot and copies for input on the UI thread (Android-L2).
+        val aimL = if (tall) bottom else main
+        aimSnap = AimLensSnap(aimL.rect.left, aimL.rect.top, aimL.rect.right, aimL.rect.bottom, aimL.cx, aimL.cy, aimL.scale, aimL.live)
         topLive = top.live; bottomLive = bottom.live; topBottomEdge = top.rect.bottom; mainScale = main.scale; topScale = top.scale; bottomScale = bottom.scale
         renderer.tick(viewDt)
     }
 
     private val rim = android.graphics.Paint().apply { style = android.graphics.Paint.Style.STROKE; color = android.graphics.Color.WHITE }
-    private val markFill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    private val markText = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = 12f * dp; isFakeBoldText = true }
     private val markPath = android.graphics.Path()
 
-    /** "View Rival fort" pill with an arrow toward the fort, on the screen edge at [x], [y]; also its tap area. */
-    private fun drawRivalMarker(c: Canvas, x: Float, y: Float, right: Boolean, label: String) {
-        val tw = markText.measureText(label)
-        val ph = 22f * dp; val pw = tw + 30f * dp
-        val x0 = if (right) x - pw else x; val x1 = x0 + pw
-        // A 48 dp tall tap area around the pill.
-        markL = x0 - 8f * dp; markR = x1 + 8f * dp; markT = y - 24f * dp; markB = y + 24f * dp
-        markFill.color = 0xFFE07A2E.toInt() // the Rival's orange
-        markFill.alpha = 230
-        c.drawRoundRect(x0, y - ph / 2, x1, y + ph / 2, ph / 2, ph / 2, markFill)
-        markPath.reset()
-        val tip = if (right) x1 + 8f * dp else x0 - 8f * dp
-        val base = if (right) x1 - 2f * dp else x0 + 2f * dp
-        markPath.moveTo(tip, y); markPath.lineTo(base, y - 7f * dp); markPath.lineTo(base, y + 7f * dp); markPath.close()
-        c.drawPath(markPath, markFill)
-        val tx = if (right) x0 + 10f * dp else x0 + 20f * dp
-        c.drawText(label, tx, y + markText.textSize * 0.35f, markText)
-    }
-
     private val nudgeFill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFC23D.toInt() }
-    private val nudgeText = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2B2233.toInt(); textSize = 14f * dp; isFakeBoldText = true }
+    private val nudgeText = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2C221E.toInt(); textSize = 14f * dp; isFakeBoldText = true }
 
     /** "Drag from your fort to aim", in a gold bubble over your own fort. */
     private fun drawNudge(c: Canvas, f: Frame, me: Int) {
@@ -460,12 +502,26 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     /** True when a press at screen [x], [y] may start an Aim Drag: on the side on turn's fort (plus two blocks) or within 48 dp of the picked Hob. */
     private fun onOwnFort(x: Float, y: Float): Boolean {
         val f = session.frame
-        val l = if (tall) bottom else main
+        val l = aimSnap
         if (!l.live) return false
         val k = Camera.fortOrNull(f.castles, f.side) ?: return true
         val hob = f.selectedHob
         val hobDist = if (hob != null) hypot(x - l.sx(hob.x.toFloat()), y - l.sy(hob.y.toFloat())) else Float.POSITIVE_INFINITY
         return Aim.startsOnOwnFort(l.wx(x), l.wy(y), k.x.toFloat(), k.topY.toFloat(), (k.x + k.cols * k.block).toFloat(), k.baseY.toFloat(), hobDist, dp)
+    }
+
+    /** Returns the own-fort block (c, r) at screen [x], [y] for Mendglob self-targeting (Android-H5, Android-L2). */
+    private fun hitOwnBlock(x: Float, y: Float): Pair<Int, Int>? {
+        val l = aimSnap
+        if (!l.live) return null
+        val f = session.frame
+        val k = Camera.fortOrNull(f.castles, f.side) ?: return null
+        val wx = l.wx(x); val wy = l.wy(y)
+        val bs = k.block.toFloat()
+        for (b in k.blocks) {
+            if (wx >= b.x && wx <= b.x + bs && wy >= b.y && wy <= b.y + bs) return b.c to b.r
+        }
+        return null
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -495,11 +551,20 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                     val d = dist(e); val mx = (e.getX(0) + e.getX(1)) / 2; val my = (e.getY(0) + e.getY(1)) / 2
                     if (pinchDist > 0) {
                         val k = d / pinchDist
-                        // Each lens has its own pinch range in the Tall layout.
-                        if (tall && !session.ui.value.flying) { if (pinchY <= topBottomEdge) topZoom = Camera.clampZoom(topZoom * k) else bottomZoom = Camera.clampZoom(bottomZoom * k) }
-                        else zoom = Camera.clampZoom(zoom * k)
-                        val sc = Camera.clampScale(mainScale, dp)
-                        panX = Camera.clampPan(panX - (mx - pinchX) / sc, fw); panY = Camera.clampPan(panY - (my - pinchY) / sc, fh)
+                        // Each lens has its own pinch zoom and pan in the Tall layout (Android-L7).
+                        if (tall && !session.ui.value.flying) {
+                            if (pinchY <= topBottomEdge) {
+                                topZoom = Camera.clampZoom(topZoom * k)
+                                topPan = Camera.clampPan(topPan - (mx - pinchX) / Camera.clampScale(topScale, dp), fw)
+                            } else {
+                                bottomZoom = Camera.clampZoom(bottomZoom * k)
+                                bottomPan = Camera.clampPan(bottomPan - (mx - pinchX) / Camera.clampScale(bottomScale, dp), fw)
+                            }
+                        } else {
+                            zoom = Camera.clampZoom(zoom * k)
+                            val sc = Camera.clampScale(mainScale, dp)
+                            panX = Camera.clampPan(panX - (mx - pinchX) / sc, fw); panY = Camera.clampPan(panY - (my - pinchY) / sc, fh)
+                        }
                         setManual()
                     }
                     pinchDist = d; pinchX = mx; pinchY = my
@@ -510,10 +575,10 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 val travel = hypot(e.x - downX, e.y - downY)
                 if (draggingFlag) updateAim()
                 else if (candidate && travel >= 8f * dp) {
-                    // A drag needs 8 pt of travel, not time. The spot where the finger went down is the anchor.
-                    val sel = u.selected
+                    // A drag needs 8 pt of travel, not time. Read real aim from session.aimBase (Android-H1).
+                    val (baseAngle, basePower) = session.aimBase(u)
                     anchorX = downX; anchorY = downY
-                    prevAngle = sel?.angle ?: 0; prevPower = sel?.power ?: 0; sentAngle = -1; sentPower = -1; heldAngle = -1
+                    prevAngle = baseAngle; prevPower = basePower; sentAngle = -1; sentPower = -1; heldAngle = -1
                     draggingFlag = true; dragging.value = true
                     session.aimStarted()
                     session.audio.play("aim_drag_start")
@@ -542,13 +607,24 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                     endDrag(keep = !cancel, mayFire = !cancel)
                 } else if (!blocked && !panning && hypot(e.x - downX, e.y - downY) < 10f * dp) {
                     val now = SystemClock.uptimeMillis()
-                    if (!tall && markR > markL && e.x in markL..markR && e.y in markT..markB && downX in markL..markR && downY in markT..markB) {
-                        // The Rival fort marker: one tap peeks at both forts, a second tap comes home (N3).
-                        if (!session.peek.on) reframe()
-                        session.peek.tap()
+                    val sel = u.selected
+                    val mendTap = if (u.humanTurn && !session.paused && session.handoffTo < 0 && u.hud.selectedShot == "plain" &&
+                        sel != null && session.content.hasSelfTarget(sel.plain) && inAimLens(e.x, e.y)
+                    ) hitOwnBlock(e.x, e.y) else null
+                    if (mendTap != null) {
+                        session.pickMendTarget(if (session.mendTarget == mendTap) null else mendTap)
                         session.audio.play("ui_tap")
                         lastTapAt = 0
-                    } else if (now - lastTapAt < 300) { if (manualFlag) reframe() else { zoom = 1.25f; setManual() }; lastTapAt = 0 } else lastTapAt = now
+                    } else if (now - lastTapAt < 300) {
+                        if (manualFlag) reframe()
+                        else {
+                            if (tall && !u.flying) {
+                                if (e.y <= topBottomEdge) topZoom = 1.25f else bottomZoom = 1.25f
+                            } else zoom = 1.25f
+                            setManual()
+                        }
+                        lastTapAt = 0
+                    } else lastTapAt = now
                 }
                 candidate = false; pinchDist = 0f
                 return true
@@ -592,7 +668,14 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         session.audio.loop("aim_band_stretch", false)
         session.audio.play("aim_set", semis = if (keep) 0f else -5f)
         if (!keep) session.aim(prevAngle, prevPower)
-        else if (mayFire && session.settings.quickFire) session.fire()
+        else if (mayFire && session.settings.quickFire) {
+            val cur = session.ui.value
+            if (FireLight.ready(cur.hud, cur.humanTurn, cur.selected)) {
+                session.fire(dial = session.activeDial, target = session.mendTarget)
+            } else {
+                session.fireRefusedHere()
+            }
+        }
     }
 
     companion object {

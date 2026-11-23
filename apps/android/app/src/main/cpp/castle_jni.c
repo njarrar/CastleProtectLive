@@ -17,7 +17,7 @@
 #include <string.h>
 #include "castle_core.h"
 
-#define GAME(h) ((CpGame *)(intptr_t)(h))
+#define GAME(h) ((CpGame *)(uintptr_t)(h))
 #define FN(name) Java_games_castleprotect_core_CoreJni_##name
 
 /* Copies a core string into a new byte[] and frees it. NULL in gives NULL out. */
@@ -68,12 +68,21 @@ JNIEXPORT jlong JNICALL FN(nativeNew)(JNIEnv *env, jclass cls, jbyteArray setup,
     /* NULL content: the content built into the core. */
     CpGame *g = cp_new(NULL, s, (uint64_t)seed);
     release_bytes(env, setup, s);
-    return (jlong)(intptr_t)g;
+    return (jlong)(uintptr_t)g;
 }
 
 JNIEXPORT jbyteArray JNICALL FN(nativeVersion)(JNIEnv *env, jclass cls) {
     (void)cls;
     return take_bytes(env, cp_version());
+}
+
+JNIEXPORT jlong JNICALL FN(nativeDailySeed)(JNIEnv *env, jclass cls, jbyteArray date) {
+    (void)cls;
+    const char *s = borrow_bytes(env, date);
+    if (s == NULL) return 0;
+    uint64_t seed = cp_daily_seed(s);
+    release_bytes(env, date, s);
+    return (jlong)seed;
 }
 
 JNIEXPORT jbyteArray JNICALL FN(nativeLastError)(JNIEnv *env, jclass cls, jlong h) {

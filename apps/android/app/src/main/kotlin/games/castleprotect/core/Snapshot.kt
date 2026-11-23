@@ -115,7 +115,7 @@ data class Hud(
     val hands: List<List<HandShell>> = listOf(emptyList(), emptyList()),
     val doodads: List<List<String>> = listOf(emptyList(), emptyList()),
     val selectedHob: Int = -1, val selectedShot: String = "plain",
-    val names: List<String> = listOf("You", "Rival"),
+    val names: List<String> = listOf(Text.t("common.you"), Text.t("common.rival")),
     val control: List<String> = listOf("human", "ai"),
     val score: List<Int> = listOf(0, 0),
     val puffUp: List<Boolean> = listOf(false, false),
@@ -132,6 +132,8 @@ data class Hud(
     val fatigue: Boolean = false, val fatigueRound: Int = 0, val fatigueIn: Int = -1,
     /** Set by the parser in the Test Yard: side 1 is the Dummy side, which passes itself. */
     val yard: Boolean = false,
+    /** `hud.think_ms`: think pose ms per side from the level or the Skirmish roster, 0 when unset (use app.json). */
+    val thinkMs: List<Int> = listOf(0, 0),
 ) {
     /** A person plays [side]. In the Test Yard only side 0 does, whatever the control says (QA playtest 1, M4). */
     fun human(side: Int) = control.getOrElse(side) { "ai" } == "human" && !(yard && side == 1)
@@ -671,6 +673,11 @@ class SnapshotParser {
             "fatigue" -> h = h.copy(fatigue = if (j.nextNull()) false else j.nextBoolean())
             "fatigue_round" -> h = h.copy(fatigueRound = num(j))
             "fatigue_in" -> h = h.copy(fatigueIn = num(j, -1))
+            "think_ms" -> h = h.copy(thinkMs = if (j.nextNull()) listOf(0, 0) else {
+                val l = ArrayList<Int>(2)
+                j.beginArray(); while (j.hasNext()) l.add(num(j, 0)); j.endArray()
+                l
+            })
             "handicap" -> {
                 val l = ArrayList<Handicap>(2)
                 if (!j.nextNull()) {

@@ -71,15 +71,29 @@
         380,
         120,
         "rock"
+      ],
+      [
+        1468,
+        1492,
+        408,
+        384,
+        "rock"
+      ],
+      [
+        1474,
+        1486,
+        414,
+        390,
+        "rock"
       ]
     ]
   },
   "pads": [
     {
-      "x": 300
+      "x": 312
     },
     {
-      "x": 1700
+      "x": 1712
     }
   ],
   "player": {
@@ -88,24 +102,26 @@
       "quill",
       "jax",
       "grub",
-      "bobbin"
+      "bobbin",
+      "hetty"
     ],
     "crew_size": 4,
     "blueprint": "bp_home_4"
   },
   "rival": {
-    "name": "Lance Corporal Sod Turfwick",
+    "name": "Corporal Dibber",
     "habit": "Slow to find his range. Starts over when you move.",
+    "habit_id": "cautious_mender",
+    "think_ms": 1500,
     "blueprint": "bp_r1_pancake",
     "crew": [
-      "hedge_snipper",
-      "hedge_snipper",
       "rake_hand",
-      "mower_minder"
+      "mower_minder",
+      "rake_hand"
     ],
     "aim": 2,
     "knack_uses": 1,
-    "hp_pct": 70
+    "hp_pct": 95
   },
   "rules": {
     "round_cap": 14,
@@ -121,7 +137,7 @@
   "pennants": [
     {
       "type": "win",
-      "text": "Win"
+      "text": "Get Dibber off High Hill"
     },
     {
       "type": "hits_from_spots",
@@ -129,11 +145,16 @@
       "value": 2
     },
     {
-      "type": "no_hob_bonked",
-      "text": "No Hob of yours Bonked"
+      "type": "ground_kept",
+      "text": "Leave Loaf Hill standing",
+      "value": 70,
+      "area": [
+        1060,
+        1440
+      ]
     }
   ],
-  "map_note": "Home Knoll, a ford, a low hump, then Loaf Hill between you and the Rival on High Hill.",
+  "map_note": "Home Knoll, a ford, a low hump, then Loaf Hill between you and the Rival on High Hill. A boulder at the foot of High Hill.",
   "new_thing": "Walk and Steam.",
   "water": [
     {

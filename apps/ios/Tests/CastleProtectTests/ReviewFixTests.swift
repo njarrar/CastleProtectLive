@@ -249,6 +249,7 @@ final class SessionGuardTests: XCTestCase {
 
 final class DecodeTests: XCTestCase {
     /// C2: props decode and reach the view with y flipped.
+    @MainActor
     func testPropsDecodeAndFlip() throws {
         let text = try patchedPlan { obj in
             obj["props"] = [
@@ -267,6 +268,7 @@ final class DecodeTests: XCTestCase {
     }
 
     /// M8: the Rival's live aim and preview are never shown.
+    @MainActor
     func testRivalAimIsHidden() throws {
         let text = try patchedPlan { obj in
             var hud = obj["hud"] as? [String: Any] ?? [:]
@@ -283,6 +285,7 @@ final class DecodeTests: XCTestCase {
     }
 
     /// L2, H6: bad chunks are refused; good ones land in the grid and bump their chunk.
+    @MainActor
     func testTerrainGridChunks() {
         let grid = TerrainGrid(w: 128, h: 64, chunk: 64)
         XCTAssertEqual(grid.cols, 2)
@@ -305,6 +308,7 @@ final class DecodeTests: XCTestCase {
     }
 
     /// A lean snapshot keeps the forts and HUD, moves shells and applies terrain chunks.
+    @MainActor
     func testLeanSnapshotWithTerrainChunk() throws {
         let assembler = FrameAssembler(catalog: ContentCatalog.load())
         let plan = try XCTUnwrap(CoreSnapshot.decode(try fixtureText("snapshot_plan")))
@@ -323,10 +327,15 @@ final class DecodeTests: XCTestCase {
     }
 
     func testHeadlineForEveryHow() {
+        // Titles come from text.json `results.win.title` and `results.loss.title`.
         XCTAssertEqual(ResultInfo.headline(how: "kettle_pop", won: true), "Kettle Pop!")
-        XCTAssertEqual(ResultInfo.headline(how: "rescue", won: true), "Rescued!")
+        XCTAssertEqual(ResultInfo.headline(how: "rescue", won: true, captive: "Hetty"), "Hetty's out")
         XCTAssertEqual(ResultInfo.headline(how: "squall", won: false), "Blown over")
-        XCTAssertNotEqual(ResultInfo.headline(how: "total_hp", won: true), "Clean Sweep!")
+        XCTAssertEqual(ResultInfo.headline(how: "squall", won: true), "Blown Out")
+        XCTAssertNotEqual(ResultInfo.headline(how: "total_hp", won: true), "Clean Sweep")
+        XCTAssertEqual(ResultInfo.headline(how: "give_up", won: false), "You gave up")
+        XCTAssertEqual(ResultInfo.headline(how: "captive_bonked", won: true, captive: "Hetty"), "They Bonked Hetty")
+        XCTAssertEqual(ResultInfo.headline(how: "something_new", won: false), "Flattened")
     }
 }
 

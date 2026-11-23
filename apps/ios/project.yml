@@ -29,15 +29,8 @@ targets:
     platform: iOS
     sources:
       - path: CastleProtect
-      # Game art, menu data and the core's fixtures, copied as folders into the bundle.
-      - path: ../../assets/atlas
-        type: folder
-        buildPhase: resources
-        optional: true
-      - path: ../../assets/sprites
-        type: folder
-        buildPhase: resources
-        optional: true
+      # Manifests and game content; @2x atlases, UI-only @2x sprites, AAC audio and Debug-only fixtures
+      # are copied selectively in postCompileScripts below to keep Release bundle size lean (iOS-H11).
       - path: ../../assets/manifest.json
         buildPhase: resources
         optional: true
@@ -49,15 +42,52 @@ targets:
         type: folder
         buildPhase: resources
         optional: true
-      - path: ../../core/fixtures
-        type: folder
-        buildPhase: resources
-        optional: true
     preBuildScripts:
       - name: Core module map
         path: scripts/core-module.sh
         basedOnDependencyAnalysis: false
     postCompileScripts:
+      # assets/atlas: only @2x atlas sheets and index JSON (iOS never loads @1x).
+      - name: Copy @2x atlas
+        basedOnDependencyAnalysis: false
+        script: |
+          SRC="${SRCROOT}/../../assets/atlas"
+          DST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/atlas"
+          if [ -d "$SRC" ]; then
+            mkdir -p "$DST"
+            rsync -a --delete --include='castle@2x*' --exclude='*' "$SRC/" "$DST/"
+            echo "Copied $(find "$DST" -type f | wc -l | tr -d ' ') @2x atlas files."
+          fi
+      # assets/sprites: UI-only @2x sprites and app icon (field frames come from the @2x atlas).
+      - name: Copy UI sprites
+        basedOnDependencyAnalysis: false
+        script: |
+          SRC="${SRCROOT}/../../assets/sprites"
+          DST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/sprites"
+          if [ -d "$SRC" ]; then
+            mkdir -p "$DST"
+            rsync -a --delete \
+              --include='portrait_*@2x.png' \
+              --include='icon_*@2x.png' \
+              --include='ui_*@2x.png' \
+              --include='prop_*@2x.png' \
+              --include='flattener_*@2x.png' \
+              --include='app_icon-512.png' \
+              --exclude='*' "$SRC/" "$DST/"
+            echo "Copied $(find "$DST" -type f | wc -l | tr -d ' ') UI sprite files."
+          fi
+      # core/fixtures: Debug only (for -uiTesting / FakeCoreBridge); stripped from Release builds.
+      - name: Copy debug fixtures
+        basedOnDependencyAnalysis: false
+        script: |
+          SRC="${SRCROOT}/../../core/fixtures"
+          DST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/fixtures"
+          if [ "${CONFIGURATION:-Debug}" = "Debug" ] && [ -d "$SRC" ]; then
+            mkdir -p "$DST"
+            rsync -a --delete "$SRC/" "$DST/"
+          else
+            rm -rf "$DST"
+          fi
       # assets/audio: the manifests and the AAC (.m4a) files only; iOS never loads the Opus copies.
       - name: Copy audio
         basedOnDependencyAnalysis: false

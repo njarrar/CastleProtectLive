@@ -7,6 +7,7 @@
 import {
   DEFAULT_BLUEPRINT, HOBS, KNACK, LEVELS, PLAIN, SHELLS, STARTER_FORTS, levelFort, type ShellDef,
 } from './content';
+import { hobShort, t } from '../ui/text';
 import type {
   BattleEvent, BattleSetup, Blueprint, BlueprintCheck, BlockView, Command, CommandResult, CoreApi,
   DraftView, HobClass, HobView, KettleView, Material, PinView, ShellView, ShotChip, Side, Snapshot, TerrainChunk,
@@ -105,11 +106,11 @@ export class MockCore implements CoreApi {
       if (c.kind === 'kettle') kettle++;
       else if (c.kind === 'nook') nooks++;
       else { blocks++; cost += COST[c.kind]; }
-      if (c.row > 0 && c.kind !== 'kettle' && !at.has(`${c.col},${c.row - 1}`)) problems.push({ col: c.col, row: c.row, why: 'No support' });
+      if (c.row > 0 && c.kind !== 'kettle' && !at.has(`${c.col},${c.row - 1}`)) problems.push({ col: c.col, row: c.row, why: t('workshop.problems.nothing_under') });
     }
-    if (kettle !== 4) problems.push({ col: 0, row: 0, why: 'Needs one kettle room' });
-    if (nooks < 1) problems.push({ col: 0, row: 0, why: 'Needs a Nook' });
-    if (blocks > 72) problems.push({ col: 0, row: 0, why: 'Over budget' });
+    if (kettle !== 4) problems.push({ col: 0, row: 0, why: t('workshop.problems.no_kettle_room') });
+    if (nooks < 1) problems.push({ col: 0, row: 0, why: t('workshop.problems.no_nook') });
+    if (blocks > 72) problems.push({ col: 0, row: 0, why: t('workshop.problems.over_budget.other', { n: blocks - 72 }) });
     return { ok: problems.length === 0, blocks, budget: 72, cost, problems };
   }
 
@@ -220,7 +221,7 @@ export class MockCore implements CoreApi {
       const shots = new Map<string, number>([['plain', -1], ['knack', this.setup.mode === 'yard' ? -1 : 2]]);
       this.crew.push({
         id: side === 1 && this.setup.mode === 'duel' ? `p2_${id}` : id,
-        side, name: info?.name ?? RIVAL_NAMES[cls], cls, x: hx, y: hy, hp, maxHp: hp, state: 'ready', rest: 0,
+        side, name: info?.name ?? hobShort(RIVAL_UNIT[cls]), cls, x: hx, y: hy, hp, maxHp: hp, state: 'ready', rest: 0,
         facing: side === 0 ? 1 : -1, shots,
       });
     });
@@ -247,7 +248,7 @@ export class MockCore implements CoreApi {
       case 'quick_pick': this.finishDraft(); return { ok: true };
       case 'end_draft': this.finishDraft(); return { ok: true };
       case 'give_up':
-        this.end(side === 0 ? 1 : 0, 'Give Up');
+        this.end(side === 0 ? 1 : 0, 'give_up');
         return { ok: true };
       case 'set_wind':
         if (this.setup.mode !== 'yard') return { ok: false, error: 'yard only' };
@@ -445,11 +446,11 @@ export class MockCore implements CoreApi {
         if (this.checkWin()) return;
         if (n >= 3) {
           const tot = (s: Side) => this.kettles.filter((k) => k.side === s).reduce((a, k) => a + k.hp, 0) + this.crew.filter((h) => h.side === s).reduce((a, h) => a + h.hp, 0);
-          this.end(tot(0) >= tot(1) ? 0 : 1, 'Sudden Squall');
+          this.end(tot(0) >= tot(1) ? 0 : 1, 'squall');
           return;
         }
       }
-      if (this.setup.level === '1-1' && this.round >= this.roundCap) { this.end(0, 'Doze Off'); return; }
+      if (this.setup.level === '1-1' && this.round >= this.roundCap) { this.end(0, 'round_cap'); return; }
       this.round++;
       if (this.round % 3 === 1) { this.wind = this.forecast; this.forecast = this.setup.windOff || this.setup.wind === 'off' ? 0 : clamp(Math.round(this.wind + (this.rand() * 4 - 2)), -3, 3); }
       const left = this.roundCap + 1 - this.round;
@@ -469,8 +470,8 @@ export class MockCore implements CoreApi {
       const k = this.kettles.find((x) => x.side === other);
       const crew = this.crew.filter((h) => h.side === other);
       if (this.setup.mode === 'yard') continue;
-      if (k && k.hp <= 0) { this.events.push({ t: 'kettle_pop', side: other }); this.end(s, 'Kettle Pop'); return true; }
-      if (crew.length && crew.every((h) => h.state === 'bonked')) { this.end(s, 'Clean Sweep'); return true; }
+      if (k && k.hp <= 0) { this.events.push({ t: 'kettle_pop', side: other }); this.end(s, 'kettle_pop'); return true; }
+      if (crew.length && crew.every((h) => h.state === 'bonked')) { this.end(s, 'clean_sweep'); return true; }
     }
     return false;
   }
@@ -484,14 +485,14 @@ export class MockCore implements CoreApi {
     const lvl = LEVELS.find((l) => l.id === this.setup.level);
     const win = winner === 0;
     const pennants = this.setup.mode === 'campaign'
-      ? [win, win && (how === 'Kettle Pop' || this.round <= Math.ceil(this.roundCap * 0.6) || this.hitStreak[0] >= 2), win && this.stats[0].kettle > 50]
+      ? [win, win && (how === 'kettle_pop' || this.round <= Math.ceil(this.roundCap * 0.6) || this.hitStreak[0] >= 2), win && this.stats[0].kettle > 50]
       : [];
-    const cause = !win && this.setup.mode === 'campaign' ? (this.stats[0].kettle < 30 ? 'The kettle sat one block in.' : 'A close one. Nothing broke first.') : undefined;
+
     this.result = {
-      winner, how, pennants, goals: lvl ? [...lvl.goals] : [], buttons: win ? 250 : 40,
-      stats: [this.stats[0], this.stats[1]], bestShot: this.best, cause,
+      winner, how, howKey: how, pennants, goals: lvl ? [...lvl.goals] : [], buttons: win ? 250 : 40,
+      stats: [this.stats[0], this.stats[1]], bestShot: this.best,
     };
-    this.events.push({ t: 'end', winner, how });
+    this.events.push({ t: 'end', winner, how, key: how });
   }
 
   // ---------- sim step ----------
@@ -789,7 +790,7 @@ export class MockCore implements CoreApi {
     const h = this.hob(this.picked[you]);
     const shots: ShotChip[] = [];
     if (h) {
-      shots.push({ id: 'plain', name: PLAIN[h.cls].name, icon: PLAIN[h.cls].id, kind: 'plain', uses: -1, weight: 0, best: h.cls, ready: this.shotUsable(h, 'plain'), why: h.rest > 0 ? 'Needs a rest' : undefined });
+      shots.push({ id: 'plain', name: PLAIN[h.cls].name, icon: PLAIN[h.cls].id, kind: 'plain', uses: -1, weight: 0, best: h.cls, ready: this.shotUsable(h, 'plain'), why: h.rest > 0 ? t('hud.why_short.resting') : undefined });
       if (this.knackOpen()) shots.push({ id: 'knack', name: KNACK[h.cls].name, icon: PLAIN[h.cls].id, kind: 'knack', uses: h.shots.get('knack') ?? 0, weight: 1, best: h.cls, ready: this.shotUsable(h, 'knack') });
       for (const [id, n] of this.hand[you]) {
         const d = SHELLS.find((s) => s.id === id)!;
@@ -862,7 +863,8 @@ export class MockCore implements CoreApi {
 }
 
 const PLAIN_HP: Record<HobClass, number> = { lobber: 120, zinger: 80, scatterjack: 100, delver: 140, boinker: 90, sizzler: 100, patcher: 110, peeper: 80 };
-const RIVAL_NAMES: Record<HobClass, string> = { lobber: 'Pot Hand', zinger: 'Hedge Snipper', scatterjack: 'Rake Hand', delver: 'Spade Hand', boinker: 'Bounce Hand', sizzler: 'Ember Hand', patcher: 'Mower Minder', peeper: 'Clipboard Clerk' };
+/** Rival units by Class: content Hob ids, so the name is the content one (hobs.<id>.short). */
+const RIVAL_UNIT: Record<HobClass, string> = { lobber: 'hedge_snipper', zinger: 'pebble_pitcher', scatterjack: 'rake_hand', delver: 'rake_hand', boinker: 'mower_minder', sizzler: 'hedge_snipper', patcher: 'mower_minder', peeper: 'pebble_pitcher' };
 
 function clamp(v: number, a: number, b: number) { return Math.max(a, Math.min(b, v)); }
 

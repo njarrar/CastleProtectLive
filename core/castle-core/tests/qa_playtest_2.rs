@@ -37,7 +37,7 @@ fn hang_roof_over(b: &mut Battle, hob: u8, batter: bool) {
     for r in 0..cs.rows {
         for c in 0..cs.cols {
             if let Some(bl) = cs.block_mut(c, r).filter(|_| batter) {
-                bl.hp -= 1;
+                bl.hp = (bl.max / 2 - 1).max(1);
             }
         }
     }
@@ -67,9 +67,11 @@ fn into_fatigue(b: &mut Battle) -> Value {
 #[test]
 fn qa2_n2_a_hob_crushed_to_1_hp_by_fatigue_is_squashed_not_bonked() {
     // 1-6 on Fair, round 10: the Fatigue collapse took Quill and Jax to 1 HP
-    // and the app drew them as Bonked.
+    // and the app drew them as Bonked. The found fort is the old flat
+    // Cobble-capped home fort, given inline: the content pass made the 1-6
+    // home fort crooked, so its roof no longer lands the same way.
     let mut b = battle(
-        r#"{"level":"1-6","mode":"campaign","first_turn":0,"sides":[{"control":"human"},{"control":"human"}]}"#,
+        r#"{"level":"1-6","mode":"campaign","first_turn":0,"sides":[{"control":"human","rows":["ccccccc","t11t22t","t11t22t","ttttttt","tKKt33t","tKKt33t","FFFFFFF"]},{"control":"human"}]}"#,
         1,
     );
     first_plan(&mut b);
@@ -217,7 +219,7 @@ fn qa2_b1_field_blows_have_names() {
     for (shot, by, who) in [
         ("squall", "squall", "The Squall"),
         ("ground", "ground", "A fall"),
-        ("fatigue", "fatigue", "Fatigue"),
+        ("fatigue", "fatigue", "The Creaks"),
         ("self", "self", "Your own shot"),
         ("shears", "shears", "The shears"),
         ("prop", "prop", "A Prop"),
@@ -327,7 +329,7 @@ fn qa2_m7_the_1_7_cage_holds_longer_and_hetty_is_sturdier() {
         .filter(|p| p.kind == "cage_bar")
         .map(|p| p.hp)
         .collect();
-    assert_eq!(bars, vec![100, 100, 100]);
+    assert_eq!(bars, vec![75, 75, 75]);
     assert_eq!(
         b.props.iter().find(|p| p.kind == "captive").unwrap().hp,
         140

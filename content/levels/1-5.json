@@ -1,6 +1,6 @@
 {
   "id": "1-5",
-  "name": "The Big One",
+  "name": "Under the Roof",
   "type": "siege",
   "size": "M",
   "width": 2400,
@@ -47,14 +47,30 @@
         2400,
         350
       ]
+    ],
+    "patches": [
+      [
+        1278,
+        1302,
+        330,
+        306,
+        "rock"
+      ],
+      [
+        1284,
+        1296,
+        337,
+        312,
+        "rock"
+      ]
     ]
   },
   "pads": [
     {
-      "x": 420
+      "x": 409
     },
     {
-      "x": 1820
+      "x": 1826
     }
   ],
   "player": {
@@ -67,13 +83,15 @@
     "blueprint": "bp_home_3"
   },
   "rival": {
-    "name": "Sergeant Posy Rakewell",
+    "name": "Sergeant Posy Rake",
     "habit": "Goes for your hurt Hob.",
+    "habit_id": "hob_sniper",
+    "think_ms": 900,
     "blueprint": "bp_r1_roofed",
     "crew": [
-      "hedge_snipper",
       "pebble_pitcher",
-      "rake_hand"
+      "rake_hand",
+      "pebble_pitcher"
     ],
     "aim": 2,
     "hp_pct": 85
@@ -92,18 +110,17 @@
   "pennants": [
     {
       "type": "win",
-      "text": "Win"
+      "text": "Send Posy Rake home"
     },
     {
       "type": "bonk_with_knack",
-      "text": "Bonk a Hob with a Knack"
+      "text": "Bonk a Hob under the roof with a Knack"
     },
     {
-      "type": "kettle_above_pct",
-      "text": "Your kettle above 60%",
-      "value": 60
+      "type": "no_hob_bonked",
+      "text": "No Hob of yours Bonked"
     }
   ],
-  "map_note": "A dell with a Molehill spot on its near rim. The Rival sits in the dell under a two-block Timber roof.",
-  "new_thing": "One Knack and needs a rest."
+  "map_note": "A dell past a central ridge, a boulder on the far side of it. The Rival sits in the dell under a three-row Timber roof.",
+  "new_thing": "Knacks and Rest. Walk and Steam unlocked."
 }

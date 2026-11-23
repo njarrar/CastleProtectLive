@@ -20,7 +20,141 @@ for (const k of Object.keys(HOBS)) Object.assign(HOBS[k], ROSTER[HOBS[k].i]);
 export const TEAMS = {
   blue: { col: C.you, dark: C.youD, light: C.youL, hatch: false },
   orange: { col: C.rival, dark: C.rivalD, light: C.rivalL, hatch: true },
+  neutral: { col: null, dark: null, light: null, hatch: false, neutral: true },
+  // Rival Hobs (the side you fight in campaign and Skirmish): Flattener slate hat with a green level vial,
+  // hatched rival orange scarf. Never the class colour hat your own crew wears.
+  rival: { col: C.rival, dark: C.rivalD, light: C.rivalL, hatch: true, rival: true },
 };
+
+// Rival hat: the Hob's own hat shape, with the class colour (and its dark and light shades) swapped
+// for Flattener slate. Copper pots, candles, quills and the like keep their own colours.
+const RIVAL_SLATE = (L.PALETTE_V2 && L.PALETTE_V2.flattenerSlate) || '#5A6572';
+const RIVAL_SLATE_D = (L.PALETTE_V2 && L.PALETTE_V2.flattenerSlateD) || '#3D4652';
+const RIVAL_SLATE_L = (L.PALETTE_V2 && L.PALETTE_V2.flattenerSlateL) || '#7E8A98';
+const RIVAL_BUBBLE = (L.PALETTE_V2 && L.PALETTE_V2.flattenerBubble) || '#4ADE80';
+const HAT_CLASS_COL = { lobber: C.lobber, zinger: C.zinger, scatter: C.scatter, delver: C.delver, boinker: C.boinker, patcher: C.patcher, sizzler: C.sizzler, peeper: C.peeper };
+function rivalRecolour(svg, cls) {
+  const hc = HAT_CLASS_COL[cls];
+  if (!svg || !hc) return svg || '';
+  const swap = [[hc, RIVAL_SLATE], [shade(hc, -.25), RIVAL_SLATE_D], [shade(hc, .35), RIVAL_SLATE_L]];
+  let out = svg;
+  for (const [from, to] of swap) out = out.replace(new RegExp(from.replace('#', '#?'), 'gi'), to);
+  return out;
+}
+// Small spirit-level vial pinned where the P2 diamond sits: the Flattener cap cue, on a Hob.
+function rivalVial(px, py) {
+  return g(rr(-7, -3.6, 14, 7.2, 3.6, '#F2E8D5', { stroke: ink, sw: 1.8 }) + circ(0.8, 0, 2.3, RIVAL_BUBBLE, { stroke: ink, sw: 1 }) + line(-4.2, -1.6, -4.2, 1.6, ink, 1) + line(4.2, -1.6, 4.2, 1.6, ink, 1), `translate(${px} ${py})`);
+}
+
+// Compact 16x16 (@1x, viewBox [-16, -16, 32, 32], anchor [8, 8]) team scarf & pennant badge overlays.
+// Same 0.5 px/du density as Hob sprites so clients composite at scale = hob.scale with zero blur.
+export const SCARF_OVERLAYS = {
+  hob_scarf_blue:   { col: C.you,     light: C.youL,    hatch: false, stripe: '#FFFFFF', pin: C.br,      badge: false, band: false, purpose: 'Team scarf overlay (16x16), player 1 solid cobalt blue. Composite on neutral Hob neck' },
+  hob_scarf_orange: { col: C.rival,   light: C.rivalL,  hatch: true,  stripe: '#FFFFFF', pin: '#FFFFFF', badge: true,  band: false, purpose: 'Team scarf overlay (16x16), player 2 hatched rival orange with diamond pin. Composite on neutral Hob neck' },
+  hob_scarf_dusk_0: { col: '#6D4C8A', light: '#B696D4', hatch: false, stripe: '#FFF4DE', pin: C.br,      badge: false, band: false, purpose: 'Team scarf overlay (16x16), Dusk palette team 0 twilight plum. Composite on neutral Hob neck' },
+  hob_scarf_dusk_1: { col: '#C25268', light: '#F09AAA', hatch: true,  stripe: '#FFF4DE', pin: C.brL,     badge: true,  band: false, purpose: 'Team scarf overlay (16x16), Dusk palette team 1 hatched rose-amber. Composite on neutral Hob neck' },
+  hob_scarf_ink_0:  { col: '#2C221E', light: '#FFF4DE', hatch: false, stripe: '#FFF4DE', pin: '#FFF4DE', badge: false, band: true,  purpose: 'Team scarf overlay (16x16), high-contrast Ink palette team 0 espresso & cream band. Composite on neutral Hob neck' },
+  hob_scarf_ink_1:  { col: '#2C221E', light: '#FFC23D', hatch: true,  stripe: '#FFC23D', pin: '#FFC23D', badge: true,  band: false, purpose: 'Team scarf overlay (16x16), high-contrast Ink palette team 1 espresso & hatched saffron. Composite on neutral Hob neck' },
+};
+
+export function scarfOverlaySvg(name) {
+  const spec = SCARF_OVERLAYS[name];
+  if (!spec) throw new Error('unknown scarf overlay: ' + name);
+  const edge = L.PALETTE_V2 ? L.PALETTE_V2.ink : ink;
+  const sc1 = 'M-14.5 -8 Q0 -1.5 14.5 -8 L14.5 -3 Q0 3 -14.5 -3 Z';
+  const sc2 = 'M-10.5 -3.5 L-13.8 11 L-6.2 9.2 L-4.2 -1.2 Z';
+  let b = path(sc2, spec.col, { stroke: edge, sw: 2.2 }) + path(sc1, spec.col, { stroke: edge, sw: 2.2 });
+  let inner = '';
+  if (spec.hatch) {
+    for (let x = -20; x < 20; x += 5.2) inner += line(x, 5, x + 7.5, -10, spec.stripe, 1.6, { op: .92 });
+    for (let y = -2; y < 12; y += 4.2) inner += line(-15, y + 2.5, -3, y - 2, spec.stripe, 1.4, { op: .92 });
+  } else if (spec.band) {
+    inner += path('M-14 -5.5 Q0 0.8 14 -5.5', 'none', { stroke: spec.stripe, sw: 2.1, op: .95 })
+      + line(-9.5, 5.5, -5.8, 4.5, spec.stripe, 1.8, { op: .95 });
+  } else {
+    inner += path('M-11 -6.2 Q0 -0.8 10 -5.6', 'none', { stroke: spec.light, sw: 1.8, op: .7 });
+  }
+  b += clipped(path(sc1, '#000') + path(sc2, '#000'), inner)
+    + path(sc2, 'none', { stroke: edge, sw: 2.2 })
+    + path(sc1, 'none', { stroke: edge, sw: 2.2 });
+  if (spec.badge) {
+    b += path('M-7.5 -5.8 L-4.2 -2.6 L-7.5 0.6 L-10.8 -2.6 Z', spec.pin, { stroke: edge, sw: 1.5 });
+  } else {
+    b += circ(-7.5, -2.5, 2.3, spec.pin, { stroke: edge, sw: 1.4 });
+  }
+  return b;
+}
+
+// Compute exact @1x px overlay compositing transforms relative to the Hob's feet anchor.
+export function hobOverlayEntries(hk, teamKey, pose, frameIndex) {
+  const def = HOBS[hk];
+  const frames = POSES[pose];
+  if (!def || !frames || !frames[frameIndex]) return [];
+  const p = frames[frameIndex];
+  const s = def.scale || 1;
+  const dx = p.dx || 0, dy = p.dy || 0, sx = p.sx || 1, sy = p.sy || 1, lean = p.lean || 0;
+  const rad = lean * Math.PI / 180;
+  // Scarf neck center in Hob drawing units is (0, -39); Hob sprite is 0.5 px per drawing unit.
+  const ly = -39 * sy * s;
+  const rx = -ly * Math.sin(rad);
+  const ry = ly * Math.cos(rad);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const r3 = (n) => Math.round(n * 1000) / 1000;
+  const scarfSprite = teamKey === 'orange' ? 'hob_scarf_orange' : 'hob_scarf_blue';
+  const entry = {
+    sprite: scarfSprite,
+    dx: r2((dx + rx) * 0.5),
+    dy: r2((dy + ry) * 0.5),
+    rot: lean,
+    scale: r3(((sx + sy) * 0.5) * s),
+  };
+  const out = [entry];
+  // Orange team: the diamond hat patch (the colour-blind cue the v0.1 sprites had baked in).
+  if (teamKey === 'orange') out.push(hatPatchEntry(def, p, s));
+  if (p.balloon !== null && p.balloon !== undefined) {
+    const bo = typeof p.balloon === 'object' ? p.balloon : { sway: p.balloon ? 5 : -2, str: p.balloon ? 50 : 40 };
+    out.push({
+      sprite: teamKey === 'orange' ? 'fx_snooze_balloon_p2' : 'fx_snooze_balloon',
+      dx: r2((-4 + dx) * 0.5),
+      dy: r2((dy - 92 * s) * 0.5),
+      rot: 0,
+      scale: r3(bo.k ?? 1),
+    });
+  }
+  return out;
+}
+
+// Hat patch overlay (P2 diamond). 8x8 @1x px, viewBox [-8, -8, 16, 16], anchor [4, 4]: same 0.5 px/du as Hobs.
+export const HAT_PATCH_OVERLAYS = {
+  hob_patch_orange: { purpose: 'Team hat patch overlay (8x8), player 2 diamond. Composite on the neutral Hob hat' },
+};
+export function hatPatchSvg() {
+  return path('M0 -6.5 L6 0 L0 6.5 L-6 0 Z', C.rival, { stroke: ink, sw: 2 }) + path('M0 -3.6 L3.3 0 L0 3.6 L-3.3 0 Z', 'none', { stroke: '#FFFFFF', sw: 1.1, dash: '1.6 1.6' });
+}
+// Where posedHob() puts the hat patch, mapped through the hat and body transforms, in @1x px from the feet.
+function hatPatchEntry(def, p, s) {
+  const [px, py] = def.patch;
+  const hatDy = p.hatDy || 0, hatRot = p.hatRot || 0;
+  const dx = p.dx || 0, dy = p.dy || 0, sx = p.sx || 1, sy = p.sy || 1, lean = p.lean || 0;
+  const rot = (x, y, deg) => { const r = deg * Math.PI / 180; return [x * Math.cos(r) - y * Math.sin(r), x * Math.sin(r) + y * Math.cos(r)]; };
+  // hat: translate(0 hatDy) rotate(hatRot 0 -78)
+  let [x1, y1] = rot(px, py + 78, hatRot); y1 += -78 + hatDy;
+  // body: translate(dx dy) rotate(lean) scale(sx*s sy*s)
+  const [x2, y2] = rot(x1 * sx * s, y1 * sy * s, lean);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  return { sprite: 'hob_patch_orange', dx: r2((dx + x2) * 0.5), dy: r2((dy + y2) * 0.5), rot: lean + hatRot, scale: Math.round(((sx + sy) * 0.5) * s * 1000) / 1000 };
+}
+// Portrait discs: the Hob is drawn with translate(2 -70) scale(.8) translate(-2 78) inside a 48 px disc whose
+// anchor (its centre) is at (2, -74) du. Returns the scarf (and P2 hat patch) overlays in @1x px from that anchor.
+export function portraitOverlayEntries(hk, teamKey) {
+  const def = HOBS[hk];
+  if (!def) return [];
+  const s = def.scale || 1;
+  const map = (e) => ({ ...e, dx: Math.round(((e.dx * 2 - 2) * 0.8 + 2 - 2) * 0.5 * 100) / 100, dy: Math.round(((e.dy * 2 + 78) * 0.8 - 70 + 74) * 0.5 * 100) / 100, scale: Math.round(e.scale * 0.8 * 1000) / 1000 });
+  const out = [map({ sprite: teamKey === 'orange' ? 'hob_scarf_orange' : 'hob_scarf_blue', dx: 0, dy: -39 * s * 0.5, rot: 0, scale: s })];
+  if (teamKey === 'orange') out.push(map(hatPatchEntry(def, {}, s)));
+  return out;
+}
 
 // pose table. Frames 0.. of the first six poses are the v0.1 frames and must keep their look.
 // New frames are added at the end. The play order is in assets/animations.json, not in the frame number.
@@ -152,23 +286,29 @@ export function posedHob(key, teamKey, p = {}) {
   b += clipped(path(bodyD, '#000'), path('M4 -50 C28 -40 26 -16 14 -8 L40 -8 L40 -50 Z', ink, { op: .2 }) + rr(-12, -36, 11, 11, 2, shade(coat, .25), { extra: ' transform="rotate(-8 -6 -30)"' }) + rr(-12, -36, 11, 11, 2, 'none', { stroke: C.paper, sw: 1.4, extra: ' stroke-dasharray="2.5 2.5" transform="rotate(-8 -6 -30)"' }));
   if (o.bodyAdd) b += clipped(path(bodyD, '#000'), o.bodyAdd) + path(bodyD, 'none', { stroke: ink, sw: 3 });
   b += circ(3, -30, 2, C.paper, { op: .8 }) + circ(3, -21, 2, C.paper, { op: .8 });
-  // scarf: the team part. Orange gets white hatch lines so it reads without colour
-  const sc1 = 'M-17 -47 Q0 -40 17 -47 L17 -42 Q0 -35 -17 -42 Z', sc2 = 'M-12 -42 L-16 -28 L-8 -30 L-6 -40 Z';
-  b += path(sc1, team.col, { stroke: ink, sw: 2.5 }) + path(sc2, team.col, { stroke: ink, sw: 2.5 });
-  if (team.hatch) {
-    let h = '';
-    for (let x = -24; x < 24; x += 5.5) h += line(x, -34, x + 8, -50, '#FFFFFF', 1.7, { op: .9 });
-    for (let y = -40; y < -24; y += 4.5) h += line(-18, y + 3, -4, y - 2, '#FFFFFF', 1.5, { op: .9 });
-    b += clipped(path(sc1, '#000') + path(sc2, '#000'), h) + path(sc1, 'none', { stroke: ink, sw: 2.5 }) + path(sc2, 'none', { stroke: ink, sw: 2.5 });
+  // scarf: the team part. Orange gets white hatch lines so it reads without colour.
+  // In neutral (--dedup-hobs) mode, omit the scarf so clients composite a 16x16 hob_scarf_* overlay.
+  if (team.neutral) {
+    b += path('M-15 -46 Q0 -40 15 -46', 'none', { stroke: ink, sw: 2, op: .35 });
+  } else {
+    const sc1 = 'M-17 -47 Q0 -40 17 -47 L17 -42 Q0 -35 -17 -42 Z', sc2 = 'M-12 -42 L-16 -28 L-8 -30 L-6 -40 Z';
+    b += path(sc1, team.col, { stroke: ink, sw: 2.5 }) + path(sc2, team.col, { stroke: ink, sw: 2.5 });
+    if (team.hatch) {
+      let h = '';
+      for (let x = -24; x < 24; x += 5.5) h += line(x, -34, x + 8, -50, '#FFFFFF', 1.7, { op: .9 });
+      for (let y = -40; y < -24; y += 4.5) h += line(-18, y + 3, -4, y - 2, '#FFFFFF', 1.5, { op: .9 });
+      b += clipped(path(sc1, '#000') + path(sc2, '#000'), h) + path(sc1, 'none', { stroke: ink, sw: 2.5 }) + path(sc2, 'none', { stroke: ink, sw: 2.5 });
+    }
   }
   // head
-  let head = o.hatBack ? g(o.hatBack, `translate(0 ${f(hatDy * .4)})`) : '';
+  const hatBack = team.rival ? rivalRecolour(o.hatBack, def.cls) : o.hatBack;
+  let head = hatBack ? g(hatBack, `translate(0 ${f(hatDy * .4)})`) : '';
   head += circ(-19, -60, 5.5, skin, { stroke: ink, sw: 3 });
   head += circ(0, -62, 21, skin, { stroke: ink, sw: 3 });
   head += clipped(circ(0, -62, 21, '#000'), circ(9, -56, 21, ink, { op: .13 }));
   head += faceSvg(face, skin);
   head += o.faceAdd || '';
-  let hat = o.hatSvg;
+  let hat = team.rival ? rivalRecolour(o.hatSvg, def.cls) + rivalVial(def.patch[0], def.patch[1]) : o.hatSvg;
   if (teamKey === 'orange') {
     const [px, py] = def.patch;
     hat += g(path('M0 -6.5 L6 0 L0 6.5 L-6 0 Z', team.col, { stroke: ink, sw: 2 }) + path('M0 -3.6 L3.3 0 L0 3.6 L-3.3 0 Z', 'none', { stroke: '#FFFFFF', sw: 1.1, dash: '1.6 1.6' }), `translate(${px} ${py})`);
@@ -206,9 +346,9 @@ export function posedHob(key, teamKey, p = {}) {
     out += dirt === 0 ? cl(50, -22, 10) + cl(62, -34, 6.5, '#B07A52') + cl(64, -12, 7) + cl(74, -24, 4.5, '#7A4A2E') + path('M44 -42 l5 -8 M56 -46 l2 -8', 'none', { stroke: ink, sw: 2.2 })
       : cl(58, -40, 6.5) + cl(72, -54, 5, '#B07A52') + cl(74, -26, 5.5) + cl(64, -12, 4, '#7A4A2E') + cl(78, -42, 3.2, '#7A4A2E') + circ(50, -6, 6, '#CFC8C0', { op: .7 }) + circ(60, -4, 4, '#E4DED6', { op: .7 });
   }
-  if (balloon !== null) {
+  if (balloon !== null && !team.neutral) {
     const bo = typeof balloon === 'object' ? balloon : { sway: balloon ? 5 : -2, str: balloon ? 50 : 40 };
-    out += snoozeBalloon(-4 + dx, dy - 92 * s, { tag: teamKey === 'orange', ...bo });
+    out += snoozeBalloon(-4 + dx, dy - 92 * s, { tag: teamKey === 'orange' || !!team.rival, ...bo });
   }
   return out;
 }

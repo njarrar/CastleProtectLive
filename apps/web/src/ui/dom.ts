@@ -1,3 +1,4 @@
+import { className, t } from './text';
 import { play } from '../audio/sfx';
 
 type Child = Node | string | null | undefined | false;
@@ -83,8 +84,8 @@ export function seg<T extends string>(options: [T, string][], value: T, onPick: 
 
 export function toggle(label: string, value: boolean, onSet: (v: boolean) => void): HTMLElement {
   let v = value;
-  const b = btn('', () => { v = !v; paint(); onSet(v); }, 'toggle', { role: 'switch' });
-  const paint = () => { b.textContent = v ? 'On' : 'Off'; b.classList.toggle('on', v); b.setAttribute('aria-checked', String(v)); };
+  const b = btn('', () => { v = !v; paint(); if (v) play('toggle_on'); else play('tap'); onSet(v); }, 'toggle silent', { role: 'switch' });
+  const paint = () => { b.textContent = v ? t('common.on') : t('common.off'); b.classList.toggle('on', v); b.setAttribute('aria-checked', String(v)); };
   paint();
   return h('label', { class: 'row' }, h('span', {}, label), b);
 }
@@ -100,9 +101,14 @@ export const CLASS_ICON: Record<string, string> = {
   peeper: '◉',
 };
 export const CLASS_COLOR: Record<string, string> = {
-  lobber: '#D9483B', zinger: '#3FA9F5', scatterjack: '#8BCB3A', delver: '#9A6A3A', boinker: '#F06EAA', patcher: '#2FB7A6', sizzler: '#B8325A', peeper: '#F2E05A',
+  lobber: '#C4362B', zinger: '#3FA9F5', scatterjack: '#8BCB3A', delver: '#9A6A3A', boinker: '#F06EAA', patcher: '#2FB7A6', sizzler: '#B8325A', peeper: '#F2E05A',
+};
+/** Foreground color paired with each CLASS_COLOR so every badge meets WCAG AA (>= 4.5:1). */
+export const CLASS_INK: Record<string, string> = {
+  lobber: '#FFFFFF', zinger: '#2C221E', scatterjack: '#2C221E', delver: '#FFFFFF', boinker: '#2C221E', patcher: '#2C221E', sizzler: '#FFFFFF', peeper: '#2C221E',
 };
 
 export function classBadge(cls: string, side: 0 | 1 = 0): HTMLElement {
-  return h('span', { class: `cls ${side ? 'diamond' : 'round'}`, style: `--c:${CLASS_COLOR[cls] ?? '#888'}`, title: cls, 'aria-label': cls }, h('i', {}, CLASS_ICON[cls] ?? '?'));
+  const cap = className(cls);
+  return h('span', { class: `cls ${side ? 'diamond' : 'round'}`, style: `--c:${CLASS_COLOR[cls] ?? '#888'};--fg:${CLASS_INK[cls] ?? '#2C221E'}`, title: cap, 'aria-label': cap }, h('i', {}, CLASS_ICON[cls] ?? '?'));
 }

@@ -707,6 +707,18 @@
             "type": "string"
           }
         },
+        "think_ms": {
+          "description": "Think pose time per side in ms from the level (presentation only). null: use app.json rival_think_seconds.",
+          "type": "array",
+          "items": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
         "control": {
           "type": "array",
           "items": {
@@ -981,6 +993,7 @@
               "climb",
               "bonk",
               "threaded",
+              "kettle_crack",
               "kettle_pop",
               "castle_drop",
               "thump",

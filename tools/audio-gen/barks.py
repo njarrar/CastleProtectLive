@@ -4,7 +4,8 @@ Each bark is a list of syllables from the 07 sound set (bo, bim, wub, nok, pip,
 ha, oof, mum, tat, hoo, gla, fen) with a pitch step per syllable. The pitch
 curve carries the meaning: up for cheer, down for groan (07 section 9.4).
 Each Hob has its own pitch, mouth size, breath and grit, so you can tell
-them apart by ear. Subtitles are plain English lines in each Hob's voice.
+them apart by ear. Each Hob also owns two or three syllables nobody else says
+(OWN below; importing this file checks it). Subtitles are plain English lines in each Hob's voice.
 """
 import numpy as np
 from dsp import SR, TAU, n_of, db, curve, smooth, white, filt, tv_filter, mix, ar, verb, rng
@@ -21,6 +22,7 @@ CONS = {
     'm': ('nasal', None, 950, True), 'n': ('nasal', None, 1650, True),
     'w': ('glide', None, 700, True), 'l': ('glide', None, 1350, True),
     'h': ('breath', None, None, False), 'f': ('fric', (3500, 8000), None, False),
+    'r': ('trill', None, 1150, True),      # a short rolled r: three quick taps (Jax, Thumper's growl)
 }
 
 VOICES = {
@@ -30,7 +32,7 @@ VOICES = {
     'quill':   dict(f0=335, scale=1.32, breath=0.03, grit=0.00, vib=0.004, vrate=6.0, speed=0.72, tilt=0.95, cut=7000, nasal=0.0),
     'jax':     dict(f0=215, scale=1.18, breath=0.04, grit=0.10, vib=0.010, vrate=6.0, speed=0.70, tilt=0.90, cut=6500, nasal=0.1),
     'nan':     dict(f0=300, scale=1.36, breath=0.03, grit=0.15, vib=0.035, vrate=8.0, speed=0.74, tilt=0.95, cut=6500, nasal=0.5),
-    'grub':    dict(f0=98,  scale=0.96, breath=0.10, grit=0.60, vib=0.006, vrate=4.0, speed=1.05, tilt=1.70, cut=1900, nasal=0.4),
+    'grub':    dict(f0=98,  scale=0.96, breath=0.10, grit=0.60, vib=0.006, vrate=4.0, speed=1.05, tilt=1.25, cut=3200, nasal=0.4),
     'bobbin':  dict(f0=255, scale=1.24, breath=0.04, grit=0.00, vib=0.015, vrate=5.5, speed=0.90, tilt=1.05, cut=6500, nasal=0.0),
     'hetty':   dict(f0=222, scale=1.16, breath=0.03, grit=0.00, vib=0.008, vrate=5.0, speed=1.00, tilt=1.20, cut=5200, nasal=0.6),
 }
@@ -88,6 +90,12 @@ def speak(hob, syls, steps, lens, r, shape='flat', gain=None, v=None):
             elif kind == 'breath':
                 segs.append(('asp', 0.06 * sp, st, st, F, F, 0.0, 0.5 * g, None))
                 cur = F
+            elif kind == 'trill':
+                rf = np.array([360, f2, 1700]) * v['scale']
+                for _ in range(3):
+                    segs.append(('vow', 0.024, st * 0.97, st, rf, rf, 0.75 * g, 0.05 * g, None))
+                    segs.append(('vow', 0.016, st, st, rf, rf, 0.1 * g, 0.0, None))
+                cur = rf
         if shape == 'up':
             a, b = st * 0.94, st * 1.08
         elif shape == 'down':
@@ -194,70 +202,97 @@ E0 = ('picked', 'fire', 'hit_lands', 'takes_hit', 'bonked', 'win')
 
 BARKS = {
     'marge': {
-        'picked':    (['bo', 'mum'], [0, 3], [0.13, 0.16], 'flat'),
+        'picked':    (['bo', 'dum'], [0, 3], [0.13, 0.16], 'flat'),
         'fire':      (['hoop'], [5], [0.14], 'up'),
-        'hit_lands': (['wub', 'bo'], [2, 7], [0.11, 0.22], 'up'),
+        'hit_lands': (['lub', 'bo'], [2, 7], [0.11, 0.22], 'up'),
         'takes_hit': (['oof'], [1], [0.2], 'down'),
-        'bonked':    (['mum', 'hoo'], [0, -5], [0.2, 0.34], 'down'),
-        'win':       (['bo', 'bim', 'bo'], [0, 4, 7], [0.11, 0.11, 0.28], 'up'),
+        'bonked':    (['mop', 'hoo'], [0, -5], [0.2, 0.34], 'down'),
+        'win':       (['bo', 'dum', 'lub'], [0, 4, 7], [0.11, 0.11, 0.28], 'up'),
     },
     'thumper': {
         'picked':    (['hem'], [0], [0.22], 'up'),
         'fire':      (['hup'], [4], [0.12], 'flat'),
-        'hit_lands': (['ha', 'nok'], [3, 0], [0.12, 0.14], 'flat'),
-        'takes_hit': (['oof', 'wub'], [2, -3], [0.14, 0.16], 'down'),
-        'bonked':    (['hoo', 'mum'], [-2, -7], [0.26, 0.3], 'down'),
-        'win':       (['ha', 'ha', 'nok'], [0, 2, 5], [0.1, 0.1, 0.2], 'flat'),
+        'hit_lands': (['grum', 'gob'], [3, 0], [0.12, 0.14], 'flat'),
+        'takes_hit': (['oof', 'humf'], [2, -3], [0.14, 0.16], 'down'),
+        'bonked':    (['hoo', 'grum'], [-2, -7], [0.26, 0.3], 'down'),
+        'win':       (['ha', 'gob', 'nok'], [0, 2, 5], [0.1, 0.1, 0.2], 'flat'),
     },
     'quill': {
-        'picked':    (['pip'], [0], [0.09], 'flat'),
-        'fire':      (['tat'], [4], [0.07], 'flat'),
-        'hit_lands': (['pip', 'pip'], [3, 7], [0.07, 0.1], 'flat'),
+        'picked':    (['pin'], [0], [0.09], 'flat'),
+        'fire':      (['tet'], [4], [0.07], 'flat'),
+        'hit_lands': (['pip', 'pin'], [3, 7], [0.07, 0.1], 'flat'),
         'takes_hit': (['tik'], [6], [0.1], 'down'),
         'bonked':    (['pip', 'fen'], [2, -4], [0.1, 0.3], 'down'),
-        'win':       (['tat', 'pip', 'bim'], [0, 4, 9], [0.07, 0.07, 0.2], 'up'),
+        'win':       (['tet', 'pip', 'tik'], [0, 4, 9], [0.07, 0.07, 0.2], 'up'),
     },
     'jax': {
-        'picked':    (['ta', 'ta', 'tat'], [0, 0, 4], [0.05, 0.05, 0.12], 'flat'),
-        'fire':      (['ha', 'tat'], [5, 7], [0.06, 0.09], 'flat'),
-        'hit_lands': (['bo', 'bo', 'bim'], [2, 4, 9], [0.06, 0.06, 0.16], 'up'),
+        'picked':    (['ta', 'ta', 'trat'], [0, 0, 4], [0.05, 0.05, 0.12], 'flat'),
+        'fire':      (['ha', 'rrap'], [5, 7], [0.06, 0.09], 'flat'),
+        'hit_lands': (['bo', 'pep', 'bim'], [2, 4, 9], [0.06, 0.06, 0.16], 'up'),
         'takes_hit': (['ha', 'ha', 'oof'], [7, 5, 0], [0.05, 0.05, 0.14], 'down'),
-        'bonked':    (['wub', 'wub', 'hoo'], [0, -2, -7], [0.09, 0.09, 0.3], 'down'),
-        'win':       (['ta', 'ta', 'gla', 'bim'], [0, 2, 5, 9], [0.05, 0.05, 0.1, 0.24], 'up'),
+        'bonked':    (['wub', 'pep', 'hoo'], [0, -2, -7], [0.09, 0.09, 0.3], 'down'),
+        'win':       (['ta', 'trat', 'rrap', 'bim'], [0, 2, 5, 9], [0.05, 0.05, 0.1, 0.24], 'up'),
     },
     'nan': {
-        'picked':    (['nok', 'nok'], [0, 2], [0.07, 0.1], 'flat'),
-        'fire':      (['tat', 'tat'], [5, 5], [0.05, 0.07], 'flat'),
-        'hit_lands': (['ha', 'nok'], [7, 2], [0.1, 0.1], 'flat'),
-        'takes_hit': (['pip', 'pip', 'tat'], [8, 6, 3], [0.05, 0.05, 0.1], 'down'),
-        'bonked':    (['fen', 'hoo'], [1, -5], [0.14, 0.32], 'wobble'),
-        'win':       (['nok', 'nok', 'ha'], [2, 5, 9], [0.07, 0.07, 0.22], 'up'),
+        'picked':    (['nok', 'nen'], [0, 2], [0.07, 0.1], 'flat'),
+        'fire':      (['klat', 'tat'], [5, 5], [0.05, 0.07], 'flat'),
+        'hit_lands': (['ha', 'klat'], [7, 2], [0.1, 0.1], 'flat'),
+        'takes_hit': (['pip', 'dit', 'tat'], [8, 6, 3], [0.05, 0.05, 0.1], 'down'),
+        'bonked':    (['fen', 'nen'], [1, -5], [0.14, 0.32], 'wobble'),
+        'win':       (['nok', 'klat', 'dit'], [2, 5, 9], [0.07, 0.07, 0.22], 'up'),
     },
     'grub': {
-        'picked':    (['mum'], [0], [0.2], 'flat'),
-        'fire':      (['wub'], [3], [0.13], 'flat'),
-        'hit_lands': (['hem', 'nok'], [2, 0], [0.13, 0.13], 'flat'),
+        'picked':    (['mmm'], [0], [0.2], 'flat'),
+        'fire':      (['hmm'], [3], [0.13], 'flat'),
+        'hit_lands': (['hem', 'mub'], [2, 0], [0.13, 0.13], 'flat'),
         'takes_hit': (['mumf'], [1], [0.18], 'down'),
-        'bonked':    (['mum', 'mum'], [-1, -6], [0.22, 0.32], 'down'),
-        'win':       (['hem', 'hem', 'mum'], [0, 2, 4], [0.11, 0.11, 0.24], 'flat'),
+        'bonked':    (['mmm', 'mub'], [-1, -6], [0.22, 0.32], 'down'),
+        'win':       (['hmm', 'hem', 'mmm'], [0, 2, 4], [0.11, 0.11, 0.24], 'flat'),
     },
     'bobbin': {
         'picked':    (['bo', 'ing'], [0, 7], [0.09, 0.16], 'up'),
-        'fire':      (['hoop', 'la'], [4, 9], [0.08, 0.12], 'up'),
-        'hit_lands': (['bim', 'bo', 'bim'], [2, 5, 9], [0.08, 0.08, 0.16], 'up'),
+        'fire':      (['dib', 'la'], [4, 9], [0.08, 0.12], 'up'),
+        'hit_lands': (['bim', 'lop', 'bim'], [2, 5, 9], [0.08, 0.08, 0.16], 'up'),
         'takes_hit': (['wub', 'oof'], [7, 0], [0.09, 0.15], 'down'),
-        'bonked':    (['bo', 'bo', 'hoo'], [5, 0, -5], [0.12, 0.14, 0.3], 'down'),
-        'win':       (['gla', 'bim', 'bo', 'bim'], [0, 4, 7, 12], [0.09, 0.09, 0.09, 0.24], 'up'),
+        'bonked':    (['lop', 'bo', 'hoo'], [5, 0, -5], [0.12, 0.14, 0.3], 'down'),
+        'win':       (['gla', 'dib', 'ing', 'bim'], [0, 4, 7, 12], [0.09, 0.09, 0.09, 0.24], 'up'),
     },
     'hetty': {
-        'picked':    (['mum', 'tat'], [0, 2], [0.14, 0.09], 'flat'),
-        'fire':      (['nok'], [4], [0.11], 'flat'),
-        'hit_lands': (['mum', 'bim'], [0, 5], [0.12, 0.18], 'up'),
-        'takes_hit': (['hem', 'tat'], [4, 0], [0.12, 0.09], 'down'),
-        'bonked':    (['hoo', 'mum'], [0, -5], [0.22, 0.34], 'down'),
-        'win':       (['mum', 'gla', 'fen'], [0, 4, 7], [0.13, 0.12, 0.26], 'up'),
+        'picked':    (['wel', 'tat'], [0, 2], [0.14, 0.09], 'flat'),
+        'fire':      (['tut'], [4], [0.11], 'flat'),
+        'hit_lands': (['mum', 'dem'], [0, 5], [0.12, 0.18], 'up'),
+        'takes_hit': (['tut', 'tat'], [4, 0], [0.12, 0.09], 'down'),
+        'bonked':    (['hoo', 'wel'], [0, -5], [0.22, 0.34], 'down'),
+        'win':       (['wel', 'gla', 'dem'], [0, 4, 7], [0.13, 0.12, 0.26], 'up'),
     },
 }
+
+# Syllables only this Hob says. check_own() fails the build if another Hob uses one.
+OWN = {
+    'marge': ('dum', 'lub', 'mop'),
+    'thumper': ('grum', 'gob', 'humf'),
+    'quill': ('pin', 'tet', 'tik'),
+    'jax': ('trat', 'rrap', 'pep'),
+    'nan': ('klat', 'nen', 'dit'),
+    'grub': ('mmm', 'hmm', 'mub'),
+    'bobbin': ('ing', 'dib', 'lop'),
+    'hetty': ('wel', 'tut', 'dem'),
+}
+
+
+def check_own():
+    for hob, own in OWN.items():
+        said = {sy for ev in BARKS[hob].values() for sy in ev[0]}
+        for sy in own:
+            if sy not in said:
+                raise ValueError(f'{hob} owns {sy} but never says it')
+            for other in BARKS:
+                if other != hob and any(sy in ev[0] for ev in BARKS[other].values()):
+                    raise ValueError(f'{other} says {sy}, which belongs to {hob}')
+
+
+check_own()
+
 
 # Subtitles: at least 3 lines per event, picked without repeats (07 section 9.4).
 # First lines come from the crew doc (03 section 3) where it gives one.

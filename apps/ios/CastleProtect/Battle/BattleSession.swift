@@ -16,7 +16,7 @@ struct HudState: Equatable {
     var activeSide = 0
     /// The side whose controls the HUD shows: the active side in a Couch Duel, else side 0.
     var hudSide = 0
-    var names = ["You", "Rival"]
+    var names = [GameText.shared.t("common.you"), GameText.shared.t("common.rival")]
     var humanTurn = false
     var isDuel = false
     var kettlePercent = [100, 100]
@@ -101,22 +101,24 @@ struct HudState: Equatable {
         fatigueIn = s.fatigueIn
     }
 
-    /// "Fatigue in 3", "2", "1" before Fatigue starts, "Fatigue" once it is on, else nil.
+    /// "Creaks in 3", "2", "1" before the Creaks start, "The Creaks" once on, else nil (`hud.creaks`).
     var fatigueText: String? {
         if isYard || isVolley { return nil }
-        if fatigue { return "Fatigue" }
-        if let n = fatigueIn, n >= 1, n <= 3 { return "Fatigue in \(n)" }
+        if fatigue { return GameText.shared.t("hud.creaks.on") }
+        if let n = fatigueIn, n >= 1, n <= 3 { return GameText.shared.t("hud.creaks.in", ["n": n]) }
         return nil
     }
 
     /// The round label's main words: the Test Yard has no rounds to count.
-    var roundText: String { isYard ? "Test Yard" : "Round \(round)/\(roundCap)" }
+    var roundText: String {
+        isYard ? GameText.shared.t("hud.test_yard") : GameText.shared.t("hud.round", ["n": round, "cap": roundCap])
+    }
 
     var isVolley: Bool { volleyActions > 0 }
-    /// "Shots left 7/10" for the side the HUD shows.
+    /// "Shots left: 7 of 10" for the side the HUD shows.
     var volleyText: String {
         guard isVolley, hudSide < volleyLeft.count else { return "" }
-        return "Shots left \(volleyLeft[hudSide])/\(volleyActions)"
+        return GameText.shared.t("hud.shots_left", ["n": volleyLeft[hudSide], "total": volleyActions])
     }
 
     var inFlight: Bool { phase.isResolving }
@@ -158,32 +160,73 @@ final class DragModel: ObservableObject {
     @Published var overlay: DragOverlay?
 }
 
+/// Carries a CADisplayLink so `FrameClock.deinit` can invalidate it safely in Swift 6.
+private final class DisplayLinkBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var link: CADisplayLink?
+
+    var isRunning: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return link != nil
+    }
+
+    func replace(with newLink: CADisplayLink?) {
+        lock.lock()
+        let old = link
+        link = newLink
+        lock.unlock()
+        if let old {
+            let box = UncheckedBox(old)
+            if Thread.isMainThread {
+                box.value.invalidate()
+            } else {
+                DispatchQueue.main.async { box.value.invalidate() }
+            }
+        }
+    }
+}
+
+/// Weak target proxy so `CADisplayLink` never creates a retain cycle with `FrameClock`.
+@MainActor
+private final class DisplayLinkProxy: NSObject {
+    weak var owner: FrameClock?
+    init(_ owner: FrameClock) {
+        self.owner = owner
+        super.init()
+    }
+    @objc func fire() { owner?.handleFire() }
+}
+
 /// Calls `onFrame` once per display refresh on the main run loop.
 @MainActor
-final class FrameClock: NSObject {
-    private var link: CADisplayLink?
+final class FrameClock {
+    private let linkBox = DisplayLinkBox()
     private let onFrame: () -> Void
 
     init(onFrame: @escaping () -> Void) {
         self.onFrame = onFrame
-        super.init()
     }
 
-    var isRunning: Bool { link != nil }
+    deinit {
+        linkBox.replace(with: nil)
+    }
+
+    var isRunning: Bool { linkBox.isRunning }
 
     func start() {
-        guard link == nil else { return }
-        let l = CADisplayLink(target: self, selector: #selector(fire))
+        guard !linkBox.isRunning else { return }
+        let proxy = DisplayLinkProxy(self)
+        let l = CADisplayLink(target: proxy, selector: #selector(DisplayLinkProxy.fire))
         l.add(to: .main, forMode: .common)
-        link = l
+        linkBox.replace(with: l)
     }
 
     func stop() {
-        link?.invalidate()
-        link = nil
+        linkBox.replace(with: nil)
     }
 
-    @objc private func fire() { onFrame() }
+    fileprivate func handleFire() { onFrame() }
 }
 
 
@@ -211,6 +254,18 @@ final class BattleSession: ObservableObject {
     @Published private(set) var layout = BattleLayout.empty
     /// A Doodad picked in the tray: Fire uses it instead of a shot.
     @Published private(set) var armedDoodad: String?
+    /// Optional shot dial ("hops3", "rebuild", "puff_up") sent with `fire`.
+    @Published var selectedDial: String?
+    /// Optional own-fort block `[c, r]` sent with self-mend shots (`mendglob`).
+    @Published var selectedBlockTarget: [Int]?
+    /// True while tapping an own-fort block selects a self-mend target for `mendglob`.
+    @Published var pickingMendTarget = false
+    /// Room chosen for Pot Lid ("kettle" or "nook:N").
+    @Published var armedDoodadRoom: String = "kettle"
+    /// Up to 3 own-fort blocks `[c, r]` picked for Mend Bucket (empty = core picks most hurt).
+    @Published var armedDoodadTargets: [[Int]] = []
+    /// Edge (-1 left, +1 right) for the native SwiftUI "View Rival fort" / "Back to my fort" button.
+    @Published private(set) var rivalMarkerEdge: Int?
     let dragModel = DragModel()
     /// Banners waiting for the one on screen (a turn line, then Fatigue or a shot switch).
     private(set) var bannerQueue: [String] = []
@@ -245,8 +300,20 @@ final class BattleSession: ObservableObject {
     private(set) var frameVersion = 0
     /// View time, hit stop, slow motion, shake and every effect on the field.
     let fx = FieldFX()
-    var settings = GameSettings() {
-        didSet { applyFxSettings() }
+    @Published var settings = GameSettings() {
+        didSet {
+            applyFxSettings()
+            game.rivalFast = settings.rivalTurnsFast
+            if settings.leftHand != oldValue.leftHand
+                || settings.reduceMotion != oldValue.reduceMotion
+                || settings.largeText != oldValue.largeText {
+                relayout()
+            }
+            if settings.colourSet != oldValue.colourSet
+                || settings.reduceMotion != oldValue.reduceMotion {
+                frameVersion &+= 1
+            }
+        }
     }
     /// A bark subtitle on screen, and its side.
     @Published private(set) var subtitle: (text: String, side: Int)?
@@ -272,6 +339,16 @@ final class BattleSession: ObservableObject {
     var onFrame: ((BattleSnapshot) -> Void)?
     /// The Pause card went up (true) or away (false): sound follows it (UX 8.2).
     var onPausedChanged: ((Bool) -> Void)?
+    /// One-shot UI/aim audio cues (`aim_set`, `aim_limit`, `aim_tick`, `aim_recall`, `turn_hob_pick`, `fly_fast_zip`).
+    var onAudioCue: ((String) -> Void)?
+    /// Continuous aim band stretch loop `(gain, pitch)`.
+    var onAimBand: ((Float, Double) -> Void)?
+    /// Current slow-motion time scale for music/loop varispeed.
+    var onSlowMo: ((Float) -> Void)?
+    /// A Hob was explicitly picked by the player (for `"picked"` bark).
+    var onHobPicked: ((String, Int) -> Void)?
+    /// Fired after each display-link tick so `BattleSKView` shares the session's single display link.
+    var onDisplayTick: (() -> Void)?
 
     private var clock: FrameClock?
     private var bannerTask: Task<Void, Never>?
@@ -286,6 +363,8 @@ final class BattleSession: ObservableObject {
     private var dragEndedAt: UInt64 = 0
     private var hitFullPower = false
     private var squallWarned = false
+    /// The last Rival turn banner was a `rivals.banner.thinking` line (never two running).
+    private var lastRivalLine = false
     private var squallAnnounced = false
     private var viewSize: CGSize = .zero
     private var viewInsets = Insets()
@@ -302,13 +381,15 @@ final class BattleSession: ObservableObject {
 
     /// The gold ring on the picked Hob shows until this many aims were started from the fort.
     nonisolated static let ownerRingAims = 3
-    nonisolated static let skyNudgeText = "Drag from your fort to aim"
-    /// Round 9: one round before Fatigue. Round 10: the collapse starts (shown in red).
-    nonisolated static let fatigueWarnText = "Fatigue next round: hurt blocks hold less"
-    nonisolated static let fatigueStartText = "Fatigue! Battered blocks give way"
+    nonisolated static var skyNudgeText: String { GameText.shared.t("hud.aim_hint") }
+    /// Round 9: one round before the Creaks. Round 10: the collapse starts (shown in red).
+    nonisolated static var fatigueWarnText: String { GameText.shared.t("banners.creaks.warn") }
+    nonisolated static var fatigueStartText: String { GameText.shared.t("banners.creaks.start") }
 
-    /// True for the Fatigue banners, which the turn banner waits for.
-    nonisolated static func isFatigueBanner(_ text: String) -> Bool { text.hasPrefix("Fatigue") }
+    /// True for the Creaks banners, which the turn banner waits for.
+    nonisolated static func isFatigueBanner(_ text: String) -> Bool {
+        !text.isEmpty && (text == fatigueWarnText || text == fatigueStartText)
+    }
 
     /// The gold ring shows on the picked Hob on the player's Plan step until 3 aims were started
     /// from the fort (QA playtest 2, owner rule).
@@ -324,6 +405,7 @@ final class BattleSession: ObservableObject {
             snapshot = s
             hud = HudState(s)
             lastTurnSeq = s.phase == .draft ? -1 : s.turnSeq
+            openCheckedTurn = s.phase == .draft ? -1 : s.turnSeq
             fx.noteState(s)
         }
     }
@@ -383,7 +465,10 @@ final class BattleSession: ObservableObject {
         gesture = nil
         pendingAim = nil
         dragModel.overlay = nil
+        onAimBand?(0, 0)
+        onSlowMo?(1)
         if dragging { dragging = false }
+        if rivalMarkerEdge != nil { rivalMarkerEdge = nil }
     }
 
     func tick() {
@@ -414,26 +499,30 @@ final class BattleSession: ObservableObject {
                 lastNanos += UInt64(ms) * 1_000_000
             }
         }
+        if !paused { onSlowMo?(Float(fx.timeScale(nowNanos: now))) }
         flushAim(now: now, force: false)
         if hudHeld && !fx.collapseShowing {
             hudHeld = false
             let next = HudState(snapshot)
             if next != hud { hud = next }
         }
-        if let snap = game.frameIfNeeded() {
+        // Check recovery BEFORE reading the next frame so stale FX are reset first (iOS-M7).
+        if game.recoveredNotice {
+            game.recoveredNotice = false
+            fx.reset()
+            openCheckedTurn = -1
+            resetActionOptions()
+            armedDoodad = nil
+            if let s = game.frame() { apply(s) }
+            showBanner(GameText.shared.t("errors.turn_reset"))
+        } else if let snap = game.frameIfNeeded() {
             apply(snap)
         } else if let fault = game.fault, !faultReported {
             faultReported = true
             stop()
             onFault?(self, fault)
         }
-        if game.recoveredNotice {
-            game.recoveredNotice = false
-            // The battle was rebuilt from the turn start: no pose or show of the old run is left (L5).
-            fx.reset()
-            if let s = game.frame() { apply(s) }
-            showBanner("Hiccup! Back to the start of the turn")
-        }
+        onDisplayTick?()
     }
 
     private func apply(_ snap: BattleSnapshot) {
@@ -446,7 +535,7 @@ final class BattleSession: ObservableObject {
         } else if !snap.lean {
             fx.noteState(snap)
         }
-        if !snap.shells.isEmpty || !old.shells.isEmpty { fx.trail(snap.shells, ids: Array(0..<snap.shells.count)) }
+        if !snap.shells.isEmpty || !old.shells.isEmpty { fx.trail(snap.shells, ids: snap.shells.map(\.id)) }
         // A shell in the air: the Fatigue hold and any Rival peek end, the camera follows it.
         if !snap.shells.isEmpty { cameraHome = nil; if rivalPeek { rivalPeek = false } }
         snapshot = snap
@@ -470,13 +559,18 @@ final class BattleSession: ObservableObject {
             let next = HudState(snap)
             if next != hud { hud = next }
         }
-        if !snap.humanTurn || snap.phase != .plan { armedDoodad = nil }
+        if !snap.humanTurn || snap.phase != .plan {
+            armedDoodad = nil
+            resetActionOptions()
+        }
         if wasInFlight != snap.phase.isResolving {
             if snap.phase.isResolving {
                 endDragKeepingAim(); endPan(); cameraPan = 0; fineTuneOpen = false
                 if rivalPeek { rivalPeek = false }
             }
             relayout()
+        } else {
+            refreshRivalMarker()
         }
         if let result = snap.result, !endReported {
             endReported = true
@@ -500,23 +594,33 @@ final class BattleSession: ObservableObject {
     }
 
     private func turnStarted(_ snap: BattleSnapshot) {
+        resetActionOptions()
         // Test Yard: the Dummy side passes itself in a blink; no banner for it (rules 3).
         if snap.mode == "test_yard" && !snap.isHuman(snap.activeSide) { return }
+        let words = GameText.shared
         let name = snap.name(snap.activeSide)
         var text: String
         if snap.isDuel {
-            text = "\(name)'s turn"
+            text = words.t("banners.name_turn", ["name": name])
         } else if snap.isHuman(snap.activeSide) {
-            text = "Your turn"
+            text = words.t("banners.your_turn")
         } else {
-            text = "\(name) aims"
+            let rival = words.rivalShort(name)
+            // Now and then a Rival line in place of "aims", one turn in four at most (text.json).
+            if !lastRivalLine && Double.random(in: 0..<1) < 0.25, words.has("rivals.banner.thinking") {
+                text = words.pick("rivals.banner.thinking", ["rival": rival])
+                lastRivalLine = true
+            } else {
+                text = words.t("banners.rival_aims", ["rival": rival])
+                lastRivalLine = false
+            }
         }
         if snap.squallRound >= 1 && !squallAnnounced {
             squallAnnounced = true
-            text = "Sudden Squall"
+            text = words.t("banners.weather.squall")
         } else if snap.squallIn == 3 && !squallWarned {
             squallWarned = true
-            text = "Squall in 3"
+            text = words.t("banners.weather.squall_in", ["n": 3])
         }
         game.rivalFast = settings.rivalTurnsFast
         cameraPan = 0
@@ -536,6 +640,8 @@ final class BattleSession: ObservableObject {
         } else {
             showBanner(text)
         }
+        // Pick an acting Hob BEFORE autosave runs so the saved turn starts on that Hob (iOS-M3).
+        openOnAnActingHob(snap)
         // The Fine Tune pad moves to the side away from the fort on turn (Couch Duel).
         relayout()
         onTurnStarted?(self)
@@ -549,7 +655,7 @@ final class BattleSession: ObservableObject {
             case "fatigue_warn":
                 if fatigueWarnedRound != snap.round {
                     fatigueWarnedRound = snap.round
-                    showBanner(e.text.isEmpty ? Self.fatigueWarnText : e.text, queued: true)
+                    showBanner(Self.fatigueWarnText, queued: true)
                 }
             case "fatigue":
                 holdHome(snap)
@@ -580,7 +686,6 @@ final class BattleSession: ObservableObject {
         let warn = snap.events.first { $0.type == "fatigue_warn" }
         if (warn != nil || (snap.fatigueIn == 1 && !snap.fatigue)), fatigueWarnedRound != snap.round {
             fatigueWarnedRound = snap.round
-            if let text = warn?.text, !text.isEmpty { return text }
             return Self.fatigueWarnText
         }
         return nil
@@ -605,25 +710,32 @@ final class BattleSession: ObservableObject {
     /// The Hob a turn should open on, or nil when the picked Hob can act (or nobody can).
     nonisolated static func hobToOpen(_ snap: BattleSnapshot) -> String? {
         guard snap.phase == .plan, snap.humanTurn, let fort = snap.fort(snap.activeSide) else { return nil }
-        if let id = snap.selectedHob, let hob = fort.hobs.first(where: { $0.id == id }) {
-            // Dug in counts as able to act: Shove Off clears it.
-            let shotReady = snap.shots.isEmpty || snap.shots.contains { $0.ready }
-            if !hob.isOut && ((hob.canFire && shotReady) || hob.buried) { return nil }
-            return fort.hobs.first { $0.id != id && !$0.isOut && $0.canFire }?.id
+        let canShove = snap.steam >= snap.shoveOffCost
+        func ableToAct(_ h: HobView) -> Bool {
+            !h.isOut && (h.canFire || (h.buried && canShove))
         }
-        return fort.hobs.first { !$0.isOut && $0.canFire }?.id
+        if let id = snap.selectedHob, let hob = fort.hobs.first(where: { $0.id == id }) {
+            // Dug in counts as able to act only when Steam covers Shove Off (iOS-M3).
+            let shotReady = snap.shots.isEmpty || snap.shots.contains { $0.ready }
+            if !hob.isOut && ((hob.canFire && shotReady) || (hob.buried && canShove)) { return nil }
+            return fort.hobs.first { $0.id != id && ableToAct($0) }?.id
+        }
+        return fort.hobs.first { ableToAct($0) }?.id
     }
 
-    /// The line for a `shot_switch`: the unready chip's own words when the core sent them.
+    /// The line for a `shot_switch`: the unready chip's words when there are some.
     static func shotSwitchText(_ e: BattleEvent, snap: BattleSnapshot) -> String {
         let from = e.raw?.fromShot ?? ""
-        if let chip = snap.shots.first(where: { $0.id == from }), let text = chip.text, !text.isEmpty {
+        let chip = snap.shots.first(where: { $0.id == from })
+        if let text = chip?.text, !text.isEmpty {
             return text
         }
         let hob = snap.forts.flatMap(\.hobs).first { $0.id == String(e.amount) }
-        let reason = e.text.isEmpty ? "" : refusalText(e.text)
-        if let hob, !reason.isEmpty { return "\(hob.name): \(reason)" }
-        return "Switched to the Plain Shot"
+        if let hob, !e.text.isEmpty,
+           let line = whyLine(e.text, hob: hob.shortName, shot: chip?.name) {
+            return line
+        }
+        return GameText.shared.t("hud.switched_plain")
     }
 
     /// Shows a banner for 1.2 s (a Fatigue banner longer). A queued one waits for the banner on
@@ -647,43 +759,63 @@ final class BattleSession: ObservableObject {
         }
     }
 
-    /// A short line for a refused action, so a buzz is never the only answer (H2). A refusal
-    /// with the core's own words (rules 3 `detail`) shows those.
+    /// A short line for a refused action, so a buzz is never the only answer (H2). The words
+    /// come from text.json by the refusal id, with the Hob's short name and the shot's name.
     private func refused(_ reply: CoreReply) {
+        // Recovery is handled by `game.recoveredNotice` in `tick()` with its own banner (iOS-M7).
+        guard reply.reason != "recovered" else { return }
         onLocalHaptic?(.illegal)
         guard let reason = reply.reason, reason != "busy" else { return }
-        if let detail = reply.detail, !detail.isEmpty, reply.shot != nil || reply.readyShot != nil {
-            showBanner(detail)
-        } else {
-            showBanner(Self.refusalText(reason))
+        let fort = snapshot.fort(snapshot.activeSide)
+        let hob = reply.hob.flatMap { id in fort?.hobs.first { $0.id == String(id) } } ?? selectedHobView
+        let shotId = reply.shot ?? snapshot.selectedShot
+        let shot = snapshot.shots.first { $0.id == shotId }?.name
+        let doodad = armedDoodad.map { game.catalog.doodadName($0) }
+        showBanner(Self.refusalText(reason, hob: hob?.shortName, shot: shot, doodad: doodad, detail: reply.detail))
+    }
+
+    /// The text.json key for a refusal id the core sends (core/API.md, Refusal reasons).
+    nonisolated static func refusalKey(_ reason: String) -> String {
+        switch reason {
+        case "resting_plain_only", "resting", "buried", "no_knack_uses", "not_in_hand", "no_heavy_first_turn",
+             "no_actions_left", "already_acted", "not_planning", "hob_cannot_fire", "no_ghost":
+            return "hud.why.\(reason)"
+        case "no_shot": return "hud.why.not_in_hand"
+        case "not_enough_steam": return "hud.why.no_steam"
+        case "cannot_walk_now", "cannot_walk_there": return "hud.why.cannot_walk"
+        case "bad_value": return "hud.why.out_of_range"
+        case "bad_target": return "hud.why.own_block"
+        case "battle_over": return "hud.why.over"
+        case "pin_faded": return "hud.pin_faded"
+        case "cannot_shove_now": return "hud.shove_off.not_now"
+        case "not_buried": return "hud.shove_off.nothing"
+        case "nothing_to_mend": return "hud.mend.none"
+        case "no_one_to_puff_up", "puff_up_not_allowed": return "hud.dial.puff_up_none"
+        case "no_doodad": return "hud.doodad.none_left"
+        case "cannot_use_now": return "hud.doodad.not_now"
+        case "recovered": return "errors.turn_reset"
+        case "dead_handle", "panic", "null_handle": return "errors.core_stopped"
+        default: return "hud.why.default"
         }
     }
 
-    nonisolated static func refusalText(_ reason: String) -> String {
-        switch reason {
-        case "not_enough_steam": return "Not enough Steam"
-        case "hob_cannot_fire": return "That Hob cannot fire"
-        case "resting_plain_only": return "Resting: Plain Shot only"
-        case "no_knack_uses": return "No Knack left"
-        case "no_heavy_first_turn": return "No Heavy shot on the first turn"
-        case "cannot_walk_now", "cannot_walk_there": return "Cannot walk there"
-        case "cannot_shove_now", "not_buried": return "Nothing to shove off"
-        case "already_acted": return "You have acted this turn"
-        case "pin_faded": return "That Pin has faded"
-        case "no_ghost": return "No shot to recall yet"
-        case "no_doodad", "cannot_use_now": return "Cannot use that now"
-        case "nothing_to_mend": return "Nothing to mend"
-        case "no_one_to_puff_up": return "No one to Puff Up"
-        case "bad_target": return "Pick one of your own blocks"
-        case "no_actions_left": return "No shots left"
-        case "battle_over": return "The battle is over"
-        case "buried": return "Dug in: Shove Off first"
-        case "resting": return "Resting this turn"
-        case "bad_value": return "That aim is out of range"
-        case "recovered": return "Hiccup! Back to the start of the turn"
-        case "dead_handle", "panic": return "The rules core stopped"
-        default: return reason.replacingOccurrences(of: "_", with: " ").capitalized
-        }
+    /// The text.json line for a refusal id, or nil when a name it needs is missing.
+    nonisolated static func whyLine(_ reason: String, hob: String? = nil, shot: String? = nil,
+                                    doodad: String? = nil) -> String? {
+        var vars: [String: any CustomStringConvertible] = [:]
+        if let hob, !hob.isEmpty { vars["hob"] = hob }
+        if let shot, !shot.isEmpty { vars["shot"] = shot }
+        if let doodad, !doodad.isEmpty { vars["doodad"] = doodad }
+        return GameText.shared.complete(refusalKey(reason), vars)
+    }
+
+    /// Plain words for a refusal: the text.json line, else the core's own `detail`, else a
+    /// plain "that did not go through" line.
+    nonisolated static func refusalText(_ reason: String, hob: String? = nil, shot: String? = nil,
+                                        doodad: String? = nil, detail: String? = nil) -> String {
+        if let line = whyLine(reason, hob: hob, shot: shot, doodad: doodad) { return line }
+        if let detail, !detail.isEmpty { return detail }
+        return GameText.shared.t("errors.move_failed")
     }
 
     // MARK: Layout
@@ -704,8 +836,11 @@ final class BattleSession: ObservableObject {
         let hudSide = snapshot.isDuel ? snapshot.activeSide : 0
         let next = BattleLayout.compute(size: viewSize, insets: viewInsets, mode: mode,
                                         inFlight: snapshot.phase.isResolving, isPad: big,
-                                        hudSide: hudSide, leftHand: settings.leftHand)
+                                        hudSide: hudSide, leftHand: settings.leftHand,
+                                        reduceMotion: settings.reduceMotion,
+                                        largeText: settings.largeText)
         if next != layout { layout = next }
+        refreshRivalMarker()
     }
 
     // MARK: Pause
@@ -715,6 +850,7 @@ final class BattleSession: ObservableObject {
         endDragKeepingAim(restore: true)
         paused = true
         showPauseCard = true
+        refreshRivalMarker()
         onPausedChanged?(true)
     }
 
@@ -722,6 +858,7 @@ final class BattleSession: ObservableObject {
         let was = paused
         paused = false
         showPauseCard = false
+        refreshRivalMarker()
         if was { onPausedChanged?(false) }
     }
 
@@ -763,6 +900,7 @@ final class BattleSession: ObservableObject {
         }
         let limit = max(1, snapshot.world.w)
         cameraPan = min(limit, max(-limit, start.pan - Double(dx / start.scale)))
+        refreshRivalMarker()
         frameVersion &+= 1
     }
 
@@ -778,6 +916,7 @@ final class BattleSession: ObservableObject {
     func pan(by cells: Double) {
         let limit = max(1, snapshot.world.w)
         cameraPan = min(limit, max(-limit, cameraPan + cells))
+        refreshRivalMarker()
         frameVersion &+= 1
     }
 
@@ -807,12 +946,32 @@ final class BattleSession: ObservableObject {
         !stopped && !paused && (snapshot.phase == .plan || snapshot.phase == .handoff) && layout.mode == .wide
     }
 
+    /// Recomputes whether the native SwiftUI Rival fort button should appear and on which edge.
+    private func refreshRivalMarker() {
+        guard canPeek, let lens = layout.lenses.first, lens.focus == .both else {
+            if rivalMarkerEdge != nil { rivalMarkerEdge = nil }
+            return
+        }
+        let rivalSide = 1 - snapshot.activeSide
+        let edge: Int?
+        if rivalPeek {
+            edge = rivalSide == 1 ? 1 : -1
+        } else {
+            var target = Camera.worldRect(for: .both, snap: snapshot, fx: fx, frame: lens.frame.size,
+                                          minBlock: lens.minBlock, home: cameraHome, peek: false)
+            target = Camera.panned(target, by: cameraPan, worldW: snapshot.world.w)
+            edge = Camera.rivalEdge(worldRect: target, snap: snapshot)
+        }
+        if rivalMarkerEdge != edge { rivalMarkerEdge = edge }
+    }
+
     /// The Rival fort marker was tapped: both forts at any zoom, or back home on a second tap.
     func toggleRivalPeek() {
         guard canPeek || rivalPeek else { return }
         rivalPeek.toggle()
         if rivalPeek { cameraPan = 0; endPan() }
         onLocalHaptic?(.tick)
+        refreshRivalMarker()
         frameVersion &+= 1
     }
 
@@ -863,9 +1022,11 @@ final class BattleSession: ObservableObject {
         guard g.isDragging else { return }
         // Throttled: the newest aim goes out at most every 66 ms, and always on release (H8).
         pendingAim = (g.angleTenths, g.power)
+        onAimBand?(min(1, Float(g.power) / 100), Double(g.power) / 100 * 5)
         if g.power >= 100 && !hitFullPower {
             hitFullPower = true
             onLocalHaptic?(.tick)
+            onAudioCue?("aim_limit")
         } else if g.power < 100 {
             hitFullPower = false
         }
@@ -886,6 +1047,7 @@ final class BattleSession: ObservableObject {
         gesture = nil
         pendingAim = nil
         dragModel.overlay = nil
+        onAimBand?(0, 0)
         if dragging { dragging = false }
     }
 
@@ -904,6 +1066,7 @@ final class BattleSession: ObservableObject {
             return
         }
         game.send(.aim(angle: g.angleTenths, power: g.power))
+        onAudioCue?("aim_set")
         dragEndedAt = DispatchTime.now().uptimeNanoseconds
         fineTuneOpen = true
         scheduleFold()
@@ -935,6 +1098,141 @@ final class BattleSession: ObservableObject {
         game.send(.aim(angle: before.angle, power: before.power))
     }
 
+    // MARK: Action options (iOS-H4: dial, self-mend target, Pot Lid room, Mend Bucket targets)
+
+    var selectedShotChip: ShotChip? {
+        snapshot.shots.first { $0.id == snapshot.selectedShot }
+    }
+
+    var selectedShotDef: ContentCatalog.Shot? {
+        selectedShotChip.flatMap { game.catalog.shots[$0.art] }
+    }
+
+    var selectedHobView: HobView? {
+        snapshot.fort(snapshot.activeSide)?.hobs.first { $0.id == snapshot.selectedHob }
+    }
+
+    /// Dial choices for the current shot (`barn_raising` Rebuild/Puff Up, or Bobbin Plain 2/3 Hops).
+    var availableDials: [(id: String?, label: String, enabled: Bool)] {
+        guard armedDoodad == nil else { return [] }
+        if let dials = selectedShotDef?.dials, !dials.isEmpty {
+            return dials.map { id -> (id: String?, label: String, enabled: Bool) in
+                switch id {
+                case "rebuild": return (id, GameText.shared.t("hud.dial.rebuild"), true)
+                case "puff_up": return (id, GameText.shared.t("hud.dial.puff_up"), hud.puffUp)
+                default: return (id, id.replacingOccurrences(of: "_", with: " ").capitalized, true)
+                }
+            }
+        }
+        if snapshot.selectedShot == "plain", selectedHobView?.def == "bobbin" {
+            let text = GameText.shared
+            return [(nil, text.plural("hud.dial.hops", 2), true), ("hops3", text.plural("hud.dial.hops", 3), true)]
+        }
+        return []
+    }
+
+    /// True when the picked shot supports tapping an own-fort block to self-mend (`mendglob`).
+    var canPickMendTarget: Bool {
+        armedDoodad == nil && (selectedShotDef?.hasSelfTarget ?? false)
+    }
+
+    /// Rooms that Pot Lid may protect on the active side's fort (`kettle` or `nook:N`).
+    var potLidRooms: [(id: String, label: String)] {
+        let text = GameText.shared
+        let kettle: (id: String, label: String) = ("kettle", text.t("hud.doodad.kettle_room"))
+        guard let fort = snapshot.fort(snapshot.activeSide) else { return [kettle] }
+        return [kettle] + fort.rooms.enumerated().map { idx, room in
+            ("nook:\(room.id)", text.t("hud.doodad.nook", ["n": idx + 1]))
+        }
+    }
+
+    /// True while a field tap should select an own-fort block instead of starting an Aim Drag.
+    var wantsBlockTap: Bool {
+        canAct && (armedDoodad == "mend_bucket" || (armedDoodad == nil && canPickMendTarget && pickingMendTarget))
+    }
+
+    /// Highlighted own-fort blocks for the renderer (self-mend target or Mend Bucket targets).
+    var highlightedBlocks: [[Int]] {
+        if armedDoodad == "mend_bucket" { return armedDoodadTargets }
+        if let target = selectedBlockTarget, canPickMendTarget { return [target] }
+        return []
+    }
+
+    func selectDial(_ dial: String?) {
+        guard canAct else { return }
+        selectedDial = dial
+        onLocalHaptic?(.tick)
+    }
+
+    func toggleMendTargetMode() {
+        guard canAct, canPickMendTarget else { return }
+        if selectedBlockTarget != nil && !pickingMendTarget {
+            selectedBlockTarget = nil
+            pickingMendTarget = false
+        } else {
+            pickingMendTarget.toggle()
+        }
+        onLocalHaptic?(.tick)
+        frameVersion &+= 1
+    }
+
+    func selectDoodadRoom(_ room: String) {
+        guard canAct, armedDoodad == "pot_lid" else { return }
+        armedDoodadRoom = room
+        onLocalHaptic?(.tick)
+    }
+
+    func clearDoodadTargets() {
+        armedDoodadTargets = []
+        frameVersion &+= 1
+    }
+
+    /// Handles a tap on the player's own fort while targeting `mendglob` or `mend_bucket`.
+    /// Returns true if the tap picked/toggled a block (suppressing Aim Drag).
+    func handleBlockTap(at point: CGPoint) -> Bool {
+        guard wantsBlockTap, let map = lensMap?(point), let fort = snapshot.fort(snapshot.activeSide) else {
+            return false
+        }
+        let w = map.world(point)
+        guard let block = fort.blocks.first(where: {
+            Double(w.x) >= $0.x && Double(w.x) <= $0.x + $0.w && Double(w.y) >= $0.y && Double(w.y) <= $0.y + $0.h
+        }) else {
+            return false
+        }
+        let c = Int(((block.x - fort.originX) / fort.block).rounded())
+        let r = Int(((block.y - fort.baseY) / fort.block).rounded())
+        let cell = [c, r]
+        if armedDoodad == "mend_bucket" {
+            if let idx = armedDoodadTargets.firstIndex(of: cell) {
+                armedDoodadTargets.remove(at: idx)
+            } else if armedDoodadTargets.count < 3 {
+                armedDoodadTargets.append(cell)
+            } else {
+                onLocalHaptic?(.illegal)
+                return true
+            }
+            onLocalHaptic?(.tick)
+            frameVersion &+= 1
+            return true
+        }
+        if pickingMendTarget {
+            selectedBlockTarget = selectedBlockTarget == cell ? nil : cell
+            pickingMendTarget = false
+            onLocalHaptic?(.tick)
+            frameVersion &+= 1
+            return true
+        }
+        return false
+    }
+
+    private func resetActionOptions() {
+        selectedDial = nil
+        selectedBlockTarget = nil
+        pickingMendTarget = false
+        armedDoodadRoom = "kettle"
+        armedDoodadTargets = []
+    }
+
     // MARK: HUD actions
 
     /// Fire acts on finger up inside the button, with a 150 ms guard after an
@@ -955,10 +1253,18 @@ final class BattleSession: ObservableObject {
 
     private func sendFire() {
         guard canAct else { return }
-        let reply = game.send(.fire())
+        let dialToSend: String?
+        if let d = selectedDial, availableDials.contains(where: { $0.id == d && $0.enabled }) {
+            dialToSend = d
+        } else {
+            dialToSend = nil
+        }
+        let targetToSend = canPickMendTarget ? selectedBlockTarget : nil
+        let reply = game.send(.fire(dial: dialToSend, target: targetToSend))
         if reply.ok {
             fineTuneOpen = false
             if rivalPeek { rivalPeek = false }
+            resetActionOptions()
             onLocalHaptic?(.fire)
         } else {
             // Rules 3: a refused Fire spends nothing. Show the core's words, and move the pick to
@@ -995,17 +1301,26 @@ final class BattleSession: ObservableObject {
     /// Picks a Doodad chip: Fire then uses it. Picking it again puts it down.
     func armDoodad(_ id: String) {
         guard canAct else { return }
-        armedDoodad = armedDoodad == id ? nil : id
+        let next = armedDoodad == id ? nil : id
+        armedDoodad = next
+        armedDoodadRoom = "kettle"
+        armedDoodadTargets = []
+        pickingMendTarget = false
         onLocalHaptic?(.tick)
+        frameVersion &+= 1
     }
 
-    /// Uses a Doodad as the Action, with the core's default targets (Mend
-    /// Bucket: the most hurt blocks; Pot Lid: the Kettle Room).
+    /// Uses a Doodad as the Action, passing the chosen Pot Lid room or Mend Bucket block targets
+    /// (nil falls back to the core's default: Kettle Room or most-hurt blocks).
     @discardableResult
-    func useDoodad(_ id: String) -> Bool {
+    func useDoodad(_ id: String, room: String? = nil, targets: [[Int]]? = nil) -> Bool {
         guard canAct else { return false }
-        let reply = game.send(.doodad(doodad: id))
+        let chosenRoom: String? = id == "pot_lid" ? (room ?? (armedDoodadRoom == "kettle" ? nil : armedDoodadRoom)) : nil
+        let chosenTargets: [[Int]]? = id == "mend_bucket" ? (targets ?? (armedDoodadTargets.isEmpty ? nil : armedDoodadTargets)) : nil
+        let reply = game.send(.doodad(doodad: id, targets: chosenTargets, room: chosenRoom))
         armedDoodad = nil
+        armedDoodadRoom = "kettle"
+        armedDoodadTargets = []
         if reply.ok { onLocalHaptic?(.fire) } else { refused(reply) }
         tick()
         return reply.ok
@@ -1021,10 +1336,12 @@ final class BattleSession: ObservableObject {
         let power = min(100, max(0, a.power + dPower))
         if angle == a.angle && power == a.power && a.set {
             onLocalHaptic?(.illegal)
+            onAudioCue?("aim_limit")
             return false
         }
         let reply = game.send(.aim(angle: angle, power: power))
         onLocalHaptic?(reply.ok ? .tick : .illegal)
+        if reply.ok { onAudioCue?("aim_tick") }
         scheduleFold()
         tick()
         return reply.ok
@@ -1043,6 +1360,7 @@ final class BattleSession: ObservableObject {
             refused(reply)
             return
         }
+        onAudioCue?("aim_recall")
         fineTuneOpen = true
         scheduleFold()
         tick()
@@ -1051,20 +1369,32 @@ final class BattleSession: ObservableObject {
     func pickHob(_ id: String) {
         guard canAct else { return }
         let reply = game.send(.pickHob(hob: Int(id) ?? -1))
-        if reply.ok { onLocalHaptic?(.tick) } else { refused(reply) }
+        if reply.ok {
+            resetActionOptions()
+            onLocalHaptic?(.tick)
+            onAudioCue?("turn_hob_pick")
+            if let def = snapshot.fort(snapshot.activeSide)?.hobs.first(where: { $0.id == id })?.def {
+                onHobPicked?(def, snapshot.activeSide)
+            }
+        } else {
+            refused(reply)
+        }
         tick()
     }
 
     func pickShot(_ id: String) {
         guard canAct else { return }
         armedDoodad = nil
+        resetActionOptions()
         let reply = game.send(.pickShot(shot: id))
         if reply.ok {
             onLocalHaptic?(.tick)
             // The pick stands even when it cannot fire now; say why (rules 3).
             if reply.ready == false {
                 let chip = snapshot.shots.first { $0.id == id }
-                let text = reply.text ?? chip?.text ?? reply.why.map(Self.refusalText)
+                let hob = selectedHobView?.shortName
+                let text = reply.why.map { Self.refusalText($0, hob: hob, shot: chip?.name, detail: reply.text) }
+                    ?? chip?.text ?? reply.text
                 if let text, !text.isEmpty { showBanner(text) }
             }
         } else {
@@ -1078,7 +1408,7 @@ final class BattleSession: ObservableObject {
     @discardableResult
     func walk(_ dir: Int) -> Bool {
         guard canAct else { return false }
-        let reply = game.send(.walk(dx: dir * 4))
+        let reply = game.send(.walk(dx: dir * game.catalog.appConfig.walkCells))
         if !reply.ok { refused(reply) }
         return reply.ok
     }
@@ -1087,23 +1417,37 @@ final class BattleSession: ObservableObject {
         guard !stopped else { return }
         game.speed = game.speed >= 2 ? 1 : 2
         fx.fast = game.speed >= 2
-        if game.speed >= 2 { fx.cancelSlowMotion() }
+        if game.speed >= 2 {
+            fx.cancelSlowMotion()
+            onAudioCue?("fly_fast_zip")
+        }
         game.markDirty()
         tick()
     }
 
     /// Give up: the other side wins (`how: "give_up"`); a campaign loss still pays its Buttons.
-    /// Works in any phase but ended, even while the Rival thinks.
+    /// Works in any phase but ended, even while the Rival thinks, without blocking the main thread (iOS-M8).
     @discardableResult
     func giveUp() -> Bool {
         guard !stopped, game.isRunning, snapshot.phase != .ended else { return false }
-        game.waitUntilIdle()
         let side: Int? = snapshot.isDuel ? snapshot.activeSide : nil
-        let reply = game.giveUp(side: side)
         let was = paused
         paused = false
         showPauseCard = false
         if was { onPausedChanged?(false) }
+        if game.isBusy {
+            Task { @MainActor [weak self] in
+                guard let self, !self.stopped, self.game.isRunning else { return }
+                _ = await self.game.host.run { _ in () }
+                guard !self.stopped, self.game.isRunning, self.snapshot.phase != .ended else { return }
+                let reply = self.game.giveUp(side: side)
+                if !reply.ok { self.refused(reply) }
+                self.game.markDirty()
+                self.tick()
+            }
+            return true
+        }
+        let reply = game.giveUp(side: side)
         if !reply.ok { refused(reply) }
         game.markDirty()
         tick()
@@ -1144,7 +1488,7 @@ final class BattleSession: ObservableObject {
     }
 
     private func scheduleFold() {
-        guard !isPad else { return }
+        guard !layout.usePadScale else { return }
         foldTask?.cancel()
         foldTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 4_000_000_000)

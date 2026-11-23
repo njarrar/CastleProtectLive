@@ -229,16 +229,19 @@ impl Battle {
                 }
             }
             FlightKind::Bounce => {
-                let hard = matches!(hit, Hit::Hob(_) | Hit::Kettle(_) | Hit::Water);
+                let mud_code = self.content.terrain_code("mud");
+                let hit_mud =
+                    hit == Hit::Terrain && mud_code != 0 && self.terrain.get(cx, cy) == mud_code;
+                let hard = matches!(hit, Hit::Hob(_) | Hit::Kettle(_) | Hit::Water) || hit_mud;
                 if !hard && a.bounces < f.bounces {
+                    let vert = self.collide(a.side, px, cy, None, false).is_some();
+                    let horiz = self.collide(a.side, cx, py, None, false).is_some();
                     let effs = self.triggers(a.shot, TriggerOn::Bounce);
                     a.bounces += 1;
                     if self.run_effects(&effs, a, px, py, None, false) {
                         a.done = true;
                         return;
                     }
-                    let vert = self.collide(a.side, px, cy, None, false).is_some();
-                    let horiz = self.collide(a.side, cx, py, None, false).is_some();
                     let (mut vx, mut vy) = (a.vx, a.vy);
                     if vert || !horiz {
                         vy = -vy;
@@ -254,19 +257,27 @@ impl Battle {
                 }
             }
             FlightKind::Roller => {
-                if hit == Hit::Terrain && cy >= py {
-                    let dir = if a.vx > 0 {
-                        1
-                    } else if a.vx < 0 {
-                        -1
-                    } else {
-                        self.castles[a.side as usize].front_dir()
-                    };
-                    a.mode = Mode::Roll { dir };
-                    a.roll_speed = a.vx.abs().max(FX_ONE);
-                    a.x = fx(px) + FX_ONE / 2;
-                    a.y = fx(py) + FX_ONE / 2;
+                if hit == Hit::Water {
+                    self.ev(json!({"t": "miss", "x": cx, "y": cy, "why": "water"}));
+                    a.done = true;
                     return;
+                }
+                if hit == Hit::Terrain && cy >= py {
+                    let mud_code = self.content.terrain_code("mud");
+                    if mud_code == 0 || self.terrain.get(cx, cy) != mud_code {
+                        let dir = if a.vx > 0 {
+                            1
+                        } else if a.vx < 0 {
+                            -1
+                        } else {
+                            self.castles[a.side as usize].front_dir()
+                        };
+                        a.mode = Mode::Roll { dir };
+                        a.roll_speed = a.vx.abs().max(FX_ONE);
+                        a.x = fx(px) + FX_ONE / 2;
+                        a.y = fx(py) + FX_ONE / 2;
+                        return;
+                    }
                 }
                 let effs = self.triggers(a.shot, TriggerOn::Stop);
                 self.run_effects(&effs, a, px, py, Some(hit), false);
@@ -275,20 +286,36 @@ impl Battle {
             }
             FlightKind::Dig => {
                 if matches!(hit, Hit::Terrain | Hit::Block { .. }) {
-                    let l = len_fx(a.vx, a.vy).max(1);
-                    let dx = (a.vx as i64 * FX_ONE as i64 / l as i64) as i32;
-                    let dy = (a.vy as i64 * FX_ONE as i64 / l as i64) as i32;
+                    let (dx, dy) = if a.vx == 0 && a.vy == 0 {
+                        (0, FX_ONE)
+                    } else {
+                        let l = len_fx(a.vx, a.vy).max(1);
+                        (
+                            (a.vx as i64 * FX_ONE as i64 / l as i64) as i32,
+                            (a.vy as i64 * FX_ONE as i64 / l as i64) as i32,
+                        )
+                    };
                     a.mode = Mode::Bore { dx, dy };
-                    a.x = fx(px) + FX_ONE / 2;
-                    a.y = fx(py) + FX_ONE / 2;
+                    a.x = fx(cx) + FX_ONE / 2 - dx;
+                    a.y = fx(cy) + FX_ONE / 2 - dy;
                     return;
                 }
-                if let Hit::Hob(h) = hit {
-                    if f.block_dmg > 0 {
-                        self.damage_hob_direct(a.side, h, f.block_dmg, DType::Dig);
+                let effs = self.triggers(a.shot, TriggerOn::Stop);
+                if f.block_dmg > 0 {
+                    match hit {
+                        Hit::Hob(h) => {
+                            self.damage_hob_direct(a.side, h, f.block_dmg, DType::Dig);
+                            if effs.is_empty() {
+                                self.after_damage();
+                            }
+                        }
+                        Hit::Kettle(_) | Hit::Prop(_) if effs.is_empty() => {
+                            self.blast(a, cx, cy, 0, f.block_dmg, DType::Dig, &[], 100, Some(hit));
+                            self.after_damage();
+                        }
+                        _ => {}
                     }
                 }
-                let effs = self.triggers(a.shot, TriggerOn::Stop);
                 self.run_effects(&effs, a, px, py, Some(hit), false);
                 a.done = true;
                 return;
@@ -313,6 +340,7 @@ impl Battle {
 
     fn roll_tick(&mut self, a: &mut Actor, dir: i32) {
         let f = self.content.shots[a.shot].flight.clone();
+        let mud_code = self.content.terrain_code("mud");
         let n = (a.roll_speed >> FX_SHIFT).max(1);
         let mut descended = 0;
         let mut climbed = 0;
@@ -322,7 +350,16 @@ impl Battle {
             let mut ny = y;
             match self.collide(a.side, nx, y, None, true) {
                 None => {}
+                Some(Hit::Water) => {
+                    self.mark_pin(nx, y);
+                    self.ev(json!({"t": "miss", "x": nx, "y": y, "why": "water"}));
+                    a.done = true;
+                    return;
+                }
                 Some(Hit::Terrain) => {
+                    if mud_code != 0 && self.terrain.get(nx, y) == mud_code {
+                        return self.roll_stop(a, x, y, Some(Hit::Terrain));
+                    }
                     if self.collide(a.side, nx, y - 1, None, true).is_none()
                         && (f.motor || a.roll_speed > FX_ONE / 2)
                     {
@@ -348,11 +385,27 @@ impl Battle {
             }
             // fall onto the ground below
             let mut drop = 0;
-            while drop < 4 && self.collide(a.side, nx, ny + 1, None, true).is_none() {
+            let mut below = self.collide(a.side, nx, ny + 1, None, true);
+            while drop < 4 && below.is_none() {
                 ny += 1;
                 drop += 1;
+                below = self.collide(a.side, nx, ny + 1, None, true);
             }
-            if drop == 4 && self.collide(a.side, nx, ny + 1, None, true).is_none() {
+            if below == Some(Hit::Water) {
+                self.mark_pin(nx, ny + 1);
+                self.ev(json!({"t": "miss", "x": nx, "y": ny + 1, "why": "water"}));
+                a.done = true;
+                return;
+            }
+            if below == Some(Hit::Terrain)
+                && mud_code != 0
+                && self.terrain.get(nx, ny + 1) == mud_code
+            {
+                a.x = fx(nx) + FX_ONE / 2;
+                a.y = fx(ny) + FX_ONE / 2;
+                return self.roll_stop(a, nx, ny, Some(Hit::Terrain));
+            }
+            if drop == 4 && below.is_none() {
                 a.x = fx(nx) + FX_ONE / 2;
                 a.y = fx(ny) + FX_ONE / 2;
                 a.mode = Mode::Fly;
@@ -413,18 +466,28 @@ impl Battle {
 
     fn bore_tick(&mut self, a: &mut Actor, dx: Fx, dy: Fx) {
         let f = self.content.shots[a.shot].flight.clone();
+        let top_limit = -4 * self.terrain.h;
         for _ in 0..3 {
+            let (prev_x, prev_y) = (cell(a.x), cell(a.y));
             a.x += dx;
             a.y += dy;
             let (x, y) = (cell(a.x), cell(a.y));
-            if x < 0 || x >= self.terrain.w || y >= self.terrain.h {
+            if x < 0 || x >= self.terrain.w || y >= self.terrain.h || y < top_limit {
                 return self.bore_stop(
                     a,
                     x.clamp(0, self.terrain.w - 1),
-                    y.min(self.terrain.h - 1),
+                    y.clamp(0, self.terrain.h - 1),
                     None,
                     true,
                 );
+            }
+            if (x, y) == (prev_x, prev_y) {
+                continue;
+            }
+            if let Some((s, c, r)) = a.skip {
+                if self.castles[s as usize].slot_at(x, y) != Some((c, r)) {
+                    a.skip = None;
+                }
             }
             match self.collide(a.side, x, y, a.skip, false) {
                 Some(Hit::Block { side, c, r }) => {
@@ -464,7 +527,7 @@ impl Battle {
                         return self.bore_stop(a, x, y, None, true);
                     }
                     let r = (f.tunnel / 2).max(1);
-                    self.terrain.clear_rect(x - r, y - r, x + r, y + r);
+                    self.terrain.clear_bore(x, y, r, dx, dy);
                     a.in_ground = true;
                     a.bored += 10000 / bp;
                     if a.bored >= f.max_cells * 100 {
@@ -472,9 +535,25 @@ impl Battle {
                     }
                 }
                 Some(Hit::Kettle(s)) => {
-                    return self.bore_stop(a, x, y, Some(Hit::Kettle(s)), false)
+                    let hit = Hit::Kettle(s);
+                    let effs = self.triggers(a.shot, TriggerOn::Stop);
+                    if f.block_dmg > 0 && effs.is_empty() {
+                        self.blast(a, x, y, 0, f.block_dmg, DType::Dig, &[], 100, Some(hit));
+                        self.after_damage();
+                        return self.bore_stop(a, x, y, None, false);
+                    }
+                    return self.bore_stop(a, x, y, Some(hit), false);
                 }
-                Some(Hit::Prop(p)) => return self.bore_stop(a, x, y, Some(Hit::Prop(p)), false),
+                Some(Hit::Prop(p)) => {
+                    let hit = Hit::Prop(p);
+                    let effs = self.triggers(a.shot, TriggerOn::Stop);
+                    if f.block_dmg > 0 && effs.is_empty() {
+                        self.blast(a, x, y, 0, f.block_dmg, DType::Dig, &[], 100, Some(hit));
+                        self.after_damage();
+                        return self.bore_stop(a, x, y, None, false);
+                    }
+                    return self.bore_stop(a, x, y, Some(hit), false);
+                }
                 Some(Hit::Off) => {
                     a.done = true;
                     return;
@@ -482,6 +561,10 @@ impl Battle {
                 None => {
                     if a.in_ground && (f.stop_on_air || a.skip.is_none()) {
                         return self.bore_stop(a, x, y, None, false);
+                    }
+                    if !a.in_ground && a.skip.is_none() {
+                        a.mode = Mode::Fly;
+                        return;
                     }
                 }
             }
@@ -492,6 +575,17 @@ impl Battle {
     }
 
     fn bore_stop(&mut self, a: &mut Actor, x: i32, y: i32, hit: Option<Hit>, half: bool) {
+        if a.in_ground {
+            let r = (self.content.shots[a.shot].flight.tunnel / 2).max(1);
+            let (x0, x1) = if let Mode::Bore { dx, .. } = a.mode {
+                let steps = (a.bored / 100).max(1) as i64;
+                let sx = x - ((dx as i64 * steps) >> FX_SHIFT) as i32;
+                (sx.min(x) - r - 2, sx.max(x) + r + 2)
+            } else {
+                (x - r - 2, x + r + 2)
+            };
+            self.settle_ground(x0, x1);
+        }
         if self.lid_stop(a, x, y) {
             return;
         }
@@ -499,6 +593,9 @@ impl Battle {
         self.update_buried();
         let effs = self.triggers(a.shot, TriggerOn::Stop);
         self.run_effects(&effs, a, x, y, hit, half);
+        if effs.is_empty() && a.in_ground {
+            self.after_damage();
+        }
         a.done = true;
     }
 
@@ -667,10 +764,25 @@ impl Battle {
                             };
                             self.damage_hob(a.side, h, *above_dmg, *dtype, 1000, &[cover], false);
                         }
+                        let hit_kettle = {
+                            let k = &self.castles[side as usize].kettle;
+                            (k.c == c || k.c + 1 == c) && k.r > r && k.r <= r + above_n
+                        };
+                        if hit_kettle {
+                            self.damage_kettle(a.side, side, *above_dmg, *dtype, 1000, &[]);
+                        }
                         self.ev(json!({"t": "column", "side": side, "c": c, "r": r}));
                         self.after_damage();
                     } else {
                         let r = Band::Tiny.radius();
+                        self.ev(json!({
+                            "t": "explode",
+                            "x": x,
+                            "y": y,
+                            "r": r,
+                            "dmg": above_dmg,
+                            "type": dtype
+                        }));
                         self.blast(a, x, y, r, *above_dmg, *dtype, &[], 100, direct);
                         self.after_damage();
                     }
@@ -715,16 +827,19 @@ impl Battle {
                         tag: shot.clone(),
                         stops_rollers: pf.stops_rollers,
                     });
-                    // a side keeps at most 3 props; a fourth pops the oldest
+                    // a side keeps at most 3 shell props; a fourth pops the oldest
                     let mine: Vec<usize> = self
                         .props
                         .iter()
                         .enumerate()
-                        .filter(|(_, p)| p.side == a.side)
+                        .filter(|(_, p)| p.side == a.side && p.kind == "shell")
                         .map(|(i, _)| i)
                         .collect();
                     if mine.len() > 3 {
-                        self.props.remove(mine[0]);
+                        let old = self.props.remove(mine[0]);
+                        self.ev(
+                            json!({"t": "prop_break", "kind": old.kind, "x": old.x, "y": old.y}),
+                        );
                     }
                     self.ev(json!({"t": "prop", "x": x, "y": yy, "shot": shot}));
                 }
@@ -746,6 +861,7 @@ impl Battle {
                     {
                         let mut nb = ob.clone();
                         nb.hp = (nb.max * restore_pct / 100).max(1);
+                        nb.peephole = false;
                         let mut test = self.castles[s].clone();
                         test.slots[i] = Slot::Block(nb.clone());
                         let held = self.held_slots(a.side);
@@ -867,7 +983,13 @@ impl Battle {
                 continue;
             }
             let ny = (cs.x..cs.x + w)
-                .map(|x| self.terrain.surface_below(x, base))
+                .map(|x| {
+                    let mut y = base.max(0);
+                    while y < self.terrain.h && !self.terrain.solid(x, y) {
+                        y += 1;
+                    }
+                    y
+                })
                 .min()
                 .unwrap_or(self.terrain.h)
                 .min(self.terrain.h);
@@ -877,26 +999,22 @@ impl Battle {
             }
             self.castles[s].base_y = ny;
             self.ev(json!({"t": "castle_drop", "side": s, "cells": drop}));
-            if drop > 48 {
+            if drop > THUMP_DROP {
                 self.ev(json!({"t": "thump", "side": s}));
-                let cs = &mut self.castles[s];
-                let mut broke = vec![];
+                let mut targets = vec![];
+                let cs = &self.castles[s];
                 for r in 0..cs.rows {
                     for c in 0..cs.cols {
-                        if let Some(b) = cs.block_mut(c, r) {
-                            b.hp -= 10;
-                            if b.hp <= 0 {
-                                broke.push((c, r));
+                        if let Some(b) = cs.block(c, r) {
+                            if !self.content.materials.blocks[b.mat as usize].never_falls {
+                                targets.push((c, r));
                             }
                         }
                     }
                 }
-                for &(c, r) in &broke {
-                    let i = cs.idx(c, r);
-                    cs.slots[i] = Slot::Empty;
-                }
-                for (c, r) in broke {
-                    self.ev(json!({"t": "break", "side": s, "c": c, "r": r, "why": "thump"}));
+                let shooter = self.cur.as_ref().map(|c| c.side).unwrap_or(2);
+                for (c, r) in targets {
+                    self.apply_block(shooter, s as u8, c, r, 10);
                 }
                 let ids: Vec<u8> = self
                     .hobs
@@ -947,6 +1065,9 @@ impl Battle {
         }
         self.ev(json!({"t": "bonk", "hob": h, "side": victim_side}));
         self.stats[victim_side as usize].own_bonked += 1;
+        if self.stats[victim_side as usize].first_bonked.is_none() {
+            self.stats[victim_side as usize].first_bonked = Some(h);
+        }
         for n in neighbours {
             if self.hobs[n as usize].has_passive(|p| matches!(p, Passive::OldGrudge))
                 && !self.hobs[n as usize].grudge
@@ -1014,29 +1135,32 @@ impl Battle {
         self.apply_block(shooter, side, c, r, d);
     }
 
+    /// Remove a block from castle `side` at `(c, r)` and record `root_round`
+    /// if it was the boss Sprinkler Root.
+    pub(crate) fn remove_block(&mut self, side: usize, c: i32, r: i32) {
+        let i = self.castles[side].idx(c, r);
+        let root = matches!(&self.castles[side].slots[i], Slot::Block(b) if b.root);
+        self.castles[side].slots[i] = Slot::Empty;
+        if root && self.root_round == 0 {
+            self.root_round = self.round;
+        }
+    }
+
     pub(crate) fn apply_block(&mut self, shooter: u8, side: u8, c: i32, r: i32, d: i32) {
         if d <= 0 {
             return;
         }
-        let round = self.round;
         let mut broke = false;
-        let mut root = false;
         if let Some(b) = self.castles[side as usize].block_mut(c, r) {
             b.hp -= d;
             broke = b.hp <= 0;
-            root = b.root;
         }
         self.ev(json!({"t": "hit", "target": "block", "side": side, "c": c, "r": r, "dmg": d}));
         self.note_taken(side, d);
         if broke {
-            let cs = &mut self.castles[side as usize];
-            let i = cs.idx(c, r);
-            cs.slots[i] = Slot::Empty;
+            self.remove_block(side as usize, c, r);
             self.stats[side as usize].blocks_lost += 1;
             self.ev(json!({"t": "break", "side": side, "c": c, "r": r}));
-            if root && self.root_round == 0 {
-                self.root_round = round;
-            }
         }
         if let Some(cx) = self.cur.as_mut() {
             if shooter != side {
@@ -1068,7 +1192,9 @@ impl Battle {
             ),
             Some(_) => ("self".to_string(), -1),
             None => (
-                if self.soft_falls {
+                if let Some(src) = self.field_source {
+                    src.to_string()
+                } else if self.soft_falls {
                     "fatigue".to_string()
                 } else if self.squall_round() > 0 {
                     "squall".to_string()
@@ -1210,6 +1336,7 @@ impl Battle {
         if d <= 0 {
             return;
         }
+        let was_cracked = self.castles[side as usize].kettle_cracked();
         self.castles[side as usize].kettle_hp -= d;
         self.stats[side as usize].kettle_lost += d as i64;
         self.note_taken(side, d);
@@ -1224,6 +1351,9 @@ impl Battle {
         }
         let hp = self.castles[side as usize].kettle_hp;
         self.ev(json!({"t": "hit", "target": "kettle", "side": side, "dmg": d, "hp": hp.max(0), "why": why}));
+        if !was_cracked && hp > 0 && self.castles[side as usize].kettle_cracked() {
+            self.ev(json!({"t": "kettle_crack", "side": side, "hp": hp}));
+        }
         if hp <= 0 {
             self.kettle_popped(
                 side,
@@ -1358,8 +1488,7 @@ impl Battle {
             if d > r {
                 continue;
             }
-            let extra = if a.passed_block { vec![50] } else { vec![] };
-            self.damage_kettle(shooter, s, dmg, dtype, falloff(d), &extra);
+            self.damage_kettle(shooter, s, dmg, dtype, falloff(d), &[]);
         }
         // props
         for pi in 0..self.props.len() {
@@ -1379,7 +1508,12 @@ impl Battle {
             if d > r {
                 continue;
             }
-            let dd = calc(dmg, falloff(d), &[]);
+            let extra: &[i32] = if p.kind == "cage_bar" && dtype == DType::Pierce {
+                &[150]
+            } else {
+                &[]
+            };
+            let dd = calc(dmg, falloff(d), extra);
             let p = &mut self.props[pi];
             p.hp -= dd;
             if dtype == DType::Blast && r > 0 && p.kind == "shell" {
@@ -1387,21 +1521,26 @@ impl Battle {
                 p.x += if p.x >= x { push } else { -push };
                 p.x = p.x.clamp(0, self.terrain.w - 1);
             }
-            let (px, py, hp, kind) = (p.x, p.y, p.hp, p.kind.clone());
+            let (px, py, hp, kind, prop_side) = (p.x, p.y, p.hp, p.kind.clone(), p.side);
             self.ev(
                 json!({"t": "hit", "target": "prop", "kind": kind, "x": px, "y": py, "dmg": dd}),
             );
             if hp <= 0 {
                 self.ev(json!({"t": "prop_break", "kind": kind, "x": px, "y": py}));
             }
-            if shooter == 0 && kind == "cage_bar" {
+            if (shooter == 0 && kind == "cage_bar")
+                || ((kind == "roller" || kind == "shears") && prop_side != shooter)
+            {
                 if let Some(c) = self.cur.as_mut() {
                     c.hit_enemy = true;
                 }
             }
         }
-        // shoved props settle on the ground again
+        // shoved shell props settle on the ground again
         for pi in 0..self.props.len() {
+            if self.props[pi].kind != "shell" {
+                continue;
+            }
             let (px, mut py) = (self.props[pi].x, self.props[pi].y);
             while py < self.terrain.h - 1 && !self.solid_any(px, py + 1) {
                 py += 1;
@@ -1477,8 +1616,7 @@ impl Battle {
                 }
                 // remove the chunk: it breaks on landing
                 for &(c, r) in &chunk {
-                    let i = self.castles[s].idx(c, r);
-                    self.castles[s].slots[i] = Slot::Empty;
+                    self.remove_block(s, c, r);
                 }
                 let mut ev =
                     json!({"t": "collapse", "side": side, "blocks": blocks_json, "falls": falls});
@@ -1616,7 +1754,7 @@ impl Battle {
                 };
             }
             let dmg = if tumbled {
-                20
+                45 + ((drop - 64) / 8).min(25)
             } else if drop > 32 {
                 (10 * drop / 16).min(40)
             } else {

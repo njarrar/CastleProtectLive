@@ -17,6 +17,16 @@ on:
       - "scripts/build-xcframework.sh"
       - "scripts/setup-rust.sh"
       - ".github/workflows/ios.yml"
+  pull_request:
+    branches: [castle-protect-plan, main]
+    paths:
+      - "core/**"
+      - "content/**"
+      - "assets/**"
+      - "apps/ios/**"
+      - "scripts/build-xcframework.sh"
+      - "scripts/setup-rust.sh"
+      - ".github/workflows/ios.yml"
   workflow_dispatch:
 
 permissions:
@@ -36,7 +46,7 @@ env:
 jobs:
   simulator:
     if: github.repository == 'njarrar/CastleProtectLive'
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
@@ -59,7 +69,7 @@ jobs:
 
       - name: Install Rust
         if: steps.check.outputs.core == 'true'
-        run: scripts/setup-rust.sh aarch64-apple-ios aarch64-apple-ios-sim
+        run: scripts/setup-rust.sh aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
 
       - name: Cache cargo
         if: steps.check.outputs.core == 'true'
@@ -109,6 +119,20 @@ jobs:
                           best = (key, d["udid"])
           print(best[1] if best else "")
           ')"
+          ipad_id="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          best = None
+          for runtime, devices in data.items():
+              if "iOS" not in runtime:
+                  continue
+              for d in devices:
+                  if d.get("isAvailable") and d["name"].startswith("iPad"):
+                      key = (runtime, d["name"])
+                      if best is None or key > best[0]:
+                          best = (key, d["udid"])
+          print(best[1] if best else "")
+          ')"
           if [ -z "$sim_id" ]; then
             echo "::error::No iPhone simulator found on this runner."
             exit 1
@@ -117,6 +141,9 @@ jobs:
             echo "project=$project"
             echo "scheme=$scheme"
             echo "destination=platform=iOS Simulator,id=$sim_id"
+            if [ -n "$ipad_id" ]; then
+              echo "ipad_destination=platform=iOS Simulator,id=$ipad_id"
+            fi
           } >> "$GITHUB_OUTPUT"
 
       - name: Build for simulator
@@ -198,10 +225,10 @@ jobs:
             | tee build/xcodebuild-release.log
           grep -q "Linking the real core from .*ios-arm64" build/xcodebuild-release.log || { echo "::error::The Release device build did not link the real core's device slice."; exit 1; }
 
-      # Required reason APIs (privacy manifest): list what the linked binary,
-      # Rust std included, imports, and fail when a category is used but not
-      # declared in PrivacyInfo.xcprivacy.
-      - name: Check the privacy manifest against the binary
+      # Required reason APIs (privacy manifest) & Release bundle hygiene (iOS-M15, iOS-H11):
+      # inspect both undefined C symbols and ObjC selector references, verify every triggered
+      # category is declared with non-empty reason codes, and assert no fixtures or @1x atlases ship.
+      - name: Check the privacy manifest and Release bundle hygiene
         # Runs even when a test failed, so one run reports every problem.
         if: ${{ !cancelled() && steps.check.outputs.core == 'true' }}
         working-directory: apps/ios
@@ -209,41 +236,78 @@ jobs:
           app="build/DerivedData/Build/Products/Release-iphoneos/CastleProtect.app"
           bin="$app/CastleProtect"
           test -f "$bin" || { echo "::error::No Release binary at $bin"; exit 1; }
+          if [ -d "$app/fixtures" ]; then
+            echo "::error::Release bundle contains core/fixtures; fixtures must stay Debug/Tests only."
+            exit 1
+          fi
+          if ls "$app"/atlas/castle@1x* >/dev/null 2>&1; then
+            echo "::error::Release bundle contains @1x atlas files; iOS ships @2x only."
+            exit 1
+          fi
           nm -u "$bin" | sed 's/^ *U *//' | sort -u > build/undefined-symbols.txt
+          otool -v -s __TEXT __objc_methname "$bin" 2>/dev/null | sed 's/^[0-9a-fA-F]*[[:space:]]*//' | sort -u > build/objc-selectors.txt || true
           manifest="$app/PrivacyInfo.xcprivacy"
           test -f "$manifest" || { echo "::error::PrivacyInfo.xcprivacy is not in the app bundle"; exit 1; }
-          fail=0
-          check() {
-            local category="$1"; shift
-            local hits=""
-            for sym in "$@"; do
-              if grep -qxF "_${sym}" build/undefined-symbols.txt; then hits="$hits $sym"; fi
-            done
-            if [ -n "$hits" ]; then
-              echo "$category:$hits"
-              if ! plutil -convert xml1 -o - "$manifest" | grep -q "$category"; then
-                echo "::error::The binary calls$hits ($category) but PrivacyInfo.xcprivacy does not declare it."
-                fail=1
-              fi
-            fi
-          }
-          check NSPrivacyAccessedAPICategoryFileTimestamp stat stat64 fstat fstat64 fstatat lstat lstat64 getattrlist fgetattrlist getattrlistbulk getattrlistat
-          check NSPrivacyAccessedAPICategorySystemBootTime mach_absolute_time
-          check NSPrivacyAccessedAPICategoryDiskSpace statfs statfs64 fstatfs fstatfs64 statvfs fstatvfs
-          check NSPrivacyAccessedAPICategoryActiveKeyboards activeInputModes
-          # UserDefaults (and @AppStorage) show up as the class reference, not a C symbol.
-          check NSPrivacyAccessedAPICategoryUserDefaults 'OBJC_CLASS_$_NSUserDefaults'
+          python3 - "$manifest" build/undefined-symbols.txt build/objc-selectors.txt <<'PY'
+          import plistlib, sys
+
+          manifest_path, sym_path, sel_path = sys.argv[1:4]
+          with open(manifest_path, "rb") as f:
+              plist = plistlib.load(f)
+          syms = set(line.strip() for line in open(sym_path) if line.strip())
+          sels = set(line.strip() for line in open(sel_path) if line.strip())
+
+          declared = {}
+          for entry in plist.get("NSPrivacyAccessedAPITypes", []):
+              cat = entry.get("NSPrivacyAccessedAPIType")
+              reasons = [r for r in entry.get("NSPrivacyAccessedAPITypeReasons", []) if isinstance(r, str) and r.strip()]
+              if cat:
+                  declared[cat] = reasons
+
+          checks = [
+              ("NSPrivacyAccessedAPICategoryFileTimestamp",
+               ["stat", "stat64", "fstat", "fstat64", "fstatat", "lstat", "lstat64", "getattrlist", "fgetattrlist", "getattrlistbulk", "getattrlistat"],
+               []),
+              ("NSPrivacyAccessedAPICategorySystemBootTime",
+               ["mach_absolute_time", "mach_continuous_time", "CACurrentMediaTime"],
+               ["systemUptime"]),
+              ("NSPrivacyAccessedAPICategoryDiskSpace",
+               ["statfs", "statfs64", "fstatfs", "fstatfs64", "statvfs", "fstatvfs"],
+               []),
+              ("NSPrivacyAccessedAPICategoryActiveKeyboards",
+               [],
+               ["activeInputModes"]),
+              ("NSPrivacyAccessedAPICategoryUserDefaults",
+               ["OBJC_CLASS_$_NSUserDefaults"],
+               []),
+          ]
+
+          fail = 0
+          for category, c_syms, objc_sels in checks:
+              hits = [s for s in c_syms if f"_{s}" in syms or s in syms]
+              hits += [f"objc:{s}" for s in objc_sels if s in sels]
+              if hits:
+                  print(f"{category}: {' '.join(hits)}")
+                  reasons = declared.get(category)
+                  if not reasons:
+                      print(f"::error::Binary uses {hits} ({category}) without a valid non-empty NSPrivacyAccessedAPITypeReasons entry in PrivacyInfo.xcprivacy.")
+                      fail = 1
+          for cat, reasons in declared.items():
+              if not reasons:
+                  print(f"::error::PrivacyInfo.xcprivacy declares {cat} with empty NSPrivacyAccessedAPITypeReasons.")
+                  fail = 1
+          print(f"Undefined symbols checked: {len(syms)}, ObjC selectors checked: {len(sels)}")
+          sys.exit(fail)
+          PY
           # Where fstat comes from (Rust std's panic and backtrace code), for the build log.
           echo "Objects that pull in fstat:"
           for lib in $(find ../../core/target -path '*aarch64-apple-ios/release/libcastle_ffi.a' 2>/dev/null); do
             nm -A "$lib" 2>/dev/null | grep -E "U _fstat(64)?$" | head -n 8 || true
           done
-          echo "Undefined symbols checked: $(wc -l < build/undefined-symbols.txt)"
-          exit $fail
 
       # core/API.md: a debug core refuses a call from another thread with
       # wrong_thread (compiled out in release). Link the debug core once and run
-      # the tests that make a Rival turn, a replay and lean aim frames.
+      # ALL real-core test classes including Workshop and QA playtest suites (iOS-M15).
       - name: Thread rule on a debug core
         if: ${{ !cancelled() && steps.check.outputs.core == 'true' }}
         working-directory: apps/ios
@@ -256,19 +320,44 @@ jobs:
             -configuration Debug \
             -destination "${{ steps.pick.outputs.destination }}" \
             -derivedDataPath build/DerivedDataDev \
-            -only-testing:CastleProtectTests/CoreGameTests/testRealCoreWhenLinked \
-            -only-testing:CastleProtectTests/RealCoreTests/testMultiTurnReplayMatchesTheHash \
-            -only-testing:CastleProtectTests/LeanHudTests/testLeanAimReachesTheHudOnTheRealCore \
-            -only-testing:CastleProtectTests/LeanHudTests/testCouchDuelAfterReadyOnTheRealCore \
+            -only-testing:CastleProtectTests/CoreGameTests \
+            -only-testing:CastleProtectTests/RealCoreTests \
+            -only-testing:CastleProtectTests/RealCoreV02Tests \
+            -only-testing:CastleProtectTests/RealCoreRulesThreeTests \
+            -only-testing:CastleProtectTests/RulesFourTests \
+            -only-testing:CastleProtectTests/WorkshopTests \
+            -only-testing:CastleProtectTests/LeanHudTests \
             CODE_SIGNING_ALLOWED=NO > build/xcodebuild-dev.log 2>&1
           status=$?
           set -e
           grep -E "Test Case .* (passed|failed|skipped)|Executed [0-9]+ test|: error: |Linking the real core" build/xcodebuild-dev.log || true
           tail -n 30 build/xcodebuild-dev.log
           [ "$status" -eq 0 ] || exit "$status"
-          for t in testRealCoreWhenLinked testMultiTurnReplayMatchesTheHash testLeanAimReachesTheHudOnTheRealCore testCouchDuelAfterReadyOnTheRealCore; do
+          for t in testRealCoreWhenLinked testMultiTurnReplayMatchesTheHash testLeanAimReachesTheHudOnTheRealCore testCouchDuelAfterReadyOnTheRealCore testRulesFourOnTheRealCore testWorkshopValidatesOnTheRealCore; do
             grep -qE "Test Case .*${t}\]' passed" build/xcodebuild-dev.log || { echo "::error::${t} did not pass on the debug core."; exit 1; }
           done
+
+      - name: Test on iPad simulator
+        if: ${{ !cancelled() && steps.check.outputs.app == 'true' && steps.pick.outputs.ipad_destination != '' }}
+        working-directory: apps/ios
+        run: |
+          set +e
+          xcodebuild test \
+            -project "${{ steps.pick.outputs.project }}" \
+            -scheme "${{ steps.pick.outputs.scheme }}" \
+            -configuration Debug \
+            -destination "${{ steps.pick.outputs.ipad_destination }}" \
+            -derivedDataPath build/DerivedDataIPad \
+            -only-testing:CastleProtectTests/BattleLayoutTests \
+            -only-testing:CastleProtectTests/LandscapeFrameTests \
+            -only-testing:CastleProtectTests/WorkshopTests \
+            -only-testing:CastleProtectTests/LeanHudTests \
+            CODE_SIGNING_ALLOWED=NO > build/xcodebuild-ipad.log 2>&1
+          status=$?
+          set -e
+          grep -E "Test Case .* (passed|failed|skipped)|Executed [0-9]+ test|: error: " build/xcodebuild-ipad.log || true
+          tail -n 30 build/xcodebuild-ipad.log
+          exit "$status"
 
       - name: Zip simulator app
         if: steps.check.outputs.app == 'true'
@@ -307,13 +396,13 @@ jobs:
   # archive:
   #   needs: simulator
   #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   runs-on: macos-latest
+  #   runs-on: macos-15
   #   timeout-minutes: 60
   #   environment: release
   #   steps:
   #     - uses: actions/checkout@v7
   #     - name: Install Rust
-  #       run: scripts/setup-rust.sh aarch64-apple-ios aarch64-apple-ios-sim
+  #       run: scripts/setup-rust.sh aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
   #     - uses: Swatinem/rust-cache@v2
   #       with:
   #         workspaces: core -> target

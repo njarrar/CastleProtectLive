@@ -1,30 +1,55 @@
 // Dev only: data for the mock core (mock.ts). Nothing in the production build imports this;
-// the real core ships all of it from content/ JSON.
-import type { Blueprint, BlueprintCell, HobInfo, LevelInfo } from './types';
+// the real core ships all of it from content/ JSON. Names, habits and goal words come from
+// content JSON and content/text.json too, so the mock never shows a stale name. Only the
+// mock's own play numbers (radius, damage) live here.
+import hobsRaw from '../../../../content/hobs.json' with { type: 'json' };
+import shotsRaw from '../../../../content/shots.json' with { type: 'json' };
+import classesRaw from '../../../../content/classes.json' with { type: 'json' };
+import appRaw from '../../../../content/app.json' with { type: 'json' };
+import { has, hobShort, rivalShort, t } from '../ui/text';
+import type { Blueprint, BlueprintCell, HobClass, HobInfo, LevelInfo } from './types';
 
-export const HOBS: HobInfo[] = [
-  { id: 'marge', name: 'Marge', cls: 'lobber', hp: 120 },
-  { id: 'quill', name: 'Quill', cls: 'zinger', hp: 80, joins: '1-2' },
-  { id: 'jax', name: 'Jax', cls: 'scatterjack', hp: 100, joins: '1-4' },
-  { id: 'grub', name: 'Grub', cls: 'delver', hp: 140, joins: '1-5' },
-  { id: 'hetty', name: 'Hetty', cls: 'patcher', hp: 110, joins: '1-7' },
-  { id: 'bobbin', name: 'Bobbin', cls: 'boinker', hp: 90, joins: '1-8' },
-  { id: 'thumper', name: 'Old Thumper', cls: 'lobber', hp: 120, joins: '1-9' },
-  { id: 'nan', name: 'Nan', cls: 'scatterjack', hp: 100, joins: '1-10' },
-];
+interface RawLevelFile {
+  id: string; name: string; type: string;
+  player: { crew_size: number };
+  rival: { name?: string; habit?: string; crew: string[]; aim?: number };
+  rules: { round_cap: number; squall?: boolean; wind?: { min: number; max: number }; rummage?: { pool: number } };
+  pennants: { type: string; text: string; value?: number }[];
+}
+const levelFiles = import.meta.glob<RawLevelFile>('../../../../content/levels/*.json', { eager: true, import: 'default' });
+const hobDefs = hobsRaw as { id: string; name: string; class: string; hp: number; player?: boolean }[];
+const shotName = (id: string): string => (shotsRaw as { id: string; name: string }[]).find((x) => x.id === id)?.name ?? id;
+const JOINS = (appRaw as { joins: Record<string, string> }).joins;
 
-export const LEVELS: Omit<LevelInfo, 'draftPool' | 'draftPicks' | 'doodads'>[] = [
-  { id: '1-1', name: 'First Lump', type: 'Siege', rival: 'Sir Pudge', habit: 'Shoots wide first. Then a bit closer.', rivalCrew: ['lobber'], aim: 1, roundCap: 8, wind: 'No wind', goals: ['Win', 'Land 2 hits in a row', 'Win by Round 5'], crewSize: 1, draft: false },
-  { id: '1-2', name: 'Two Hats', type: 'Siege', rival: 'Private Tuft Edgerly', habit: 'Shoots your top Hob first.', rivalCrew: ['zinger', 'lobber'], aim: 1, roundCap: 10, wind: 'No wind', goals: ['Win', 'Bonk with each Hob', 'No Hob of yours Bonked'], crewSize: 2, draft: false },
-  { id: '1-3', name: 'Kettle on the Knoll', type: 'Siege', rival: 'Corporal Fernsby Clip', habit: 'Hides his crew deep. Leaves the kettle near the wall.', rivalCrew: ['lobber', 'zinger'], aim: 1, roundCap: 12, wind: 'No wind', goals: ['Win', 'Pop the kettle', 'Win by Round 8'], crewSize: 2, draft: false },
-  { id: '1-4', name: 'Breezy Tops', type: 'Siege', rival: 'Lance Corporal Sod Turfwick', habit: 'Forgets the wind on his first shot of each front.', rivalCrew: ['lobber', 'scatterjack', 'zinger'], aim: 1, roundCap: 15, wind: 'Wind 2', goals: ['Win', 'Hit in a wind of 2', 'Kettle over half'], crewSize: 3, draft: false },
-  { id: '1-5', name: 'The Big One', type: 'Siege', rival: 'Sergeant Posy Rakewell', habit: 'Goes for your hurt Hob.', rivalCrew: ['lobber', 'zinger', 'scatterjack'], aim: 2, roundCap: 15, wind: 'Wind 0 to 2', goals: ['Win', 'Open the roof with a Knack', 'Win by Round 9'], crewSize: 3, draft: false },
-  { id: '1-6', name: 'Roof Trouble', type: 'Siege', rival: 'Warden Privet Snedd', habit: 'Aims at roofs.', rivalCrew: ['lobber', 'lobber', 'zinger'], aim: 1, roundCap: 15, wind: 'Wind 0 to 2', goals: ['Win', 'Keep your top Nook', 'Kettle over half'], crewSize: 3, draft: false },
-  { id: '1-7', name: 'Hetty in a Jam', type: 'Rescue', rival: 'Corporal Fernsby Clip', habit: 'Rescue. Break the bars.', rivalCrew: ['lobber', 'zinger', 'scatterjack'], aim: 1, roundCap: 14, wind: 'Wind 0 to 2', goals: ['Win', 'Free Hetty by Round 6', 'Hetty unhurt'], crewSize: 4, draft: false },
-  { id: '1-8', name: 'Rummage Sale', type: 'Siege', rival: 'Sergeant Posy Rakewell', habit: 'Grabs the biggest shell in the Rummage.', rivalCrew: ['lobber', 'zinger', 'scatterjack', 'boinker'], aim: 2, roundCap: 15, wind: 'Wind 0 to 2', goals: ['Win', 'Bonk a Hob with a Trick Shell', 'Use both your Trick Shells'], crewSize: 4, draft: true },
-  { id: '1-9', name: 'Over Loaf Hill', type: 'Siege', rival: 'Lance Corporal Sod Turfwick', habit: 'Slow to find his range. Starts over when you move.', rivalCrew: ['lobber', 'lobber', 'scatterjack', 'zinger'], aim: 2, roundCap: 15, wind: 'Wind 0 to 2', goals: ['Win', 'Walk to the hump', 'No Hob of yours Bonked'], crewSize: 4, draft: true },
-  { id: '1-10', name: 'The Topiary Keep', type: 'Grand Fort', rival: 'Marshal Trimm', habit: 'Three phases. Watch the tell.', rivalCrew: ['zinger', 'zinger', 'lobber', 'scatterjack'], aim: 2, roundCap: 18, wind: 'Wind 0 to 3', goals: ['Win', 'Break the Sprinkler Root by Round 4', 'Keep the hill over half'], crewSize: 4, draft: true },
-];
+export const HOBS: HobInfo[] = hobDefs.filter((x) => x.player).map((x) => ({
+  id: x.id, name: hobShort(x.id, x.name), cls: x.class as HobClass, hp: x.hp, joins: JOINS[x.id],
+}));
+
+const classOf = (id: string): string => hobDefs.find((x) => x.id === id)?.class ?? 'lobber';
+const levelOrder = (id: string) => Number(id.split('-')[1] ?? 0);
+
+export const LEVELS: Omit<LevelInfo, 'draftPool' | 'draftPicks' | 'doodads'>[] = Object.values(levelFiles)
+  .filter((l) => /^\d+-\d+$/.test(l.id))
+  .sort((a, b) => levelOrder(a.id) - levelOrder(b.id))
+  .map((l) => {
+    const kind: LevelInfo['kind'] = l.type === 'rescue' ? 'rescue' : l.type === 'grand_fort' ? 'grand_fort' : 'siege';
+    const w = l.rules.wind ?? { min: 0, max: 0 };
+    const goal = (p: RawLevelFile['pennants'][number] | undefined): string => {
+      if (!p) return '';
+      const vars = { n: p.value, rival: rivalShort(l.rival.name, l.id) };
+      if (has(`levels.${l.id}.goals.${p.type}`)) return t(`levels.${l.id}.goals.${p.type}`, vars);
+      return has(`pennants.${p.type}`) ? t(`pennants.${p.type}`, vars) : p.text;
+    };
+    return {
+      id: l.id, name: l.name, kind, type: t(`map.types.${kind}`), rival: l.rival.name ?? '', habit: l.rival.habit ?? '',
+      rivalCrew: l.rival.crew.map(classOf).filter((c) => c !== 'dummy') as HobClass[],
+      rivalUnits: l.rival.crew.filter((id) => classOf(id) !== 'dummy'),
+      aim: l.rival.aim ?? 1, roundCap: l.rules.round_cap, squall: l.rules.squall !== false,
+      wind: w.max === 0 ? t('level_card.wind_none') : w.min === w.max ? t('level_card.wind_one', { n: w.max }) : t('level_card.wind_range', { min: w.min, max: w.max }),
+      goals: [0, 1, 2].map((i) => goal(l.pennants[i])) as [string, string, string],
+      crewSize: l.player.crew_size, draft: (l.rules.rummage?.pool ?? 0) > 0,
+    };
+  });
 
 export interface ShellDef {
   id: string;
@@ -41,36 +66,51 @@ export interface ShellDef {
   kettleX?: number;
 }
 
+const card = (id: string): string => {
+  const c = (shotsRaw as { id: string; card?: string | { line?: string } }[]).find((x) => x.id === id)?.card;
+  return typeof c === 'string' ? c : c?.line ?? '';
+};
+const shell = (id: string, weight: 0 | 1 | 2, best: HobClass, nums: Omit<ShellDef, 'id' | 'name' | 'weight' | 'best' | 'hint'>): ShellDef =>
+  ({ id, name: shotName(id), weight, best, hint: card(id), ...nums });
+
 export const SHELLS: ShellDef[] = [
-  { id: 'pudding_bomb', name: 'Pudding Bomb', weight: 2, best: 'lobber', hint: 'Big pot, big boom.', radius: 52, dmg: 70 },
-  { id: 'marble_sack', name: 'Marble Sack', weight: 0, best: 'scatterjack', hint: 'Splits in three at the top.', radius: 22, dmg: 28, split: 3 },
-  { id: 'mole_mail', name: 'Mole Mail', weight: 1, best: 'delver', hint: 'Bores through the hill, then bursts.', radius: 34, dmg: 40, dig: 40 },
-  { id: 'nosy_goose', name: 'Nosy Goose', weight: 0, best: 'zinger', hint: 'Flies flat and far.', radius: 20, dmg: 45, grav: 0.55 },
-  { id: 'lid_lifter', name: 'Lid Lifter', weight: 1, best: 'patcher', hint: 'Hits a kettle hard.', radius: 24, dmg: 35, kettleX: 2.2 },
-  { id: 'old_turnip', name: 'Old Turnip', weight: 1, best: 'lobber', hint: 'Heavy, low and mean.', radius: 26, dmg: 55, grav: 1.3 },
-  { id: 'rubber_radish', name: 'Rubber Radish', weight: 0, best: 'boinker', hint: 'Bounces, then pops.', radius: 26, dmg: 34 },
-  { id: 'sod_sack', name: 'Sod Sack', weight: 0, best: 'delver', hint: 'Dumps a heap of dirt.', radius: 24, dmg: 20, dig: -1 },
+  shell('pudding_bomb', 2, 'lobber', { radius: 52, dmg: 70 }),
+  shell('marble_sack', 0, 'scatterjack', { radius: 22, dmg: 28, split: 3 }),
+  shell('mole_mail', 1, 'delver', { radius: 34, dmg: 40, dig: 40 }),
+  shell('nosy_goose', 0, 'zinger', { radius: 20, dmg: 45, grav: 0.55 }),
+  shell('lid_lifter', 1, 'patcher', { radius: 24, dmg: 35, kettleX: 2.2 }),
+  shell('old_turnip', 1, 'lobber', { radius: 26, dmg: 55, grav: 1.3 }),
+  shell('rubber_radish', 0, 'boinker', { radius: 26, dmg: 34 }),
+  shell('sod_sack', 0, 'delver', { radius: 24, dmg: 20, dig: -1 }),
 ];
 
-export const PLAIN: Record<string, { id: string; name: string; radius: number; dmg: number; grav?: number }> = {
-  lobber: { id: 'clodpot', name: 'Clod Pot', radius: 30, dmg: 38 },
-  zinger: { id: 'hatpin', name: 'Hatpin', radius: 16, dmg: 40, grav: 0.6 },
-  scatterjack: { id: 'gravel', name: 'Gravel', radius: 24, dmg: 30 },
-  delver: { id: 'nibbler', name: 'Nibbler', radius: 26, dmg: 34 },
-  boinker: { id: 'bouncebean', name: 'Bounce Bean', radius: 24, dmg: 32 },
-  patcher: { id: 'mendglob', name: 'Mend Glob', radius: 20, dmg: 30 },
-  sizzler: { id: 'clodpot', name: 'Ember Pot', radius: 22, dmg: 30 },
-  peeper: { id: 'hatpin', name: 'Lens Pin', radius: 14, dmg: 26 },
+// Plain Shots by Class: the id and name from content/classes.json and shots.json.
+const plainOf = (cls: string, fallback: string): string => (classesRaw as { id: string; plain: string }[]).find((c) => c.id === cls)?.plain ?? fallback;
+const plain = (cls: string, fallback: string, nums: { radius: number; dmg: number; grav?: number }) => {
+  const id = plainOf(cls, fallback);
+  return { id, name: shotName(id), ...nums };
 };
+export const PLAIN: Record<string, { id: string; name: string; radius: number; dmg: number; grav?: number }> = {
+  lobber: plain('lobber', 'clodpot', { radius: 30, dmg: 38 }),
+  zinger: plain('zinger', 'hatpin', { radius: 16, dmg: 40, grav: 0.6 }),
+  scatterjack: plain('scatterjack', 'gravel_sneeze', { radius: 24, dmg: 30 }),
+  delver: plain('delver', 'nibbler', { radius: 26, dmg: 34 }),
+  boinker: plain('boinker', 'bouncebean', { radius: 24, dmg: 32 }),
+  patcher: plain('patcher', 'mendglob', { radius: 20, dmg: 30 }),
+  sizzler: plain('lobber', 'clodpot', { radius: 22, dmg: 30 }),
+  peeper: plain('zinger', 'hatpin', { radius: 14, dmg: 26 }),
+};
+// Knacks by Class: the id and name from content/shots.json.
+const knack = (id: string, nums: { radius: number; dmg: number; grav?: number; split?: number }) => ({ name: shotName(id), ...nums });
 export const KNACK: Record<string, { name: string; radius: number; dmg: number; grav?: number; split?: number }> = {
-  lobber: { name: 'Grand Dumpling', radius: 46, dmg: 60 },
-  zinger: { name: 'Long Skewer', radius: 18, dmg: 70, grav: 0.4 },
-  scatterjack: { name: 'Pepper Rain', radius: 20, dmg: 24, split: 5 },
-  delver: { name: 'Anvil Bun', radius: 22, dmg: 80, grav: 1.2 },
-  boinker: { name: 'Rising Fizz', radius: 26, dmg: 40 },
-  patcher: { name: 'Big Patch', radius: 30, dmg: 40 },
-  sizzler: { name: 'Hot Pot', radius: 30, dmg: 44 },
-  peeper: { name: 'Glint', radius: 14, dmg: 40 },
+  lobber: knack('grand_dumpling', { radius: 46, dmg: 60 }),
+  zinger: knack('sunspear', { radius: 18, dmg: 70, grav: 0.4 }),
+  scatterjack: knack('pepper_rain', { radius: 20, dmg: 24, split: 5 }),
+  delver: knack('burrowbomb', { radius: 22, dmg: 80, grav: 1.2 }),
+  boinker: knack('rolypoly', { radius: 26, dmg: 40 }),
+  patcher: knack('barn_raising', { radius: 30, dmg: 40 }),
+  sizzler: knack('grand_dumpling', { radius: 30, dmg: 44 }),
+  peeper: knack('sunspear', { radius: 14, dmg: 40 }),
 };
 
 function grid(cols: number, rows: number, fill: (c: number, r: number) => BlueprintCell['kind'] | null): BlueprintCell[] {
@@ -98,19 +138,19 @@ export function makeFort(name: string, cols: number, rows: number, mat: (c: numb
 }
 
 export const STARTER_FORTS: Blueprint[] = [
-  makeFort('Box 1', 5, 5, () => 'wicker', 5),
-  makeFort('Box 2', 5, 5, (_c, r) => (r < 2 ? 'cobble' : 'timber'), 5),
-  makeFort('Box 3', 6, 5, (c) => (c % 2 ? 'timber' : 'wicker'), 5),
+  makeFort(t('workshop.level_fort'), 5, 5, () => 'wicker', 5),
+  makeFort(t('workshop.level_fort'), 5, 5, (_c, r) => (r < 2 ? 'cobble' : 'timber'), 5),
+  makeFort(t('workshop.level_fort'), 6, 5, (c) => (c % 2 ? 'timber' : 'wicker'), 5),
 ];
 
-export const DEFAULT_BLUEPRINT: Blueprint = { id: 'default', ...makeFort('Oak Lump', 5, 5, (_c, r) => (r === 0 ? 'timber' : 'wicker'), 5) };
+export const DEFAULT_BLUEPRINT: Blueprint = { id: 'default', ...makeFort(t('workshop.home_fort'), 5, 5, (_c, r) => (r === 0 ? 'timber' : 'wicker'), 5) };
 
 export function levelFort(id: string): Blueprint {
   const n = Number(id.split('-')[1] ?? 1);
   const lvl = LEVELS.find((l) => l.id === id);
   const crew = lvl?.rivalCrew.length ?? 1;
-  if (n <= 3) return makeFort('Hedge Box', 4, 4, (_c, r) => (n === 3 && r < 2 ? 'timber' : 'wicker'), Math.max(crew, 1));
-  if (n <= 6) return makeFort('Hedge Box', 5, 4 + (n === 6 ? 3 : 0), () => 'timber', crew);
-  if (n <= 9) return makeFort('Hedge Box', 5, 5, (_c, r) => (r >= 4 && n === 9 ? 'cobble' : 'timber'), crew);
-  return makeFort('Topiary Keep', 7, 7, (c, r) => (r < 2 || c === 0 ? 'cobble' : 'timber'), crew);
+  if (n <= 3) return makeFort(t('workshop.level_fort'), 4, 4, (_c, r) => (n === 3 && r < 2 ? 'timber' : 'wicker'), Math.max(crew, 1));
+  if (n <= 6) return makeFort(t('workshop.level_fort'), 5, 4 + (n === 6 ? 3 : 0), () => 'timber', crew);
+  if (n <= 9) return makeFort(t('workshop.level_fort'), 5, 5, (_c, r) => (r >= 4 && n === 9 ? 'cobble' : 'timber'), crew);
+  return makeFort(t('workshop.level_fort'), 7, 7, (c, r) => (r < 2 || c === 0 ? 'cobble' : 'timber'), crew);
 }

@@ -1,7 +1,9 @@
 package games.castleprotect
 
 import games.castleprotect.battle.AnimClip
+import games.castleprotect.battle.AnimDef
 import games.castleprotect.battle.Anims
+import games.castleprotect.battle.BattleRenderer
 import games.castleprotect.battle.Camera
 import games.castleprotect.core.ContentInfo
 import games.castleprotect.core.GameEvent
@@ -24,7 +26,10 @@ class AnimsAudioTest {
     private val audio = AudioManifest.parse(Fixtures.text("assets/audio/audio.json"))
 
     @Test fun everyAnimationLoadsWithFramesThatExist() {
-        assertEquals(212, anims.defs.size)
+        // The count comes from the file itself (animations.json `count`), so a new art pass never breaks this test.
+        val raw = JSONObject(Fixtures.text("assets/animations.json"))
+        assertEquals(raw.getInt("count"), anims.defs.size)
+        assertEquals(raw.getJSONObject("animations").length(), anims.defs.size)
         for (d in anims.defs.values) {
             assertEquals(d.frames.size, d.ms.size)
             for (fr in d.frames) assertTrue("missing sprite $fr", File(Fixtures.root, "assets/sprites/$fr@2x.png").isFile)
@@ -40,12 +45,18 @@ class AnimsAudioTest {
         val clip = AnimClip(anims, fire)
         val seen = ArrayList<String>()
         clip.advance(0f) { seen.add(it) }
-        assertEquals("hob_marge_blue_fire_2", clip.sprite)   // play order, not the number in the name
-        clip.advance(130f) { seen.add(it) }
-        assertEquals("hob_marge_blue_fire_3", clip.sprite)
+        assertEquals("hob_marge_blue_fire_3", clip.sprite)   // release frame first (0 ms wind-up, play order)
         assertEquals(listOf("release"), seen)
+        clip.advance(40f) { seen.add(it) }
+        assertEquals("hob_marge_blue_fire_0", clip.sprite)
         clip.advance(1000f)
         assertTrue(clip.def.name.endsWith("_idle"))           // next
+    }
+
+    @Test fun battleRendererTableSpritesExistOnDisk() {
+        for (sp in BattleRenderer.TABLE_SPRITES) {
+            assertTrue("missing renderer sprite $sp", File(Fixtures.root, "assets/sprites/$sp@2x.png").isFile)
+        }
     }
 
     @Test fun loopFromAndHoldAndBackwards() {
@@ -76,7 +87,8 @@ class AnimsAudioTest {
     }
 
     @Test fun everySoundFileIsThere() {
-        assertEquals(140, audio.sounds.size)
+        // The count comes from audio.json `totals.sounds`, not a number kept here.
+        assertEquals(JSONObject(Fixtures.text("assets/audio/audio.json")).getJSONObject("totals").getInt("sounds"), audio.sounds.size)
         for (s in audio.sounds.values) {
             assertTrue("missing ${s.file}", File(Fixtures.root, "assets/audio/${s.file}").isFile)
             assertTrue("missing m4a for ${s.id}", File(Fixtures.root, "assets/audio/${s.file.removeSuffix(".ogg")}.m4a").isFile)
@@ -86,7 +98,8 @@ class AnimsAudioTest {
 
     @Test fun everyCueTheAppPlaysIsInTheManifest() {
         val events = listOf("explode", "hit", "break", "carve", "mound", "split", "castle_drop", "thump", "threaded", "lid", "lid_block",
-            "mend", "rebuild", "front", "squall_warning", "draft_start", "draft_pick", "miss", "relight", "shears_snip", "boss_phase")
+            "mend", "rebuild", "front", "squall_warning", "draft_start", "draft_pick", "miss", "relight", "shears_snip", "boss_phase",
+            "buried", "roller", "roller_stop", "roller_done", "shears_jam")
         val targets = listOf("block", "kettle", "hob")
         for (t in events) for (target in targets) for (r in listOf(0, 10, 18, 28, 42, 64)) {
             val e = GameEvent(t, 0, 0, 0, r, 1, 0, 30, 0, -1, 0, target, "", "", false, kind = if (r == 0) "mend_bucket" else "")
@@ -105,7 +118,55 @@ class AnimsAudioTest {
         for (id in listOf("mus_r1_base", "mus_r1_stir", "mus_r1_peril", "mus_map", "sting_win", "sting_lose", "mus_title_jingle", "wx_wind_loop",
             "wx_squall_loop", "fly_whistle_loop", "ket_whistle_loop", "aim_band_stretch", "aim_drag_start", "aim_set", "aim_tick", "aim_limit",
             "aim_recall", "turn_yours", "turn_hob_pick", "ui_fire_press", "ui_denied", "ui_tap", "ui_slider_tick", "ui_confirm", "ui_back",
-            "meta_pennant_stamp", "ui_handoff_flip")) assertNotNull(id, audio[id])
+            "meta_pennant_stamp", "ui_handoff_flip",
+            "cas_steam", "col_crack", "fly_bounce_hop", "fly_fast_zip", "fly_roll_loop", "meta_block_place", "ui_buttons_tick", "ui_sheet_open", "ui_toggle_on")) assertNotNull(id, audio[id])
+        assertEquals(listOf("cas_steam"), Cues.forEvent(GameEvent("walk", 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, "", "", "", false), audio) { _, _, _ -> null })
+        assertEquals(listOf("fly_bounce_hop"), Cues.forEvent(GameEvent("bounce", 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, "", "", "", false), audio) { _, _, _ -> null })
+        assertEquals("col_crack", Cues.forAnim("fx_crack_cobble", "crack", audio))
+    }
+
+    @Test fun oneSoundPerEvent() {
+        fun ev(t: String) = GameEvent(t, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, "", "", "", false)
+        fun cue(t: String) = Cues.forEvent(ev(t), audio) { _, _, _ -> null }
+        assertEquals(listOf("doo_lid_bounce"), cue("lid_block"))
+        assertEquals(listOf("doo_pot_lid_clang"), cue("lid"))
+        assertEquals(listOf("hob_buried_thlup"), cue("buried"))
+        assertEquals(listOf("cas_boss_horn"), cue("boss_phase"))
+        assertEquals(listOf("wx_front_chime"), cue("front"))
+        assertEquals("hit_threaded_zip", cue("threaded").first())
+        assertEquals(listOf("doo_roller_rumble"), cue("roller"))
+        assertEquals(listOf("doo_shears_jam"), cue("shears_jam"))
+        // The bell is the Squall's alone.
+        assertEquals(listOf("wx_squall_bell"), cue("squall_warning"))
+        val bells = listOf("explode", "lid", "lid_block", "buried", "boss_phase", "front", "threaded", "roller", "shears_jam", "relight", "miss").filter { "wx_squall_bell" in cue(it) }
+        assertTrue("bell on $bells", bells.isEmpty())
+        // Ethel stopping or going home: the same rumble, 3 semitones down.
+        assertEquals(0f, Cues.semis(ev("roller")), 0f)
+        assertEquals(-3f, Cues.semis(ev("roller_stop")), 0f)
+        assertEquals(-3f, Cues.semis(ev("roller_done")), 0f)
+    }
+
+    @Test fun rivalHobsHaveTheirOwnClipsAndIdlesStartAnywhere() {
+        for (h in listOf("marge", "quill", "jax", "grub", "bobbin", "hetty", "thumper", "nan")) {
+            for (pose in listOf("idle", "aim", "fire", "hit", "bonked", "cheer")) assertNotNull("hob_${h}_rival_$pose", anims["hob_${h}_rival_$pose"])
+            assertTrue("portrait_${h}_rival", File(Fixtures.root, "assets/sprites/portrait_${h}_rival@2x.png").isFile)
+        }
+        assertEquals("rival", games.castleprotect.battle.Sprites.team(1, human = false))
+        assertEquals("orange", games.castleprotect.battle.Sprites.team(1, human = true)) // Couch Duel player 2
+        assertEquals("blue", games.castleprotect.battle.Sprites.team(0, human = true))
+        val idle = anims["hob_marge_rival_idle"]!!
+        assertTrue(idle.randomStart)
+        // A random start lands inside the loop, and is not the same for every Hob.
+        val starts = (0L until 16L).map { AnimClip.idleStart(idle, it * 7919L) }
+        assertTrue(starts.all { it in 0 until idle.total })
+        assertTrue(starts.toSet().size > 4)
+        // Without random_start, the clip's own offset.
+        val fixed = AnimDef("x", arrayOf("a", "b"), intArrayOf(100, 100), true, 0, 1f, 1f, 0f, 0f, arrayOf(emptyArray(), emptyArray()), null, null, null, randomStart = false, startOffsetMs = 150)
+        assertEquals(150, AnimClip.idleStart(fixed, 99L))
+        val clip = AnimClip(anims, idle)
+        clip.seek(idle.starts[2] + 1)
+        assertEquals(2, clip.frame)
+        assertEquals(idle.frames[2], clip.sprite)
     }
 
     @Test fun barksHaveSubtitlesForEveryHob() {
@@ -116,6 +177,23 @@ class AnimsAudioTest {
             assertTrue(id, b.lines[id].orEmpty().isNotEmpty())
         }
         assertEquals(1f, b.chance["bonked"]!!, 0f)
+        // Old Thumper is keyed old_thumper in barks.json; his sounds still say thumper.
+        assertTrue(b.entries.containsKey("bark_thumper_win"))
+        // crew.win: the crew's own line, said by no single Hob.
+        assertEquals(listOf("Lumpy forever!"), b.crewWinLines)
+        assertTrue(b.entries.values.none { e -> e.subtitles.any { it.contains("Lumpy forever") } })
+        // with_mate lines join the pool only with that Hob on the crew; with_rival only against a named Rival.
+        val grub = b.entries["bark_grub_takes_hit"]!!
+        val mate = grub.withMate.values.flatten().first()
+        assertFalse(mate in grub.pool(setOf("marge"), null))
+        assertTrue(mate in grub.pool(setOf("marge", grub.withMate.keys.first()), null))
+        val marge = b.entries["bark_marge_fire"]!!
+        assertTrue(marge.withRival.isNotEmpty())
+        assertTrue(marge.pool(emptySet(), null).none { "{rival}" in it || "Pudge" in it })
+        assertTrue(marge.pool(emptySet(), "Pudge").any { "Pudge" in it })
+        // A bark's own chance wins over the event's.
+        assertEquals(0.2f, b.chanceOf("bark_grub_picked", "picked"), 0f)
+        assertEquals(b.chance["picked"]!!, b.chanceOf("bark_marge_picked", "picked"), 0f)
     }
 
     @Test fun musicLayersFollowTheRules() {

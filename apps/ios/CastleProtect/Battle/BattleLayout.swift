@@ -65,11 +65,16 @@ struct BattleLayout: Equatable, Sendable {
     /// Tall layout zones; zero in Wide.
     var topStrip: CGRect = .zero
     var fieldStrip: CGRect = .zero
+    /// Integrated Portrait Walk + Steam + Readout rail tucked cleanly inside the bottom dock
+    /// so the player's lower fort and Stomper legs stay 100% unobstructed (Part 2 Plate 2).
+    var walkRail: CGRect = .zero
     var tray: CGRect = .zero
     var crewRow: CGRect = .zero
     /// Where the Fine Tune pad sits: on the side away from the fort of the side the HUD
     /// shows, so it never covers your fort (QA playtest 1, M7). Zero in flight.
     var fineTune: CGRect = .zero
+    /// True when the viewport is large enough for the iPad HUD scale (false in narrow Split View / Slide Over).
+    var usePadScale: Bool = false
 
     static let empty = BattleLayout(mode: .wide, size: .zero, insets: Insets(), lenses: [], aimRegion: .zero)
 
@@ -82,13 +87,14 @@ struct BattleLayout: Equatable, Sendable {
         CGSize(width: key * 2 + 64 + 8 + 12, height: max(key * 2 + 4, 92) + 12)
     }
 
-    /// Fine Tune key size per layout.
+    /// Fine Tune key size per layout (meets the 48 pt touch target floor across phones and 56 pt on iPad).
     static func fineTuneKey(mode: LayoutMode, isPad: Bool) -> CGFloat {
-        isPad ? 56 : (mode == .wide ? 48 : 44)
+        isPad ? 56 : 48
     }
 
     static func compute(size: CGSize, insets: Insets, mode: LayoutMode, inFlight: Bool, isPad: Bool,
-                        hudSide: Int = 0, leftHand: Bool = false) -> BattleLayout {
+                        hudSide: Int = 0, leftHand: Bool = false, reduceMotion: Bool = false,
+                        largeText: Bool = false) -> BattleLayout {
         let w = size.width, h = size.height
         guard w > 0, h > 0 else { return .empty }
         let scale: CGFloat = isPad ? 1.25 : 1
@@ -106,7 +112,7 @@ struct BattleLayout: Equatable, Sendable {
             var layout = BattleLayout(mode: .wide, size: size, insets: insets,
                                       lenses: [Lens(viewport: full, frame: clear, focus: inFlight ? .follow : .both,
                                                     minBlock: isPad ? 8 : 6)],
-                                      aimRegion: full)
+                                      aimRegion: full, usePadScale: isPad)
             if !inFlight {
                 // Under the top strip, away from your fort; clear of the crew column when it is on that side.
                 let column: CGFloat = (padRight == leftHand) ? 48 * scale + 16 : 0
@@ -116,38 +122,57 @@ struct BattleLayout: Equatable, Sendable {
             }
             return layout
         case .tall:
-            let stripH: CGFloat = 56 * scale
+            let stripH: CGFloat = (72 * scale * (largeText ? 1.18 : 1)).rounded()
             let fieldH: CGFloat = 32
             let crewH: CGFloat = 80 * scale
-            let trayH: CGFloat = 52 * scale
+            let trayH: CGFloat = 58 * scale
+            let walkRailH: CGFloat = 48 * scale
             let topStrip = CGRect(x: 0, y: insets.top, width: w, height: stripH)
             let crew = CGRect(x: 0, y: h - insets.bottom - crewH, width: w, height: crewH)
             let tray = CGRect(x: 0, y: crew.minY - trayH, width: w, height: trayH)
-            if inFlight {
+            let walkRail = CGRect(x: 0, y: tray.minY - walkRailH, width: w, height: walkRailH)
+            if inFlight && !reduceMotion {
                 let joinedBottom = h - insets.bottom - fieldH
                 let joined = CGRect(x: 0, y: topStrip.maxY, width: w, height: max(10, joinedBottom - topStrip.maxY))
                 let field = CGRect(x: 0, y: joined.maxY, width: w, height: fieldH)
                 return BattleLayout(mode: .tall, size: size, insets: insets,
                                     lenses: [Lens(viewport: joined, frame: joined.insetBy(dx: 8, dy: 8), focus: .follow),
                                              Lens(viewport: field, frame: field.insetBy(dx: 4, dy: 2), focus: .whole)],
-                                    aimRegion: .zero, topStrip: topStrip, fieldStrip: field, tray: .zero, crewRow: .zero)
+                                    aimRegion: .zero, topStrip: topStrip, fieldStrip: field, walkRail: .zero, tray: .zero, crewRow: .zero,
+                                    usePadScale: isPad)
             }
-            let avail = max(40, tray.minY - topStrip.maxY - fieldH)
+            if inFlight {
+                // Reduce Motion: keep the Tall split lenses steady during flight without joining or sweeping.
+                let bottomEdge = h - insets.bottom
+                let avail = max(40, bottomEdge - topStrip.maxY - fieldH)
+                let topLens = CGRect(x: 0, y: topStrip.maxY, width: w, height: (avail * 0.42).rounded())
+                let field = CGRect(x: 0, y: topLens.maxY, width: w, height: fieldH)
+                let bottomLens = CGRect(x: 0, y: field.maxY, width: w, height: max(10, bottomEdge - field.maxY))
+                return BattleLayout(mode: .tall, size: size, insets: insets,
+                                    lenses: [Lens(viewport: topLens, frame: topLens.insetBy(dx: 8, dy: 8), focus: .target),
+                                             Lens(viewport: field, frame: field.insetBy(dx: 4, dy: 2), focus: .whole),
+                                             Lens(viewport: bottomLens, frame: bottomLens.insetBy(dx: 8, dy: 8), focus: .own)],
+                                    aimRegion: .zero, topStrip: topStrip, fieldStrip: field, walkRail: .zero, tray: .zero, crewRow: .zero,
+                                    usePadScale: isPad)
+            }
+            let avail = max(40, walkRail.minY - topStrip.maxY - fieldH)
             let topLens = CGRect(x: 0, y: topStrip.maxY, width: w, height: (avail * 0.39).rounded())
             let field = CGRect(x: 0, y: topLens.maxY, width: w, height: fieldH)
-            let bottomLens = CGRect(x: 0, y: field.maxY, width: w, height: tray.minY - field.maxY)
-            // Pause, the Walk pad and the readout float along the Bottom lens foot.
-            let bottomFrame = CGRect(x: bottomLens.minX + 8, y: bottomLens.minY + 8,
-                                     width: bottomLens.width - 16, height: max(10, bottomLens.height - 72))
-            // Docked in the Bottom lens above the readout row, on the side away from your fort.
-            let padY = max(bottomLens.minY + 4, bottomLens.maxY - 6 - 44 - 8 - pad.height)
+            let bottomLens = CGRect(x: 0, y: field.maxY, width: w, height: walkRail.minY - field.maxY)
+            // Walk, Steam, and Readout sit inside `walkRail` in the bottom dock, so the player's
+            // entire cutaway fort and Stomper legs stay 100% unobstructed inside `bottomLens`!
+            let bottomFrame = bottomLens.insetBy(dx: 8, dy: 8)
+            // Docked cleanly in the Bottom lens away from your fort.
+            let padY = max(bottomLens.minY + 4, bottomLens.maxY - 8 - pad.height)
             let padX = padRight ? w - 8 - pad.width : 8
             return BattleLayout(mode: .tall, size: size, insets: insets,
                                 lenses: [Lens(viewport: topLens, frame: topLens.insetBy(dx: 8, dy: 8), focus: .target),
                                          Lens(viewport: field, frame: field.insetBy(dx: 4, dy: 2), focus: .whole),
                                          Lens(viewport: bottomLens, frame: bottomFrame, focus: .own)],
-                                aimRegion: bottomLens, topStrip: topStrip, fieldStrip: field, tray: tray, crewRow: crew,
-                                fineTune: CGRect(x: padX, y: padY, width: pad.width, height: pad.height))
+                                aimRegion: bottomLens, topStrip: topStrip, fieldStrip: field, walkRail: walkRail,
+                                tray: tray, crewRow: crew,
+                                fineTune: CGRect(x: padX, y: padY, width: pad.width, height: pad.height),
+                                usePadScale: isPad)
         }
     }
 }

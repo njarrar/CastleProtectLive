@@ -42,24 +42,26 @@ final class SaveStore: @unchecked Sendable {
 
     /// The saved data, or a fresh one when there is none or both files are damaged.
     func load() -> SaveData {
-        clearStaleTemps()
-        let main = read(fileURL)
-        let backup: (ok: SaveData?, newer: Bool) = main.ok == nil ? read(backupURL) : (ok: nil, newer: false)
-        if main.newer || backup.newer {
-            lock.lock()
-            newerFile = true
-            lock.unlock()
+        queue.sync {
+            clearStaleTemps()
+            let main = read(fileURL)
+            let backup: (ok: SaveData?, newer: Bool) = main.ok == nil ? read(backupURL) : (ok: nil, newer: false)
+            if main.newer || backup.newer {
+                lock.lock()
+                newerFile = true
+                lock.unlock()
+                return SaveData()
+            }
+            if let data = main.ok { return data }
+            if let data = backup.ok { return data }
+            // Both damaged (or missing): keep what is there for a look later.
+            let fm = FileManager.default
+            if fm.fileExists(atPath: fileURL.path) {
+                try? fm.removeItem(at: damagedURL)
+                try? fm.copyItem(at: fileURL, to: damagedURL)
+            }
             return SaveData()
         }
-        if let data = main.ok { return data }
-        if let data = backup.ok { return data }
-        // Both damaged (or missing): keep what is there for a look later.
-        let fm = FileManager.default
-        if fm.fileExists(atPath: fileURL.path) {
-            try? fm.removeItem(at: damagedURL)
-            try? fm.copyItem(at: fileURL, to: damagedURL)
-        }
-        return SaveData()
     }
 
     private func clearStaleTemps() {
@@ -73,7 +75,7 @@ final class SaveStore: @unchecked Sendable {
     /// Queues a write. Later writes always land after earlier ones.
     func write(_ data: SaveData) {
         queue.async { [self] in
-            try? self.writeNow(data)
+            try? self.writeLocked(data)
         }
     }
 
@@ -82,8 +84,15 @@ final class SaveStore: @unchecked Sendable {
         queue.sync {}
     }
 
-    /// Writes at once on the calling thread. Used by tests and by `write`.
+    /// Writes at once, serialized through the save queue so it never races with queued writes.
     func writeNow(_ data: SaveData) throws {
+        try queue.sync {
+            try self.writeLocked(data)
+        }
+    }
+
+    /// Performs the atomic write. Must run only on `queue`.
+    private func writeLocked(_ data: SaveData) throws {
         guard !isNewerSchema else { return }
         let fm = FileManager.default
         try fm.createDirectory(at: directory, withIntermediateDirectories: true)

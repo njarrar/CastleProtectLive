@@ -18,10 +18,10 @@
       "shells": [
         "pudding_bomb",
         "lid_lifter",
-        "marble_sack",
         "nosy_goose",
         "mole_mail",
-        "old_turnip"
+        "rubber_radish",
+        "sod_sack"
       ]
     },
     {
@@ -40,11 +40,11 @@
       ],
       "shells": [
         "pudding_bomb",
-        "lid_lifter",
         "marble_sack",
         "nosy_goose",
-        "mole_mail",
-        "old_turnip"
+        "old_turnip",
+        "rubber_radish",
+        "sod_sack"
       ]
     },
     {
@@ -62,12 +62,12 @@
         "pot_lid"
       ],
       "shells": [
-        "pudding_bomb",
         "lid_lifter",
         "marble_sack",
         "nosy_goose",
         "mole_mail",
-        "old_turnip"
+        "old_turnip",
+        "rubber_radish"
       ]
     }
   ]

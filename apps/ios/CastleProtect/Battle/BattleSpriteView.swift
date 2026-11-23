@@ -1,22 +1,49 @@
 import SpriteKit
 import UIKit
 
+/// Holds a NotificationCenter observer token so `BattleSKView.deinit` removes it safely in Swift 6.
+private final class ViewObserverBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var token: NSObjectProtocol?
+
+    func set(_ t: NSObjectProtocol) {
+        lock.lock()
+        let old = token
+        token = t
+        lock.unlock()
+        if let old { NotificationCenter.default.removeObserver(old) }
+    }
+
+    func remove() {
+        lock.lock()
+        let old = token
+        token = nil
+        lock.unlock()
+        if let old { NotificationCenter.default.removeObserver(old) }
+    }
+}
+
 /// The battle field: an SKView whose scene is updated from the latest core
-/// snapshot when it changes (and four times a second for idle poses). It also
-/// reads touches for the Aim Drag. The battle clock itself runs in the session.
+/// snapshot when it changes (and five times a second for idle poses). It shares
+/// `BattleSession`'s display link and pauses SpriteKit when idle (iOS-M4).
 /// Drawing only: nothing here decides an outcome.
 final class BattleSKView: SKView {
     var session: BattleSession {
-        didSet { wireLensMap() }
+        willSet {
+            if session !== newValue { session.onDisplayTick = nil }
+        }
+        didSet { wireSession() }
     }
     private let battleScene: BattleScene
-    private var link: CADisplayLink?
+    private let observerBox = ViewObserverBox()
     private var lastBoundsSize: CGSize = .zero
     private var aimTouch: UITouch?
     private var drawnVersion = -1
     private var drawnLayout = BattleLayout.empty
     private var drawnColours = ColourSet.brickabrac
     private var drawnPose: UInt64 = 0
+    private var drawnRingStep: UInt64 = 0
+    private var idleTicks = 0
 
     init(session: BattleSession) {
         self.session = session
@@ -28,27 +55,38 @@ final class BattleSKView: SKView {
         backgroundColor = Palette.hex(0xA6DCEF)
         battleScene.scaleMode = .resizeFill
         presentScene(battleScene)
-        wireLensMap()
+        wireSession()
         isAccessibilityElement = true
-        accessibilityLabel = "Battlefield"
+        accessibilityLabel = GameText.shared.t("hud.field")
         updateHint()
-        NotificationCenter.default.addObserver(self, selector: #selector(voiceOverChanged),
-                                               name: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil)
+        let me = WeakRef(self)
+        let token = NotificationCenter.default.addObserver(
+            forName: UIAccessibility.voiceOverStatusDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { me.value?.updateHint() }
+        }
+        observerBox.set(token)
     }
 
-    @objc private func voiceOverChanged() { updateHint() }
+    deinit {
+        observerBox.remove()
+    }
 
-    /// The session asks where a touch lands in the world (the own-fort rule for an Aim Drag).
-    private func wireLensMap() {
+    /// Connects the lens camera map and shared display-link callback to the session.
+    private func wireSession() {
         let scene = WeakRef(battleScene)
         session.lensMap = { point in scene.value?.lensMap(at: point) }
+        let me = WeakRef(self)
+        session.onDisplayTick = { me.value?.frameTick() }
     }
 
     private func updateHint() {
         // A VoiceOver user cannot drag on the fort: point them at Fine Tune (M5).
         accessibilityHint = UIAccessibility.isVoiceOverRunning
-            ? "Use the aim readout to open Fine Tune, then Fire."
-            : "Drag from your fort to aim."
+            ? GameText.shared.t("a11y.field")
+            : GameText.shared.t("hud.aim_hint")
     }
 
     @available(*, unavailable)
@@ -58,34 +96,43 @@ final class BattleSKView: SKView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        link?.invalidate()
-        link = nil
-        guard window != nil else { return }
-        let l = CADisplayLink(target: self, selector: #selector(frameTick))
-        l.add(to: .main, forMode: .common)
-        link = l
+        if window != nil {
+            idleTicks = 0
+            isPaused = false
+            frameTick()
+        } else {
+            isPaused = true
+        }
     }
 
-    @objc private func frameTick() {
+    private func frameTick() {
+        guard window != nil else { return }
         let now = DispatchTime.now().uptimeNanoseconds
-        // Idle poses step at 5 a second (the idle frames are 400 ms; a blink is an active clip and
-        // draws every frame while it plays). Effects, flight and the camera draw every frame (review 2, M7).
-        let pose = now / 200_000_000
+        // Idle poses step at 5 Hz; the owner-ring pulse steps at 15 Hz when Reduce Motion is off.
+        let pose = session.settings.reduceMotion ? 0 : now / 200_000_000
+        let ringStep = (session.showOwnerRing && !session.settings.reduceMotion) ? now / 66_000_000 : 0
         let colours = session.settings.colourSet
         let busy = session.fx.isActive || session.snapshot.phase.isResolving || battleScene.cameraMoving
-            || session.showOwnerRing
-        // Draw only when something changed (H8, M1).
-        guard busy || session.frameVersion != drawnVersion || session.layout != drawnLayout || colours != drawnColours
-                || pose != drawnPose else { return }
+        let changed = busy || session.frameVersion != drawnVersion || session.layout != drawnLayout
+            || colours != drawnColours || pose != drawnPose || ringStep != drawnRingStep
+        guard changed else {
+            idleTicks += 1
+            if idleTicks >= 2 && !isPaused { isPaused = true }
+            return
+        }
+        idleTicks = 0
+        if isPaused { isPaused = false }
         drawnVersion = session.frameVersion
         drawnLayout = session.layout
         drawnColours = colours
         drawnPose = pose
+        drawnRingStep = ringStep
         battleScene.render(snapshot: session.snapshot, layout: session.layout, fx: session.fx, colours: colours,
                            dragging: session.dragging, reduceMotion: session.settings.reduceMotion,
                            pan: session.cameraPan, panning: session.panning,
                            extras: LensExtras(home: session.cameraHome, peek: session.rivalPeek,
-                                              ownerRing: session.showOwnerRing))
+                                              ownerRing: session.showOwnerRing,
+                                              highlightedBlocks: session.highlightedBlocks))
     }
 
     override func layoutSubviews() {
@@ -98,6 +145,8 @@ final class BattleSKView: SKView {
             }
             lastBoundsSize = bounds.size
             battleScene.size = bounds.size
+            drawnVersion = -1
+            frameTick()
         }
     }
 
@@ -117,9 +166,8 @@ final class BattleSKView: SKView {
         let p = t.location(in: self)
         // Touches that start inside the safe-area insets are palm and edge touches.
         guard bounds.inset(by: safeAreaInsets).contains(p) else { return }
-        // The Rival fort marker is a button: one tap peeks at both forts (QA playtest 2, N3).
-        if battleScene.markerHit(p) {
-            session.toggleRivalPeek()
+        // Own-fort block targeting for Mendglob or Mend Bucket takes precedence over Aim Drag (iOS-H4).
+        if session.wantsBlockTap, session.handleBlockTap(at: p) {
             return
         }
         aimTouch = t
@@ -164,18 +212,12 @@ final class BattleScene: SKScene {
         fatalError("init(coder:) is not used")
     }
 
-    /// True while any lens camera is still easing toward its target.
     /// The camera of the shown field lens under a view point, or nil.
     func lensMap(at point: CGPoint) -> LensMap? {
         for layer in layers where !layer.crop.isHidden {
             if let map = layer.map, map.viewport.contains(point) { return map }
         }
         return nil
-    }
-
-    /// True when a view point is on the Rival fort marker of a shown lens.
-    func markerHit(_ point: CGPoint) -> Bool {
-        layers.contains { !$0.crop.isHidden && ($0.markerRect?.contains(point) ?? false) }
     }
 
     /// Only shown lenses count: a rig left easing when its lens was hidden must not keep the scene at 60 fps.
@@ -247,8 +289,8 @@ final class CameraRig {
     }
 }
 
-/// One lens: a crop node over its viewport, a backdrop, and a world node that
-/// the camera scales and moves. Nodes are pooled and reused every frame.
+/// One lens: a crop node over its viewport, atmospheric backdrop + parallax hills,
+/// and a world node that the camera scales and moves. Nodes are pooled and reused every frame.
 @MainActor
 final class LensLayer {
     let crop = SKCropNode()
@@ -257,14 +299,18 @@ final class LensLayer {
     private(set) var map: LensMap?
     private let mask = SKSpriteNode(color: .white, size: CGSize(width: 1, height: 1))
     private let backdrop = SKSpriteNode(color: .clear, size: CGSize(width: 1, height: 1))
+    private let farHills = SKSpriteNode(color: .clear, size: CGSize(width: 1, height: 1))
+    private let midHills = SKSpriteNode(color: .clear, size: CGSize(width: 1, height: 1))
     private let world = SKNode()
     private let ground = SKShapeNode()
     private let cutLine = SKShapeNode()
     private let sheet: SpriteSheet
     private var lastTerrain: [Double] = []
     private var lastWorldW = 0.0
-    /// One body node per fort, so a walk moves and bobs everything on it.
+    /// One body node and one outer-contour shape node per fort, so a walk moves and bobs everything on it.
     private var fortNodes: [SKNode] = []
+    private var fortContours: [SKShapeNode] = []
+    private var fortContourKeys: [Int: Int] = [:]
     private var pools: [String: [SKSpriteNode]] = [:]
     private var used: [String: Int] = [:]
     private let terrainLayer = SKNode()
@@ -272,56 +318,57 @@ final class LensLayer {
     private var terrainDrawn: [Int: Int] = [:]
     private var terrainGrid: TerrainGrid?
     private var terrainVersion = -1
-    /// "Rival fort" on the screen edge when the fort being shot at is out of frame (QA playtest 1, M3).
-    private let marker = SKNode()
-    private let markerLabel = SKLabelNode(fontNamed: "AvenirNext-Heavy")
-    private let markerArrow = SKShapeNode()
-    private let markerPlate = SKShapeNode()
-    /// Where the marker is, in view points, while it shows (a tap there peeks).
-    private(set) var markerRect: CGRect?
     /// The gold ring on the picked Hob while the owner rule is being taught (QA playtest 2).
     private let ownerRing = SKShapeNode()
+    private var lastOwnerRadius: CGFloat = -1
 
     /// World cells per @1x pixel for Hob frames (72 x 80 px at @1x), so a Hob
     /// stands about two blocks tall in its Nook. Blocks are 1 cell a pixel.
     static let hobCellsPerPixel: CGFloat = 0.5
+
+    /// Caps persistent trajectory pins per side so Round 10 Fatigue stays readable (Part 2 Plate 2).
+    nonisolated static func visiblePins(_ pins: [PinView], maxPerSide: Int = 2) -> [PinView] {
+        guard maxPerSide > 0 else { return [] }
+        let p0 = pins.filter { $0.side == 0 }.suffix(maxPerSide)
+        let p1 = pins.filter { $0.side == 1 }.suffix(maxPerSide)
+        return Array(p0) + Array(p1)
+    }
 
     init(sheet: SpriteSheet) {
         self.sheet = sheet
         crop.maskNode = mask
         backdrop.zPosition = -10
         crop.addChild(backdrop)
+        farHills.zPosition = -8
+        farHills.texture = BattleArtCache.farHillsTexture
+        crop.addChild(farHills)
+        midHills.zPosition = -6
+        midHills.texture = BattleArtCache.midHillsTexture
+        crop.addChild(midHills)
         crop.addChild(world)
         ground.zPosition = 0
         world.addChild(ground)
         terrainLayer.zPosition = 0.5
         world.addChild(terrainLayer)
         cutLine.zPosition = 8
-        cutLine.strokeColor = Palette.hex(0xE5484D)
+        cutLine.strokeColor = Palette.hex(0xC9363E)
         cutLine.lineWidth = 2
         cutLine.isHidden = true
         world.addChild(cutLine)
         for _ in 0..<2 {
             let n = SKNode()
             n.zPosition = 1
+            let contour = SKShapeNode()
+            contour.zPosition = 1.18
+            contour.strokeColor = Palette.hex(0x2C221E)
+            contour.fillColor = .clear
+            contour.lineCap = .round
+            contour.lineJoin = .round
+            n.addChild(contour)
             world.addChild(n)
             fortNodes.append(n)
+            fortContours.append(contour)
         }
-        marker.zPosition = 20
-        marker.isHidden = true
-        markerPlate.lineWidth = 2
-        markerPlate.strokeColor = Palette.hex(0x2B1E2E)
-        markerPlate.fillColor = Palette.hex(0xFFF4DE)
-        marker.addChild(markerPlate)
-        markerLabel.text = "Rival fort"
-        markerLabel.fontSize = 13
-        markerLabel.fontColor = Palette.hex(0x2B1E2E)
-        markerLabel.verticalAlignmentMode = .center
-        marker.addChild(markerLabel)
-        markerArrow.lineWidth = 2
-        markerArrow.strokeColor = Palette.hex(0x2B1E2E)
-        marker.addChild(markerArrow)
-        crop.addChild(marker)
         ownerRing.zPosition = 3.5
         ownerRing.strokeColor = Palette.hex(0xFFC23D)
         ownerRing.fillColor = .clear
@@ -339,49 +386,15 @@ final class LensLayer {
         }
         ownerRing.isHidden = false
         let radius = CGFloat(max(18, 26 * cellsPerPoint))
-        ownerRing.path = CGPath(ellipseIn: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2), transform: nil)
+        if abs(radius - lastOwnerRadius) > 0.25 {
+            lastOwnerRadius = radius
+            ownerRing.path = CGPath(ellipseIn: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2), transform: nil)
+        }
         ownerRing.lineWidth = CGFloat(max(2, 4 * cellsPerPoint))
         ownerRing.position = CGPoint(x: hob.x, y: hob.y + 18)
         let pulse = reduceMotion ? 1 : 0.85 + 0.15 * sin(now / 260)
         ownerRing.setScale(CGFloat(pulse))
         ownerRing.alpha = reduceMotion ? 1 : CGFloat(0.75 + 0.25 * sin(now / 260))
-    }
-
-    /// Places the Rival fort marker on the lens edge at the fort's height, or hides it. It is a
-    /// button (QA playtest 2, N3): "View Rival fort" peeks at both forts; while peeking it stays
-    /// up as "Back to my fort".
-    private func updateRivalMarker(show: Bool, peek: Bool, snap: BattleSnapshot, worldRect: CGRect, lens: Lens,
-                                   sceneHeight: CGFloat, palette: Palette) {
-        let rivalSide = 1 - snap.activeSide
-        let edgeNow: Int? = Camera.rivalEdge(worldRect: worldRect, snap: snap)
-        let peekEdge: Int? = rivalSide == 1 ? 1 : -1
-        guard show, let edge = peek ? peekEdge : edgeNow else {
-            marker.isHidden = true
-            markerRect = nil
-            return
-        }
-        marker.isHidden = false
-        markerLabel.text = Camera.markerText(peek: peek)
-        let fort = Camera.fortRect(rivalSide, snap: snap)
-        let at = Camera.viewRect(of: fort, worldRect: worldRect, frame: lens.frame)
-        let vp = lens.viewport
-        let w: CGFloat = 144, h: CGFloat = 32
-        let x = edge > 0 ? vp.maxX - 8 - w / 2 : vp.minX + 8 + w / 2
-        let y = peek ? lens.frame.minY + h : min(max(at.midY, lens.frame.minY + h), lens.frame.maxY - h)
-        marker.position = CGPoint(x: x, y: sceneHeight - y)
-        // The tap target, in view points: at least 44 pt tall.
-        markerRect = CGRect(x: x - w / 2, y: y - 22, width: w, height: 44)
-        markerPlate.path = CGPath(roundedRect: CGRect(x: -w / 2, y: -h / 2, width: w, height: h),
-                                  cornerWidth: 8, cornerHeight: 8, transform: nil)
-        markerPlate.strokeColor = palette.side(rivalSide)
-        markerLabel.position = CGPoint(x: CGFloat(-edge) * 8, y: 0)
-        let tip = CGFloat(edge) * (w / 2 - 4)
-        let arrow = CGMutablePath()
-        arrow.move(to: CGPoint(x: tip - CGFloat(edge) * 10, y: 7))
-        arrow.addLine(to: CGPoint(x: tip, y: 0))
-        arrow.addLine(to: CGPoint(x: tip - CGFloat(edge) * 10, y: -7))
-        markerArrow.path = arrow
-        markerArrow.strokeColor = palette.side(rivalSide)
     }
 
     // MARK: Pools
@@ -400,6 +413,7 @@ final class LensLayer {
             node.zPosition = z
             node.zRotation = 0
             node.alpha = 1
+            node.xScale = 1
             node.yScale = 1
             return node
         }
@@ -431,7 +445,19 @@ final class LensLayer {
         mask.position = centre
         backdrop.size = vp.size
         backdrop.position = centre
-        backdrop.color = small ? palette.paper : palette.sky
+        if small {
+            backdrop.texture = nil
+            backdrop.color = palette.paper
+            backdrop.colorBlendFactor = 1
+            farHills.isHidden = true
+            midHills.isHidden = true
+        } else {
+            backdrop.texture = BattleArtCache.skyTexture
+            backdrop.color = .white
+            backdrop.colorBlendFactor = 0
+            farHills.isHidden = false
+            midHills.isHidden = false
+        }
 
         // Camera: ease toward the lens's target, then fit it into the Clear Rect.
         let peek = extras.peek && lens.focus == .both
@@ -452,15 +478,32 @@ final class LensLayer {
                                  y: frameCentre.y - worldRect.midY * scale + shake.y)
         map = small ? nil : LensMap(viewport: vp, frameCentre: frameCentre, worldRect: worldRect, scale: scale,
                                     sceneHeight: sceneHeight)
-        updateRivalMarker(show: lens.focus == .both && (snap.phase == .plan || snap.phase == .handoff),
-                          peek: peek, snap: snap, worldRect: worldRect, lens: lens, sceneHeight: sceneHeight, palette: palette)
-        updateOwnerRing(show: extras.ownerRing && lens.focus != .whole && lens.focus != .target && snap.phase == .plan,
-                        snap: snap, cellsPerPoint: Double(1 / max(0.0001, scale)), now: fx.now, reduceMotion: reduceMotion)
+
+        // Atmospheric parallax hills tinted with ~18% sky haze so distant hills recede cleanly.
+        if !small {
+            let parallaxNorm = CGFloat(worldRect.midX / max(1, snap.world.w) - 0.5)
+            let hillW = max(vp.width * 1.45, 520)
+            let farH = max(60, vp.height * 0.42)
+            let midH = max(50, vp.height * 0.32)
+            let vpBottom = sceneHeight - vp.maxY
+            farHills.size = CGSize(width: hillW, height: farH)
+            farHills.anchorPoint = CGPoint(x: 0.5, y: 0)
+            farHills.position = CGPoint(x: vp.midX - parallaxNorm * vp.width * 0.14, y: vpBottom + vp.height * 0.14)
+            farHills.alpha = 0.85
+
+            midHills.size = CGSize(width: hillW, height: midH)
+            midHills.anchorPoint = CGPoint(x: 0.5, y: 0)
+            midHills.position = CGPoint(x: vp.midX - parallaxNorm * vp.width * 0.28, y: vpBottom + vp.height * 0.04)
+            midHills.alpha = 0.90
+        }
+
         let cellsPerPoint = Double(1 / max(0.0001, scale))
+        updateOwnerRing(show: extras.ownerRing && lens.focus != .whole && lens.focus != .target && snap.phase == .plan,
+                        snap: snap, cellsPerPoint: cellsPerPoint, now: fx.now, reduceMotion: reduceMotion)
         let useArt = !small && !sheet.isEmpty
         let now = fx.now
 
-        if let grid = snap.ground, grid.hasData {
+        if !small, let grid = snap.ground, grid.hasData {
             ground.isHidden = true
             updateTerrain(grid: grid, textures: textures)
         } else {
@@ -470,26 +513,28 @@ final class LensLayer {
         }
 
         for fort in snap.forts {
-            drawFort(fort, snap: snap, fx: fx, palette: palette, useArt: useArt, small: small, reduceMotion: reduceMotion)
+            drawFort(fort, snap: snap, fx: fx, palette: palette, useArt: useArt, small: small,
+                     reduceMotion: reduceMotion, cellsPerPoint: cellsPerPoint,
+                     highlightedBlocks: extras.highlightedBlocks)
         }
         // A core with more castles than nodes must not trap the range (L1).
         if snap.forts.count < fortNodes.count {
             for i in snap.forts.count..<fortNodes.count { fortNodes[i].isHidden = true }
         }
 
-        // Collapse ghosts: creak, lean, drop row by row, land, break (view only).
-        if useArt {
+        // Collapse ghosts: creak, lean, drop row by row, land, break (view only; shown in fallback mode too).
+        if !small {
             for p in fx.pieces {
                 let t = fx.pieceTransform(p)
                 let node = take("piece", parent: world, z: 2.2)
-                place(node, frame: sheet.frame("block_\(p.mat)_battered") ?? sheet.frame("block_\(p.mat)_fresh"),
+                place(node, frame: useArt ? (sheet.frame("block_\(p.mat)_battered") ?? sheet.frame("block_\(p.mat)_fresh")) : nil,
                       at: CGPoint(x: p.x + p.size / 2 + t.dx, y: p.y + t.dy), scale: 1, flip: false,
                       fallback: palette.material(p.mat), fallbackSize: CGSize(width: p.size, height: p.size))
                 node.anchorPoint = CGPoint(x: 0.5, y: 0)
                 node.size = CGSize(width: p.size, height: p.size)
                 node.zRotation = CGFloat(-t.deg * .pi / 180)
                 node.yScale = CGFloat(t.squash)
-                if now - p.start < fx.motion.creakMs + fx.motion.leanMs, let crack = fx.library.clip("fx_crack_\(p.mat)") {
+                if useArt, now - p.start < fx.motion.creakMs + fx.motion.leanMs, let crack = fx.library.clip("fx_crack_\(p.mat)") {
                     let c = take("crack", parent: world, z: 2.3)
                     placeClip(c, crack.frame(at: now - p.start), crack, at: CGPoint(x: p.x + t.dx, y: p.y + p.size + t.dy),
                               cellsPerPx: 1, flip: false)
@@ -498,35 +543,73 @@ final class LensLayer {
             }
         }
 
-        // Props: cage bars, the captive, a Crock or a turnip, the 1-10 roller and shears hinge.
+        // Props: handcrafted 1-7 Rescue Cage + Hetty, 1-10 Big Smoothie Jr. roller + lawn sign + Topiary Shears, shell props.
+        var drewLawnSign = false
         for p in snap.props where !p.broken {
             let node = take("prop", parent: world, z: 2.5)
             switch p.kind {
             case "cage_bar":
-                place(node, frame: nil, at: CGPoint(x: p.x, y: p.y), scale: 1, flip: false,
-                      fallback: palette.cage, fallbackSize: CGSize(width: 4, height: 44))
-            case "captive":
-                let art = useArt ? fx.library.clip("hob_hetty_blue_idle") : nil
-                if let art {
-                    placeClip(node, art.frame(at: now), art, at: CGPoint(x: p.x, y: p.y), cellsPerPx: Self.hobCellsPerPixel, flip: false)
+                if useArt, let frame = sheet.frame("prop_cage_bar") {
+                    place(node, frame: frame, at: CGPoint(x: p.x, y: p.y), scale: 0.9, flip: false,
+                          fallback: palette.cage, fallbackSize: CGSize(width: 16, height: 48))
                 } else {
-                    place(node, frame: nil, at: CGPoint(x: p.x, y: p.y), scale: 1, flip: false,
-                          fallback: palette.you, fallbackSize: CGSize(width: 14, height: 18))
+                    placeTexture(node, BattleArtCache.cageBarTexture, at: CGPoint(x: p.x, y: p.y),
+                                 size: CGSize(width: 14, height: 48), anchor: CGPoint(x: 0.5, y: 0))
+                }
+            case "captive":
+                if !small {
+                    let halo = take("halo", parent: world, z: 2.35)
+                    placeTexture(halo, BattleArtCache.rescueHaloTexture, at: CGPoint(x: p.x, y: p.y + 18),
+                                 size: CGSize(width: 44, height: 44), anchor: CGPoint(x: 0.5, y: 0.5))
+                    halo.alpha = reduceMotion ? 0.6 : CGFloat(0.45 + 0.25 * sin(now / 360))
+                }
+                if useArt, let frame = sheet.frame("prop_rescue_cage_hetty") {
+                    place(node, frame: frame, at: CGPoint(x: p.x, y: p.y), scale: 0.65, flip: false,
+                          fallback: palette.you, fallbackSize: CGSize(width: 28, height: 34))
+                } else if useArt, let art = fx.library.clip("hob_hetty_blue_idle") {
+                    let fname = art.frame(at: reduceMotion ? 0 : now)
+                    placeClip(node, fname, art, at: CGPoint(x: p.x, y: p.y), cellsPerPx: Self.hobCellsPerPixel, flip: false)
+                    drawOverlays(for: fname, parent: world, at: CGPoint(x: p.x, y: p.y),
+                                 cellsPerPx: Self.hobCellsPerPixel, flip: false, z: 2.54)
+                } else {
+                    placeTexture(node, BattleArtCache.captiveHettyTexture, at: CGPoint(x: p.x, y: p.y),
+                                 size: CGSize(width: 28, height: 34), anchor: CGPoint(x: 0.5, y: 0))
                 }
             case "roller":
-                place(node, frame: nil, at: CGPoint(x: p.x, y: p.y), scale: 1, flip: false,
-                      fallback: palette.flattened, fallbackSize: CGSize(width: 44, height: 26))
+                if useArt, let frame = sheet.frame("prop_big_smoothie_jr") ?? sheet.frame("prop_roller") {
+                    place(node, frame: frame, at: CGPoint(x: p.x, y: p.y), scale: 0.85, flip: false,
+                          fallback: palette.flattened, fallbackSize: CGSize(width: 56, height: 36))
+                } else {
+                    placeTexture(node, BattleArtCache.rollerTexture, at: CGPoint(x: p.x, y: p.y),
+                                 size: CGSize(width: 60, height: 38), anchor: CGPoint(x: 0.5, y: 0))
+                }
+                if !small && !drewLawnSign {
+                    drewLawnSign = true
+                    let sign = take("prop_extra", parent: world, z: 2.45)
+                    let signPos = CGPoint(x: p.x - 46, y: snap.groundAt(p.x - 46))
+                    if useArt, let sf = sheet.frame("prop_lawn_sign") {
+                        place(sign, frame: sf, at: signPos, scale: 0.75, flip: false,
+                              fallback: palette.dirt, fallbackSize: CGSize(width: 30, height: 26))
+                    } else {
+                        placeTexture(sign, BattleArtCache.lawnSignTexture, at: signPos,
+                                     size: CGSize(width: 34, height: 28), anchor: CGPoint(x: 0.5, y: 0))
+                    }
+                }
             case "shears":
-                place(node, frame: nil, at: CGPoint(x: p.x, y: p.y), scale: 1, flip: false,
-                      fallback: palette.ink, fallbackSize: CGSize(width: 14, height: 14))
-                node.zRotation = .pi / 4
+                if useArt, let frame = sheet.frame("prop_shears") {
+                    place(node, frame: frame, at: CGPoint(x: p.x, y: p.y), scale: 0.9, flip: false,
+                          fallback: palette.ink, fallbackSize: CGSize(width: 34, height: 28))
+                } else {
+                    placeTexture(node, BattleArtCache.shearsTexture, at: CGPoint(x: p.x, y: p.y),
+                                 size: CGSize(width: 38, height: 28), anchor: CGPoint(x: 0.5, y: 0.4))
+                }
             default:
                 let name = p.shot.isEmpty ? "shell_clodpot" : "shell_\(p.shot)"
                 let frame = useArt ? (sheet.frame(name) ?? sheet.frame("shell_clodpot")) : nil
                 place(node, frame: frame, at: CGPoint(x: p.x, y: p.y), scale: 1.2, flip: false,
                       fallback: palette.kettle, fallbackSize: CGSize(width: 18, height: 18))
             }
-            node.alpha = CGFloat(0.55 + 0.45 * p.hpFraction)
+            node.alpha = CGFloat(0.65 + 0.35 * p.hpFraction)
         }
 
         // The 1-10 cut line: shown one boss turn before the snip.
@@ -560,8 +643,8 @@ final class LensLayer {
             }
         }
 
-        // Pins: yours round, the Rival's a diamond, dropped in with a stick. A spent Pin shows faded.
-        for pin in snap.pins {
+        // Pins: capped to the 2 most recent per side so Round 10 Fatigue never turns into clutter (Plate 2).
+        for pin in Self.visiblePins(snap.pins, maxPerSide: 2) {
             let node = take("pin", parent: world, z: 4)
             let pinScale = CGFloat(max(small ? 1.2 : 0.5, cellsPerPoint))
             let key = "\(pin.side):\(pin.hob):\(Int(pin.x)):\(Int(pin.y))"
@@ -610,6 +693,26 @@ final class LensLayer {
             }
         }
 
+        // De-overlapped color-coded floating combat numbers & `Drop!` starburst callouts (Plate 2).
+        if !small {
+            let calloutScale = CGFloat(max(0.65, min(1.5, cellsPerPoint * 0.85)))
+            for item in fx.resolvedCallouts(minDx: max(36, 38 * cellsPerPoint), minDy: max(22, 24 * cellsPerPoint)) {
+                let node = take("callout", parent: world, z: 8.5)
+                let tex = BattleArtCache.calloutTexture(text: item.callout.text, style: item.callout.style)
+                let baseSz = tex.size()
+                let pop: CGFloat = (!reduceMotion && item.progress < 0.14)
+                    ? CGFloat(0.72 + (item.progress / 0.14) * 0.40)
+                    : 1.0
+                placeTexture(node, tex, at: CGPoint(x: item.x, y: item.y),
+                             size: CGSize(width: baseSz.width * 0.5 * calloutScale * pop,
+                                          height: baseSz.height * 0.5 * calloutScale * pop),
+                             anchor: CGPoint(x: 0.5, y: 0.5))
+                if item.progress > 0.72 {
+                    node.alpha = CGFloat(max(0, 1 - (item.progress - 0.72) / 0.28))
+                }
+            }
+        }
+
         // Weather: wind leaves always, the Squall in its rounds.
         if useArt {
             drawWeather(snap: snap, fx: fx, view: worldRect, reduceMotion: reduceMotion)
@@ -620,12 +723,14 @@ final class LensLayer {
     // MARK: Forts
 
     private func drawFort(_ fort: FortView, snap: BattleSnapshot, fx: FieldFX, palette: Palette, useArt: Bool, small: Bool,
-                          reduceMotion: Bool) {
-        let body = fortNodes[min(fort.side, fortNodes.count - 1)]
+                          reduceMotion: Bool, cellsPerPoint: Double, highlightedBlocks: [[Int]] = []) {
+        let fortIdx = min(fort.side, fortNodes.count - 1)
+        let body = fortNodes[fortIdx]
         body.isHidden = false
         let now = fx.now
         // Walking: the body slides from the old spot to the new one and bobs on its legs.
-        let px: Double = fort.originX + Double(fort.cols) * fort.block / 2
+        let fortWidth = max(fort.block * 3, Double(max(1, fort.cols)) * fort.block)
+        let px: Double = fort.originX + fortWidth / 2
         let py: Double = fort.baseY
         var offX = 0.0
         var offY = 0.0
@@ -633,8 +738,8 @@ final class LensLayer {
         var walking: (t: Double, w: WalkAnim)?
         if let w = fx.walks[fort.side] {
             let t = now - w.start
-            let p = min(1, max(0, t / w.duration))
-            offX = -w.dx * (1 - p)
+            let segP = min(1, max(0, (now - w.segStart) / max(1, w.segDuration)))
+            offX = -w.dx * (1 - segP)
             if !reduceMotion {
                 let frame = Int(t / fx.motion.bobFrameMs) % max(1, fx.motion.bobDy.count)
                 offY = -fx.motion.bobDy[frame]
@@ -646,20 +751,100 @@ final class LensLayer {
         body.zRotation = CGFloat(-tilt * .pi / 180)
         func local(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: x - px, y: y - py) }
         let team = SpriteImages.team(fort.side)
+        let isFlattenerSide = fort.side == 1 && !snap.isDuel
+        let isTopiaryBoss = fort.side == 1 && (snap.boss != nil || snap.level == "1-10")
 
-        // Stomper legs under the Footing while walking; the second leg 3 frames later.
-        if let walking, useArt, let clip = fx.library.clip("stomper_\(team)_walk") {
-            let width = Double(fort.cols) * fort.block
-            for (i, fx0) in [0.25, 0.75].enumerated() {
+        // Soft ground contact shadow beneath the fort (figure-ground grounding, Plate 1).
+        if !small {
+            let shadow = take("shadow", parent: body, z: 0.7)
+            placeTexture(shadow, BattleArtCache.groundShadowTexture, at: local(px, fort.baseY - 4),
+                         size: CGSize(width: fortWidth + 32, height: 16), anchor: CGPoint(x: 0.5, y: 0.5))
+        }
+
+        // 3 planted Stomper legs ALWAYS visible beneath the Footing (planted at rest, marching during walks!).
+        if !small {
+            let stomperClip = useArt ? fx.library.clip("stomper_\(team)_walk") : nil
+            for (i, frac) in [0.18, 0.50, 0.82].enumerated() {
                 let node = take("stomper", parent: body, z: 0.9)
-                let t = walking.t + Double(i) * 3 * fx.motion.bobFrameMs
-                placeClip(node, clip.frame(at: reduceMotion ? 0 : t), clip,
-                          at: local(fort.originX + width * fx0, fort.baseY + 3), cellsPerPx: 1, flip: fort.side == 1)
+                let legPos = local(fort.originX + fortWidth * frac, fort.baseY + 3)
+                if let clip = stomperClip {
+                    let frameName: String
+                    if let walking, !reduceMotion {
+                        let t = walking.t + Double(i) * 2 * fx.motion.bobFrameMs
+                        frameName = clip.frame(at: t)
+                    } else {
+                        frameName = clip.frames.first ?? ""
+                    }
+                    placeClip(node, frameName, clip, at: legPos, cellsPerPx: 0.95, flip: fort.side == 1)
+                } else {
+                    var stepPhase = 0.0
+                    if let walking, !reduceMotion { stepPhase = sin(walking.t / 95.0 + Double(i) * 2.1) }
+                    let tex = BattleArtCache.stomperTexture(side: fort.side, isFlattener: isFlattenerSide)
+                    placeTexture(node, tex, at: CGPoint(x: legPos.x, y: legPos.y + CGFloat(stepPhase * 3.5)),
+                                 size: CGSize(width: 18, height: 22), anchor: CGPoint(x: 0.5, y: 0.88))
+                    node.xScale = fort.side == 1 ? -1 : 1
+                }
+            }
+        }
+
+        // Boss 1-10 The Topiary Keep: sculpted clipped-hedge Topiary Peacock crest & fanned tail!
+        if isTopiaryBoss && !small {
+            let topY = (fort.blocks.map { $0.y + $0.h }.max() ?? (fort.baseY + 80))
+            let crest = take("boss_crest", parent: body, z: 0.82)
+            let crestPos = local(px + 6, topY - 12)
+            if useArt, let frame = sheet.frame("prop_topiary_peacock_crest") {
+                place(crest, frame: frame, at: crestPos, scale: 0.85, flip: false,
+                      fallback: palette.grass, fallbackSize: CGSize(width: 136, height: 82))
+            } else {
+                placeTexture(crest, BattleArtCache.topiaryPeacockTexture, at: crestPos,
+                             size: CGSize(width: max(124, fortWidth * 1.15), height: 78),
+                             anchor: CGPoint(x: 0.5, y: 0.16))
+            }
+        }
+
+        // Opaque cutaway interior backing (`#3B2D24`) + warm amber lantern glow (`#FFCE70`) for every Nook & Kettle Room.
+        if !small {
+            for room in fort.rooms {
+                let back = take("room_back", parent: body, z: 0.86)
+                placeTexture(back, BattleArtCache.nookRoomTexture, at: local(room.box.midX, room.box.midY),
+                             size: CGSize(width: room.box.width + 2, height: room.box.height + 2),
+                             anchor: CGPoint(x: 0.5, y: 0.5))
+                let occupied = fort.hobs.contains { !$0.isOut && $0.x >= room.box.x0 - 4 && $0.x <= room.box.x1 + 4 && $0.y >= room.box.y0 - 4 && $0.y <= room.box.y1 + 4 }
+                if occupied {
+                    let glow = take("lantern", parent: body, z: 0.89)
+                    placeTexture(glow, BattleArtCache.lanternGlowTexture, at: local(room.box.midX, room.box.midY + 4),
+                                 size: CGSize(width: room.box.width * 1.15, height: room.box.height * 1.15),
+                                 anchor: CGPoint(x: 0.5, y: 0.5))
+                    glow.alpha = 0.72
+                    // Subtle 0.18 warm window glaze over occupied cutaway Nooks.
+                    let glaze = take("glaze", parent: body, z: 3.1)
+                    placeTexture(glaze, BattleArtCache.windowGlazeTexture, at: local(room.box.midX, room.box.midY),
+                                 size: CGSize(width: room.box.width, height: room.box.height),
+                                 anchor: CGPoint(x: 0.5, y: 0.5))
+                    glaze.alpha = 0.18
+                }
+            }
+            if let kr = fort.kettleRoom {
+                let back = take("room_back", parent: body, z: 0.86)
+                placeTexture(back, BattleArtCache.nookRoomTexture, at: local(kr.midX, kr.midY),
+                             size: CGSize(width: kr.width + 2, height: kr.height + 2),
+                             anchor: CGPoint(x: 0.5, y: 0.5))
+                if fort.kettleHp > 0 {
+                    let glow = take("lantern", parent: body, z: 0.89)
+                    placeTexture(glow, BattleArtCache.lanternGlowTexture, at: local(kr.midX, kr.midY),
+                                 size: CGSize(width: kr.width * 1.25, height: kr.height * 1.25),
+                                 anchor: CGPoint(x: 0.5, y: 0.5))
+                    glow.alpha = 0.82
+                }
             }
         }
 
         let shimmerClip = fx.library.clip("fx_shimmer")
+        let pickedSet: Set<Int> = fort.side == snap.activeSide && !small
+            ? Set(highlightedBlocks.compactMap { $0.count >= 2 ? $0[0] * 10_000 + $0[1] : nil })
+            : []
         // Blocks a collapse crushed stay until its ghost blocks land on them (review 2, M6).
+        // Exterior walls stay 100% opaque (alpha = 1.0) — zero ghosted own-fort bleed-through!
         let blocks = fort.blocks + fx.held(side: fort.side)
         for (bi, b) in blocks.enumerated() {
             let node = take("block", parent: body, z: 1)
@@ -667,10 +852,16 @@ final class LensLayer {
             let wear = ratio > 0.66 ? "fresh" : (ratio > 0.33 ? "scuffed" : "battered")
             let mat = FieldFX.materialKey(b.material)
             let f = useArt ? (sheet.frame("block_\(mat)_\(wear)") ?? sheet.frame("block_\(mat)_fresh")) : nil
+            let c = Int(((b.x - fort.originX) / fort.block).rounded())
+            let r = Int(((b.y - fort.baseY) / fort.block).rounded())
+            let picked = pickedSet.contains(c * 10_000 + r)
             node.texture = f?.texture
             if f == nil {
-                node.color = b.root ? palette.gold : (b.battered ? palette.flattened : palette.material(b.material))
+                node.color = picked ? palette.gold : (b.root ? palette.gold : (b.battered ? palette.flattened : palette.material(b.material)))
                 node.colorBlendFactor = 1
+            } else if picked {
+                node.color = palette.gold
+                node.colorBlendFactor = 0.55
             } else if b.root || b.battered {
                 node.color = b.root ? palette.gold : palette.flattened
                 node.colorBlendFactor = b.root ? 0.45 : 0.35
@@ -682,6 +873,20 @@ final class LensLayer {
             node.size = CGSize(width: b.w, height: b.h)
             node.position = local(b.x, b.y)
             node.xScale = 1
+            node.alpha = 1
+            // Boss 1-10 Sprinkler Root weak-spot prop overlay.
+            if b.root && !small {
+                let rootNode = take("root", parent: body, z: 1.45)
+                let rootPos = local(b.x + b.w / 2, b.y + b.h / 2)
+                if useArt, let rf = sheet.frame("prop_sprinkler_root") {
+                    place(rootNode, frame: rf, at: rootPos, scale: 0.45, flip: false,
+                          fallback: palette.gold, fallbackSize: CGSize(width: b.w * 1.4, height: b.h * 1.4))
+                } else {
+                    placeTexture(rootNode, BattleArtCache.sprinklerRootTexture, at: rootPos,
+                                 size: CGSize(width: b.w * 1.45, height: b.h * 1.55), anchor: CGPoint(x: 0.5, y: 0.45))
+                }
+                rootNode.alpha = reduceMotion ? 1 : CGFloat(0.86 + 0.14 * sin(now / 260))
+            }
             // Shimmer: blocks at the end of their reach glint once every 3 s.
             if b.shimmer, useArt, let shimmerClip {
                 let t = (now + Double(bi * 211)).truncatingRemainder(dividingBy: 3000)
@@ -694,27 +899,79 @@ final class LensLayer {
             }
         }
 
-        // Rooms: Loophole Flaps and Pot Lids.
+        // Double-weight dark espresso outer silhouette (`3 pt` contour) around the fort exterior (Plate 1).
+        if fortIdx < fortContours.count {
+            let contour = fortContours[fortIdx]
+            if small || blocks.isEmpty {
+                contour.isHidden = true
+            } else {
+                contour.isHidden = false
+                contour.lineWidth = CGFloat(max(2.0, 2.8 * cellsPerPoint))
+                var hasher = Hasher()
+                hasher.combine(blocks.count)
+                for b in blocks {
+                    hasher.combine(Int(((b.x - fort.originX) / fort.block).rounded()))
+                    hasher.combine(Int(((b.y - fort.baseY) / fort.block).rounded()))
+                }
+                let hashKey = hasher.finalize()
+                if fortContourKeys[fortIdx] != hashKey {
+                    fortContourKeys[fortIdx] = hashKey
+                    contour.path = Self.outerContourPath(blocks: blocks, fort: fort, originOffset: CGPoint(x: -px, y: -py))
+                }
+            }
+        }
+
+        // Team pennant flag atop the highest roof block of the fort (Plate 1).
+        if !small, let roofBlock = blocks.max(by: { ($0.y + $0.h) < ($1.y + $1.h) }) {
+            let flag = take("flag", parent: body, z: 2.6)
+            let poleBase = local(roofBlock.x + roofBlock.w * 0.5, roofBlock.y + roofBlock.h - 1)
+            let tex = BattleArtCache.fortPennantTexture(side: fort.side, color: palette.side(fort.side), isFlattener: isFlattenerSide)
+            placeTexture(flag, tex, at: poleBase, size: CGSize(width: 24, height: 28), anchor: CGPoint(x: 0.25, y: 0))
+            flag.xScale = fort.side == 1 ? -1 : 1
+        }
+
+        // Rooms: recessed dark arched Loopholes, Loophole Flaps and Pot Lids.
         for room in fort.rooms {
             let key = "\(fort.side):\(room.id)"
-            if let hole = room.loophole, useArt {
-                let anim = fx.flaps[key]
-                if room.flap || anim != nil, let clip = fx.library.clip("loophole_flap_\(team)_close") {
-                    let node = take("flap", parent: body, z: 1.2)
-                    let name: String
-                    if let anim {
-                        let t = now - anim.start
-                        name = anim.closing ? clip.frame(at: t) : (t >= clip.total ? "loophole_open" : clip.frame(at: t, reversed: true))
-                    } else {
-                        name = clip.hold ?? clip.frames.last ?? ""
+            if let hole = room.loophole, !small {
+                // Dark arched Loophole embrasure along the enemy-facing wall.
+                let arch = take("loophole", parent: body, z: 1.15)
+                let archCenter = local(hole.midX, hole.midY)
+                if useArt, let lf = sheet.frame("ui_front_loophole") {
+                    place(arch, frame: lf, at: archCenter, scale: 0.55, flip: fort.side == 1,
+                          fallback: palette.ink, fallbackSize: CGSize(width: max(8, hole.width), height: max(12, hole.height)))
+                } else {
+                    placeTexture(arch, BattleArtCache.loopholeArchTexture, at: archCenter,
+                                 size: CGSize(width: max(8, hole.width + 4), height: max(12, hole.height + 4)),
+                                 anchor: CGPoint(x: 0.5, y: 0.5))
+                }
+                if useArt {
+                    let anim = fx.flaps[key]
+                    if room.flap || anim != nil, let clip = fx.library.clip("loophole_flap_\(team)_close") {
+                        let node = take("flap", parent: body, z: 1.2)
+                        let name: String
+                        if let anim {
+                            let t = now - anim.start
+                            name = anim.closing ? clip.frame(at: t) : (t >= clip.total ? "loophole_open" : clip.frame(at: t, reversed: true))
+                        } else {
+                            name = clip.hold ?? clip.frames.last ?? ""
+                        }
+                        placeClip(node, name, clip, at: local(hole.x0, hole.y1 + 5), cellsPerPx: 1, flip: false)
                     }
-                    placeClip(node, name, clip, at: local(hole.x0, hole.y1 + 5), cellsPerPx: 1, flip: false)
                 }
             }
             drawLid(key: key, on: room.lid, at: local(room.box.midX, room.box.y1), fx: fx, body: body)
         }
         if let kr = fort.kettleRoom, useArt {
             drawLid(key: "\(fort.side):kettle", on: fort.kettleLid, at: local(kr.midX, kr.y1), fx: fx, body: body)
+        }
+
+        // Brass steam pipe linking the copper Heartkettle down toward the Footing & Stomper legs.
+        if !small {
+            let pipeH = max(8, fort.kettleY - fort.baseY + 4)
+            let pipe = take("steam_pipe", parent: body, z: 1.6)
+            placeTexture(pipe, BattleArtCache.steamPipeTexture, at: local(fort.kettleX, fort.baseY - 2),
+                         size: CGSize(width: 8, height: pipeH), anchor: CGPoint(x: 0.5, y: 0))
         }
 
         // The kettle: its state art, the pop animation, steam when critical.
@@ -724,10 +981,13 @@ final class LensLayer {
         let kPoint = local(fort.kettleX, fort.kettleY)
         if useArt, let pop = fx.kettlePops[fort.side], let clip = fx.library.clip("kettle_pop") {
             placeClip(kettle, clip.frame(at: now - pop.start), clip, at: kPoint, cellsPerPx: 0.75, flip: fort.side == 1)
+        } else if useArt, let kFrame = sheet.frame("kettle_\(state)") {
+            place(kettle, frame: kFrame, at: kPoint, scale: 0.75, flip: fort.side == 1,
+                  fallback: fort.kettleHp > 0 ? palette.kettle : palette.flattened,
+                  fallbackSize: CGSize(width: 24, height: 22))
         } else {
-            place(kettle, frame: useArt ? sheet.frame("kettle_\(state)") : nil, at: kPoint,
-                  scale: 0.75, flip: fort.side == 1, fallback: fort.kettleHp > 0 ? palette.kettle : palette.flattened,
-                  fallbackSize: CGSize(width: 20, height: 18))
+            placeTexture(kettle, BattleArtCache.copperKettleTexture(state: state), at: kPoint,
+                         size: CGSize(width: 26, height: 24), anchor: CGPoint(x: 0.5, y: 0))
         }
         if useArt, state == "critical", let steam = fx.library.clip("fx_kettle_steam") {
             let s = take("steam", parent: body, z: 2.1)
@@ -735,7 +995,9 @@ final class LensLayer {
                       cellsPerPx: 0.8, flip: false)
         }
 
-        // Hobs: idle, aim pose by power, fire, hit, tumble, land, dig, cheer, Bonked with the balloon.
+        // Hobs vs Flatteners ("Round vs Flat" faction silhouettes, Plate 3):
+        // Side 1 in non-Duel battles renders rigid vertical Slate-Grey Flatteners with spirit-level
+        // caps, green level bubbles, orange ties, and a SQUARE zzz Snooze Balloon when Bonked.
         for h in fort.hobs {
             let node = take("hob", parent: body, z: 3)
             let selected = h.id == snap.selectedHob && fort.side == snap.activeSide
@@ -744,13 +1006,38 @@ final class LensLayer {
             // A Hob that fell with a collapse rides down with its chunk (review 2, M6).
             let drop = fx.hobOffset(side: fort.side, hob: h.id)
             let at = local(h.x + drop.dx, h.y + lift + drop.dy)
-            if useArt, let pick = fx.hobSprite(side: fort.side, hob: h, selected: selected, aiming: aiming, power: snap.aim.power) {
+            // A Rival's own Hob (a content Hob such as Marge) wears the Rival look; Neat Brigade
+            // units stay Flatteners (assets bundle, play and look pass).
+            let rivalHob = SpriteImages.hobArtName(id: h.def, name: "") != nil
+            if isFlattenerSide && !rivalHob && !small {
+                if useArt, let fPick = fx.flattenerSprite(side: fort.side, hob: h, selected: selected,
+                                                          aiming: aiming, power: snap.aim.power, sheet: sheet) {
+                    placeClip(node, fPick.0, fPick.1, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: true)
+                    drawOverlays(for: fPick.0, parent: body, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: true, z: 3.04)
+                } else {
+                    let fk = SpriteImages.flattenerArtName(def: h.def, cls: h.cls)
+                    let poseInfo = fx.flattenerPose(side: fort.side, hob: h, selected: selected, aiming: aiming, power: snap.aim.power)
+                    let tilted = poseInfo.pose == "hit" || poseInfo.pose == "tumble" || h.isOut || h.isCrushed
+                    let tex = BattleArtCache.flattenerTexture(kind: fk, bonked: h.isOut, tilted: tilted)
+                    let hSize: CGSize = h.isOut ? CGSize(width: 34, height: 52) : CGSize(width: 24, height: 34)
+                    placeTexture(node, tex, at: at, size: hSize, anchor: CGPoint(x: 0.5, y: 0))
+                    node.xScale = -1
+                }
+            } else if useArt, let pick = fx.hobSprite(side: fort.side, hob: h, selected: selected, aiming: aiming, power: snap.aim.power) {
                 placeClip(node, pick.0, pick.1, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: fort.side == 1)
+                drawOverlays(for: pick.0, parent: body, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: fort.side == 1, z: 3.04)
             } else {
                 let bonked = h.isOut
-                place(node, frame: nil, at: at, scale: 1, flip: fort.side == 1,
-                      fallback: bonked ? palette.flattened : palette.side(fort.side),
-                      fallbackSize: CGSize(width: small ? 18 : 14, height: small ? 18 : 16))
+                if !small {
+                    let tex = BattleArtCache.hobFallbackTexture(side: fort.side, color: palette.side(fort.side), bonked: bonked)
+                    let sz: CGSize = bonked ? CGSize(width: 34, height: 50) : CGSize(width: 24, height: 30)
+                    placeTexture(node, tex, at: at, size: sz, anchor: CGPoint(x: 0.5, y: 0))
+                    node.xScale = fort.side == 1 ? -1 : 1
+                } else {
+                    place(node, frame: nil, at: at, scale: 1, flip: fort.side == 1,
+                          fallback: bonked ? palette.flattened : palette.side(fort.side),
+                          fallbackSize: CGSize(width: 18, height: 18))
+                }
             }
             // Squashed is not Bonked (QA playtest 2, N2): drawn flattened, with three small
             // stars over its head, and still live.
@@ -773,6 +1060,40 @@ final class LensLayer {
         }
     }
 
+    /// Computes exposed exterior edges of a fort's blocks for the double-weight espresso silhouette contour.
+    private static func outerContourPath(blocks: [BlockView], fort: FortView, originOffset: CGPoint) -> CGPath {
+        struct CellKey: Hashable { let c: Int; let r: Int }
+        var occupied = Set<CellKey>()
+        occupied.reserveCapacity(blocks.count)
+        for b in blocks {
+            let c = Int(((b.x - fort.originX) / fort.block).rounded())
+            let r = Int(((b.y - fort.baseY) / fort.block).rounded())
+            occupied.insert(CellKey(c: c, r: r))
+        }
+        let path = CGMutablePath()
+        for b in blocks {
+            let c = Int(((b.x - fort.originX) / fort.block).rounded())
+            let r = Int(((b.y - fort.baseY) / fort.block).rounded())
+            let x0 = CGFloat(b.x) + originOffset.x
+            let y0 = CGFloat(b.y) + originOffset.y
+            let x1 = x0 + CGFloat(b.w)
+            let y1 = y0 + CGFloat(b.h)
+            if !occupied.contains(CellKey(c: c - 1, r: r)) {
+                path.move(to: CGPoint(x: x0, y: y0)); path.addLine(to: CGPoint(x: x0, y: y1))
+            }
+            if !occupied.contains(CellKey(c: c + 1, r: r)) {
+                path.move(to: CGPoint(x: x1, y: y0)); path.addLine(to: CGPoint(x: x1, y: y1))
+            }
+            if !occupied.contains(CellKey(c: c, r: r + 1)) {
+                path.move(to: CGPoint(x: x0, y: y1)); path.addLine(to: CGPoint(x: x1, y: y1))
+            }
+            if !occupied.contains(CellKey(c: c, r: r - 1)) {
+                path.move(to: CGPoint(x: x0, y: y0)); path.addLine(to: CGPoint(x: x1, y: y0))
+            }
+        }
+        return path
+    }
+
     /// How flat a squashed Hob is drawn (its height, as a share).
     static let crushedScale: CGFloat = 0.55
 
@@ -791,7 +1112,7 @@ final class LensLayer {
             path.close()
             UIColor(red: 1, green: 0.76, blue: 0.24, alpha: 1).setFill()
             path.fill()
-            UIColor(red: 0.17, green: 0.12, blue: 0.18, alpha: 1).setStroke()
+            UIColor(red: 0.17, green: 0.13, blue: 0.12, alpha: 1).setStroke()
             path.lineWidth = 1.2
             path.stroke()
             _ = ctx
@@ -919,9 +1240,21 @@ final class LensLayer {
         ground.path = path
     }
 
-    // MARK: Placing sprites
+    // MARK: Placing sprites & --v2 overlays
+
+    private func placeTexture(_ node: SKSpriteNode, _ texture: SKTexture, at point: CGPoint, size: CGSize, anchor: CGPoint) {
+        node.position = point
+        node.texture = texture
+        node.color = .white
+        node.colorBlendFactor = 0
+        node.size = size
+        node.anchorPoint = anchor
+        node.xScale = 1
+        node.yScale = 1
+    }
 
     /// Puts a sprite frame with its anchor at `point`. `scale` is world cells per @1x pixel.
+    /// Automatically honors `--v2` tight alpha-bbox `drawSize` and `trimOffset`!
     private func place(_ node: SKSpriteNode, frame: SpriteSheet.Frame?, at point: CGPoint, scale: CGFloat, flip: Bool,
                        fallback: UIColor, fallbackSize: CGSize) {
         node.position = point
@@ -929,10 +1262,8 @@ final class LensLayer {
             node.texture = frame.texture
             node.colorBlendFactor = 0
             node.color = .white
-            node.size = CGSize(width: frame.size.width * scale, height: frame.size.height * scale)
-            // Manifest anchors are from the top left; SpriteKit's are unit values from the bottom left.
-            node.anchorPoint = CGPoint(x: frame.anchor.x / max(1, frame.size.width),
-                                       y: 1 - frame.anchor.y / max(1, frame.size.height))
+            node.size = CGSize(width: frame.drawSize.width * scale, height: frame.drawSize.height * scale)
+            node.anchorPoint = frame.spriteKitAnchor()
         } else {
             node.texture = nil
             node.color = fallback
@@ -944,6 +1275,7 @@ final class LensLayer {
     }
 
     /// Puts one frame of an animation with the clip's shared size and anchor at `point`.
+    /// When the atlas frame is `--v2` trimmed, uses `frame.drawSize` and shifts anchor by `trimOffset`.
     private func placeClip(_ node: SKSpriteNode, _ frameName: String, _ clip: AnimClip, at point: CGPoint, cellsPerPx: CGFloat, flip: Bool) {
         node.position = point
         guard let frame = sheet.frame(frameName) else {
@@ -953,10 +1285,730 @@ final class LensLayer {
         node.texture = frame.texture
         node.colorBlendFactor = 0
         node.color = .white
-        let w = CGFloat(clip.w), h = CGFloat(clip.h)
-        node.size = CGSize(width: w * cellsPerPx, height: h * cellsPerPx)
-        node.anchorPoint = CGPoint(x: clip.anchor.x / max(1, w), y: 1 - clip.anchor.y / max(1, h))
+        if frame.isTrimmed {
+            node.size = CGSize(width: frame.drawSize.width * cellsPerPx, height: frame.drawSize.height * cellsPerPx)
+            node.anchorPoint = frame.spriteKitAnchor(untrimmedAnchor: clip.anchor)
+        } else {
+            let w = CGFloat(clip.w), h = CGFloat(clip.h)
+            node.size = CGSize(width: w * cellsPerPx, height: h * cellsPerPx)
+            node.anchorPoint = CGPoint(x: clip.anchor.x / max(1, w), y: 1 - clip.anchor.y / max(1, h))
+        }
         node.xScale = flip ? -1 : 1
+    }
+
+    /// Composites `--v2` team scarf / snooze-balloon overlays on top of a deduplicated Hob frame.
+    private func drawOverlays(for frameName: String, parent: SKNode, at point: CGPoint,
+                              cellsPerPx: CGFloat, flip: Bool, z: CGFloat) {
+        let list = sheet.overlays(for: frameName)
+        guard !list.isEmpty else { return }
+        let dir: CGFloat = flip ? -1 : 1
+        for (idx, ov) in list.enumerated() {
+            guard let ovFrame = sheet.frame(ov.sprite) else { continue }
+            let ovNode = take("overlay", parent: parent, z: z + CGFloat(idx) * 0.01)
+            let ovScale = CGFloat(ov.scale ?? 1) * cellsPerPx
+            // Overlay dx/dy in castle@2x.json are @1x px relative to feet anchor in y-down space.
+            let pos = CGPoint(x: point.x + dir * CGFloat(ov.dx) * cellsPerPx,
+                              y: point.y - CGFloat(ov.dy) * cellsPerPx)
+            place(ovNode, frame: ovFrame, at: pos, scale: ovScale, flip: flip, fallback: .clear, fallbackSize: .zero)
+            if let rot = ov.rot, rot != 0 {
+                ovNode.zRotation = CGFloat(-rot * .pi / 180) * dir
+            }
+        }
+    }
+}
+
+// MARK: Pre-rendered CoreGraphics Art Cache (Cutaway Rooms, Flatteners, Boss Props, Outlined Callouts)
+
+/// Caches crisp CoreGraphics-rendered `SKTexture`s for the Part 2 visual overhaul so
+/// atmospheric backdrops, cutaway Nooks, planted Stompers, Slate-Grey Flatteners,
+/// Topiary Peacock boss props, Rescue Cage, and outlined damage numbers look art-directed
+/// even before regenerated PNGs are copied into the bundle.
+@MainActor
+private enum BattleArtCache {
+    private static var flattenerCache: [String: SKTexture] = [:]
+    private static var hobCache: [String: SKTexture] = [:]
+    private static var kettleCache: [String: SKTexture] = [:]
+    private static var stomperCache: [String: SKTexture] = [:]
+    private static var pennantCache: [String: SKTexture] = [:]
+    private static var calloutCache: [String: SKTexture] = [:]
+
+    static let skyTexture: SKTexture = {
+        let sz = CGSize(width: 16, height: 256)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let colors = [Palette.hex(0x88C8E6).cgColor, Palette.hex(0xA6DCEF).cgColor, Palette.hex(0xF5EED8).cgColor] as CFArray
+            if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.62, 1.0]) {
+                ctx.cgContext.drawLinearGradient(grad, start: .zero, end: CGPoint(x: 0, y: sz.height), options: [])
+            }
+        }
+        let tex = SKTexture(image: img)
+        tex.filteringMode = .linear
+        return tex
+    }()
+
+    /// Distant Puddingstone Downs hills glazed with ~18% cool sky atmospheric haze.
+    static let farHillsTexture: SKTexture = {
+        let sz = CGSize(width: 512, height: 140)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let p = UIBezierPath()
+            p.move(to: CGPoint(x: 0, y: sz.height))
+            p.addLine(to: CGPoint(x: 0, y: 74))
+            p.addCurve(to: CGPoint(x: 170, y: 42), controlPoint1: CGPoint(x: 55, y: 34), controlPoint2: CGPoint(x: 115, y: 66))
+            p.addCurve(to: CGPoint(x: 350, y: 56), controlPoint1: CGPoint(x: 235, y: 18), controlPoint2: CGPoint(x: 290, y: 70))
+            p.addCurve(to: CGPoint(x: 512, y: 48), controlPoint1: CGPoint(x: 415, y: 34), controlPoint2: CGPoint(x: 465, y: 24))
+            p.addLine(to: CGPoint(x: sz.width, y: sz.height))
+            p.close()
+            // Cool atmospheric sky-tinted hill green (#97C0B8)
+            Palette.hex(0x97C0B8).setFill()
+            p.fill()
+            _ = ctx
+        }
+        let tex = SKTexture(image: img)
+        tex.filteringMode = .linear
+        return tex
+    }()
+
+    static let midHillsTexture: SKTexture = {
+        let sz = CGSize(width: 512, height: 120)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let p = UIBezierPath()
+            p.move(to: CGPoint(x: 0, y: sz.height))
+            p.addLine(to: CGPoint(x: 0, y: 62))
+            p.addCurve(to: CGPoint(x: 195, y: 36), controlPoint1: CGPoint(x: 75, y: 80), controlPoint2: CGPoint(x: 130, y: 20))
+            p.addCurve(to: CGPoint(x: 390, y: 44), controlPoint1: CGPoint(x: 265, y: 56), controlPoint2: CGPoint(x: 320, y: 22))
+            p.addCurve(to: CGPoint(x: 512, y: 58), controlPoint1: CGPoint(x: 440, y: 58), controlPoint2: CGPoint(x: 485, y: 44))
+            p.addLine(to: CGPoint(x: sz.width, y: sz.height))
+            p.close()
+            // Soft mid-ground sage-meadow (#84B888)
+            Palette.hex(0x84B888).setFill()
+            p.fill()
+            _ = ctx
+        }
+        let tex = SKTexture(image: img)
+        tex.filteringMode = .linear
+        return tex
+    }()
+
+    static let groundShadowTexture: SKTexture = {
+        let sz = CGSize(width: 128, height: 32)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let cg = ctx.cgContext
+            let colors = [Palette.hex(0x2C221E).withAlphaComponent(0.34).cgColor,
+                          Palette.hex(0x2C221E).withAlphaComponent(0.0).cgColor] as CFArray
+            if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+                cg.saveGState()
+                cg.scaleBy(x: 1, y: 0.25)
+                cg.drawRadialGradient(grad, startCenter: CGPoint(x: 64, y: 64), startRadius: 4,
+                                      endCenter: CGPoint(x: 64, y: 64), endRadius: 60, options: [])
+                cg.restoreGState()
+            }
+        }
+        return SKTexture(image: img)
+    }()
+
+    /// Opaque `#3B2D24` recessed cutaway timber chamber backing (eliminates tree bleed-through).
+    static let nookRoomTexture: SKTexture = {
+        let sz = CGSize(width: 64, height: 64)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            Palette.hex(0x3B2D24).setFill()
+            ctx.fill(CGRect(origin: .zero, size: sz))
+            // Subtle warm timber wainscot planks
+            Palette.hex(0x4C3A2E).setStroke()
+            let cg = ctx.cgContext
+            cg.setLineWidth(1.2)
+            for x in stride(from: 12, to: 64, by: 14) {
+                cg.move(to: CGPoint(x: CGFloat(x), y: 4))
+                cg.addLine(to: CGPoint(x: CGFloat(x), y: 60))
+            }
+            cg.strokePath()
+            // Recessed inner frame shadow
+            Palette.hex(0x261C17).setStroke()
+            cg.setLineWidth(4)
+            cg.stroke(CGRect(x: 2, y: 2, width: 60, height: 60))
+        }
+        return SKTexture(image: img)
+    }()
+
+    /// Warm `#FFCE70` radial lantern rim-light glow for occupied Nooks & Kettle Room.
+    static let lanternGlowTexture: SKTexture = {
+        let sz = CGSize(width: 64, height: 64)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let colors = [Palette.hex(0xFFCE70).withAlphaComponent(0.55).cgColor,
+                          Palette.hex(0xFFCE70).withAlphaComponent(0.18).cgColor,
+                          Palette.hex(0xFFCE70).withAlphaComponent(0.0).cgColor] as CFArray
+            if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.55, 1]) {
+                ctx.cgContext.drawRadialGradient(grad, startCenter: CGPoint(x: 32, y: 28), startRadius: 2,
+                                                 endCenter: CGPoint(x: 32, y: 32), endRadius: 31, options: [])
+            }
+        }
+        return SKTexture(image: img)
+    }()
+
+    /// Subtle `0.18` warm glass specular glaze over occupied Nooks.
+    static let windowGlazeTexture: SKTexture = {
+        let sz = CGSize(width: 64, height: 64)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let p = UIBezierPath()
+            p.move(to: CGPoint(x: 8, y: 6))
+            p.addLine(to: CGPoint(x: 28, y: 6))
+            p.addLine(to: CGPoint(x: 8, y: 34))
+            p.close()
+            UIColor.white.setFill()
+            p.fill()
+            let p2 = UIBezierPath()
+            p2.move(to: CGPoint(x: 36, y: 6))
+            p2.addLine(to: CGPoint(x: 44, y: 6))
+            p2.addLine(to: CGPoint(x: 10, y: 52))
+            p2.addLine(to: CGPoint(x: 6, y: 44))
+            p2.close()
+            p2.fill()
+            _ = ctx
+        }
+        return SKTexture(image: img)
+    }()
+
+    static let loopholeArchTexture: SKTexture = {
+        let sz = CGSize(width: 24, height: 32)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let arch = UIBezierPath()
+            arch.move(to: CGPoint(x: 4, y: 28))
+            arch.addLine(to: CGPoint(x: 4, y: 12))
+            arch.addArc(withCenter: CGPoint(x: 12, y: 12), radius: 8, startAngle: .pi, endAngle: 0, clockwise: true)
+            arch.addLine(to: CGPoint(x: 20, y: 28))
+            arch.close()
+            Palette.hex(0x2C221E).setFill()
+            arch.fill()
+            Palette.hex(0xC88A2E).setStroke()
+            arch.lineWidth = 2.2
+            arch.stroke()
+            _ = ctx
+        }
+        return SKTexture(image: img)
+    }()
+
+    static let steamPipeTexture: SKTexture = {
+        let sz = CGSize(width: 16, height: 64)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let rect = CGRect(x: 3, y: 0, width: 10, height: 64)
+            Palette.hex(0xC88A2E).setFill()
+            ctx.fill(rect)
+            Palette.hex(0xFFE08A).setFill()
+            ctx.fill(CGRect(x: 5, y: 0, width: 3, height: 64))
+            Palette.hex(0x2C221E).setStroke()
+            ctx.cgContext.setLineWidth(1.8)
+            ctx.cgContext.stroke(rect)
+            for y in [16, 44] as [CGFloat] {
+                let collar = CGRect(x: 1.5, y: y, width: 13, height: 5)
+                Palette.hex(0xFFC23D).setFill()
+                ctx.fill(collar)
+                ctx.cgContext.stroke(collar)
+            }
+        }
+        return SKTexture(image: img)
+    }()
+
+    static func stomperTexture(side: Int, isFlattener: Bool) -> SKTexture {
+        let key = "\(side)_\(isFlattener)"
+        if let hit = stomperCache[key] { return hit }
+        let sz = CGSize(width: 36, height: 44)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let ink = Palette.hex(0x2C221E)
+            let metal = isFlattener ? Palette.hex(0x5A6572) : Palette.hex(0x7B6B5A)
+            let accent = isFlattener ? Palette.hex(0xE8730C) : Palette.hex(0xC88A2E)
+
+            // Upper piston leg
+            let leg = UIBezierPath(roundedRect: CGRect(x: 11, y: 2, width: 14, height: 24), cornerRadius: 4)
+            metal.setFill(); leg.fill()
+            ink.setStroke(); leg.lineWidth = 2.6; leg.stroke()
+
+            // Brass knee joint
+            let knee = UIBezierPath(ovalIn: CGRect(x: 12, y: 18, width: 12, height: 10))
+            accent.setFill(); knee.fill()
+            ink.setStroke(); knee.lineWidth = 2.2; knee.stroke()
+
+            // Planted broad iron stomper boot
+            let foot = UIBezierPath(roundedRect: CGRect(x: 4, y: 28, width: 28, height: 12), cornerRadius: 5)
+            Palette.hex(0x463E3B).setFill(); foot.fill()
+            ink.setStroke(); foot.lineWidth = 2.8; foot.stroke()
+
+            // Rivets
+            Palette.hex(0xFFE08A).setFill()
+            UIBezierPath(ovalIn: CGRect(x: 9, y: 32, width: 3.5, height: 3.5)).fill()
+            UIBezierPath(ovalIn: CGRect(x: 23.5, y: 32, width: 3.5, height: 3.5)).fill()
+            _ = ctx
+        }
+        let tex = SKTexture(image: img)
+        stomperCache[key] = tex
+        return tex
+    }
+
+    static func copperKettleTexture(state: String) -> SKTexture {
+        if let hit = kettleCache[state] { return hit }
+        let sz = CGSize(width: 52, height: 48)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let ink = Palette.hex(0x2C221E)
+            let copper = state == "popped" ? Palette.hex(0x6E6A68) : Palette.hex(0xD9773A)
+            let pot = UIBezierPath(ovalIn: CGRect(x: 8, y: 12, width: 36, height: 32))
+            copper.setFill(); pot.fill()
+            ink.setStroke(); pot.lineWidth = 3; pot.stroke()
+            // Specular highlight
+            Palette.hex(0xFFE08A).withAlphaComponent(0.75).setFill()
+            UIBezierPath(ovalIn: CGRect(x: 14, y: 17, width: 11, height: 7)).fill()
+            // Brass lid
+            let lid = UIBezierPath(roundedRect: CGRect(x: 15, y: 7, width: 22, height: 8), cornerRadius: 4)
+            Palette.hex(0xFFC23D).setFill(); lid.fill()
+            ink.setStroke(); lid.lineWidth = 2.4; lid.stroke()
+            // Glowing dial core
+            let glow = state == "critical" ? Palette.hex(0xC9363E) : (state == "popped" ? Palette.hex(0x3B3338) : Palette.hex(0x4FE3C1))
+            let dial = UIBezierPath(ovalIn: CGRect(x: 20, y: 22, width: 12, height: 12))
+            glow.setFill(); dial.fill()
+            ink.setStroke(); dial.lineWidth = 2; dial.stroke()
+            _ = ctx
+        }
+        let tex = SKTexture(image: img)
+        kettleCache[state] = tex
+        return tex
+    }
+
+    static func fortPennantTexture(side: Int, color: UIColor, isFlattener: Bool) -> SKTexture {
+        let key = "\(side)_\(color.description)_\(isFlattener)"
+        if let hit = pennantCache[key] { return hit }
+        let sz = CGSize(width: 48, height: 56)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let ink = Palette.hex(0x2C221E)
+            // Mast pole
+            let mast = UIBezierPath()
+            mast.move(to: CGPoint(x: 12, y: 8))
+            mast.addLine(to: CGPoint(x: 12, y: 54))
+            ink.setStroke(); mast.lineWidth = 3.5; mast.lineCapStyle = .round; mast.stroke()
+            // Brass finial
+            let finial = UIBezierPath(ovalIn: CGRect(x: 8, y: 3, width: 8, height: 8))
+            Palette.hex(0xFFC23D).setFill(); finial.fill()
+            ink.setStroke(); finial.lineWidth = 2; finial.stroke()
+            // Swallowtail pennant
+            let flag = UIBezierPath()
+            flag.move(to: CGPoint(x: 12, y: 11))
+            flag.addLine(to: CGPoint(x: 45, y: 18))
+            flag.addLine(to: CGPoint(x: 36, y: 24))
+            flag.addLine(to: CGPoint(x: 45, y: 31))
+            flag.addLine(to: CGPoint(x: 12, y: 33))
+            flag.close()
+            (isFlattener ? Palette.hex(0x5A6572) : color).setFill(); flag.fill()
+            if isFlattener {
+                // Sharp orange Flattener stripe
+                let stripe = UIBezierPath(rect: CGRect(x: 13, y: 19, width: 24, height: 6))
+                Palette.hex(0xE8730C).setFill(); stripe.fill()
+            }
+            ink.setStroke(); flag.lineWidth = 2.6; flag.lineJoinStyle = .round; flag.stroke()
+            _ = ctx
+        }
+        let tex = SKTexture(image: img)
+        pennantCache[key] = tex
+        return tex
+    }
+
+    /// Bespoke procedural rigid tall rectilinear Slate-Grey Flattener rig (Plate 3 "Round vs Flat").
+    static func flattenerTexture(kind: String, bonked: Bool, tilted: Bool) -> SKTexture {
+        let key = "\(kind)_\(bonked)_\(tilted)"
+        if let hit = flattenerCache[key] { return hit }
+        let sz: CGSize = bonked ? CGSize(width: 68, height: 104) : CGSize(width: 48, height: 68)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let ink = Palette.hex(0x2C221E)
+            let slate = Palette.hex(0x5A6572)
+            let slateLight = Palette.hex(0x7E8A98)
+            let orange = Palette.hex(0xE8730C)
+            let bubble = Palette.hex(0x4ADE80)
+            let baseY = sz.height - 4
+            let cx = sz.width * 0.5
+
+            // Square zzz Snooze Balloon above when Bonked (Plate 3: Square vs Round!).
+            if bonked {
+                let str = UIBezierPath()
+                str.move(to: CGPoint(x: cx, y: baseY - 46))
+                str.addLine(to: CGPoint(x: cx, y: 34))
+                ink.setStroke(); str.lineWidth = 2.4; str.stroke()
+                let cube = UIBezierPath(roundedRect: CGRect(x: cx - 18, y: 4, width: 36, height: 30), cornerRadius: 2)
+                Palette.hex(0xC8D0DC).setFill(); cube.fill()
+                ink.setStroke(); cube.lineWidth = 3; cube.stroke()
+                // Angular Z glyphs
+                let zPath = UIBezierPath()
+                zPath.move(to: CGPoint(x: cx - 9, y: 14)); zPath.addLine(to: CGPoint(x: cx - 1, y: 14))
+                zPath.addLine(to: CGPoint(x: cx - 9, y: 24)); zPath.addLine(to: CGPoint(x: cx - 1, y: 24))
+                zPath.move(to: CGPoint(x: cx + 3, y: 12)); zPath.addLine(to: CGPoint(x: cx + 11, y: 12))
+                zPath.addLine(to: CGPoint(x: cx + 3, y: 22)); zPath.addLine(to: CGPoint(x: cx + 11, y: 22))
+                ink.setStroke(); zPath.lineWidth = 2.4; zPath.stroke()
+            }
+
+            // Straight dark uniform legs (rectilinear)
+            let leftLeg = UIBezierPath(rect: CGRect(x: cx - 9, y: baseY - 12, width: 7, height: 12))
+            let rightLeg = UIBezierPath(rect: CGRect(x: cx + 2, y: baseY - 12, width: 7, height: 12))
+            Palette.hex(0x3D4652).setFill(); leftLeg.fill(); rightLeg.fill()
+            ink.setStroke(); leftLeg.lineWidth = 2.4; leftLeg.stroke(); rightLeg.lineWidth = 2.4; rightLeg.stroke()
+
+            // Tall rigid rectilinear Slate-Grey uniform torso (sharp shoulders!)
+            let torso = UIBezierPath(roundedRect: CGRect(x: cx - 12, y: baseY - 38, width: 24, height: 27), cornerRadius: 2)
+            slate.setFill(); torso.fill()
+            // Pressed lapel crease
+            let lapel = UIBezierPath(rect: CGRect(x: cx - 10, y: baseY - 36, width: 5, height: 23))
+            slateLight.setFill(); lapel.fill()
+            ink.setStroke(); torso.lineWidth = 3; torso.stroke()
+
+            // Sharp orange tie
+            let tie = UIBezierPath()
+            tie.move(to: CGPoint(x: cx, y: baseY - 36))
+            tie.addLine(to: CGPoint(x: cx + 3.5, y: baseY - 22))
+            tie.addLine(to: CGPoint(x: cx, y: baseY - 17))
+            tie.addLine(to: CGPoint(x: cx - 3.5, y: baseY - 22))
+            tie.close()
+            orange.setFill(); tie.fill()
+            ink.setStroke(); tie.lineWidth = 1.8; tie.stroke()
+
+            // Stark white gloves + straight tool
+            let gloveL = UIBezierPath(roundedRect: CGRect(x: cx - 17, y: baseY - 27, width: 7, height: 8), cornerRadius: 2)
+            let gloveR = UIBezierPath(roundedRect: CGRect(x: cx + 10, y: baseY - 27, width: 7, height: 8), cornerRadius: 2)
+            UIColor.white.setFill(); gloveL.fill(); gloveR.fill()
+            ink.setStroke(); gloveL.lineWidth = 2.2; gloveL.stroke(); gloveR.lineWidth = 2.2; gloveR.stroke()
+            let tool = UIBezierPath(rect: CGRect(x: cx + 14, y: baseY - 40, width: 4, height: 26))
+            (kind == "snipper" ? orange : slateLight).setFill(); tool.fill()
+            ink.setStroke(); tool.lineWidth = 1.8; tool.stroke()
+
+            // Blocky head
+            let head = UIBezierPath(roundedRect: CGRect(x: cx - 9, y: baseY - 52, width: 18, height: 15), cornerRadius: 3)
+            Palette.hex(0xEAD3C0).setFill(); head.fill()
+            ink.setStroke(); head.lineWidth = 2.6; head.stroke()
+            // Stern brows / X-eyes if bonked
+            let eyes = UIBezierPath()
+            eyes.move(to: CGPoint(x: cx - 5, y: baseY - 45)); eyes.addLine(to: CGPoint(x: cx - 1, y: baseY - 45))
+            eyes.move(to: CGPoint(x: cx + 1, y: baseY - 45)); eyes.addLine(to: CGPoint(x: cx + 5, y: baseY - 45))
+            ink.setStroke(); eyes.lineWidth = 2; eyes.stroke()
+
+            // Flat spirit-level pancake cap with bright #4ADE80 green level bubble!
+            ctx.cgContext.saveGState()
+            let capPivot = CGPoint(x: cx, y: baseY - 54)
+            ctx.cgContext.translateBy(x: capPivot.x, y: capPivot.y)
+            if tilted { ctx.cgContext.rotate(by: 0.24) }
+            let brim = UIBezierPath(rect: CGRect(x: -16, y: -4, width: 32, height: 5))
+            slate.setFill(); brim.fill()
+            ink.setStroke(); brim.lineWidth = 2.4; brim.stroke()
+            let crown = UIBezierPath(rect: CGRect(x: -11, y: -11, width: 22, height: 8))
+            slateLight.setFill(); crown.fill()
+            ink.setStroke(); crown.lineWidth = 2.4; crown.stroke()
+            // Spirit-level vial & bright green bubble
+            let vial = UIBezierPath(roundedRect: CGRect(x: -7, y: -9.5, width: 14, height: 5), cornerRadius: 2)
+            Palette.hex(0xE8F8EC).setFill(); vial.fill()
+            let bx: CGFloat = tilted ? 2.5 : -2.5
+            let bub = UIBezierPath(ovalIn: CGRect(x: bx, y: -9, width: 5, height: 4))
+            bubble.setFill(); bub.fill()
+            ink.setStroke(); vial.lineWidth = 1.4; vial.stroke()
+            ctx.cgContext.restoreGState()
+        }
+        let tex = SKTexture(image: img)
+        flattenerCache[key] = tex
+        return tex
+    }
+
+    /// Plump round storybook Hob fallback (with round puffy Snooze Balloon when Bonked).
+    static func hobFallbackTexture(side: Int, color: UIColor, bonked: Bool) -> SKTexture {
+        let key = "\(side)_\(color.description)_\(bonked)"
+        if let hit = hobCache[key] { return hit }
+        let sz: CGSize = bonked ? CGSize(width: 68, height: 100) : CGSize(width: 48, height: 60)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let ink = Palette.hex(0x2C221E)
+            let cx = sz.width * 0.5
+            let baseY = sz.height - 4
+            if bonked {
+                let str = UIBezierPath()
+                str.move(to: CGPoint(x: cx, y: baseY - 38))
+                str.addQuadCurve(to: CGPoint(x: cx, y: 34), controlPoint: CGPoint(x: cx + 6, y: (baseY - 38 + 34) / 2))
+                ink.setStroke(); str.lineWidth = 2.2; str.stroke()
+                let balloon = UIBezierPath(ovalIn: CGRect(x: cx - 18, y: 4, width: 36, height: 32))
+                Palette.hex(0xFFF4DE).setFill(); balloon.fill()
+                ink.setStroke(); balloon.lineWidth = 3; balloon.stroke()
+            }
+            // Round plump Hob coat
+            let coat = UIBezierPath(ovalIn: CGRect(x: cx - 14, y: baseY - 32, width: 28, height: 28))
+            Palette.hex(0xD8984C).setFill(); coat.fill()
+            ink.setStroke(); coat.lineWidth = 3; coat.stroke()
+            // Team scarf
+            let scarf = UIBezierPath(roundedRect: CGRect(x: cx - 13, y: baseY - 34, width: 26, height: 7), cornerRadius: 3)
+            color.setFill(); scarf.fill()
+            ink.setStroke(); scarf.lineWidth = 2.2; scarf.stroke()
+            // Round head + domed cap
+            let head = UIBezierPath(ovalIn: CGRect(x: cx - 10, y: baseY - 49, width: 20, height: 18))
+            Palette.hex(0xF6D2B2).setFill(); head.fill()
+            ink.setStroke(); head.lineWidth = 2.6; head.stroke()
+            let hat = UIBezierPath(ovalIn: CGRect(x: cx - 12, y: baseY - 56, width: 24, height: 11))
+            color.setFill(); hat.fill()
+            ink.setStroke(); hat.lineWidth = 2.4; hat.stroke()
+            _ = ctx
+        }
+        let tex = SKTexture(image: img)
+        hobCache[key] = tex
+        return tex
+    }
+
+    /// 1-10 Boss sculpted clipped-hedge Topiary Peacock crest & fanned tail (Plate 1).
+    static let topiaryPeacockTexture: SKTexture = {
+        let sz = CGSize(width: 240, height: 150)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let ink = Palette.hex(0x2C221E)
+            let cx: CGFloat = 120, cy: CGFloat = 126
+            // 7 fanned sculpted hedge tail plumes with golden eye-spots
+            for i in -3...3 {
+                let angle = CGFloat(i) * 0.34 - .pi / 2
+                let tip = CGPoint(x: cx + cos(angle) * 96, y: cy + sin(angle) * 92)
+                let plume = UIBezierPath()
+                plume.move(to: CGPoint(x: cx, y: cy))
+                let left = CGPoint(x: cx + cos(angle - 0.16) * 76, y: cy + sin(angle - 0.16) * 72)
+                let right = CGPoint(x: cx + cos(angle + 0.16) * 76, y: cy + sin(angle + 0.16) * 72)
+                plume.addQuadCurve(to: tip, controlPoint: left)
+                plume.addQuadCurve(to: CGPoint(x: cx, y: cy), controlPoint: right)
+                plume.close()
+                (i % 2 == 0 ? Palette.hex(0x2F7E36) : Palette.hex(0x3D9642)).setFill()
+                plume.fill()
+                ink.setStroke(); plume.lineWidth = 3.2; plume.stroke()
+                // Gold-ringed peacock eye-spot
+                let eyeCenter = CGPoint(x: cx + cos(angle) * 70, y: cy + sin(angle) * 68)
+                let outerEye = UIBezierPath(ovalIn: CGRect(x: eyeCenter.x - 10, y: eyeCenter.y - 10, width: 20, height: 20))
+                Palette.hex(0xFFC23D).setFill(); outerEye.fill()
+                ink.setStroke(); outerEye.lineWidth = 2; outerEye.stroke()
+                let innerEye = UIBezierPath(ovalIn: CGRect(x: eyeCenter.x - 5, y: eyeCenter.y - 5, width: 10, height: 10))
+                Palette.hex(0x2F6FDE).setFill(); innerEye.fill()
+            }
+            // Sculpted peacock neck & crowned head
+            let neck = UIBezierPath(roundedRect: CGRect(x: cx - 14, y: 54, width: 28, height: 68), cornerRadius: 14)
+            Palette.hex(0x266B2C).setFill(); neck.fill()
+            ink.setStroke(); neck.lineWidth = 3.2; neck.stroke()
+            let head = UIBezierPath(ovalIn: CGRect(x: cx - 18, y: 36, width: 36, height: 30))
+            Palette.hex(0x3D9642).setFill(); head.fill()
+            ink.setStroke(); head.lineWidth = 3.2; head.stroke()
+            // Brass beak pointing left toward player
+            let beak = UIBezierPath()
+            beak.move(to: CGPoint(x: cx - 16, y: 48))
+            beak.addLine(to: CGPoint(x: cx - 34, y: 53))
+            beak.addLine(to: CGPoint(x: cx - 15, y: 58))
+            beak.close()
+            Palette.hex(0xFFC23D).setFill(); beak.fill()
+            ink.setStroke(); beak.lineWidth = 2.4; beak.stroke()
+            // Topiary crown sprigs
+            for dx in [-8, 0, 8] as [CGFloat] {
+                let dot = UIBezierPath(ovalIn: CGRect(x: cx + dx - 3.5, y: 24, width: 7, height: 7))
+                Palette.hex(0xFFC23D).setFill(); dot.fill()
+                ink.setStroke(); dot.lineWidth = 1.6; dot.stroke()
+            }
+            _ = ctx
+        }
+        return SKTexture(image: img)
+    }()
+
+    /// 1-10 Boss glowing vine-wrapped Sprinkler Root emblem (Plate 3).
+    static let sprinklerRootTexture: SKTexture = {
+        let sz = CGSize(width: 56, height: 60)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let ink = Palette.hex(0x2C221E)
+            // Soft amber-teal glow
+            Palette.hex(0x4FE3C1).withAlphaComponent(0.35).setFill()
+            UIBezierPath(ovalIn: CGRect(x: 4, y: 6, width: 48, height: 48)).fill()
+            // Brass sprinkler head + valve
+            let body = UIBezierPath(roundedRect: CGRect(x: 16, y: 16, width: 24, height: 32), cornerRadius: 8)
+            Palette.hex(0xFFC23D).setFill(); body.fill()
+            ink.setStroke(); body.lineWidth = 2.8; body.stroke()
+            // Emerald vines wrapping root
+            let vine = UIBezierPath()
+            vine.move(to: CGPoint(x: 10, y: 44))
+            vine.addCurve(to: CGPoint(x: 46, y: 20), controlPoint1: CGPoint(x: 20, y: 24), controlPoint2: CGPoint(x: 34, y: 42))
+            Palette.hex(0x1F6B29).setStroke(); vine.lineWidth = 5; vine.lineCapStyle = .round; vine.stroke()
+            Palette.hex(0x8BD888).setStroke(); vine.lineWidth = 2; vine.stroke()
+            // Top brass spray jet
+            let jet = UIBezierPath(roundedRect: CGRect(x: 22, y: 6, width: 12, height: 10), cornerRadius: 3)
+            Palette.hex(0xC88A2E).setFill(); jet.fill()
+            ink.setStroke(); jet.lineWidth = 2.2; jet.stroke()
+            _ = ctx
+        }
+        return SKTexture(image: img)
+    }()
+
+    /// 1-10 Boss vintage `Big Smoothie Jr.` steam roller (Plate 1 & 3).
+    static let rollerTexture: SKTexture = {
+        let sz = CGSize(width: 120, height: 76)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let ink = Palette.hex(0x2C221E)
+            // Chimney stack
+            let stack = UIBezierPath(roundedRect: CGRect(x: 28, y: 8, width: 12, height: 24), cornerRadius: 2)
+            Palette.hex(0x3D4652).setFill(); stack.fill()
+            ink.setStroke(); stack.lineWidth = 2.8; stack.stroke()
+            // Boiler body
+            let boiler = UIBezierPath(roundedRect: CGRect(x: 22, y: 26, width: 70, height: 26), cornerRadius: 8)
+            Palette.hex(0x5A6572).setFill(); boiler.fill()
+            ink.setStroke(); boiler.lineWidth = 3; boiler.stroke()
+            // Brass trim band
+            let band = UIBezierPath(rect: CGRect(x: 46, y: 27, width: 16, height: 24))
+            Palette.hex(0xFFC23D).setFill(); band.fill()
+            ink.setStroke(); band.lineWidth = 2; band.stroke()
+            // Heavy front iron flattening drum
+            let drum = UIBezierPath(ovalIn: CGRect(x: 6, y: 38, width: 34, height: 34))
+            Palette.hex(0x7E8A98).setFill(); drum.fill()
+            ink.setStroke(); drum.lineWidth = 3.2; drum.stroke()
+            let hub = UIBezierPath(ovalIn: CGRect(x: 18, y: 50, width: 10, height: 10))
+            Palette.hex(0xE8730C).setFill(); hub.fill()
+            ink.setStroke(); hub.lineWidth = 2; hub.stroke()
+            // Rear wheel
+            let wheel = UIBezierPath(ovalIn: CGRect(x: 78, y: 40, width: 32, height: 32))
+            Palette.hex(0x463E3B).setFill(); wheel.fill()
+            ink.setStroke(); wheel.lineWidth = 3; wheel.stroke()
+            _ = ctx
+        }
+        return SKTexture(image: img)
+    }()
+
+    /// A sign line from `hud.signs` on two rows: broken at the space nearest the middle.
+    static func signLines(_ line: String) -> String {
+        let spaces = line.indices.filter { line[$0] == " " }
+        guard !spaces.isEmpty else { return line }
+        let middle = line.count / 2
+        let best = spaces.min { a, b in
+            abs(line.distance(from: line.startIndex, to: a) - middle) < abs(line.distance(from: line.startIndex, to: b) - middle)
+        } ?? spaces[0]
+        var out = line
+        out.replaceSubrange(best...best, with: "\n")
+        return out
+    }
+
+    /// 1-10 Boss lawn sign, its words from `hud.signs` (Plate 1).
+    static let lawnSignTexture: SKTexture = {
+        let sz = CGSize(width: 68, height: 56)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let ink = Palette.hex(0x2C221E)
+            let post = UIBezierPath(rect: CGRect(x: 30, y: 28, width: 8, height: 26))
+            Palette.hex(0x7B4E29).setFill(); post.fill()
+            ink.setStroke(); post.lineWidth = 2.4; post.stroke()
+            let board = UIBezierPath(roundedRect: CGRect(x: 4, y: 6, width: 60, height: 26), cornerRadius: 4)
+            Palette.hex(0xFFF4DE).setFill(); board.fill()
+            ink.setStroke(); board.lineWidth = 2.6; board.stroke()
+            let style = NSMutableParagraphStyle(); style.alignment = .center
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 7.5, weight: .heavy),
+                .foregroundColor: ink,
+                .paragraphStyle: style,
+            ]
+            NSString(string: BattleArtCache.signLines(GameText.shared.pool("hud.signs").first ?? "")).draw(in: CGRect(x: 6, y: 9, width: 56, height: 22), withAttributes: attrs)
+            _ = ctx
+        }
+        return SKTexture(image: img)
+    }()
+
+    /// 1-10 Boss brass-hinged orange-handled Topiary Shears (Plate 1 & 3).
+    static let shearsTexture: SKTexture = {
+        let sz = CGSize(width: 76, height: 56)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let ink = Palette.hex(0x2C221E)
+            // Twin steel blades
+            let b1 = UIBezierPath()
+            b1.move(to: CGPoint(x: 34, y: 28)); b1.addLine(to: CGPoint(x: 4, y: 12)); b1.addLine(to: CGPoint(x: 30, y: 34)); b1.close()
+            let b2 = UIBezierPath()
+            b2.move(to: CGPoint(x: 34, y: 28)); b2.addLine(to: CGPoint(x: 4, y: 44)); b2.addLine(to: CGPoint(x: 30, y: 22)); b2.close()
+            Palette.hex(0xC8D0DC).setFill(); b1.fill(); b2.fill()
+            ink.setStroke(); b1.lineWidth = 2.6; b1.stroke(); b2.lineWidth = 2.6; b2.stroke()
+            // Orange handles
+            let h1 = UIBezierPath(roundedRect: CGRect(x: 36, y: 10, width: 34, height: 11), cornerRadius: 5)
+            let h2 = UIBezierPath(roundedRect: CGRect(x: 36, y: 35, width: 34, height: 11), cornerRadius: 5)
+            Palette.hex(0xE8730C).setFill(); h1.fill(); h2.fill()
+            ink.setStroke(); h1.lineWidth = 2.6; h1.stroke(); h2.lineWidth = 2.6; h2.stroke()
+            // Brass pivot bolt
+            let bolt = UIBezierPath(ovalIn: CGRect(x: 29, y: 21, width: 14, height: 14))
+            Palette.hex(0xFFC23D).setFill(); bolt.fill()
+            ink.setStroke(); bolt.lineWidth = 2.4; bolt.stroke()
+            _ = ctx
+        }
+        return SKTexture(image: img)
+    }()
+
+    /// 1-7 ornate wrought-iron hanging Rescue Cage bar (Plate 3).
+    static let cageBarTexture: SKTexture = {
+        let sz = CGSize(width: 28, height: 96)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let ink = Palette.hex(0x2C221E)
+            // Brass top suspension ring
+            let ring = UIBezierPath(ovalIn: CGRect(x: 8, y: 2, width: 12, height: 12))
+            Palette.hex(0xFFC23D).setStroke(); ring.lineWidth = 3; ring.stroke()
+            // Ornate wrought-iron vertical bars
+            let barL = UIBezierPath(roundedRect: CGRect(x: 5, y: 14, width: 6, height: 78), cornerRadius: 2)
+            let barR = UIBezierPath(roundedRect: CGRect(x: 17, y: 14, width: 6, height: 78), cornerRadius: 2)
+            Palette.hex(0x4E5460).setFill(); barL.fill(); barR.fill()
+            ink.setStroke(); barL.lineWidth = 2; barL.stroke(); barR.lineWidth = 2; barR.stroke()
+            // Riveted iron crossbars
+            for y in [18, 52, 84] as [CGFloat] {
+                let cross = UIBezierPath(roundedRect: CGRect(x: 2, y: y, width: 24, height: 7), cornerRadius: 2)
+                Palette.hex(0x3D434F).setFill(); cross.fill()
+                ink.setStroke(); cross.lineWidth = 2; cross.stroke()
+            }
+            _ = ctx
+        }
+        return SKTexture(image: img)
+    }()
+
+    static let rescueHaloTexture: SKTexture = {
+        let sz = CGSize(width: 64, height: 64)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let colors = [Palette.hex(0xFFE08A).withAlphaComponent(0.65).cgColor,
+                          Palette.hex(0xFFC23D).withAlphaComponent(0.0).cgColor] as CFArray
+            if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+                ctx.cgContext.drawRadialGradient(grad, startCenter: CGPoint(x: 32, y: 32), startRadius: 6,
+                                                 endCenter: CGPoint(x: 32, y: 32), endRadius: 30, options: [])
+            }
+        }
+        return SKTexture(image: img)
+    }()
+
+    static let captiveHettyTexture: SKTexture = {
+        hobFallbackTexture(side: 0, color: Palette.hex(0x2F6FDE), bonked: false)
+    }()
+
+    /// Outlined floating combat number / `Drop!` starburst texture (Plate 2).
+    static func calloutTexture(text: String, style: CalloutStyle) -> SKTexture {
+        let key = "\(style)_\(text)"
+        if let hit = calloutCache[key] { return hit }
+        let isDrop = style == .drop
+        let font = UIFont.systemFont(ofSize: isDrop ? 28 : 26, weight: .black)
+        let fill: UIColor
+        switch style {
+        case .hobHit: fill = Palette.hex(0xFFC23D)
+        case .wallBreak: fill = Palette.hex(0xFFF4DE)
+        case .drop: fill = Palette.hex(0x2C221E)
+        case .kettleHit: fill = Palette.hex(0xFF9E44)
+        case .mend: fill = Palette.hex(0x4FE3C1)
+        }
+        let attrs: [NSAttributedString.Key: Any] = isDrop
+            ? [.font: font, .foregroundColor: fill]
+            : [.font: font, .foregroundColor: fill, .strokeColor: Palette.hex(0x2C221E), .strokeWidth: -5.5]
+        let ns = NSString(string: text)
+        let textSz = ns.size(withAttributes: attrs)
+        let padX: CGFloat = isDrop ? 22 : 10
+        let padY: CGFloat = isDrop ? 16 : 6
+        let sz = CGSize(width: ceil(textSz.width + padX * 2), height: ceil(textSz.height + padY * 2))
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            if isDrop {
+                // Starburst yellow plaque behind `Drop!`
+                let star = UIBezierPath()
+                let cx = sz.width / 2, cy = sz.height / 2
+                let rx = sz.width * 0.48, ry = sz.height * 0.48
+                let points = 12
+                for k in 0..<(points * 2) {
+                    let frac: CGFloat = k % 2 == 0 ? 1.0 : 0.74
+                    let a = CGFloat(k) * .pi / CGFloat(points)
+                    let pt = CGPoint(x: cx + cos(a) * rx * frac, y: cy + sin(a) * ry * frac)
+                    if k == 0 { star.move(to: pt) } else { star.addLine(to: pt) }
+                }
+                star.close()
+                Palette.hex(0xFFE08A).setFill(); star.fill()
+                Palette.hex(0x2C221E).setStroke(); star.lineWidth = 3.2; star.stroke()
+            }
+            ns.draw(at: CGPoint(x: (sz.width - textSz.width) / 2, y: (sz.height - textSz.height) / 2), withAttributes: attrs)
+            _ = ctx
+        }
+        let tex = SKTexture(image: img)
+        if calloutCache.count > 64 { calloutCache.removeAll() }
+        calloutCache[key] = tex
+        return tex
     }
 }
 
@@ -987,11 +2039,13 @@ final class TerrainTextures {
     }
 }
 
-/// What a lens needs beyond the frame: the Fatigue home hold, the Rival peek, the owner ring.
+/// What a lens needs beyond the frame: the Fatigue home hold, the Rival peek, the owner ring,
+/// and any own-fort block targets picked for Mendglob or Mend Bucket.
 struct LensExtras: Equatable {
     var home: Int?
     var peek = false
     var ownerRing = false
+    var highlightedBlocks: [[Int]] = []
 }
 
 /// View-only camera framing: which part of the field each lens wants to show
@@ -1096,7 +2150,7 @@ enum Camera {
     }
 
     /// The marker's words: a button that peeks at both forts, then brings you back.
-    static func markerText(peek: Bool) -> String { peek ? "Back to my fort" : "View Rival fort" }
+    static func markerText(peek: Bool) -> String { GameText.shared.t(peek ? "hud.view_mine" : "hud.view_rival") }
 
     /// The Rival fort edge marker: -1 when the fort being shot at is off the left of the frame,
     /// +1 off the right, nil when it is in view.
@@ -1124,7 +2178,13 @@ enum Camera {
         case .own:
             return fortRect(own, snap: snap).insetBy(dx: -170, dy: -60).offsetBy(dx: own == 0 ? 110 : -110, dy: 40)
         case .target:
-            return fortRect(1 - own, snap: snap).insetBy(dx: -150, dy: -50).offsetBy(dx: 0, dy: 30)
+            var targetRect = fortRect(1 - own, snap: snap)
+            // In Rescue stages (e.g. 1-7 Hetty in a Jam), keep Hetty's Rescue Cage visible in Portrait Top Lens until freed.
+            let rescueProps = snap.props.filter { !$0.broken && ($0.kind == "cage_bar" || $0.kind == "captive") }
+            for rp in rescueProps {
+                targetRect = targetRect.union(CGRect(x: rp.x - 24, y: rp.y - 12, width: 48, height: 64))
+            }
+            return targetRect.insetBy(dx: -150, dy: -50).offsetBy(dx: 0, dy: 30)
         case .follow:
             if let home, snap.shells.isEmpty {
                 return planRect(snap, frame: frame, minBlock: minBlock, side: home)
@@ -1154,19 +2214,19 @@ enum Camera {
     }
 }
 
-/// Colours from the art kit (docs/art/png/20-palette-and-style.png).
+/// Colours from the Part 2 Brickabrac palette (`#2C221E` dark espresso ink, `#5A6572` Flattener slate).
 struct Palette {
-    var ink = Palette.hex(0x2B1E2E)
+    var ink = Palette.hex(0x2C221E)
     var paper = Palette.hex(0xFFF4DE)
     var sky = Palette.hex(0xA6DCEF)
     var grass = Palette.hex(0x8BCB3A)
     var dirt = Palette.hex(0x9A6A3A)
     var kettle = Palette.hex(0xD9773A)
-    var flattened = Palette.hex(0x8A90A2)
+    var flattened = Palette.hex(0x5A6572)
     var you = Palette.hex(0x2F6FDE)
     var rival = Palette.hex(0xE8730C)
     var gold = Palette.hex(0xFFC23D)
-    var cage = Palette.hex(0x5B5F6B)
+    var cage = Palette.hex(0x4E5460)
 
     init(set: ColourSet) {
         switch set {

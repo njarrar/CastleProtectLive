@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
                         title = { Text(c.title) },
                         text = { Text(c.text) },
                         confirmButton = { TextButton({ session.confirm = null; c.action() }) { Text(c.yes) } },
-                        dismissButton = { TextButton({ session.confirm = null }) { Text("Cancel") } },
+                        dismissButton = { TextButton({ session.confirm = null }) { Text(c.no) } },
                     )
                 }
             }

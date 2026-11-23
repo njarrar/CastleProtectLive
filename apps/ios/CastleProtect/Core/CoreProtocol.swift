@@ -804,11 +804,14 @@ struct CoreHud: Decodable, Equatable, Sendable {
     var fatigue = false
     var fatigueRound = 10
     var fatigueIn: Int?
+    /// `[player, rival]` think pose in ms (content `rival.think_ms`), null entries when unset.
+    var thinkMs: [Int?] = []
 
     init() {}
 
     init(from decoder: Decoder) throws {
         let k = try decoder.container(keyedBy: CodingKeys.self)
+        thinkMs = k.value(.thinkMs, [Int?]())
         steamMax = k.value(.steamMax, []); shoveOffCost = k.value(.shoveOffCost, 15)
         shots = k.value(.shots, []); handicap = k.value(.handicap, [])
         volley = k.value(.volley, nil); boss = k.value(.boss, nil); rules = k.value(.rules, CoreRules())
@@ -828,7 +831,7 @@ struct CoreHud: Decodable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case turn, round, side, wind, forecast, steam, crew, squall, hands, doodads, selected, names, control, score
         case shots, handicap, volley, boss, rules, fire, fatigue
-        case fatigueRound = "fatigue_round", fatigueIn = "fatigue_in"
+        case fatigueRound = "fatigue_round", fatigueIn = "fatigue_in", thinkMs = "think_ms"
         case steamMax = "steam_max", shoveOffCost = "shove_off_cost"
         case roundCap = "round_cap", frontRoundsLeft = "front_rounds_left", steamTurnLeft = "steam_turn_left"
         case kettlePct = "kettle_pct", squallWarning = "squall_warning", squallRound = "squall_round", puffUp = "puff_up"
@@ -1034,6 +1037,8 @@ struct CoreEvent: Decodable, Equatable, Sendable {
     var hp: Int?
     var turns: Int?
     var wind: Int?
+    /// `mend`: the Doodad id when triggered by Mend Bucket, else nil (self-mend shot).
+    var doodad: String?
     /// `collapse` and `mend`: the cells; `big_drop` sends a count instead (`blockCount`).
     var blocks: [CoreCell]?
     var blockCount: Int?
@@ -1064,6 +1069,7 @@ struct CoreEvent: Decodable, Equatable, Sendable {
         c = k.value(.c, nil); type = k.value(.type, nil); why = k.value(.why, nil); kind = k.value(.kind, nil)
         state = k.value(.state, nil); nook = k.value(.nook, nil); phase = k.value(.phase, nil)
         cells = k.value(.cells, nil); hp = k.value(.hp, nil); turns = k.value(.turns, nil); wind = k.value(.wind, nil)
+        doodad = k.value(.doodad, nil)
         // `room` is "kettle" or "nook:N" on a lid, a number elsewhere.
         let roomText: String? = k.value(.room, nil)
         let roomNumber: Int? = k.value(.room, nil)
@@ -1080,7 +1086,7 @@ struct CoreEvent: Decodable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case t, tick, side, hob, x, y, r, dmg, n, round, target, winner, how, text, shell, shot, callout, threaded
-        case c, type, why, kind, state, room, nook, phase, cells, hp, turns, wind, blocks, falls, from, to, when
+        case c, type, why, kind, state, room, nook, phase, cells, hp, turns, wind, doodad, blocks, falls, from, to, when
     }
 }
 

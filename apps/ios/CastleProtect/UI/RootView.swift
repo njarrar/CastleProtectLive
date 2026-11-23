@@ -45,11 +45,11 @@ struct RootView: View {
             SettingsView()
                 .environmentObject(model)
         }
-        .alert("Castle Protect", isPresented: Binding(
+        .alert(tx("app.title"), isPresented: Binding(
             get: { model.notice != nil },
             set: { if !$0 { model.notice = nil } }
         )) {
-            Button("OK", role: .cancel) {}
+            Button(tx("common.close"), role: .cancel) {}
         } message: {
             Text(model.notice ?? "")
         }
@@ -94,26 +94,29 @@ struct TitleView: View {
                             .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).stroke(Theme.ink, lineWidth: 3))
                             .accessibilityHidden(true)
                     }
-                    Text("Castle Protect")
+                    Text(tx("app.title"))
                         .font(Theme.title(wide ? 38 : 44))
                         .foregroundStyle(Theme.ink)
                         .accessibilityAddTraits(.isHeader)
-                    Text("The Unflattening")
+                    Text(tx("app.subtitle"))
                         .font(Theme.label(18))
                         .foregroundStyle(Theme.inkSoft)
                     VStack(spacing: 10) {
-                        slider("Music", model.percentSetting(\.music))
-                        slider("Sound", model.percentSetting(\.sound))
-                        slider("Voices", model.percentSetting(\.voices))
+                        slider(tx("home.music"), model.percentSetting(\.music))
+                        slider(tx("home.sound"), model.percentSetting(\.sound))
+                        slider(tx("home.voices"), model.percentSetting(\.voices))
                     }
                     .padding(16)
                     .frame(maxWidth: 420)
                     .panel()
-                    Button("Play") { model.play() }
+                    Text(tx("app.tagline"))
+                        .font(Theme.label(17))
+                        .foregroundStyle(Theme.ink)
+                    Button(tx("home.play")) { model.play() }
                         .buttonStyle(GoldButtonStyle(height: 64, minWidth: 220))
                         .accessibilityIdentifier("play")
-                        .accessibilityHint("Starts the first battle")
-                    Text("Free forever. No ads.")
+                        .accessibilityHint(tx("home.play_hint"))
+                    Text(tx("app.promise"))
                         .font(Theme.label(15))
                         .foregroundStyle(Theme.inkSoft)
                     Spacer(minLength: 20)
@@ -132,7 +135,7 @@ struct TitleView: View {
             Slider(value: value, in: 0...100, step: 1)
                 .tint(Theme.goldDark)
                 .accessibilityLabel(title)
-                .accessibilityValue("\(Int(value.wrappedValue)) percent")
+                .accessibilityValue(tx("common.percent", ["n": Int(value.wrappedValue)]))
             Text("\(Int(value.wrappedValue))").font(Theme.number(15)).frame(width: 36)
         }
     }
@@ -147,7 +150,7 @@ struct LoadingCard: View {
             Theme.ink.opacity(0.45).ignoresSafeArea()
             VStack(spacing: 14) {
                 ProgressView().tint(Theme.ink)
-                Text("Loading your fight").font(Theme.label(18)).foregroundStyle(Theme.ink)
+                Text(tx("common.loading_fight")).font(Theme.label(18)).foregroundStyle(Theme.ink)
             }
             .padding(24)
             .panel(corner: 24)
@@ -172,14 +175,16 @@ struct ResumeCard: View {
         ZStack {
             Theme.ink.opacity(0.45).ignoresSafeArea()
             VStack(spacing: 14) {
-                Text("Carry on?").font(Theme.title(30)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                Text(tx("home.carry_on.title")).font(Theme.title(30)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                 Text(battle.title).font(Theme.label(18)).foregroundStyle(Theme.ink)
-                Text("Round \(battle.round), \(battle.turnName == "You" ? "your" : "\(battle.turnName)'s") turn")
+                Text(battle.turnName == tx("common.you") || battle.turnName == "You"
+                     ? tx("home.carry_on.where_you", ["n": battle.round])
+                     : tx("home.carry_on.where", ["n": battle.round, "name": battle.turnName]))
                     .font(Theme.label(16)).foregroundStyle(Theme.inkSoft)
-                Button("Carry on") { model.carryOn() }
+                Button(tx("home.carry_on.yes")) { model.carryOn() }
                     .buttonStyle(GoldButtonStyle())
                     .accessibilityIdentifier("carryOn")
-                Button("Leave it") { model.leaveIt() }
+                Button(tx("home.carry_on.no")) { model.leaveIt() }
                     .buttonStyle(PaperButtonStyle())
             }
             .padding(24)

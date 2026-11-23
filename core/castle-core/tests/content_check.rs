@@ -20,6 +20,7 @@ fn content_files_match_their_schemas() {
         ("blueprints.json", "blueprints.schema.json"),
         ("rummage.json", "rummage.schema.json"),
         ("starter_box.json", "starter_box.schema.json"),
+        ("app.json", "app.schema.json"),
     ];
     let mut errs = vec![];
     for (f, sc) in pairs {
@@ -126,8 +127,12 @@ fn api_fixtures_match_the_api_schemas() {
     let mut errs = vec![];
     for n in [
         "snapshot_plan.json",
+        "snapshot_aim_lean.json",
         "snapshot_lean.json",
         "snapshot_after_shot.json",
+        "snapshot_rescue_1_7.json",
+        "snapshot_boss_1_10.json",
+        "snapshot_ended.json",
     ] {
         errs.extend(
             validate(&snap, &read(&f.join(n)))
@@ -135,7 +140,13 @@ fn api_fixtures_match_the_api_schemas() {
                 .map(|e| format!("{n}: {e}")),
         );
     }
-    errs.extend(validate(&setup, &read(&f.join("setup_1_1.json"))));
+    for n in ["setup_1_1.json", "setup_couch.json"] {
+        errs.extend(
+            validate(&setup, &read(&f.join(n)))
+                .into_iter()
+                .map(|e| format!("{n}: {e}")),
+        );
+    }
     errs.extend(validate(
         &cmd,
         &read(&f.join("commands_1_1.json"))["commands"],
@@ -181,4 +192,137 @@ fn fixtures_are_current() {
             "{name} is stale; run: cargo run -p castle-core --example make_fixtures"
         );
     }
+}
+
+#[test]
+fn no_two_forts_share_a_grid() {
+    // Shape only: a fort in another material is still the same fort.
+    let c = embedded::content();
+    let mut seen: Vec<(String, &str)> = vec![];
+    for b in &c.blueprints {
+        let grid: String = b
+            .rows
+            .iter()
+            .map(|r| {
+                r.chars()
+                    .map(|g| match g {
+                        '.' => '.',
+                        'K' | '1'..='5' => 'o',
+                        _ => '#',
+                    })
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("|");
+        if let Some((_, other)) = seen.iter().find(|(g, _)| *g == grid) {
+            panic!("{} has the same grid as {}", b.id, other);
+        }
+        seen.push((grid, &b.id));
+    }
+}
+
+#[test]
+fn rival_habits_come_from_ids() {
+    // The habit each level played with before habit_id existed (picked then
+    // from words in the display line). The id keeps play the same.
+    let c = embedded::content();
+    let want = [
+        ("1-1", "balanced"),
+        ("1-2", "hob_sniper"),
+        ("1-3", "kettle_hunter"),
+        ("1-4", "balanced"),
+        ("1-5", "hob_sniper"),
+        ("1-6", "roof_wrecker"),
+        ("1-7", "balanced"),
+        ("1-8", "kettle_hunter"),
+        ("1-9", "cautious_mender"),
+        ("1-10", "roof_wrecker"),
+        ("d1", "balanced"),
+        ("d2", "balanced"),
+    ];
+    assert_eq!(want.len(), c.levels.len());
+    for (id, h) in want {
+        let l = c.level(id).unwrap();
+        assert_eq!(l.rival.habit_id.as_deref(), Some(h), "{id}");
+    }
+    let mut v = embedded::bundle_json();
+    v["levels"][0]["rival"]["habit_id"] = serde_json::json!("sulks");
+    let e = Content::from_json(&v.to_string()).unwrap_err();
+    assert!(e.contains("unknown habit_id sulks"), "{e}");
+    let mut v = embedded::bundle_json();
+    v["levels"][0]["rival"]["think_ms"] = serde_json::json!(9000);
+    assert!(Content::from_json(&v.to_string()).is_err());
+}
+
+#[test]
+fn region_one_rivals_and_pennants_are_their_own() {
+    let c = embedded::content();
+    let campaign: Vec<_> = c.levels.iter().filter(|l| l.kind != "skirmish").collect();
+    // the Hedger is not in every level
+    let with_hedger = c
+        .levels
+        .iter()
+        .filter(|l| l.rival.crew.iter().any(|h| h == "hedge_snipper"))
+        .count();
+    assert!(
+        with_hedger * 2 < c.levels.len(),
+        "{with_hedger} levels field a Hedger"
+    );
+    let mut wins: Vec<&str> = vec![];
+    for l in &campaign {
+        assert!(l.rival.think_ms.is_some(), "{} Rival think time", l.id);
+        assert!(!l.rival.name.is_empty(), "{} Rival name", l.id);
+        let win = l.pennants.iter().find(|p| p.kind == "win").unwrap();
+        assert_ne!(win.text, "Win", "{}: word the win goal", l.id);
+        assert!(!wins.contains(&win.text.as_str()), "{} win text", l.id);
+        wins.push(&win.text);
+        // at least one goal no other level has
+        let own = l.pennants.iter().filter(|p| p.kind != "win").any(|p| {
+            !campaign.iter().any(|o| {
+                o.id != l.id
+                    && o.pennants
+                        .iter()
+                        .any(|q| q.kind == p.kind && q.value == p.value && q.area == p.area)
+            })
+        });
+        assert!(own, "{} needs a goal of its own", l.id);
+    }
+    for l in c.levels.iter().filter(|l| l.kind == "skirmish") {
+        assert!(l.rival.roster.len() >= 2, "{} Skirmish roster", l.id);
+    }
+}
+
+#[test]
+fn skirmish_rival_is_named_by_seed() {
+    let c = Arc::new(embedded::content());
+    let roster = &c.level("d1").unwrap().rival.roster;
+    let mut seen = vec![];
+    for seed in 0..12u64 {
+        let mut b = Battle::new(c.clone(), r#"{"level":"d1"}"#, seed).unwrap();
+        let want = &roster[(seed % roster.len() as u64) as usize];
+        assert_eq!(b.names[1], want.name);
+        assert_eq!(b.think_ms[1], want.think_ms);
+        // a Retry keeps the same Rival
+        let r = Battle::new(c.clone(), r#"{"level":"d1","attempt":2}"#, seed).unwrap();
+        assert_eq!(r.names[1], want.name);
+        if !seen.contains(&b.names[1]) {
+            seen.push(b.names[1].clone());
+        }
+        let s = b.snapshot();
+        assert_eq!(s["hud"]["names"][1], want.name.as_str());
+        assert_eq!(s["hud"]["think_ms"][1], serde_json::json!(want.think_ms));
+    }
+    assert_eq!(seen.len(), roster.len());
+    // a name from the setup wins
+    let b = Battle::new(
+        c.clone(),
+        r#"{"level":"d1","sides":[{},{"name":"Sir Pudge"}]}"#,
+        3,
+    )
+    .unwrap();
+    assert_eq!(b.names[1], "Sir Pudge");
+    // a campaign Rival keeps the level's name and think time
+    let b = Battle::new(c.clone(), r#"{"level":"1-6"}"#, 3).unwrap();
+    assert_eq!(b.names[1], "Warden Snedd");
+    assert_eq!(b.think_ms[1], Some(600));
 }

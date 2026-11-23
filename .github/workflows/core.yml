@@ -10,6 +10,12 @@ on:
       - "content/**"
       - "scripts/setup-rust.sh"
       - ".github/workflows/core.yml"
+  pull_request:
+    paths:
+      - "core/**"
+      - "content/**"
+      - "scripts/setup-rust.sh"
+      - ".github/workflows/core.yml"
   workflow_dispatch:
 
 permissions:
@@ -65,3 +71,8 @@ jobs:
         if: steps.check.outputs.present == 'true'
         working-directory: core
         run: cargo test --workspace
+
+      - name: cargo test --release
+        if: steps.check.outputs.present == 'true'
+        working-directory: core
+        run: cargo test --workspace --release

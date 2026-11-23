@@ -82,7 +82,8 @@ const KNOWN: Record<string, string[]> = {
   // shove_off_cost (the refusal says not_enough_steam), rules (objective and cap_win)
   // v0.3: fire (Fire lit or grey, and why), fatigue_in (the round label warns); fatigue and
   // fatigue_round are read from castles[].fatigue and fatigue_in instead
-  '.hud': ['boss', 'control', 'crew', 'doodads', 'fatigue', 'fatigue_in', 'fatigue_round', 'fire', 'forecast', 'front_rounds_left', 'hands', 'handicap', 'kettle_pct', 'names', 'puff_up', 'round', 'round_cap', 'rules', 'score', 'selected', 'shots', 'shove_off_cost', 'side', 'squall', 'squall_round', 'squall_warning', 'steam', 'steam_max', 'steam_turn_left', 'turn', 'volley', 'wind'],
+  // rules v5: think_ms, the Rival's think pose per side (null: app.json rival_think_seconds)
+  '.hud': ['boss', 'control', 'crew', 'doodads', 'fatigue', 'fatigue_in', 'fatigue_round', 'fire', 'forecast', 'front_rounds_left', 'hands', 'handicap', 'kettle_pct', 'names', 'puff_up', 'round', 'round_cap', 'rules', 'score', 'selected', 'shots', 'shove_off_cost', 'side', 'squall', 'squall_round', 'squall_warning', 'steam', 'steam_max', 'steam_turn_left', 'think_ms', 'turn', 'volley', 'wind'],
   '.hud.fire': ['ready', 'text', 'why'],
   '.hud.shots[]': ['id', 'ready', 'shot', 'text', 'why'],
   '.hud.handicap[]': ['crew', 'help', 'preview_pct', 'steam'],
@@ -102,7 +103,7 @@ const KNOWN: Record<string, string[]> = {
   '.result': ['best_shot', 'broke', 'buttons', 'how', 'pennants', 'pennants_new', 'round', 'score', 'stats', 'winner'],
   '.result.best_shot': ['angle', 'dmg', 'hob', 'hob_name', 'power', 'round', 'shot', 'shot_name', 'side'],
   '.result.stats[].best_shot': ['angle', 'dmg', 'hob', 'hob_name', 'power', 'round', 'shot', 'shot_name', 'side'],
-  // not shown yet on purpose: best_streak, bonks, blocks_lost, kettle_lost, hobs_lost (duel results show shots, hits, blocks)
+  // not shown yet on purpose: blocks_lost, kettle_lost, hobs_lost (the results show shots, hits, bonks, blocks, best run)
   '.result.stats[]': ['best_shot', 'best_streak', 'blocks_dropped', 'blocks_lost', 'bonks', 'hits', 'hobs_lost', 'kettle_lost', 'shots'],
   // the "what broke you" line reads how, last and the losses; top (the three worst shots) is for the replay card
   '.result.broke': ['blocks_lost', 'hobs_bonked', 'how', 'kettle_lost', 'last', 'side', 'top'],
@@ -154,7 +155,7 @@ test('rooms, props, root and battered reach the view', () => {
 });
 
 // Rules v3 (QA playtest 1): the adapter reads hud.fire, the Fatigue warning and the Retry try count.
-test('rules v3: hud.fire greys Fire with its text, fatigue_warning is a banner, attempt goes in the setup', () => {
+test('rules v3: hud.fire greys Fire with the table\'s line, fatigue_warning is a banner, attempt goes in the setup', () => {
   const plan = fx('snapshot_plan.json');
   plan.hud.fire = { ready: false, why: 'resting_plain_only', text: 'Marge Dumpling needs a rest: Plain Shot only' };
   plan.events = [{ t: 'fatigue_warning', round: 9, text: 'Fatigue next round' }];
@@ -167,7 +168,10 @@ test('rules v3: hud.fire greys Fire with its text, fatigue_warning is a banner, 
   expect(JSON.parse(setupJson).attempt).toBe(2);
   const s = core.snapshot();
   expect(s.hud.fire).not.toBe('ready');
-  expect(s.hud.fireWhy).toBe('Marge Dumpling needs a rest: Plain Shot only');
+  // The reason id from the core, in content/text.json's words with the Hob's short name (never the core's English).
+  expect(s.hud.fireWhy).toMatch(/^\S.* needs a rest\. Plain Shot only\.$/);
+  expect(s.hud.fireWhy).not.toContain('Dumpling');
   // QA playtest 2 (N1): its own event, so the battle holds its banner before the turn banner.
-  expect(s.events.some((e) => e.t === 'fatigue' && e.phase === 'warn' && e.text === 'Fatigue next round')).toBe(true);
+  // The Creaks (core id fatigue): the warning line is the table's, not the core's text.
+  expect(s.events.some((e) => e.t === 'fatigue' && e.phase === 'warn' && /^The Creaks start next round/.test(e.text))).toBe(true);
 });

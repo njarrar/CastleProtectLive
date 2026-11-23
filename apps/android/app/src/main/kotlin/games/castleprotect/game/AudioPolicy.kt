@@ -105,8 +105,8 @@ object AudioRules {
  */
 class LayerMix(private val layers: List<Layer>) {
     /** One decoded layer: 16 bit PCM, 1 or 2 channels, [frames] long. */
-    class Layer(val pcm: ShortArray, val channels: Int) {
-        val frames: Int = if (channels > 0) pcm.size / channels else 0
+    class Layer(val pcm: ShortArray, val channels: Int, val offset: Int = 0, val count: Int = pcm.size) {
+        val frames: Int = if (channels > 0) count / channels else 0
         var gain = 0f
         internal var from = 0f
         internal var to = 0f
@@ -146,8 +146,8 @@ class LayerMix(private val layers: List<Layer>) {
                     ly.gain = ly.from + (ly.to - ly.from) * u
                 }
                 if (ly.gain <= 0f) continue
-                if (ly.channels == 1) { val v = ly.pcm[p] * ly.gain; l += v; r += v }
-                else { l += ly.pcm[p * 2] * ly.gain; r += ly.pcm[p * 2 + 1] * ly.gain }
+                if (ly.channels == 1) { val v = ly.pcm[ly.offset + p] * ly.gain; l += v; r += v }
+                else { l += ly.pcm[ly.offset + p * 2] * ly.gain; r += ly.pcm[ly.offset + p * 2 + 1] * ly.gain }
             }
             out[f * 2] = (l * master).toInt().coerceIn(-32768, 32767).toShort()
             out[f * 2 + 1] = (r * master).toInt().coerceIn(-32768, 32767).toShort()

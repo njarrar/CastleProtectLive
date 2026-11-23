@@ -52,14 +52,15 @@ class QaPlaytestOneTest {
         assertEquals("not_planning", fire.why)
         assertEquals("Not your turn", fire.text)
         assertTrue(e.hud.shots.all { !it.ready && it.text == "Not your turn" })
-        assertEquals("Not your turn", FireLight.why(e.hud))
+        // The core's id, in the string table's words (hud.why.not_planning), never the core's English.
+        assertEquals("Not your turn.", FireLight.why(e.hud))
     }
 
     @Test fun fireIsGreyWhenTheCoreSaysSoEvenIfTheHobCanFire() {
         val p = parse(plan)
         val grey = p.hud.copy(fire = games.castleprotect.core.FireState(false, "resting_plain_only", "Marge Dumpling needs a rest: Plain Shot only"))
         assertFalse(FireLight.ready(grey, true, p.selectedHob))
-        assertEquals("Marge Dumpling needs a rest: Plain Shot only", FireLight.why(grey))
+        assertEquals("Marge needs a rest. Plain Shot only.", FireLight.why(grey, "Marge", "Grand Dumpling"))
         // Nobody on turn, or no Hob: never lit.
         assertFalse(FireLight.ready(p.hud, false, p.selectedHob))
         assertFalse(FireLight.ready(p.hud, true, null))
@@ -70,9 +71,11 @@ class QaPlaytestOneTest {
         assertFalse(r.ok)
         assertEquals("Marge Dumpling needs a rest: Plain Shot only", r.detail)
         assertEquals("plain", r.readyShot)
-        assertEquals("Marge Dumpling needs a rest: Plain Shot only" to "plain", FireLight.onRefusal(r))
+        assertEquals("Marge needs a rest. Plain Shot only." to "plain", FireLight.onRefusal(r, "Marge", "Grand Dumpling"))
         val none = Reply.parse("""{"ok":false,"reason":"no_knack_uses","detail":"No Knack uses left","ready_shot":null}""")
-        assertEquals("No Knack uses left" to null, FireLight.onRefusal(none))
+        assertEquals("Grand Dumpling is used up." to null, FireLight.onRefusal(none, "Marge", "Grand Dumpling"))
+        // An id the table does not know never shows the core's English.
+        assertEquals("That did not go through. Nothing is lost. Try again." to null, FireLight.onRefusal(Reply.parse("""{"ok":false,"reason":"bad_value","detail":"angle 0 to 1800"}""")))
         assertNull(FireLight.onRefusal(Reply.parse("""{"ok":true}""")))
         // In an array the first refusal speaks for it.
         val arr = Reply.parse("""[{"ok":true},{"ok":false,"reason":"bad_value","detail":"angle 0 to 1800"}]""")
@@ -91,13 +94,14 @@ class QaPlaytestOneTest {
         assertEquals("resting_plain_only", sw.why); assertEquals("turn_start", sw.whenTag)
         val walk = f.events[1]
         assertEquals(100, walk.fromX); assertEquals(120, walk.toX)
-        assertEquals("Marge needs a rest: Clodpot picked", HudText.shotSwitch("Marge", sw.why, "Clodpot"))
+        assertEquals("Marge needs a rest. Plain Shot only.", HudText.shotSwitch("Marge", sw.why, "Grand Dumpling"))
+        assertEquals("Grand Dumpling is used up. Switched to the Plain Shot", HudText.shotSwitch("Marge", "no_knack_uses", "Grand Dumpling"))
     }
 
     @Test fun unreadyChipsGetABadge() {
-        assertEquals("REST", HudText.chipBadge("resting_plain_only"))
-        assertEquals("0 LEFT", HudText.chipBadge("no_knack_uses"))
-        assertEquals("HEAVY", HudText.chipBadge("no_heavy_first_turn"))
+        assertEquals("Resting", HudText.chipBadge("resting_plain_only"))
+        assertEquals("Used up", HudText.chipBadge("no_knack_uses"))
+        assertEquals("Not yet", HudText.chipBadge("no_heavy_first_turn"))
         assertEquals("", HudText.chipBadge("not_planning"))
     }
 
@@ -106,16 +110,16 @@ class QaPlaytestOneTest {
     @Test fun fatigueFieldsAndTheRoundLabel() {
         val h = parse(plan).hud
         assertFalse(h.fatigue); assertEquals(10, h.fatigueRound); assertEquals(9, h.fatigueIn)
-        assertEquals("Round 1/${h.roundCap}", HudText.round(h, "campaign"))
+        assertEquals("Round 1 of ${h.roundCap}", HudText.round(h, "campaign"))
         val r7 = h.copy(round = 7, fatigueIn = 3)
-        assertEquals("Round 7/${h.roundCap}  Fatigue in 3", HudText.round(r7, "campaign"))
+        assertEquals("Round 7 of ${h.roundCap}  Creaks in 3", HudText.round(r7, "campaign"))
         val r9 = h.copy(round = 9, fatigueIn = 1)
-        assertEquals("Round 9/${h.roundCap}  Fatigue next round", HudText.round(r9, "campaign"))
-        assertEquals("Fatigue next round", HudText.fatigueBanner(r9))
+        assertEquals("Round 9 of ${h.roundCap}  Creaks next round", HudText.round(r9, "campaign"))
+        assertEquals("The Creaks start next round. Cracked blocks hold less.", HudText.fatigueBanner(r9))
         assertTrue(HudText.warn(r9))
         assertNull(HudText.fatigueBanner(r7))
         val r10 = h.copy(round = 10, fatigue = true, fatigueIn = -1)
-        assertEquals("Round 10/${h.roundCap}  Fatigue", HudText.round(r10, "campaign"))
+        assertEquals("Round 10 of ${h.roundCap}  The Creaks", HudText.round(r10, "campaign"))
         // The Squall warning wins the label when both are close.
         assertTrue(HudText.round(r9.copy(squallWarning = 2), "campaign").endsWith("Squall in 2"))
         // A null fatigue_in (Volley Points, Test Yard) reads as -1.
@@ -130,10 +134,11 @@ class QaPlaytestOneTest {
         assertEquals(0, r.winner)
         val b = r.bestShot!!
         assertEquals(0, b.side); assertEquals("Marge Dumpling", b.hobName); assertEquals("Clodpot", b.shotName)
-        assertEquals(440, b.angle); assertEquals(78, b.power); assertEquals(29, b.dmg)
+        assertEquals(440, b.angle); assertEquals(78, b.power); assertEquals(19, b.dmg)
         assertEquals(b, r.bestOf(0))
         assertNull(r.bestOf(1))
-        assertEquals("Clodpot by Marge Dumpling, 44.0° / 78, 29 dmg", HudText.bestShot(b))
+        // The Hob's short name from text.json, never cut at a space.
+        assertEquals("Best shot: Marge, 19. Angle 44.0, power 78.", HudText.bestShot(b, "Marge"))
     }
 
     // ---- M6: Retry sends attempt -------------------------------------------------
@@ -158,11 +163,11 @@ class QaPlaytestOneTest {
     // ---- M4: Test Yard -----------------------------------------------------------
 
     @Test fun testYardSetupAndTheDummySideIsNeverHuman() {
-        val s = JSONObject(BattleSpec.testYard("d1", FortGrid.HOME, 3).setup)
+        val s = JSONObject(BattleSpec.testYard("d1", Fixtures.homeRows, 3).setup)
         assertEquals("test_yard", s.getString("mode"))
         val sides = s.getJSONArray("sides")
         assertEquals("human", sides.getJSONObject(0).getString("control"))
-        assertEquals(FortGrid.HOME.size, sides.getJSONObject(0).getJSONArray("rows").length())
+        assertEquals(Fixtures.homeRows.size, sides.getJSONObject(0).getJSONArray("rows").length())
         assertEquals(3, sides.getJSONObject(0).getInt("crew_size"))
         val h = Hud(control = listOf("human", "human"), yard = true)
         assertTrue(h.human(0)); assertFalse(h.human(1))
@@ -179,7 +184,7 @@ class QaPlaytestOneTest {
         val v2 = """{"sim":"0.2.0","rules":2,"tick_hz":120}"""
         assertNull(SaveCompat.refusal(v3, v3, standIn = false))
         val msg = SaveCompat.refusal(v2, v3, standIn = false)!!
-        assertTrue(msg, msg.contains("older game rules (version 2)"))
+        assertEquals(games.castleprotect.core.Text.t("errors.saved_fight_old"), msg)
         assertFalse(msg.contains("_"))
         assertNotNull(SaveCompat.refusal("", v3, standIn = false))
         // No version from the core: this app's own rules version is assumed.
@@ -214,20 +219,20 @@ class QaPlaytestOneTest {
     }
 
     @Test fun workshopGridRoundTripsAndEditsRooms() {
-        val g = FortGrid.fromRows(FortGrid.HOME)
-        assertEquals(FortGrid.HOME, g.toRows())
+        val g = FortGrid.fromRows(Fixtures.homeRows)
+        assertEquals(Fixtures.homeRows, g.toRows())
         assertEquals(3, g.seats())
         // A new Nook takes the next free number on a clear 2 x 2.
-        assertTrue(g.place('N', 0, 6))
-        assertEquals(4, g.seats()); assertEquals('4', g[1, 7])
+        assertTrue(g.place('N', 0, 7))
+        assertEquals(4, g.seats()); assertEquals('4', g[1, 8])
         assertFalse(g.place('t', 1, 7)) // a room is not built over
-        assertTrue(g.place('.', 0, 6)) // erasing a room cell clears the room
+        assertTrue(g.place('.', 0, 7)) // erasing a room cell clears the room
         assertEquals(3, g.seats())
-        assertEquals(FortGrid.HOME, g.toRows())
-        assertTrue(g.place('c', 0, 6))
+        assertEquals(Fixtures.homeRows, g.toRows())
+        assertTrue(g.place('c', 0, 7))
         assertEquals("c......", g.toRows().first())
         val bad = FortCheck.parse("""{"budget":72,"cells":[[1,3],[0,4]],"cost":255,"detail":"Kettle Room must be walled","ok":false,"reason":"invalid_blueprint","used":33}""")
-        assertFalse(bad.ok); assertEquals("Kettle Room must be walled", bad.why); assertEquals(listOf(1 to 3, 0 to 4), bad.cells)
+        assertFalse(bad.ok); assertEquals("The Kettle Room needs four walls.", bad.why); assertEquals("kettle_room_walls", bad.kind); assertEquals(listOf(1 to 3, 0 to 4), bad.cells)
         assertTrue(FortCheck.parse("""{"budget":72,"cost":390,"ok":true,"used":42}""").ok)
     }
 
@@ -284,7 +289,7 @@ class QaPlaytestOneTest {
         val p = SnapshotParser()
         p.parse(g.snapshot())
         g.command(Cmd.pickHob(0)); g.command(Cmd.pickShot("knack"))
-        assertTrue(Reply.parse(g.command(Cmd.FIRE)).ok)
+        assertTrue(Reply.parse(g.command(Cmd.fire())).ok)
         settle(g)
         assertTrue(Reply.parse(g.command(Cmd.AI_TURN)).ok)
         settle(g)
@@ -299,13 +304,16 @@ class QaPlaytestOneTest {
         g.command(Cmd.pickShot("knack"))
         val grey = p.parse(g.snapshot())
         assertFalse(FireLight.ready(grey.hud, grey.humanTurn, grey.selectedHob))
-        assertEquals(knack.text, FireLight.why(grey.hud))
-        val refused = Reply.parse(g.command(Cmd.FIRE))
-        val (words, to) = FireLight.onRefusal(refused)!!
-        assertEquals(knack.text, words)
+        // The words come from the string table by the core's id, with the Hob's short name; never the core's English.
+        val expected = games.castleprotect.core.Text.t("hud.why.resting_plain_only", "hob" to "Marge")
+        assertEquals(expected, FireLight.why(grey.hud, "Marge", "Grand Dumpling"))
+        val refused = Reply.parse(g.command(Cmd.fire()))
+        assertEquals("resting_plain_only", refused.reason)
+        val (words, to) = FireLight.onRefusal(refused, "Marge", "Grand Dumpling")!!
+        assertEquals(expected, words)
         assertEquals("plain", to)
         assertTrue(Reply.parse(g.command(Cmd.pickShot(to!!))).ok)
-        assertTrue(Reply.parse(g.command(Cmd.FIRE)).ok)
+        assertTrue(Reply.parse(g.command(Cmd.fire())).ok)
         g.close()
     }
 
@@ -314,7 +322,7 @@ class QaPlaytestOneTest {
         val g = NativeCore.factory()!!.newGame("""{"level":"1-1"}""", 7)
         val p = SnapshotParser()
         p.parse(g.snapshot())
-        g.command(Cmd.pickHob(0)); g.command(Cmd.pickShot("knack")); g.command(Cmd.FIRE)
+        g.command(Cmd.pickHob(0)); g.command(Cmd.pickShot("knack")); g.command(Cmd.fire())
         val events = ArrayList<games.castleprotect.core.GameEvent>()
         settle(g); events += p.parse(g.snapshot()).events
         g.command(Cmd.AI_TURN); settle(g); events += p.parse(g.snapshot()).events
@@ -341,7 +349,7 @@ class QaPlaytestOneTest {
         }
         assertNotNull(warnHud)
         assertEquals(1, warnHud!!.fatigueIn)
-        assertEquals("Fatigue next round", HudText.fatigueBanner(warnHud))
+        assertEquals("The Creaks start next round. Cracked blocks hold less.", HudText.fatigueBanner(warnHud))
         assertTrue(seen.contains("fatigue_warning"))
         assertTrue(seen.contains("fatigue"))
         assertTrue(f.hud.fatigue)
@@ -367,7 +375,7 @@ class QaPlaytestOneTest {
 
     @Test fun nativeTestYardNeverHandsThePlayerTheDummyTurn() {
         assumeTrue(ready())
-        for (rows in listOf(null, FortGrid.HOME)) {
+        for (rows in listOf(null, Fixtures.homeRows)) {
             val spec = BattleSpec.testYard("d1", rows, if (rows == null) 0 else 3)
             val g = NativeCore.factory()!!.newGame(spec.setup, spec.seed)
             val p = SnapshotParser()
@@ -379,7 +387,7 @@ class QaPlaytestOneTest {
                 // Endless uses: a Knack goes every time, no Hob rests.
                 if (i % 2 == 1) g.command(Cmd.pickShot("knack"))
                 assertTrue(FireLight.ready(f.hud, f.humanTurn, f.selectedHob))
-                assertTrue(Reply.parse(g.command(Cmd.FIRE)).ok)
+                assertTrue(Reply.parse(g.command(Cmd.fire())).ok)
                 settle(g)
                 f = p.parse(g.snapshot())
             }
@@ -391,8 +399,8 @@ class QaPlaytestOneTest {
     @Test fun nativeWorkshopFortChecksComeFromTheCore() {
         assumeTrue(ready())
         val g = NativeCore.factory()!!.newGame("""{"level":"d1","mode":"test_yard"}""", 1)
-        assertTrue(FortCheck.parse(g.command(Cmd.validateBlueprint(FortGrid.HOME, 3))).ok)
-        val grid = FortGrid.fromRows(FortGrid.HOME)
+        assertTrue(FortCheck.parse(g.command(Cmd.validateBlueprint(Fixtures.homeRows, 3))).ok)
+        val grid = FortGrid.fromRows(Fixtures.homeRows)
         grid.place('.', 0, 2) // knock a hole in the Kettle Room wall
         val bad = FortCheck.parse(g.command(Cmd.validateBlueprint(grid.toRows(), grid.seats())))
         assertFalse(bad.ok); assertTrue(bad.why.isNotEmpty())

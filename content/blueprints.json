@@ -3,71 +3,74 @@
     "id": "bp_home_3",
     "name": "Home fort, three seats",
     "rows": [
-      "ttttttt",
-      "t11t22t",
-      "t11t22t",
-      "ttttttt",
-      "tKKt33t",
-      "tKKt33t",
+      ".c.tttt",
+      "wwwt33t",
+      "t11t33t",
+      "t11twww",
+      "wttt22t",
+      "tKKt22t",
+      "tKKtttt",
       "FFFFFFF"
     ]
   },
   {
     "id": "bp_home_3_cobble",
-    "name": "Home fort with a Cobble cap",
+    "name": "Home fort with a Cobble chimney",
     "rows": [
-      "ccccccc",
-      "t11t22t",
-      "t11t22t",
-      "ttttttt",
-      "tKKt33t",
-      "tKKt33t",
+      ".c.....",
+      ".c.tccc",
+      "wwwt33t",
+      "t11t33t",
+      "t11twww",
+      "wttt22t",
+      "tKKt22t",
+      "tKKtttt",
       "FFFFFFF"
     ]
   },
   {
     "id": "bp_home_4",
-    "name": "Home fort, five seats",
+    "name": "Home fort, four seats",
     "rows": [
-      "ttttttt",
-      "t11t22t",
-      "t11t22t",
-      "ttttttt",
-      "tKKt33t",
-      "tKKt33t",
-      "ttttttt",
-      "t44t55t",
-      "t44t55t",
-      "FFFFFFF"
+      "...tttt.",
+      ".c.t11t.",
+      "ttww11t.",
+      "t22tttt.",
+      "t22t33t.",
+      "tttt33t.",
+      "tKKttttw",
+      "tKKt44tw",
+      "tttt44tw",
+      "FFFFFFFF"
     ]
   },
   {
     "id": "bp_home_5",
     "name": "Home fort, five seats, Cobble low row",
     "rows": [
-      "ttttttt",
-      "t11t22t",
-      "t11t22t",
-      "ttttttt",
-      "tKKt33t",
-      "tKKt33t",
-      "ttttttt",
-      "c44c55c",
-      "c44c55c",
-      "FFFFFFF"
+      ".wwtttt.",
+      "t11t22t.",
+      "t11t22t.",
+      "ttttttt.",
+      "tKKt33t.",
+      "tKKt33tw",
+      "tttttttw",
+      "c44c55cw",
+      "c44c55cw",
+      "FFFFFFFF"
     ]
   },
   {
     "id": "bp_r1_box_wicker",
-    "name": "Hedge Box (Wicker)",
+    "name": "Pudge's hamper on legs",
     "rows": [
-      "wwwwwww",
-      "w11w22w",
-      "w11w22w",
-      "wwwwwww",
-      "wKKw33w",
-      "wKKw33w",
-      "FFFFFFF"
+      "wwwwwwww",
+      "w11ww22w",
+      "w11ww22w",
+      "wwwwwwww",
+      "w.wKKw.w",
+      "w.wKKw.w",
+      "FFFFFFFF"
     ]
   },
   {
@@ -88,27 +91,46 @@
   },
   {
     "id": "bp_r1_kettle_knoll",
-    "name": "Hedge Box, kettle near the wall",
+    "name": "Knoll post, kettle by the wall",
     "rows": [
-      "ttttttt",
-      "w11w22t",
-      "w11w22t",
-      "wwwwwwt",
-      "w33wKKw",
-      "w33wKKw",
-      "FFFFFFF"
+      "wwwwwww.",
+      "w11w22w.",
+      "w11w22w.",
+      "tttttttw",
+      "w33ttKKw",
+      "w33ttKKw",
+      "FFFFFFFF"
     ]
   },
   {
     "id": "bp_r1_timber_3",
-    "name": "Hedge Box (Timber)",
+    "name": "The Dibber",
     "rows": [
-      "ttttttt",
-      "t11t22t",
-      "t11t22t",
-      "ttttttt",
+      "...tttt",
+      "...t11t",
+      "...t11t",
+      "...tttt",
+      "...t22t",
+      "...t22t",
+      "wwwtttt",
       "tKKt33t",
       "tKKt33t",
+      "FFFFFFF"
+    ]
+  },
+  {
+    "id": "bp_r1_fernsby_post",
+    "name": "Fernsby's hut on stilts",
+    "rows": [
+      "...wwww",
+      "...w11w",
+      "...w11w",
+      "ttttwww",
+      "tKKt22t",
+      "tKKt22t",
+      "ttttttt",
+      "w..t33t",
+      "w..t33t",
       "FFFFFFF"
     ]
   },
@@ -145,34 +167,31 @@
   },
   {
     "id": "bp_r1_orchard",
-    "name": "Hedge Box, five seats",
+    "name": "Hedge Box, five seats, with a rake rack",
     "rows": [
-      "ttttttt",
-      "t11t22t",
-      "t11t22t",
-      "ttttttt",
-      "tKKt33t",
-      "tKKt33t",
-      "ttttttt",
-      "t44t55t",
-      "t44t55t",
-      "FFFFFFF"
+      ".ttttttt",
+      ".t11t22t",
+      ".t11t22t",
+      "wttttttt",
+      "wtKKt33t",
+      "wtKKt33t",
+      "wttttttt",
+      "wt44t55t",
+      "wt44t55t",
+      "FFFFFFFF"
     ]
   },
   {
     "id": "bp_r1_pancake",
     "name": "Pancake with a Cobble roof",
     "rows": [
-      "ccccccc",
-      "t11t22t",
-      "t11t22t",
-      "ttttttt",
-      "tKKt33t",
-      "tKKt33t",
-      "ttttttt",
-      "t44t55t",
-      "t44t55t",
-      "FFFFFFF"
+      "cccccccc",
+      "t11t22tc",
+      "t11t22tc",
+      "tttttttc",
+      "cKKt33tc",
+      "cKKt33tc",
+      "FFFFFFFF"
     ]
   },
   {
@@ -185,8 +204,8 @@
       "tttttttw",
       "tKKt33tw",
       "tKKt33tw",
-      "tttttttw",
-      "r44t55tw",
+      "ttttrttw",
+      "t44t55tw",
       "t44t55tw",
       "FFFFFFFF"
     ]
@@ -195,15 +214,15 @@
     "id": "bp_kit_oak",
     "name": "Starter Box: Oak",
     "rows": [
+      "tttt...",
+      "t11t...",
+      "t11t...",
       "ttttttt",
-      "t11t22t",
-      "t11t22t",
+      "t22t33t",
+      "t22t33t",
       "ttttttt",
-      "tKKt33t",
-      "tKKt33t",
-      "ttttttt",
-      "t44t55t",
-      "t44t55t",
+      "tKKt44t",
+      "tKKt44t",
       "FFFFFFF"
     ]
   },
@@ -227,16 +246,16 @@
     "id": "bp_kit_reed",
     "name": "Starter Box: Reed Roof",
     "rows": [
-      "wwwwwww",
-      "t11t22t",
-      "t11t22t",
-      "ttttttt",
-      "tKKt33t",
-      "tKKt33t",
-      "ttttttt",
-      "t44t55t",
-      "t44t55t",
-      "FFFFFFF"
+      "...wwwww",
+      "....w11w",
+      "....w11w",
+      "wwwwwwww",
+      ".t22t33w",
+      ".t22t33w",
+      "tttttttw",
+      ".tKKt44w",
+      ".tKKt44w",
+      "FFFFFFFF"
     ]
   }
 ]

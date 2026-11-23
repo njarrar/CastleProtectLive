@@ -3,56 +3,118 @@ import { play, unlockAudio } from '../audio/sfx';
 import { clearBattle, dropBattleSave, loadBattleSave } from '../save/db';
 import type { BattleSetup, Blueprint } from '../core/types';
 import { btn, h } from '../ui/dom';
+import { bigSmoothieIconUrl, topiaryPeacockIconUrl } from '../ui/svgIcons';
+import { plural, t } from '../ui/text';
 
 export function gear(app: App, back: Route): HTMLElement {
-  return btn('⚙', () => app.go({ to: 'settings', back }), 'gear round-btn', { 'aria-label': 'Settings' });
+  return btn('⚙', () => app.go({ to: 'settings', back }), 'gear round-btn', { 'aria-label': t('common.settings') });
 }
 
 // ---------- S0 / S1: title and first run ----------
 export function titleScreen(app: App): Screen {
   const first = !app.settings.seenFirstRun;
-  const slider = h('input', { type: 'range', min: 0, max: 100, value: app.settings.sound, 'aria-label': 'Sound' }) as HTMLInputElement;
-  slider.addEventListener('input', () => void app.setSettings({ sound: Number(slider.value) }));
-  const play_ = btn('Play', () => {
+  const slider = h('input', { type: 'range', min: 0, max: 100, value: app.settings.sound, 'aria-label': t('home.sound') }) as HTMLInputElement;
+  slider.addEventListener('input', () => { void app.setSettings({ sound: Number(slider.value) }); play('slider_tick'); });
+  let jingled = false;
+  const playJingleOnce = () => { if (jingled) return; jingled = true; unlockAudio(); play('title_jingle'); };
+  const play_ = btn(t('home.play'), () => {
+    jingled = true;
     unlockAudio();
-    play('tap');
+    play('confirm');
     if (first) {
       void app.setSettings({ seenFirstRun: true });
       app.go({ to: 'battle', setup: app.campaignSetup('1-1') });
     } else app.go({ to: 'map' });
-  }, 'primary big play', { 'data-autofocus': true, 'data-testid': 'play' });
-  if (first) setTimeout(() => play_.classList.add('bounce'), 6000);
+  }, 'primary big play silent', { 'data-autofocus': true, 'data-testid': 'play', title: first ? t('home.play_hint') : undefined });
+  const bounceT = first ? window.setTimeout(() => play_.classList.add('bounce'), 6000) : 0;
   const el = h('main', { class: 'screen title' },
     h('div', { class: 'sky-hills', 'aria-hidden': 'true' }),
-    h('div', { class: 'logo' }, h('span', {}, 'Castle'), h('span', {}, 'Protect')),
-    first ? h('label', { class: 'row slider' }, h('span', {}, 'Sound'), slider) : '',
+    h('div', { class: 'logo', role: 'heading', 'aria-level': 1, 'aria-label': t('app.title') }, ...t('app.title').split(' ').map((w) => h('span', { 'aria-hidden': 'true' }, w))),
+    h('p', { class: 'tagline' }, t('app.tagline')),
+    first ? h('label', { class: 'row slider' }, h('span', {}, t('home.sound')), slider) : '',
     play_,
-    h('p', { class: 'small free' }, 'Free forever. No ads.'),
+    h('p', { class: 'small free' }, t('app.promise')),
   );
+  el.addEventListener('pointerdown', (e) => { if (!play_.contains(e.target as Node)) playJingleOnce(); }, { once: true });
+  let alive = true;
+  let resumeKey: ((e: KeyboardEvent) => void) | null = null;
   void loadBattleSave().then((save) => {
-    if (!save) return;
+    if (!save || !alive) return;
     // A save from another rules engine is never replayed; it is put aside, not kept forever.
     if (save.coreName !== app.core.name) { void dropBattleSave(); return; }
-    const sheet = h('div', { class: 'scrim' }, h('div', { class: 'card resume', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'resume-h' },
-      h('h2', { id: 'resume-h' }, 'Carry on?'),
+    const setSiblingsInert = (on: boolean) => {
+      for (const child of Array.from(el.children)) if (child !== sheet) (child as HTMLElement).inert = on;
+    };
+    const closeSheet = () => {
+      if (resumeKey) { window.removeEventListener('keydown', resumeKey); resumeKey = null; }
+      setSiblingsInert(false);
+      sheet.remove();
+      play_.focus({ preventScroll: true });
+    };
+    const dialog = h('div', { class: 'card resume', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'resume-h' },
+      h('h2', { id: 'resume-h' }, t('home.carry_on.title')),
       h('p', {}, save.label),
-      btn('Resume', () => {
+      btn(t('home.carry_on.yes'), () => {
         unlockAudio();
+        play('confirm');
         // The battle screen checks the version and the replay; a bad save routes to the map with a note.
         app.go({ to: 'battle', setup: save.setup, resume: save.core, handoff: save.handoff });
-      }, 'primary', { 'data-autofocus': true, 'data-testid': 'resume' }),
-      btn('Leave it', () => { void clearBattle(); sheet.remove(); }, 'secondary'),
-    ));
+      }, 'primary silent', { 'data-autofocus': true, 'data-testid': 'resume' }),
+      btn(t('home.carry_on.no'), () => {
+        play('back');
+        // Abandoning a saved campaign battle grants the 40-Button loss payout (07 §4.5 / Web-L8).
+        if (save.setup.mode === 'campaign') {
+          app.progress.buttons += 40;
+          void app.saveProgress();
+        }
+        void clearBattle();
+        closeSheet();
+      }, 'secondary silent'),
+    );
+    const sheet = h('div', { class: 'scrim' }, dialog);
+    // True modal trap: inert siblings, Tab cycle, and Escape dismissal (Web-H7 #5).
+    resumeKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); play('back'); closeSheet(); return; }
+      if (e.key !== 'Tab') return;
+      const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input, [tabindex="0"]')];
+      if (!focusable.length) return;
+      const idx = focusable.indexOf(document.activeElement as HTMLElement);
+      const nxt = e.shiftKey ? (idx <= 0 ? focusable.length - 1 : idx - 1) : (idx + 1) % focusable.length;
+      focusable[nxt].focus();
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', resumeKey);
     el.append(sheet);
-    sheet.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+    setSiblingsInert(true);
+    dialog.querySelector<HTMLElement>('[data-autofocus]')?.focus();
   }).catch(() => undefined);
-  return { el };
+  return {
+    el,
+    destroy: () => {
+      alive = false;
+      clearTimeout(bounceT);
+      if (resumeKey) window.removeEventListener('keydown', resumeKey);
+    },
+  };
 }
 
-// ---------- S3: Brickabrac Map, Region 1 ----------
+// ---------- S3: Brickabrac Map, Region 1 (Plate 5 Storybook Redesign) ----------
 const NODE_POS: [number, number][] = [
-  [6, 62], [15, 48], [24, 60], [33, 42], [42, 56], [51, 38], [60, 54], [70, 40], [79, 56], [91, 42],
+  [6, 62], [15, 48], [24, 60], [33, 42], [42, 56], [51, 38], [60, 54], [70, 40], [79, 56], [91, 46],
 ];
+
+/** Smooth curved cubic Bezier SVG path through the 10 Puddingstone Downs stops. */
+function smoothRoadPath(pts: [number, number][]): string {
+  if (!pts.length) return '';
+  let d = `M ${pts[0][0]} ${pts[0][1] + 3}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[i + 1];
+    const mx = ((x0 + x1) / 2).toFixed(2);
+    d += ` C ${mx} ${(y0 + 3).toFixed(2)}, ${mx} ${(y1 + 3).toFixed(2)}, ${x1} ${(y1 + 3).toFixed(2)}`;
+  }
+  return d;
+}
 
 export function mapScreen(app: App, r: Route): Screen {
   const levels = app.levels();
@@ -64,34 +126,70 @@ export function mapScreen(app: App, r: Route): Screen {
     const [x, y] = NODE_POS[i] ?? [i * 9, 50];
     const st = app.levelDone(l.id) ? 'done' : l.id === next ? 'next' : app.levelOpen(l.id) ? 'open' : 'locked';
     const pen = app.progress.levels[l.id]?.pennants ?? [];
+    const grand = l.kind === 'grand_fort';
     const b = btn(
-      h('span', { class: 'num' }, l.type === 'Grand Fort' ? '♜' : l.id.split('-')[1]),
+      grand
+        ? h('span', { class: 'grand-crest', 'aria-hidden': 'true' },
+          h('img', { src: topiaryPeacockIconUrl(), alt: '', class: 'peacock-ico' }),
+          h('span', { class: 'num grand-num' }, '10'),
+        )
+        : h('span', { class: 'num' }, l.id.split('-')[1]),
       () => app.go({ to: 'prebattle', level: l.id }),
-      `node ${st} ${l.type === 'Grand Fort' ? 'grand' : ''}`,
-      { style: `left:${x}%;top:${y}%`, 'aria-label': `Level ${l.id}, ${l.name}${st === 'locked' ? ', locked' : ''}`, disabled: st === 'locked', 'data-level': l.id },
+      `node ${st} ${grand ? 'grand' : ''}`,
+      { style: `left:${x}%;top:${y}%`, 'aria-label': st === 'locked' ? t('map.node_locked', { id: l.id, name: l.name }) : st === 'done' ? t('map.node_done', { id: l.id, name: l.name, n: pen.filter(Boolean).length }) : t('map.node', { id: l.id, name: l.name }), disabled: st === 'locked', 'data-level': l.id },
     );
     b.append(h('span', { class: 'pens', 'aria-hidden': 'true' }, ...[0, 1, 2].map((k) => h('i', { class: pen[k] ? 'got' : '' }))));
     b.append(h('span', { class: 'nm' }, l.name));
     return b;
   });
-  const path = h('div', { class: 'road', 'aria-hidden': 'true' });
-  path.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M${NODE_POS.map(([x, y]) => `${x} ${y + 4}`).join(' L')}" /></svg>`;
-  const strip = h('div', { class: 'mapstrip' }, path, ...nodes, h('div', { class: 'roller', 'aria-hidden': 'true' }, '▬●'));
+
+  // Layered painted SVG rolling Puddingstone Downs hills + curved cobbled storybook road (Plate 5).
+  const roadD = smoothRoadPath(NODE_POS);
+  const backdrop = h('div', { class: 'road', 'aria-hidden': 'true' });
+  backdrop.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none">`
+    + `<defs>`
+    + `<linearGradient id="msky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8FD2EA"/><stop offset="52%" stop-color="#FFF2D6"/></linearGradient>`
+    + `<linearGradient id="mhill1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#A8D4B8"/><stop offset="100%" stop-color="#89BC99"/></linearGradient>`
+    + `<linearGradient id="mhill2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#89CE74"/><stop offset="100%" stop-color="#62AE54"/></linearGradient>`
+    + `<linearGradient id="mhill3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#76C062"/><stop offset="100%" stop-color="#4F9647"/></linearGradient>`
+    + `</defs>`
+    + `<rect width="100" height="100" fill="url(#msky)"/>`
+    + `<ellipse cx="18" cy="14" rx="7" ry="4" fill="#FFFFFF" opacity="0.72"/><ellipse cx="22" cy="15" rx="5" ry="3" fill="#FFFFFF" opacity="0.72"/>`
+    + `<ellipse cx="58" cy="12" rx="8" ry="4" fill="#FFFFFF" opacity="0.65"/><ellipse cx="63" cy="13" rx="6" ry="3" fill="#FFFFFF" opacity="0.65"/>`
+    + `<ellipse cx="86" cy="16" rx="6" ry="3.5" fill="#FFFFFF" opacity="0.58"/>`
+    + `<path d="M0 44 Q14 26 28 38 T58 32 T86 36 L100 30 V100 H0 Z" fill="url(#mhill1)"/>`
+    + `<path d="M0 54 Q18 36 36 48 T72 42 T100 46 V100 H0 Z" fill="url(#mhill2)"/>`
+    + `<path d="M0 70 Q20 56 42 66 T82 60 L100 66 V100 H0 Z" fill="url(#mhill3)"/>`
+    // Sculpted clipped topiary hedges framing Boss 1-10 on the far right
+    + `<path d="M84 48 Q87 30 91 34 Q95 26 99 38 V62 H84 Z" fill="#2F7A46" opacity="0.55"/>`
+    // Curved cobbled storybook road connecting nodes 1-10
+    + `<path class="road-edge" d="${roadD}"/>`
+    + `<path class="road-fill" d="${roadD}"/>`
+    + `<path class="road-dash" d="${roadD}"/>`
+    + `</svg>`;
+
+  const rollerLandmark = h('div', { class: 'roller', 'aria-hidden': 'true' },
+    h('img', { src: bigSmoothieIconUrl(), alt: '', class: 'roller-ico' }),
+  );
+  const strip = h('div', { class: 'mapstrip' }, backdrop, ...nodes, rollerLandmark);
   const scroller = h('div', { class: 'mapscroll' }, strip);
   const dock = h('nav', { class: 'dock' },
-    btn('Play', () => app.go({ to: 'prebattle', level: next }), 'primary', { 'data-testid': 'dock-play' }),
-    app.modesOpen() ? btn('Modes', () => app.go({ to: 'modes' }), 'secondary') : '',
-    app.modesOpen() ? btn('Workshop', () => app.go({ to: 'workshop' }), 'secondary') : '',
+    btn(t('home.play'), () => app.go({ to: 'prebattle', level: next }), 'primary', { 'data-testid': 'dock-play', 'aria-label': t('home.play_next_hint', { id: next, name: levels.find((l) => l.id === next)?.name ?? '' }) }),
+    btn(t('modes.duel.button'), () => app.go({ to: 'duel' }), 'secondary twoplayers', { 'data-testid': 'two-players', 'aria-label': t('modes.duel.name') }),
+    app.modesOpen() ? btn(t('map.modes'), () => app.go({ to: 'modes' }), 'secondary') : '',
+    app.modesOpen() ? btn(t('map.workshop'), () => app.go({ to: 'workshop' }), 'secondary') : '',
   );
   const el = h('main', { class: 'screen map' },
     h('header', { class: 'topbar' },
       gear(app, { to: 'map' }),
-      h('div', { class: 'title' }, h('b', {}, 'Puddingstone Downs'), h('span', {}, ` ${done}/${levels.length}`)),
-      h('div', { class: 'purse' }, h('span', { title: 'Pennants' }, `⚑ ${pennants}/${levels.length * 3}`), h('span', { title: 'Buttons' }, `◎ ${app.progress.buttons}`)),
+      h('div', { class: 'title' }, h('b', {}, t('map.regions.downs.name')), h('span', { class: 'map-count', 'aria-label': t('map.cleared', { done, total: levels.length }) }, ` ${done}/${levels.length}`)),
+      h('div', { class: 'purse' },
+        h('span', { class: 'purse-pill', title: t('map.pennants'), 'aria-label': t('map.pennants_count', { n: pennants, total: levels.length * 3 }) }, h('i', { class: 'pen-dot', 'aria-hidden': 'true' }), `${pennants}/${levels.length * 3}`),
+        h('span', { class: 'purse-pill', title: t('map.buttons'), 'aria-label': plural('map.buttons_count', app.progress.buttons) }, h('i', { class: 'btn-dot', 'aria-hidden': 'true' }), String(app.progress.buttons)),
+      ),
     ),
-    h('div', { class: 'rail' }, h('span', { class: 'chip on' }, 'Downs'), h('span', { class: 'chip off' }, 'Crag'), h('span', { class: 'chip off' }, 'Fen'), h('span', { class: 'chip off' }, 'Flats')),
+    h('div', { class: 'rail' }, h('span', { class: 'chip on' }, t('map.regions.downs.chip')), h('span', { class: 'chip off' }, t('map.regions.crag.chip')), h('span', { class: 'chip off' }, t('map.regions.fen.chip')), h('span', { class: 'chip off' }, t('map.regions.flats.chip'))),
     scroller,
-    btn('2 Players', () => app.go({ to: 'duel' }), 'pill twoplayers', { 'data-testid': 'two-players' }),
     dock,
   );
   requestAnimationFrame(() => {
@@ -104,17 +202,15 @@ export function mapScreen(app: App, r: Route): Screen {
 
 // ---------- S15: Modes ----------
 export function modesScreen(app: App): Screen {
-  const row = (name: string, line: string, go?: () => void) =>
-    h('div', { class: `moderow ${go ? '' : 'locked'}` }, h('div', {}, h('b', {}, name), h('p', { class: 'small' }, line)), go ? btn('Go', go, 'primary') : h('span', { class: 'small' }, line));
+  const row = (name: string, line: string, go: () => void) =>
+    h('div', { class: 'moderow' }, h('div', {}, h('b', {}, name), h('p', { class: 'small' }, line)), btn(t('common.play'), go, 'primary', { 'aria-label': name }));
   const el = h('main', { class: 'screen modes' },
-    h('header', { class: 'topbar' }, btn('←', () => app.go({ to: 'map' }), 'round-btn', { 'aria-label': 'Back' }), h('h1', {}, 'Modes'), gear(app, { to: 'modes' })),
+    h('header', { class: 'topbar' }, btn('←', () => { play('back'); app.go({ to: 'map' }); }, 'round-btn silent', { 'aria-label': t('common.back') }), h('h1', {}, t('map.modes')), gear(app, { to: 'modes' })),
     h('div', { class: 'list' },
-      row('Couch Duel', 'Two players, one device.', () => app.go({ to: 'duel' })),
-      row('Skirmish', 'One fight with a Rival.', () => app.go({ to: 'skirmish' })),
-      row('Test Yard', 'Try any shot. Endless uses.', () => app.go({ to: 'battle', setup: yardSetup(app) })),
-      row('Workshop', 'Build your fort.', () => app.go({ to: 'workshop' })),
-      row('Trials', 'Opens after 1-8.'),
-      row('Daily Dust-up', 'Opens after 1-10.'),
+      row(t('modes.duel.name'), t('modes.duel.line'), () => app.go({ to: 'duel' })),
+      row(t('modes.skirmish.name'), t('modes.skirmish.line'), () => app.go({ to: 'skirmish' })),
+      row(t('modes.yard.name'), t('modes.yard.line'), () => app.go({ to: 'battle', setup: yardSetup(app) })),
+      row(t('modes.workshop.name'), t('modes.workshop.line'), () => app.go({ to: 'workshop' })),
     ),
   );
   return { el };
@@ -130,8 +226,8 @@ export function yardSetup(app: App, fort: Blueprint | undefined = app.progress.b
   return {
     mode: 'yard', seed: 7, difficulty: app.settings.difficulty, windOff: true,
     sides: [
-      { name: 'You', human: true, crew, blueprint },
-      { name: 'Dummy', human: false, crew: [] },
+      { name: t('common.you'), human: true, crew, blueprint },
+      { name: t('common.dummy'), human: false, crew: [] },
     ],
   };
 }

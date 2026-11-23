@@ -289,7 +289,8 @@ final class CoreThreadTests: XCTestCase {
         XCTAssertNil(game.start(.campaign("1-1", preset: .fair, seed: 4)))
         _ = game.frame()
         for _ in 0..<10 where game.fault == nil {
-            game.advance(milliseconds: 20)
+            // Longer than any Rival's think pose: a full frame sets it from `hud.think_ms`.
+            game.advance(milliseconds: 4000)
             game.waitUntilIdle()
             _ = game.frame()
         }

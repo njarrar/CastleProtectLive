@@ -1,5 +1,6 @@
 package games.castleprotect.game
 
+import games.castleprotect.core.Text
 import org.json.JSONObject
 
 /**
@@ -10,12 +11,12 @@ import org.json.JSONObject
  *
  * Grid rows here count from the bottom: row 0 sits on the Footing.
  */
-class FortGrid(val cols: Int = COLS, val rows: Int = ROWS) {
+class FortGrid(val cols: Int = COLS, val rows: Int = ROWS, val maxNooks: Int = MAX_NOOKS) {
     private val cells = Array(rows) { CharArray(cols) { '.' } }
 
     operator fun get(c: Int, r: Int): Char = if (c in 0 until cols && r in 0 until rows) cells[r][c] else '.'
 
-    fun copy(): FortGrid = FortGrid(cols, rows).also { g -> for (r in 0 until rows) cells[r].copyInto(g.cells[r]) }
+    fun copy(): FortGrid = FortGrid(cols, rows, maxNooks).also { g -> for (r in 0 until rows) cells[r].copyInto(g.cells[r]) }
 
     /** The Nooks in use, 1 to 5. */
     fun nooks(): Set<Int> {
@@ -43,8 +44,10 @@ class FortGrid(val cols: Int = COLS, val rows: Int = ROWS) {
             'K', 'N' -> {
                 if (c + 1 >= cols || r + 1 >= rows) return false
                 val box = listOf(c to r, c + 1 to r, c to r + 1, c + 1 to r + 1)
-                if (box.any { (x, y) -> isRoom(cells[y][x]) }) return false
-                val glyph = if (tool == 'K') 'K' else ((1..MAX_NOOKS).firstOrNull { it !in nooks() } ?: return false).let { '0' + it }
+                // Allow nudging the Kettle Room onto its own previous cells (Android-L10).
+                if (tool == 'K' && box.all { (x, y) -> cells[y][x] == 'K' }) return false
+                if (box.any { (x, y) -> val ch = cells[y][x]; isRoom(ch) && !(tool == 'K' && ch == 'K') }) return false
+                val glyph = if (tool == 'K') 'K' else ((1..maxNooks).firstOrNull { it !in nooks() } ?: return false).let { '0' + it }
                 if (glyph == 'K') clearGlyph('K')
                 for ((x, y) in box) cells[y][x] = glyph
             }
@@ -80,12 +83,12 @@ class FortGrid(val cols: Int = COLS, val rows: Int = ROWS) {
         const val ROWS = 9
         const val MAX_NOOKS = 5
 
-        /** content/blueprints.json `bp_home_3`, the fort a new Workshop starts from. */
-        val HOME = listOf("ttttttt", "t11t22t", "t11t22t", "ttttttt", "tKKt33t", "tKKt33t", "FFFFFFF")
+        /** The blueprint a new Workshop starts from: `bp_home_3` in content/blueprints.json (read through ContentInfo). */
+        const val HOME_ID = "bp_home_3"
 
         /** A grid from rows (top down, an `F` Footing row last is dropped). Out of grid cells are cut. */
-        fun fromRows(rows: List<String>): FortGrid {
-            val g = FortGrid()
+        fun fromRows(rows: List<String>, cols: Int = COLS, rowsCount: Int = ROWS, maxNooks: Int = MAX_NOOKS): FortGrid {
+            val g = FortGrid(cols, rowsCount, maxNooks)
             val body = if (rows.isNotEmpty() && rows.last().all { it == 'F' }) rows.dropLast(1) else rows
             body.reversed().forEachIndexed { r, line ->
                 if (r < g.rows) line.forEachIndexed { c, ch -> if (c < g.cols) g.cells[r][c] = if (ch in "wtcK12345") ch else '.' }
@@ -107,16 +110,122 @@ class FortGrid(val cols: Int = COLS, val rows: Int = ROWS) {
     }
 }
 
-/** The core's `validate_blueprint` reply, as the Workshop shows it. [cells] are c, r pairs to mark (r from the Footing). */
-class FortCheck(val ok: Boolean, val why: String, val used: Int = 0, val budget: Int = 0, val cost: Int = 0, val cells: List<Pair<Int, Int>> = emptyList()) {
+/**
+ * The core's `validate_blueprint` reply, as the Workshop shows it. [cells] are c, r pairs to mark
+ * (r from the Footing). [why] is in the string table's words (`workshop.problems`); [kind] is
+ * the problem's key there, which also picks how a marked cell is labelled.
+ */
+class FortCheck(
+    val ok: Boolean, val why: String, val used: Int = 0, val budget: Int = 0, val cost: Int = 0,
+    val cells: List<Pair<Int, Int>> = emptyList(),
+    val kind: String = if (ok) "" else problemOf(why).first,
+) {
     companion object {
         fun parse(reply: String): FortCheck {
             val o = JSONObject(reply)
             val cells = ArrayList<Pair<Int, Int>>()
             o.optJSONArray("cells")?.let { a -> for (i in 0 until a.length()) a.optJSONArray(i)?.let { p -> if (p.length() >= 2) cells.add(p.getInt(0) to p.getInt(1)) } }
             val ok = o.optBoolean("ok", false)
-            val why = if (ok) "" else o.optString("detail").ifEmpty { o.optString("reason", "Not ready") }
-            return FortCheck(ok, why, o.optInt("used"), o.optInt("budget"), o.optInt("cost"), cells)
+            if (ok) return FortCheck(true, "", o.optInt("used"), o.optInt("budget"), o.optInt("cost"), cells, "")
+            val (kind, args) = problemOf(o.optString("detail"))
+            return FortCheck(false, words(kind, args), o.optInt("used"), o.optInt("budget"), o.optInt("cost"), cells, kind)
         }
+
+        private val NUMS = Regex("\\d+")
+
+        /**
+         * The core sends a problem as English `detail` only (reason `invalid_blueprint`). This reads it
+         * into a `workshop.problems` key and its numbers, so the player sees the table's words.
+         */
+        fun problemOf(detail: String): Pair<String, Array<Pair<String, Any?>>> {
+            val d = detail.lowercase()
+            val n = NUMS.findAll(detail).map { it.value.toInt() }.toList()
+            return when {
+                d.isBlank() || d == "no rows" -> "too_small" to emptyArray()
+                "support" in d || "float" in d || "nothing under" in d -> "nothing_under" to emptyArray()
+                "kettle room" in d && "2 x 2" in d -> "kettle_room_size" to emptyArray()
+                "kettle room" in d && ("one block in" in d || "outer face" in d) -> "kettle_room_edge" to emptyArray()
+                "kettle room" in d && ("walled" in d || "walls" in d) -> "kettle_room_walls" to emptyArray()
+                "kettle" in d && ("no " in d || "needs" in d || "missing" in d) -> "no_kettle_room" to emptyArray()
+                "nook" in d && ("walled" in d || "walls" in d) -> "nook_walls" to arrayOf("n" to (n.firstOrNull() ?: 1))
+                "nooks for" in d && n.size >= 2 -> "nooks_for_hobs" to arrayOf("n" to n[0], "hobs" to n[1])
+                "at most" in d && "nook" in d -> "nooks_max" to arrayOf("n" to (n.firstOrNull() ?: 5))
+                "nook" in d && ("no " in d || "needs" in d) -> "no_nook" to emptyArray()
+                "budget" in d && n.size >= 2 -> "over_budget" to arrayOf("n" to (n[0] - n[1]).coerceAtLeast(1))
+                "footing" in d || "row 0" in d -> "footing_row" to emptyArray()
+                "outside" in d && n.size >= 2 -> (if (n[0] < 3 || n[1] < 3) "too_small" else "too_big") to arrayOf("cols" to n.getOrElse(4) { 0 }, "rows" to n.getOrElse(5) { 0 })
+                "wall" in d -> "needs_wall" to emptyArray()
+                else -> "wont_stand" to emptyArray()
+            }
+        }
+
+        /** The player's words for a problem key (`workshop.problems.<kind>`, plurals where the table has them). */
+        fun words(kind: String, args: Array<Pair<String, Any?>>): String = when (kind) {
+            "wont_stand" -> Text.t("workshop.wont_stand")
+            "over_budget" -> Text.plural("workshop.problems.over_budget", (args.firstOrNull { it.first == "n" }?.second as? Int) ?: 1)
+            else -> Text.t("workshop.problems.$kind", *args)
+        }
+    }
+}
+
+/**
+ * Pure-Kotlin Workshop diagnostic mapping and unified 2x2 room layout helpers (Part 2 Plate 4).
+ * Never decides validity rules (core `validate_blueprint` owns every rule); maps core problem
+ * coordinates accurately onto the drafting grid and identifies unified 2x2 room boxes.
+ */
+object WorkshopDiag {
+    data class RoomBox(val glyph: Char, val c: Int, val r: Int)
+
+    /**
+     * Maps core `validate_blueprint` problem cells onto the drafting grid using `(c + c0, r - 1)`
+     * (core row 0 is Footing, so buildable row 0 is `r - 1`). Includes empty cells (e.g. missing wall
+     * gaps labelled "Needs a wall") and occupied cells ("Nothing under it" or "Fix"), from `workshop.problems`.
+     */
+    fun mapBadCells(grid: FortGrid, check: FortCheck?): Map<Pair<Int, Int>, String> {
+        if (check == null || check.ok || check.cells.isEmpty()) return emptyMap()
+        val c0 = (0 until grid.cols).firstOrNull { c -> (0 until grid.rows).any { r -> grid[c, r] != '.' } } ?: 0
+        val isFloatHint = check.kind == "nothing_under" || check.kind == "wont_stand"
+        val isWallHint = check.kind == "needs_wall" || check.kind.endsWith("_walls") || check.kind == "kettle_room_edge"
+        val needsWall = Text.t("workshop.problems.needs_wall")
+        val out = LinkedHashMap<Pair<Int, Int>, String>()
+        for ((cc, rr) in check.cells) {
+            val gc = cc + c0
+            val gr = rr - 1
+            if (gc !in 0 until grid.cols || gr !in 0 until grid.rows) continue
+            val ch = grid[gc, gr]
+            val tag = when {
+                ch == '.' -> needsWall
+                isFloatHint -> Text.t("workshop.problems.nothing_under")
+                isWallHint -> needsWall
+                else -> Text.t("workshop.fix")
+            }
+            out[gc to gr] = tag
+        }
+        return out
+    }
+
+    /** Finds the bottom-left `(c, r)` anchor of each unique 2x2 room (`K`, `1`..`5`) on [grid]. */
+    fun roomAnchors(grid: FortGrid): List<RoomBox> {
+        val seen = HashSet<Char>()
+        val out = ArrayList<RoomBox>()
+        for (r in 0 until grid.rows) {
+            for (c in 0 until grid.cols) {
+                val ch = grid[c, r]
+                if ((ch == 'K' || ch in '1'..'5') && ch !in seen) {
+                    seen.add(ch)
+                    out.add(RoomBox(ch, c, r))
+                }
+            }
+        }
+        return out
+    }
+
+    /** Column coordinate letter (`A`..`H`) for drafting board ticks. */
+    fun colLabel(c: Int): String = if (c in 0..25) ('A' + c).toString() else (c + 1).toString()
+
+    /** Issue count shown in the Workshop inspector badge when [check] fails. */
+    fun issueCount(check: FortCheck?, badCount: Int): Int {
+        if (check == null || check.ok) return 0
+        return maxOf(1, badCount)
     }
 }

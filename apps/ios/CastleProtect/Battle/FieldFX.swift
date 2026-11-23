@@ -57,7 +57,19 @@ struct WalkAnim: Equatable {
     var dx: Double
     var start: Double
     var duration: Double
+    /// Current slide segment start & duration so repeated held steps accumulate smoothly.
+    var segStart: Double
+    var segDuration: Double
     var lastStomp = -1
+
+    init(dx: Double, start: Double, duration: Double, segStart: Double? = nil, segDuration: Double? = nil, lastStomp: Int = -1) {
+        self.dx = dx
+        self.start = start
+        self.duration = duration
+        self.segStart = segStart ?? start
+        self.segDuration = segDuration ?? duration
+        self.lastStomp = lastStomp
+    }
 }
 
 /// A Hob that fell with a collapse (core event `drop`): drawn at `from` until its chunk
@@ -75,6 +87,31 @@ struct HobAnim: Equatable {
     var suffix: String
     var start: Double
     var firedTo = -1.0
+}
+
+/// Color-coded floating combat feedback style (Part 2 Plate 2).
+enum CalloutStyle: Equatable, Sendable {
+    /// Damage to a Hob / Flattener (amber-gold `#FFC23D`).
+    case hobHit
+    /// Damage to a wall block (crisp cream `#FFF4DE`).
+    case wallBreak
+    /// Collapse drop callout (`Drop!` starburst yellow `#FFE08A`).
+    case drop
+    /// Direct Heartkettle hit (warm copper-orange `#FF9E44`).
+    case kettleHit
+    /// Fort repair / mend (kettle teal `#4FE3C1`).
+    case mend
+}
+
+/// One floating damage or drop callout in world space (cells, y up).
+struct CombatCallout: Equatable, Sendable {
+    var id: Int
+    var text: String
+    var x: Double
+    var y: Double
+    var start: Double
+    var duration: Double = 1150
+    var style: CalloutStyle
 }
 
 /// The view-time clock, hit stop, slow motion, screen shake and every effect
@@ -106,6 +143,11 @@ final class FieldFX {
     /// Blocks the collapse crushes: the core has already removed them, the view keeps
     /// drawing them until the ghost blocks land on them (side to blocks and land time).
     private(set) var heldBlocks: [Int: (blocks: [BlockView], until: Double)] = [:]
+    /// Hobs whose crush/fall Bonk is waiting for the ghost blocks to land.
+    private(set) var deferredBonks: Set<String> = []
+    /// Active floating combat numbers & `Drop!` starburst callouts (de-overlapped in `resolvedCallouts`).
+    private(set) var callouts: [CombatCallout] = []
+    private var nextCalloutId = 1
     /// A kettle pop was seen and its pop frame has not played yet (the win sting waits for it).
     private(set) var popFramePending = false
     /// The kettle's pop frame: the win or lose sting starts here (review 2, M8).
@@ -136,14 +178,29 @@ final class FieldFX {
     private var lastFlaps: [String: Bool] = [:]
     private var lastLids: [String: Bool] = [:]
     private var seededRooms = false
+    private var lastShooter: (side: Int, def: String)?
+    /// A Couch Duel: side 1 is player 2 and keeps the orange look. Otherwise side 1 is the Rival.
+    private(set) var duel = false
+    /// Where each Hob's idle loop starts (ms), picked once per Hob so a crew never breathes in step.
+    private var idleStart: [String: Double] = [:]
     private var rng: UInt32 = 0x2545_F491
 
     /// A sound to play now: id, pitch shift in semitones, gain.
     var onSound: ((String, Double, Float) -> Void)?
+    /// Optional spatialised sound callback: id, pitch shift, gain, world X (nil = center).
+    var onSoundAt: ((String, Double, Float, Double?) -> Void)?
     /// A bark: Hob def, event (fire, takes_hit, bonked, win, hit_lands), side.
     var onBark: ((String, String, Int) -> Void)?
     /// Shot id to trail kind (blast, pierce, dig, fire, mend).
     var trailKind: (String) -> String = { _ in "blast" }
+
+    private func emitSound(_ id: String, _ pitch: Double = 0, _ gain: Float = 1, x: Double? = nil) {
+        if let onSoundAt {
+            onSoundAt(id, pitch, gain, x)
+        } else {
+            onSound?(id, pitch, gain)
+        }
+    }
 
     init(library: AnimationLibrary = .shared) {
         self.library = library
@@ -155,7 +212,7 @@ final class FieldFX {
     /// looping balloon pose is not "moving" once its lift is done: it steps with the idle
     /// poses, so Plan stays idle after a Bonk (review 2, M7).
     var isActive: Bool {
-        !sprites.isEmpty || !pieces.isEmpty || !walks.isEmpty || trauma > 0.001
+        !sprites.isEmpty || !pieces.isEmpty || !walks.isEmpty || !callouts.isEmpty || trauma > 0.001
             || isPopShowing || !hobDrops.isEmpty
             || hobAnims.contains { $0.value.suffix != "bonked" }
             || bonkedAt.values.contains { now - $0 < Self.bonkLiftMs }
@@ -201,6 +258,8 @@ final class FieldFX {
         bonkedAt = [:]
         hobDrops = [:]
         heldBlocks = [:]
+        deferredBonks = []
+        callouts = []
         popFramePending = false
         timers = []
         lastImpact = nil
@@ -212,7 +271,9 @@ final class FieldFX {
         lastFlaps = [:]
         lastLids = [:]
         seededRooms = false
+        lastShooter = nil
         lastTrail = [:]
+        idleStart = [:]
     }
 
     // MARK: Clock
@@ -247,6 +308,7 @@ final class FieldFX {
     func newTurn() {
         slowAddedMs = 0
         slowThisShot = false
+        lastShooter = nil
     }
 
     /// 2x during Resolve cancels slow motion for the turn.
@@ -344,7 +406,7 @@ final class FieldFX {
             let t = t1 - w.start
             if t >= w.duration {
                 walks[side] = nil
-                onSound?("cas_steam", 0, 0.7)
+                emitSound("cas_steam", 0, 0.7)
                 continue
             }
             let frame = Int(t / motion.bobFrameMs)
@@ -352,7 +414,7 @@ final class FieldFX {
                 var next = w
                 next.lastStomp = frame
                 walks[side] = next
-                if frame % 3 == 0 { onSound?("cas_step", 0, 1) }
+                if frame % 3 == 0 { emitSound("cas_step", 0, 1) }
             }
         }
 
@@ -363,9 +425,9 @@ final class FieldFX {
             if local1 > k.firedTo {
                 for name in clip.eventsFired(from: k.firedTo, to: local1) {
                     switch name {
-                    case "crack": onSound?("ket_crack", 0, 1)
+                    case "crack": emitSound("ket_crack", 0, 1)
                     case "pop":
-                        onSound?("ket_pop", 0, 1)
+                        emitSound("ket_pop", 0, 1)
                         if popFramePending {
                             popFramePending = false
                             onPopFrame?()
@@ -374,7 +436,7 @@ final class FieldFX {
                         hitStop(80, nowNanos: ns)
                         addTrauma(1.0, decayMs: 600)
                         slowMotion(0.25, ms: 1200, nowNanos: ns, ending: true)
-                    case "sit": onSound?("ket_sit_down", 0, 1)
+                    case "sit": emitSound("ket_sit_down", 0, 1)
                     default: break
                     }
                 }
@@ -413,11 +475,12 @@ final class FieldFX {
         // Pin drops: the stick sound.
         for (key, start) in pinDrops where t0 - start < 70 && t1 - start >= 70 {
             _ = key
-            onSound?("aim_pin_drop", 0, 1)
+            emitSound("aim_pin_drop", 0, 1)
         }
         pinDrops = pinDrops.filter { t1 - $0.value < 400 }
         flaps = flaps.filter { t1 - $0.value.start < 400 }
         lids = lids.filter { t1 - $0.value.start < 500 }
+        callouts.removeAll { t1 - $0.start >= $0.duration }
     }
 
     // MARK: Events from the core
@@ -425,6 +488,7 @@ final class FieldFX {
     /// Turns the core's events into effects, sounds and timing. `old` is the
     /// frame before them (blocks that just fell are still in it).
     func ingest(_ events: [BattleEvent], old: BattleSnapshot, new: BattleSnapshot, nowNanos: UInt64) {
+        duel = new.isDuel
         clock = max(clock, nowNanos)
         var breaks = 0
         var hobHitThisBatch = false
@@ -433,7 +497,8 @@ final class FieldFX {
         var firstBlast = true
 
         // Collapses first: the ghost blocks fix when each side's chunk lands. What the landing
-        // does (crush hits and breaks, a kettle pop from the crush, a Hob that fell) waits for it.
+        // does (crush hits and breaks, crush/fall Bonks, a kettle pop from the crush, a Hob that
+        // fell) waits for it.
         var landBySide: [Int: Double] = [:]
         for e in events where e.raw?.t == "collapse" {
             guard let raw = e.raw else { continue }
@@ -444,15 +509,30 @@ final class FieldFX {
                 landBySide[side] = max(landBySide[side] ?? 0, land)
             }
         }
-        if !landBySide.isEmpty { holdCrushedBlocks(old: old, new: new, landBySide: landBySide) }
+        var crushHobs: Set<Int> = []
+        if !landBySide.isEmpty {
+            holdCrushedBlocks(events: events, old: old, landBySide: landBySide)
+            for e in events {
+                guard let raw = e.raw else { continue }
+                if raw.t == "hit", raw.target == "hob", (raw.why == "crush" || raw.why == "fall"), let hob = raw.hob {
+                    crushHobs.insert(hob)
+                } else if raw.t == "drop", let hob = raw.hob {
+                    crushHobs.insert(hob)
+                }
+            }
+        }
 
         for e in events {
             guard let raw = e.raw else { continue }
             if raw.t == "collapse" { continue }
-            if let land = deferUntil(raw, landBySide: landBySide), land > now {
+            if let land = deferUntil(raw, landBySide: landBySide, crushHobs: crushHobs), land > now {
                 if raw.t == "drop" {
                     noteDrop(raw, in: new, land: land)
                     continue
+                }
+                if raw.t == "bonk", let hob = raw.hob {
+                    let side = raw.side ?? hobSide(hob, in: new) ?? 0
+                    deferredBonks.insert(Self.key(side, hob))
                 }
                 if raw.t == "kettle_pop", library.clip("kettle_pop") != nil { popFramePending = true }
                 let event = e
@@ -466,10 +546,11 @@ final class FieldFX {
                 newTurn()
             case "fire":
                 if let side = raw.side, let hob = raw.hob {
+                    if let def = hobDef(side: side, hob: hob, in: new) { lastShooter = (side, def) }
                     noteLaunch(side: side, hob: hob, shot: raw.shot ?? "clodpot")
                     playHob(side: side, hob: hob, "fire", in: new)
                 } else if let shot = raw.shot {
-                    onSound?(SoundCues.launch(shot), 0, 1)
+                    emitSound(SoundCues.launch(shot), 0, 1, x: e.x)
                 }
                 if let shot = raw.shot, (shot == "tick_tock_crock" || shot == "pudding_bomb") {
                     addTrauma(0.10, decayMs: 100)
@@ -479,7 +560,7 @@ final class FieldFX {
                 let dmg = raw.dmg ?? 0
                 let band = SoundCues.band(radius: r)
                 impact(x: e.x, y: e.y, radius: r, type: raw.type ?? "blast", in: old.forts.isEmpty ? new : old, ground: new.ground)
-                onSound?(raw.type == "pierce" ? "hit_pierce" : SoundCues.blast(band), 0, 1)
+                emitSound(raw.type == "pierce" ? "hit_pierce" : SoundCues.blast(band), 0, 1, x: e.x)
                 lastImpact = (e.x, e.y, nowNanos)
                 if firstBlast {
                     firstBlast = false
@@ -501,40 +582,56 @@ final class FieldFX {
                     }
                 }
             case "carve":
-                onSound?("hit_dig_carve", 0, 1)
+                emitSound("hit_dig_carve", 0, 1, x: e.x)
             case "mound":
-                onSound?("gnd_mound_grow", 0, 1)
+                emitSound("gnd_mound_grow", 0, 1, x: e.x)
                 spawn("fx_dustcloud", x: e.x, y: e.y, scale: 0.8, z: 7)
             case "hit":
+                let dmg = raw.dmg ?? e.amount
                 if raw.target == "hob", let hob = raw.hob {
                     let side = hobSide(hob, in: new) ?? raw.side ?? 0
                     playHob(side: side, hob: hob, "hit", in: new)
+                    if dmg > 0 {
+                        let h = new.fort(side)?.hobs.first { $0.id == String(hob) }
+                            ?? old.fort(side)?.hobs.first { $0.id == String(hob) }
+                        let cx = h?.x ?? e.x
+                        let cy = (h?.y ?? e.y) + 28
+                        spawnCallout("-\(dmg)", x: cx, y: cy, style: .hobHit)
+                    }
                     if let def = hobDef(side: side, hob: hob, in: new) { onBark?(def, "takes_hit", side) }
+                    if let shooter = lastShooter, shooter.side != side {
+                        lastShooter = nil
+                        onBark?(shooter.def, "hit_lands", shooter.side)
+                    }
                 } else if raw.target == "kettle" {
-                    onSound?("ket_hit", 0, 1)
+                    emitSound("ket_hit", 0, 1, x: e.x)
+                    if dmg > 0 {
+                        let fort = raw.side.flatMap { new.fort($0) ?? old.fort($0) }
+                        let cx = fort?.kettleX ?? e.x
+                        let cy = (fort?.kettleY ?? e.y) + 24
+                        spawnCallout("-\(dmg)", x: cx, y: cy, style: .kettleHit)
+                    }
+                    if let targetSide = raw.side, let shooter = lastShooter, shooter.side != targetSide {
+                        lastShooter = nil
+                        onBark?(shooter.def, "hit_lands", shooter.side)
+                    }
+                } else if dmg > 0, e.x != 0 || e.y != 0 {
+                    spawnCallout("-\(dmg)", x: e.x, y: e.y + 14, style: .wallBreak)
                 }
             case "break":
                 if let side = raw.side, let c = raw.c, let r = raw.r {
                     breakBlock(side: side, c: c, r: r, in: old, why: raw.why)
                 }
             case "big_drop":
-                break
-            case "bonk":
-                if let hob = raw.hob {
-                    let side = raw.side ?? hobSide(hob, in: new) ?? 0
-                    let key = Self.key(side, hob)
-                    bonkedAt[key] = now
-                    hobAnims[key] = HobAnim(suffix: "bonked", start: now)
-                    onSound?("hob_bonk", 0, 1)
-                    if let def = hobDef(side: side, hob: hob, in: new) { onBark?(def, "bonked", side) }
-                    hitStop(80, nowNanos: nowNanos)
-                    let standing = new.fort(side)?.hobs.filter { !$0.bonked && $0.hp > 0 }.count ?? 1
-                    if standing == 0 {
-                        slowMotion(new.isHuman(side) ? 0.5 : 0.3, ms: new.isHuman(side) ? 600 : 1000, nowNanos: nowNanos, ending: true)
-                    } else {
-                        slowMotion(0.5, ms: 400, nowNanos: nowNanos)
-                    }
+                let side = raw.side ?? (e.side >= 0 ? e.side : 1)
+                if let fort = new.fort(side) ?? old.fort(side) {
+                    let top = (fort.blocks.map { $0.y + $0.h }.max() ?? fort.baseY + 48) + 24
+                    spawnCallout(GameText.shared.t("notes.big_drop"), x: fort.x, y: top, style: .drop, duration: 1350)
+                } else if e.x != 0 || e.y != 0 {
+                    spawnCallout(GameText.shared.t("notes.collapse"), x: e.x, y: e.y + 24, style: .drop, duration: 1350)
                 }
+            case "bonk":
+                applyBonk(raw, in: new, nowNanos: nowNanos)
             case "drop":
                 if let hob = raw.hob {
                     let side = raw.side ?? hobSide(hob, in: new) ?? 0
@@ -545,6 +642,7 @@ final class FieldFX {
                     let side = raw.side ?? hobSide(hob, in: new) ?? 0
                     let key = Self.key(side, hob)
                     bonkedAt[key] = nil
+                    deferredBonks.remove(key)
                     hobAnims[key] = nil
                 }
             case "shove_off", "dug_out":
@@ -564,34 +662,56 @@ final class FieldFX {
                 }
             case "walk":
                 if let side = raw.side, let from = raw.from, let to = raw.to, !from.isEmpty, !to.isEmpty {
-                    let dx = Double(to[0] - from[0])
-                    let duration = min(2000, max(330, abs(dx) * 14))
-                    walks[side] = WalkAnim(dx: dx, start: now, duration: duration)
+                    let stepDx = Double(to[0] - from[0])
+                    if let existing = walks[side], now < existing.start + existing.duration {
+                        let segP = min(1, max(0, (now - existing.segStart) / max(1, existing.segDuration)))
+                        let rem = existing.dx * (1 - segP)
+                        let totalDx = rem + stepDx
+                        let segDur = min(2000, max(220, abs(totalDx) * 14))
+                        walks[side] = WalkAnim(dx: totalDx, start: existing.start,
+                                               duration: (now - existing.start) + segDur,
+                                               segStart: now, segDuration: segDur,
+                                               lastStomp: existing.lastStomp)
+                    } else {
+                        let duration = min(2000, max(330, abs(stepDx) * 14))
+                        walks[side] = WalkAnim(dx: stepDx, start: now, duration: duration)
+                    }
                 }
             case "thump", "castle_drop":
-                onSound?("cas_thump", 0, 1)
+                emitSound("cas_thump", 0, 1, x: e.x)
                 addTrauma(0.5, decayMs: 300)
                 hitStop(50, nowNanos: nowNanos)
             case "threaded":
-                onSound?("hit_pierce", 0, 1)
+                emitSound("hit_threaded_zip", 0, 1, x: e.x)
                 slowMotion(0.4, ms: 400, nowNanos: nowNanos)
             case "split":
-                onSound?("fly_split", 0, 1)
+                emitSound("fly_split", 0, 1, x: e.x)
             case "lid_block":
-                onSound?("doo_pot_lid_clang", 0, 1)
+                emitSound("doo_lid_bounce", 0, 1, x: e.x)
+            case "buried":
+                emitSound("hob_buried_thlup", 0, 1, x: e.x)
             case "mend", "rebuild":
-                onSound?(raw.t == "mend" ? "doo_mend_bucket_slosh" : "ket_patch", 0, 1)
+                emitSound(raw.t == "mend" ? "doo_mend_bucket_slosh" : "ket_patch", 0, 1, x: e.x)
+                var firstCellPos: (x: Double, y: Double)?
                 for cell in raw.blocks ?? [] {
                     guard let side = raw.side, let fort = new.fort(side) else { continue }
                     let o = fort.blockOrigin(c: cell.c, r: cell.r)
+                    if firstCellPos == nil { firstCellPos = (o.x + fort.block / 2, o.y + fort.block + 12) }
                     spawn("fx_fizz_pop", x: o.x + fort.block / 2, y: o.y + fort.block / 2, scale: 1, z: 7)
                 }
+                if let pt = firstCellPos {
+                    spawnCallout(GameText.shared.t(raw.t == "rebuild" ? "notes.rebuild" : "notes.mend"), x: pt.x, y: pt.y, style: .mend, duration: 1000)
+                }
             case "front":
-                onSound?("wx_wind_shift", 0, 1)
+                emitSound("wx_front_chime", 0, 1)
+                emitSound("wx_wind_shift", 0, 0.6)
             case "squall_warning":
-                onSound?("wx_squall_bell", 0, 1)
+                // The bell is for the Squall only (assets/audio/README.md).
+                emitSound("wx_squall_bell", 0, 1)
+            case "squall_round":
+                if raw.n == 1 { emitSound("wx_squall_bell", 0, 1) }
             case "miss":
-                onSound?("hit_miss_thud", 0, 0.5)
+                emitSound("hit_miss_thud", 0, 0.5, x: e.x)
             case "win":
                 if let winner = raw.winner, let fort = new.fort(winner) {
                     for h in fort.hobs where !h.bonked && h.hp > 0 {
@@ -599,32 +719,85 @@ final class FieldFX {
                     }
                     if let first = fort.hobs.first(where: { !$0.bonked }) { onBark?(first.def, "win", winner) }
                 }
-            case "boss_phase", "roller", "shears_open", "shears_jam":
-                onSound?("cas_thump", -3, 0.8)
+            case "boss_phase":
+                emitSound("cas_boss_horn", 0, 1, x: e.x)
+            case "roller":
+                emitSound("doo_roller_rumble", 0, 1, x: e.x)
+            case "roller_stop", "roller_done":
+                emitSound("doo_roller_rumble", -3, 1, x: e.x)
+            case "shears_jam":
+                emitSound("doo_shears_jam", 0, 1, x: e.x)
+            case "shears_open":
+                emitSound("cas_thump", -3, 0.8, x: e.x)
             case "roller_move":
-                onSound?("fly_roll_loop", 0, 0.7)
+                emitSound("fly_roll_loop", 0, 0.7, x: e.x)
                 addTrauma(0.2, decayMs: 300)
             case "shears_snip":
-                onSound?("mat_timber_break", -2, 1)
+                emitSound("mat_timber_break", -2, 1, x: e.x)
                 addTrauma(0.4, decayMs: 300)
             case "relight":
-                onSound?("ket_patch", 2, 1)
+                emitSound("ket_patch", 2, 1, x: e.x)
                 // Volley Points: the kettle is lit again; a second pop gets its own show (review 2, M8).
                 if let side = raw.side { kettlePops[side] = nil }
             default:
                 break
             }
         }
+        noteBlockCracks(old: old, new: new)
         noteState(new)
     }
 
+    private func applyBonk(_ raw: CoreEvent, in new: BattleSnapshot, nowNanos: UInt64) {
+        guard let hob = raw.hob else { return }
+        let side = raw.side ?? hobSide(hob, in: new) ?? 0
+        let key = Self.key(side, hob)
+        deferredBonks.remove(key)
+        bonkedAt[key] = now
+        hobAnims[key] = HobAnim(suffix: "bonked", start: now)
+        let x = new.fort(side)?.hobs.first(where: { $0.id == String(hob) })?.x
+        emitSound("hob_bonk", 0, 1, x: x)
+        if let def = hobDef(side: side, hob: hob, in: new) { onBark?(def, "bonked", side) }
+        hitStop(80, nowNanos: nowNanos)
+        let standing = new.fort(side)?.hobs.filter { !$0.bonked && $0.hp > 0 }.count ?? 1
+        if standing == 0 {
+            slowMotion(new.isHuman(side) ? 0.5 : 0.3, ms: new.isHuman(side) ? 600 : 1000, nowNanos: nowNanos, ending: true)
+        } else {
+            slowMotion(0.5, ms: 400, nowNanos: nowNanos)
+        }
+    }
+
+    /// Plays `col_crack` when a standing block drops down a wear tier without breaking.
+    private func noteBlockCracks(old: BattleSnapshot, new: BattleSnapshot) {
+        func wearTier(_ b: BlockView) -> Int {
+            let ratio = Double(max(0, b.hp)) / Double(max(1, b.hpMax))
+            return ratio > 0.66 ? 2 : (ratio > 0.33 ? 1 : 0)
+        }
+        for newFort in new.forts {
+            guard let oldFort = old.fort(newFort.side) else { continue }
+            var oldWear: [Int: Int] = [:]
+            for b in oldFort.blocks {
+                oldWear[Int(b.x.rounded()) * 10_000 + Int(b.y.rounded())] = wearTier(b)
+            }
+            for b in newFort.blocks {
+                let key = Int(b.x.rounded()) * 10_000 + Int(b.y.rounded())
+                if let prev = oldWear[key], wearTier(b) < prev {
+                    emitSound("col_crack", 0, 0.8, x: b.x + b.w / 2)
+                    return
+                }
+            }
+        }
+    }
+
     /// When an event of this batch must wait for a collapse to land, or nil to play it now.
-    private func deferUntil(_ raw: CoreEvent, landBySide: [Int: Double]) -> Double? {
+    private func deferUntil(_ raw: CoreEvent, landBySide: [Int: Double], crushHobs: Set<Int>) -> Double? {
         guard !landBySide.isEmpty else { return nil }
         let latest = landBySide.values.max()
         switch raw.t {
         case "hit", "break":
             guard raw.why == "crush" || raw.why == "fall" else { return nil }
+            return raw.side.flatMap { landBySide[$0] } ?? latest
+        case "bonk":
+            guard let hob = raw.hob, crushHobs.contains(hob) else { return nil }
             return raw.side.flatMap { landBySide[$0] } ?? latest
         case "drop":
             return raw.side.flatMap { landBySide[$0] } ?? latest
@@ -640,13 +813,28 @@ final class FieldFX {
         guard let raw = e.raw else { return }
         switch raw.t {
         case "hit":
+            let dmg = raw.dmg ?? e.amount
             if raw.target == "hob", let hob = raw.hob {
                 let side = hobSide(hob, in: new) ?? raw.side ?? 0
-                playHob(side: side, hob: hob, "hit", in: new)
-                if let def = hobDef(side: side, hob: hob, in: new) { onBark?(def, "takes_hit", side) }
+                let isOut = new.fort(side)?.hobs.first(where: { $0.id == String(hob) })?.isOut ?? false
+                if dmg > 0 {
+                    let h = new.fort(side)?.hobs.first { $0.id == String(hob) }
+                        ?? old.fort(side)?.hobs.first { $0.id == String(hob) }
+                    spawnCallout("-\(dmg)", x: h?.x ?? e.x, y: (h?.y ?? e.y) + 28, style: .hobHit)
+                }
+                if !isOut {
+                    playHob(side: side, hob: hob, "hit", in: new)
+                    if let def = hobDef(side: side, hob: hob, in: new) { onBark?(def, "takes_hit", side) }
+                }
             } else if raw.target == "kettle" {
-                onSound?("ket_hit", 0, 1)
+                emitSound("ket_hit", 0, 1, x: e.x)
+                if dmg > 0 {
+                    let fort = raw.side.flatMap { new.fort($0) ?? old.fort($0) }
+                    spawnCallout("-\(dmg)", x: fort?.kettleX ?? e.x, y: (fort?.kettleY ?? e.y) + 24, style: .kettleHit)
+                }
             }
+        case "bonk":
+            applyBonk(raw, in: new, nowNanos: clock)
         case "break":
             if let side = raw.side, let c = raw.c, let r = raw.r {
                 breakBlock(side: side, c: c, r: r, in: old, why: raw.why)
@@ -681,22 +869,33 @@ final class FieldFX {
         }
     }
 
-    /// Blocks gone from the new frame that are not the collapse's own ghost blocks were
-    /// crushed by it: keep drawing them until the ghosts land.
-    private func holdCrushedBlocks(old: BattleSnapshot, new: BattleSnapshot, landBySide: [Int: Double]) {
-        for (side, land) in landBySide {
-            guard let before = old.fort(side), let after = new.fort(side) else { continue }
-            func key(_ b: BlockView) -> Int { Int(b.x.rounded()) * 10_000 + Int(b.y.rounded()) }
-            let still = Set(after.blocks.map(key))
-            let ghosts = Set(pieces.filter { $0.side == side }.map { Int($0.x.rounded()) * 10_000 + Int($0.y.rounded()) })
-            let crushed = before.blocks.filter { !still.contains(key($0)) && !ghosts.contains(key($0)) }
-            guard !crushed.isEmpty else { continue }
-            heldBlocks[side] = (crushed, land)
+    /// Only blocks explicitly broken by a collapse (`break` with `why == "crush"`) stay drawn
+    /// until the ghost blocks land; blocks destroyed by the blast disappear at once (iOS-H10).
+    private func holdCrushedBlocks(events: [BattleEvent], old: BattleSnapshot, landBySide: [Int: Double]) {
+        var bySide: [Int: [BlockView]] = [:]
+        var seen: [Int: Set<Int>] = [:]
+        for e in events {
+            guard let raw = e.raw, raw.t == "break", raw.why == "crush",
+                  let side = raw.side, landBySide[side] != nil,
+                  let c = raw.c, let r = raw.r,
+                  let fort = old.fort(side) else { continue }
+            let o = fort.blockOrigin(c: c, r: r)
+            let cellKey = c * 10_000 + r
+            guard !(seen[side]?.contains(cellKey) ?? false) else { continue }
+            if let block = fort.blocks.first(where: { abs($0.x - o.x) < 1 && abs($0.y - o.y) < 1 }) {
+                seen[side, default: []].insert(cellKey)
+                bySide[side, default: []].append(block)
+            }
+        }
+        for (side, blocks) in bySide {
+            guard let land = landBySide[side], !blocks.isEmpty else { continue }
+            heldBlocks[side] = (blocks, land)
         }
     }
 
     /// Pins, Flaps and the Pot Lid change state between frames, not by event alone.
     func noteState(_ s: BattleSnapshot) {
+        duel = s.isDuel
         var pins = Set<String>()
         for p in s.pins {
             let key = "\(p.side):\(p.hob):\(Int(p.x)):\(Int(p.y))"
@@ -709,7 +908,7 @@ final class FieldFX {
                 let key = "\(fort.side):\(room.id)"
                 if let was = lastFlaps[key], was != room.flap, seededRooms {
                     flaps[key] = (now, room.flap)
-                    if room.flap { onSound?("cas_loophole_flap", 0, 1) } else { onSound?("cas_loophole_flap", -3, 0.8) }
+                    if room.flap { emitSound("cas_loophole_flap", 0, 1, x: room.box.midX) } else { emitSound("cas_loophole_flap", -3, 0.8, x: room.box.midX) }
                 }
                 lastFlaps[key] = room.flap
                 let lidKey = "\(fort.side):\(room.id)"
@@ -721,7 +920,7 @@ final class FieldFX {
             let kKey = "\(fort.side):kettle"
             if let was = lastLids[kKey], was != fort.kettleLid, seededRooms {
                 lids[kKey] = (now, fort.kettleLid)
-                if fort.kettleLid { onSound?("doo_pot_lid_clang", 0, 1) }
+                if fort.kettleLid { emitSound("doo_pot_lid_clang", 0, 1, x: fort.kettleX) }
             }
             lastLids[kKey] = fort.kettleLid
         }
@@ -749,7 +948,7 @@ final class FieldFX {
         if hobAnims[key]?.suffix == "bonked" && suffix != "cheer" { return }
         guard hobClip(key: key, suffix: suffix) != nil else {
             // No art for this Hob: the launch plays at once.
-            if suffix == "fire" { onSound?(SoundCues.launch(pendingLaunch[key] ?? "clodpot"), 0, 1) }
+            if suffix == "fire" { emitSound(SoundCues.launch(pendingLaunch[key] ?? "clodpot"), 0, 1) }
             return
         }
         hobAnims[key] = HobAnim(suffix: suffix, start: now)
@@ -759,6 +958,15 @@ final class FieldFX {
     func hobClip(key: String, suffix: String) -> AnimClip? {
         guard let def = hobDefs[key], let art = SpriteImages.hobArtName(id: def, name: "") else { return nil }
         let side = key.hasPrefix("1:") ? 1 : 0
+        return hobClip(art: art, side: side, suffix: suffix)
+    }
+
+    /// `hob_<art>_<team>_<suffix>`: blue for side 0, orange for Couch Duel player 2, and the
+    /// Rival look (`rival`) for a Rival's Hob, with orange when an older atlas has no Rival clips.
+    func hobClip(art: String, side: Int, suffix: String) -> AnimClip? {
+        let team = SpriteImages.team(side, rival: side == 1 && !duel)
+        if let clip = library.clip("hob_\(art)_\(team)_\(suffix)") { return clip }
+        guard team == "rival" else { return nil }
         return library.clip("hob_\(art)_\(SpriteImages.team(side))_\(suffix)")
     }
 
@@ -773,15 +981,15 @@ final class FieldFX {
         let side = key.hasPrefix("1:") ? 1 : 0
         switch (suffix, name) {
         case ("fire", "release"):
-            onSound?(SoundCues.launch(pendingLaunch[key] ?? "clodpot"), 0, 1)
+            emitSound(SoundCues.launch(pendingLaunch[key] ?? "clodpot"), 0, 1)
             if let def = hobDefs[key] { onBark?(def, "fire", side) }
-        case ("hit", "flash"): onSound?("hob_hit_boing", 0, 1)
-        case ("tumble", "fall"): onSound?("hob_tumble_roll", 0, 1)
-        case ("land", "thud"), ("cheer", "land"): onSound?("hob_land_thud", 0, 1)
-        case ("bonked", "inflate"): onSound?("hob_balloon_inflate", 0, 1)
-        case ("bonked", "lift"): onSound?("hob_balloon_float", 0, 1)
-        case ("cheer", "jump"): onSound?("hob_cheer", 0, 0.8)
-        case ("dig", "clear"): onSound?("hob_shove_dig", 0, 1)
+        case ("hit", "flash"): emitSound("hob_hit_boing", 0, 1)
+        case ("tumble", "fall"): emitSound("hob_tumble_roll", 0, 1)
+        case ("land", "thud"), ("cheer", "land"): emitSound("hob_land_thud", 0, 1)
+        case ("bonked", "inflate"): emitSound("hob_balloon_inflate", 0, 1)
+        case ("bonked", "lift"): emitSound("hob_balloon_float", 0, 1)
+        case ("cheer", "jump"): emitSound("hob_cheer", 0, 0.8)
+        case ("dig", "clear"): emitSound("hob_shove_dig", 0, 1)
         default: break
         }
     }
@@ -797,33 +1005,40 @@ final class FieldFX {
         let key = Self.key(side, id)
         if hobDefs[key] == nil { hobDefs[key] = hob.def }
         guard let art = SpriteImages.hobArtName(id: hob.def, name: hob.name) else { return nil }
-        let base = "hob_\(art)_\(SpriteImages.team(side))_"
-        if hob.bonked || hob.hp <= 0 {
-            guard let clip = library.clip(base + "bonked") else { return nil }
+        if (hob.bonked || hob.hp <= 0) && !deferredBonks.contains(key) {
+            guard let clip = hobClip(art: art, side: side, suffix: "bonked") else { return nil }
             let start = bonkedAt[key] ?? (now - 2000)
             let t = reduceMotion ? 0 : now - start
             return (clip.frame(at: t), clip)
         }
-        if let a = hobAnims[key], a.suffix != "bonked", let clip = library.clip(base + a.suffix) {
+        if let a = hobAnims[key], a.suffix != "bonked", let clip = hobClip(art: art, side: side, suffix: a.suffix) {
             let t = now - a.start
             if !clip.finished(at: t) || clip.loop {
                 return (clip.frame(at: reduceMotion && clip.loop ? 0 : t), clip)
             }
         }
-        if selected && aiming, let clip = library.clip(base + "aim") {
+        if selected && aiming, let clip = hobClip(art: art, side: side, suffix: "aim") {
             return (clip.pickFrame(value: power), clip)
         }
-        guard let idle = library.clip(base + "idle") else { return nil }
+        guard let idle = hobClip(art: art, side: side, suffix: "idle") else { return nil }
         if reduceMotion { return (idle.frames[0], idle) }
         // A blink now and then, from the cosmetic stream.
         let last = lastBlink[key] ?? 0
-        if now - last > 2600 + 2400 * cosmetic(), let blink = library.clip(base + "blink") {
+        if now - last > 2600 + 2400 * cosmetic(), let blink = hobClip(art: art, side: side, suffix: "blink") {
             lastBlink[key] = now
             hobAnims[key] = HobAnim(suffix: "blink", start: now)
             return (blink.frame(at: 0), blink)
         }
-        let phase = Double(abs(id) * 317 % 1600)
-        return (idle.frame(at: now + phase), idle)
+        return (idle.frame(at: now + idlePhase(key: key, clip: idle)), idle)
+    }
+
+    /// Where a Hob's idle loop starts: a random point in the loop when the clip says
+    /// `random_start`, else its `start_offset_ms`. Picked once per Hob from the cosmetic stream.
+    func idlePhase(key: String, clip: AnimClip) -> Double {
+        if let start = idleStart[key] { return start }
+        let start = clip.randomStart ? cosmetic() * max(1, clip.total) : clip.startOffsetMs
+        idleStart[key] = start
+        return start
     }
 
     /// The balloon lift for a Bonked Hob, in cells (from the lift event on).
@@ -831,6 +1046,84 @@ final class FieldFX {
         guard !reduceMotion, let start = bonkedAt[Self.key(side, hob)] else { return 0 }
         let t = now - start - 800
         return t > 0 ? min(18, t / 1000 * 8) : 0
+    }
+
+    /// Logical pose string (`idle`, `aim`, `fire`, `hit`, `tumble`, `land`, `dig`, `cheer`, `bonked`)
+    /// for a Flattener enemy unit, plus optional atlas frame when regenerated Flattener art is packed.
+    func flattenerPose(side: Int, hob: HobView, selected: Bool, aiming: Bool, power: Int) -> (pose: String, timeMs: Double) {
+        let id = Int(hob.id) ?? -1
+        let key = Self.key(side, id)
+        if (hob.bonked || hob.hp <= 0) && !deferredBonks.contains(key) {
+            let start = bonkedAt[key] ?? (now - 2000)
+            return ("bonked", reduceMotion ? 0 : now - start)
+        }
+        if let a = hobAnims[key], a.suffix != "bonked" {
+            let t = now - a.start
+            if t < 600 { return (a.suffix, t) }
+        }
+        if selected && aiming { return ("aim", Double(power)) }
+        let phase = Double(abs(id) * 317 % 1600)
+        return ("idle", reduceMotion ? 0 : now + phase)
+    }
+
+    /// Looks up a regenerated `flattener_<fk>_<pose>` clip/frame in the atlas; returns nil
+    /// when legacy atlases lack Flattener frames so the renderer draws the bespoke procedural Flattener rig.
+    func flattenerSprite(side: Int, hob: HobView, selected: Bool, aiming: Bool, power: Int,
+                         sheet: SpriteSheet) -> (String, AnimClip)? {
+        let fk = SpriteImages.flattenerArtName(def: hob.def, cls: hob.cls)
+        let info = flattenerPose(side: side, hob: hob, selected: selected, aiming: aiming, power: power)
+        let base = "flattener_\(fk)_"
+        if let clip = library.clip(base + info.pose) {
+            let frameName = info.pose == "aim"
+                ? clip.pickFrame(value: power)
+                : clip.frame(at: reduceMotion && clip.loop ? 0 : info.timeMs)
+            if sheet.frame(frameName) != nil { return (frameName, clip) }
+        }
+        let fallbackName = "flattener_\(fk)_\(info.pose)_0"
+        if let f = sheet.frame(fallbackName) {
+            let synth = AnimClip(name: base + info.pose, frames: [fallbackName], ms: [200], loop: true, loopFrom: 0,
+                                 w: Double(f.size.width), h: Double(f.size.height), anchor: f.anchor,
+                                 events: [:], next: nil, hold: nil, pick: nil)
+            return (fallbackName, synth)
+        }
+        return nil
+    }
+
+    // MARK: Floating combat callouts (de-overlapped, Plate 2)
+
+    func spawnCallout(_ text: String, x: Double, y: Double, style: CalloutStyle, duration: Double = 1150) {
+        // Coalesce identical wallBreak numbers at the exact same cell within 80 ms so bursts stay crisp.
+        if style == .wallBreak,
+           callouts.contains(where: { $0.style == .wallBreak && abs($0.x - x) < 10 && abs($0.y - y) < 10 && now - $0.start < 80 }) {
+            return
+        }
+        if callouts.count >= 16 { callouts.removeFirst() }
+        let id = nextCalloutId
+        nextCalloutId &+= 1
+        callouts.append(CombatCallout(id: id, text: text, x: x, y: y, start: now, duration: duration, style: style))
+    }
+
+    /// Returns active combat callouts with deterministic vertical + horizontal collision separation
+    /// so simultaneous Round 10 Fatigue numbers never stack over each other.
+    func resolvedCallouts(minDx: Double = 42, minDy: Double = 24) -> [(callout: CombatCallout, x: Double, y: Double, progress: Double)] {
+        guard !callouts.isEmpty else { return [] }
+        let sorted = callouts.sorted { $0.start == $1.start ? $0.id < $1.id : $0.start < $1.start }
+        var placed: [(callout: CombatCallout, x: Double, y: Double, progress: Double)] = []
+        placed.reserveCapacity(sorted.count)
+        for c in sorted {
+            let progress = min(1, max(0, (now - c.start) / max(1, c.duration)))
+            var px = c.x
+            var py = c.y + (reduceMotion ? 10 : progress * 28)
+            var nudges = 0
+            while nudges < 10 {
+                guard let blocker = placed.first(where: { abs($0.x - px) < minDx && abs($0.y - py) < minDy }) else { break }
+                py = blocker.y + minDy
+                if nudges % 2 == 1 { px += (c.id % 2 == 0 ? 12 : -12) }
+                nudges += 1
+            }
+            placed.append((c, px, py, progress))
+        }
+        return placed
     }
 
     // MARK: Impacts, breaks and collapse
@@ -879,7 +1172,7 @@ final class FieldFX {
         guard let b = blockAt(side: side, c: c, r: r, in: s) else { return }
         let mat = Self.materialKey(b.mat)
         let cx = b.x + b.size / 2, cy = b.y + b.size / 2
-        if let brk = SoundCues.materialBreak(mat) { onSound?(brk, 0, 1) }
+        if let brk = SoundCues.materialBreak(mat) { emitSound(brk, 0, 1, x: cx) }
         chunks(mat: mat, x: cx, y: cy, count: motion.chunksPerBlock[mat] ?? 3)
         spawn("fx_rubble_\(mat)", x: b.x, y: b.y + 4, scale: 1, z: 1.5, holdFor: motion.rubbleHoldMs, fadeLast: 300)
         addTrauma(0.10, decayMs: 150)
@@ -913,15 +1206,16 @@ final class FieldFX {
                                         fall: max(8, falls[cell.c] ?? fort.block * Double(cell.r)), row: rowIndex,
                                         start: now, leanDir: Double(cell.c) < midC ? -1 : 1))
         }
-        onSound?("col_creak", 0, 1)
+        let colX = fort.originX + midC * fort.block
+        emitSound("col_creak", 0, 1, x: colX)
         // The fall itself: sound at the drop, rumble and shake at the first landing.
         let n = cells.count
         let dropAt = motion.creakMs + motion.leanMs
-        spawnTimer(after: dropAt) { [weak self] in self?.onSound?("col_chunk_fall", 0, 1) }
+        spawnTimer(after: dropAt) { [weak self] in self?.emitSound("col_chunk_fall", 0, 1, x: colX) }
         let firstLand = dropAt + sqrt(2 * 16 / Self.fallGravity) * 1000
         spawnTimer(after: firstLand) { [weak self] in
             guard let self else { return }
-            self.onSound?("col_chunk_land", 0, Float(min(1, 0.5 + Double(n - 1) * 0.1)))
+            self.emitSound("col_chunk_land", 0, Float(min(1, 0.5 + Double(n - 1) * 0.1)), x: colX)
             self.addTrauma(min(0.4, 0.05 * Double(n)), decayMs: 250)
             if n >= 3 { self.hitStop(50, nowNanos: self.clock) }
         }
@@ -966,8 +1260,8 @@ final class FieldFX {
         spawn("fx_rubble_\(p.mat)", x: p.x, y: p.y - p.fall + 4, scale: 1, z: 1.5, holdFor: motion.rubbleHoldMs, fadeLast: 300)
         spawn("fx_dustcloud", x: x, y: p.y - p.fall, scale: motion.dustScale[p.mat] ?? 1, z: 7)
         if p.row == 0 {
-            onSound?("col_debris_patter", 0, 0.8)
-            onSound?("col_dust_settle", 0, 0.7)
+            emitSound("col_debris_patter", 0, 0.8, x: x)
+            emitSound("col_dust_settle", 0, 0.7, x: x)
         }
     }
 
@@ -1002,9 +1296,9 @@ final class FieldFX {
         switch (s.clip, name) {
         case (let c, "flash") where c.hasPrefix("fx_impact_"):
             let mat = String(c.dropFirst("fx_impact_".count))
-            onSound?(mat == "dirt" ? "hit_miss_thud" : (SoundCues.materialHit(mat) ?? "hit_miss_thud"), 0, mat == "dirt" ? 0.6 : 1)
-        case ("fx_splash", "plop"): onSound?("hit_water_splash", 0, 1)
-        case ("fx_fizz_pop", "pop"): onSound?("hit_mend_fizz", 0, 1)
+            emitSound(mat == "dirt" ? "hit_miss_thud" : (SoundCues.materialHit(mat) ?? "hit_miss_thud"), 0, mat == "dirt" ? 0.6 : 1, x: s.x)
+        case ("fx_splash", "plop"): emitSound("hit_water_splash", 0, 1, x: s.x)
+        case ("fx_fizz_pop", "pop"): emitSound("hit_mend_fizz", 0, 1, x: s.x)
         default: break
         }
     }

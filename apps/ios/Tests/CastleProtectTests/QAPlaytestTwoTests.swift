@@ -72,7 +72,7 @@ final class RulesFourTests: XCTestCase {
     @MainActor
     func testARulesThreeSaveIsRefusedWithPlainWords() async throws {
         let game = CoreGame(bridge: FakeCoreBridge(), catalog: ContentCatalog.load())
-        XCTAssertEqual(game.rulesVersion, 4)
+        XCTAssertEqual(game.rulesVersion, 5)
         let old = #"{"setup":{"mode":"campaign","level":"1-7","preset":"fair","seed":5,"rounds":15,"wind":"light","shells":"draft","winBy":"knockout","seats":"side_by_side","names":[],"help":[],"forts":[],"attempt":1},"log":"[]","rules":3}"#
         XCTAssertEqual(CoreGame.header(Data(old.utf8))?.rules, 3)
         let result = await game.load(Data(old.utf8))
@@ -89,16 +89,16 @@ final class RulesFourTests: XCTestCase {
     func testRulesFourOnTheRealCore() async throws {
         guard CoreFactory.realCoreLinked else { throw XCTSkip("CastleCore.xcframework is not linked in this build") }
         let game = CoreGame(bridge: CoreFactory.make(preferStandIn: false), catalog: ContentCatalog.load())
-        XCTAssertEqual(game.rulesVersion, 4)
+        XCTAssertEqual(game.rulesVersion, 5)
         let old = #"{"setup":{"mode":"campaign","level":"1-1","preset":"fair","seed":5,"rounds":15,"wind":"light","shells":"draft","winBy":"knockout","seats":"side_by_side","names":[],"help":[],"forts":[]},"log":"[]","rules":3}"#
         let result = await game.load(Data(old.utf8))
         XCTAssertEqual(result, .rulesChanged)
-        // A save made now carries rules 4 and comes back.
+        // A save made now carries rules 5 and comes back.
         let setup = BattleSetup.campaign("1-1", preset: .fair, seed: 5)
         XCTAssertNil(game.start(setup))
         _ = try XCTUnwrap(game.frame())
         let bytes = game.save()
-        XCTAssertEqual(CoreGame.header(bytes)?.rules, 4)
+        XCTAssertEqual(CoreGame.header(bytes)?.rules, 5)
         let back = await game.load(bytes)
         XCTAssertEqual(back, .ok)
     }
@@ -122,12 +122,13 @@ final class SquashedTests: XCTestCase {
         XCTAssertFalse(h.bonked)
         XCTAssertFalse(h.isOut, "only bonked or 0 HP is out of the fight")
         XCTAssertTrue(h.isCrushed)
-        XCTAssertEqual(h.stateWords, "Squashed, back up soon")
-        XCTAssertEqual(PipRow.fill(h), 1, "its pip stays filled")
+        XCTAssertEqual(h.stateWords, "Squashed. Back up soon.")
+        XCTAssertGreaterThan(PipRow.fill(h), 0, "a squashed live Hob keeps a visible HP sliver")
+        XCTAssertLessThan(PipRow.fill(h), 1, "its pip reflects its low HP rather than full")
         XCTAssertLessThan(LensLayer.crushedScale, 1, "drawn flattened")
         let dropped = try hob(state: "dropped", hp: 1)
         XCTAssertFalse(dropped.isOut)
-        XCTAssertTrue(dropped.isCrushed, "the Fatigue collapse leaves dropped Hobs at 1 HP: drawn crushed")
+        XCTAssertFalse(dropped.isCrushed, "only state == squashed is drawn crushed (iOS-M9)")
     }
 
     @MainActor
@@ -136,7 +137,7 @@ final class SquashedTests: XCTestCase {
         XCTAssertTrue(bonked.isOut)
         XCTAssertFalse(bonked.isCrushed)
         XCTAssertEqual(bonked.stateWords, "Bonked")
-        XCTAssertEqual(PipRow.fill(bonked), 1, "a Bonked pip is drawn full in grey")
+        XCTAssertEqual(PipRow.fill(bonked), 0, "a Bonked pip is drawn hollow in grey (iOS-M9)")
         XCTAssertTrue(try hob(state: "squashed", hp: 0).isOut, "0 HP is out whatever the state")
         let hurt = try hob(state: "dropped", hp: 60)
         XCTAssertFalse(hurt.isOut)
@@ -166,7 +167,9 @@ final class FatigueShownTests: XCTestCase {
         XCTAssertEqual(BannerStyle.of(BattleSession.fatigueWarnText), .fatigueWarning)
         XCTAssertEqual(BannerStyle.of("Sudden Squall"), .squall)
         XCTAssertEqual(BannerStyle.of("Your turn"), .side)
-        XCTAssertTrue(BattleSession.fatigueStartText.hasPrefix("Fatigue!"))
+        XCTAssertEqual(BattleSession.fatigueStartText, "The fort creaks. Cracked blocks let go.")
+        XCTAssertEqual(BattleSession.fatigueWarnText, "The Creaks start next round. Cracked blocks hold less.")
+        XCTAssertTrue(BattleSession.isFatigueBanner(BattleSession.fatigueStartText))
         XCTAssertTrue(BattleSession.isFatigueBanner(BattleSession.fatigueWarnText))
         XCTAssertFalse(BattleSession.isFatigueBanner("Your turn"))
     }
@@ -276,7 +279,7 @@ final class LandscapeFrameTests: XCTestCase {
         XCTAssertEqual(Camera.planRect(snap, frame: tiny, minBlock: 6), Camera.ownPlanRect(snap))
         XCTAssertEqual(Camera.planRect(snap, frame: tiny, minBlock: 6, peek: true), Camera.bothRect(snap))
         XCTAssertEqual(Camera.worldRect(for: .both, snap: snap, frame: tiny, minBlock: 6, peek: true), Camera.bothRect(snap))
-        XCTAssertEqual(Camera.markerText(peek: false), "View Rival fort")
+        XCTAssertEqual(Camera.markerText(peek: false), "Look at the Rival's fort")
         XCTAssertEqual(Camera.markerText(peek: true), "Back to my fort")
     }
 
@@ -366,7 +369,7 @@ final class OwnerRuleTeachingTests: XCTestCase {
         let fort = try XCTUnwrap(session.snapshot.fort(0))
         let sky = CGPoint(x: fort.originX + Double(fort.cols) * fort.block + 300, y: 20)
         drag(session, from: sky)
-        XCTAssertEqual(session.aimNudge?.text, "Drag from your fort to aim")
+        XCTAssertEqual(session.aimNudge?.text, "Drag back to aim")
         XCTAssertEqual(session.nudgeCount, 1)
         XCTAssertEqual(session.aimStarts, 0, "a sky drag is not an aim")
         XCTAssertEqual(bridge.count("aim"), 0)
@@ -439,20 +442,24 @@ final class ResultWordsTests: XCTestCase {
         let squall = try blow(#"{"by":"squall","hob":null,"hob_name":"The Squall","round":12,"shot":"squall","shot_name":"Squall"}"#)
         XCTAssertEqual(squall.by, "squall")
         XCTAssertFalse(squall.byHob)
-        XCTAssertEqual(BrokeView.lastLine(squall), "Last blow: The Squall, round 12")
+        // The words come from text.json `results.blow.<by>`, not the core's own names.
+        XCTAssertEqual(BrokeView.lastLine(squall), "Last blow: the Squall, Round 12")
         let hob = try blow(#"{"by":"hob","hob":0,"hob_name":"Marge Dumpling","round":9,"shot":"grand_dumpling","shot_name":"Grand Dumpling"}"#)
-        XCTAssertEqual(BrokeView.lastLine(hob), "Last blow: Grand Dumpling from Marge Dumpling, round 9")
+        XCTAssertEqual(BrokeView.lastLine(hob), "Last blow: Marge's Grand Dumpling, Round 9")
         let fatigue = try blow(#"{"by":"fatigue","hob":null,"hob_name":"Fatigue","shot":"fatigue","shot_name":"Fatigue collapse","dmg":40}"#)
-        XCTAssertEqual(BrokeView.names(fatigue).main, "Fatigue")
+        XCTAssertEqual(BrokeView.names(fatigue).main, "the Creaks")
         XCTAssertEqual(BrokeView.names(fatigue).detail, "")
         let fall = try blow(#"{"by":"ground","hob":null,"hob_name":"A fall","shot":"fall","shot_name":"Fall","round":4}"#)
-        XCTAssertEqual(BrokeView.lastLine(fall), "Last blow: A fall, round 4")
+        XCTAssertEqual(BrokeView.lastLine(fall), "Last blow: a fall, Round 4")
         let crock = try blow(#"{"by":"prop","hob":null,"hob_name":"A Tick-Tock Crock","shot":"tick_tock_crock","shot_name":"Tick-Tock Crock","round":6}"#)
-        XCTAssertEqual(BrokeView.lastLine(crock), "Last blow: A Tick-Tock Crock, round 6")
+        XCTAssertEqual(BrokeView.lastLine(crock), "Last blow: Tick-Tock Crock, Round 6")
+        // Old Thumper keeps his whole short name; it is never cut at the first space.
+        let thump = try blow(#"{"by":"hob","hob":1,"hob_name":"Old Thumper","round":5,"shot":"clodpot","shot_name":"Clodpot"}"#)
+        XCTAssertEqual(BrokeView.lastLine(thump), "Last blow: Old Thumper's Clodpot, Round 5")
         // An older core without `by`: a Hob id still reads as a Hob's shot.
-        let old = try blow(#"{"hob":2,"hob_name":"Jax Peppercorn","round":3,"shot":"clodpot","shot_name":"Clodpot"}"#)
+        let old = try blow(#"{"hob":2,"hob_name":"Jax Pepper","round":3,"shot":"clodpot","shot_name":"Clodpot"}"#)
         XCTAssertTrue(old.byHob)
-        XCTAssertEqual(BrokeView.lastLine(old), "Last blow: Clodpot from Jax Peppercorn, round 3")
+        XCTAssertEqual(BrokeView.lastLine(old), "Last blow: Jax's Clodpot, Round 3")
     }
 
     @MainActor
@@ -470,10 +477,14 @@ final class ResultWordsTests: XCTestCase {
                        title: "1-9", names: ["You", "Rival"], goals: [])
         }
         let pop = info("double_pop", winner: 0)
-        XCTAssertEqual(pop.headline, "Double Pop!")
+        // A campaign win takes the level's own title (text.md, Results).
+        XCTAssertEqual(pop.headline, "Loaf Hill stays")
         XCTAssertEqual(pop.explainer, ResultInfo.doublePopNote)
-        XCTAssertTrue(ResultInfo.doublePopNote.contains("more left before that round"))
-        XCTAssertNil(info("kettle_pop", winner: 0).explainer)
+        XCTAssertTrue(ResultInfo.doublePopNote.contains("Whoever had more left standing before it wins"))
+        XCTAssertEqual(info("kettle_pop", winner: 0).explainer, "Kettle Pop!", "the how line sits under the level title")
+        let lost = info("kettle_pop", winner: 1)
+        XCTAssertEqual(lost.headline, "Kettle popped")
+        XCTAssertNotEqual(lost.explainer, lost.headline, "never a cause line that says the same as the title")
         var duel = info("double_pop", winner: 1)
         duel.setup = BattleSetup(mode: .duel, map: "d1", seed: 1)
         XCTAssertNotNil(duel.explainer, "Couch Duel says it too")
@@ -487,9 +498,10 @@ final class WorkshopTests: XCTestCase {
         let grid = WorkshopGrid(rows: WorkshopGrid.homeRows)
         XCTAssertEqual(grid.glyphRows(), WorkshopGrid.homeRows)
         XCTAssertEqual(grid.nooks, 3)
+        // bp_home_3 in content/blueprints.json: the Kettle Room low at the back, Nook 3 high at the front.
         XCTAssertEqual(grid.cell(1, 0), .kettle)
-        XCTAssertEqual(grid.cell(4, 0), .nook(3))
-        XCTAssertEqual(grid.cell(0, 5), .block("t"))
+        XCTAssertEqual(grid.cell(4, 4), .nook(3))
+        XCTAssertEqual(grid.cell(0, 5), .block("w"))
     }
 
     func testPlaceAndRemoveBlocks() {
@@ -542,12 +554,12 @@ final class WorkshopTests: XCTestCase {
     }
 
     func testTheCoresReasonsInPlainWords() {
-        XCTAssertEqual(WorkshopGrid.plainWords("grid 8x11 outside 3x3 to 8x10"), "Too big: keep the fort within 8 wide and 9 tall")
-        XCTAssertEqual(WorkshopGrid.plainWords("grid 2x2 outside 3x3 to 8x10"), "Too small: build at least 3 wide and 2 tall")
-        XCTAssertEqual(WorkshopGrid.plainWords("Block Budget 80 over 72"), "Too many blocks: 80 of 72")
-        XCTAssertEqual(WorkshopGrid.plainWords("Nook 2 must be walled on all four sides"), "Wall Nook 2 in on all four sides")
-        XCTAssertEqual(WorkshopGrid.plainWords("Kettle Room must be 2 x 2"), "Place the Kettle Room")
-        XCTAssertTrue(WorkshopGrid.plainWords("3 block(s) have no support, first at column 2 row 4").contains("hang"))
+        XCTAssertEqual(WorkshopGrid.plainWords("grid 8x11 outside 3x3 to 8x10"), "Too big. Keep it within 8 wide and 9 tall.")
+        XCTAssertEqual(WorkshopGrid.plainWords("grid 2x2 outside 3x3 to 8x10"), "Too small. Build at least 3 wide and 2 tall.")
+        XCTAssertEqual(WorkshopGrid.plainWords("Block Budget 80 over 72"), "8 blocks too many.")
+        XCTAssertEqual(WorkshopGrid.plainWords("Nook 2 must be walled on all four sides"), "Nook 2 needs four walls.")
+        XCTAssertEqual(WorkshopGrid.plainWords("Kettle Room must be 2 x 2"), "The Kettle Room is two blocks by two.")
+        XCTAssertEqual(WorkshopGrid.plainWords("3 block(s) have no support, first at column 2 row 4"), "Nothing under it")
         for d in ["grid 8x11 outside 3x3 to 8x10", "0 Nooks for 1 Hobs", "some_new_reason"] {
             let w = WorkshopGrid.plainWords(d)
             XCTAssertFalse(w.contains("_"))
@@ -581,7 +593,7 @@ final class WorkshopTests: XCTestCase {
         XCTAssertTrue(workshop.saved)
         let empty = WorkshopChecker(bridge: FakeCoreBridge()).check(WorkshopGrid())
         XCTAssertFalse(empty.ok)
-        XCTAssertEqual(empty.words, "Place some blocks to start a fort")
+        XCTAssertEqual(empty.words, "Put some blocks down.")
     }
 
     @MainActor
@@ -600,7 +612,7 @@ final class WorkshopTests: XCTestCase {
         XCTAssertTrue(grid.apply(.wicker, c: 7, r: WorkshopGrid.rows - 1))
         let hanging = checker.check(grid)
         XCTAssertFalse(hanging.ok)
-        XCTAssertTrue(hanging.words.contains("hang"), hanging.words)
+        XCTAssertEqual(hanging.words, "Nothing under it", hanging.words)
         XCTAssertTrue(hanging.marked.contains((WorkshopGrid.rows - 1) * WorkshopGrid.cols + 7))
         // No Nook: the fort cannot seat a Hob.
         var bare = WorkshopGrid(rows: WorkshopGrid.homeRows)
@@ -614,6 +626,6 @@ final class WorkshopTests: XCTestCase {
         XCTAssertEqual(bare.nooks, 0)
         let seatless = checker.check(bare)
         XCTAssertFalse(seatless.ok)
-        XCTAssertEqual(seatless.words, "Add a Nook for each Hob")
+        XCTAssertEqual(seatless.words, "Add a Nook for each Hob.")
     }
 }

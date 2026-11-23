@@ -36,7 +36,7 @@ test('the Shell card opens on a long press (iOS sends no contextmenu)', async ({
   await page.waitForTimeout(650);
   await chip.dispatchEvent('pointerup', at);
   await expect(page.locator('.shell-card')).toBeVisible();
-  await expect(page.locator('.shell-card')).toContainText('Weight');
+  await expect(page.locator('.shell-card')).toContainText(/(Light|Medium|Heavy)\. (No Rest|Rest \d)/);
 });
 
 test('landscape: aim previews do not pile up on the field (the lens is cleared under a CSS sky)', async ({ page }) => {

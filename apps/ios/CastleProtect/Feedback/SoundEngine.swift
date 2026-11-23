@@ -20,6 +20,27 @@ struct SoundEntry: Equatable, Sendable {
     var barSeconds: Double
 }
 
+/// One bark's lines from assets/audio/barks.json: the plain pool, lines that name a crewmate
+/// (used only when that Hob is on the crew), lines with `{rival}` (only against a named Rival),
+/// and an optional chance that overrides the event's.
+struct BarkLines: Equatable, Sendable {
+    var subtitles: [String] = []
+    var withMate: [String: [String]] = [:]
+    var withRival: [String] = []
+    var chance: Double?
+
+    /// The pool for this fight: plain lines, plus mate lines for crewmates here, plus Rival lines
+    /// with `{rival}` swapped for the Rival's short name.
+    func pool(mates: [String], rival: String?) -> [String] {
+        var out = subtitles
+        for mate in mates { out += withMate[mate] ?? [] }
+        if let rival, !rival.isEmpty {
+            out += withRival.map { $0.replacingOccurrences(of: "{rival}", with: rival) }
+        }
+        return out
+    }
+}
+
 struct MaterialSound: Equatable, Sendable {
     var hit: String?
     var brk: String?
@@ -33,8 +54,16 @@ final class SoundManifest: @unchecked Sendable {
     let materialSounds: [String: MaterialSound]
     /// Bus to music duck in dB (impact -6, voice -3).
     let duckDb: [String: Double]
+    /// World bus duck in dB when a Hob bark plays (-4).
+    let worldDuckDb: Double
     /// Bark subtitle lines: bark id to lines.
     let subtitles: [String: [String]]
+    /// Every bark's lines and options by sound id (`bark_marge_fire`).
+    let barkLines: [String: BarkLines]
+    /// Chance per bark event (`events.<event>.chance` in barks.json).
+    let eventChance: [String: Double]
+    /// The whole crew's win line (`crew.win`), said once after the Hob win lines.
+    let crewWin: [String]
 
     static let shared = SoundManifest(bundle: .main)
 
@@ -52,7 +81,12 @@ final class SoundManifest: @unchecked Sendable {
         blastSounds = parsed.blast
         materialSounds = parsed.material
         duckDb = parsed.duck
-        subtitles = parsed.subs
+        worldDuckDb = parsed.worldDuck
+        let barks = Self.parseBarks(subs)
+        barkLines = barks.lines
+        eventChance = barks.chance
+        crewWin = barks.crewWin
+        subtitles = barks.lines.mapValues(\.subtitles)
     }
 
     init(data: Data) {
@@ -62,13 +96,47 @@ final class SoundManifest: @unchecked Sendable {
         blastSounds = parsed.blast
         materialSounds = parsed.material
         duckDb = parsed.duck
-        subtitles = parsed.subs
+        worldDuckDb = parsed.worldDuck
+        barkLines = [:]
+        eventChance = [:]
+        crewWin = []
+        subtitles = [:]
+    }
+
+    /// barks.json: `hobs.<hob id>.barks.<event>` with `sound`, `subtitles` and the optional
+    /// `with_mate`, `with_rival` and `chance`; `events.<event>.chance`; `crew.win.subtitles`.
+    static func parseBarks(_ data: Data) -> (lines: [String: BarkLines], chance: [String: Double], crewWin: [String]) {
+        guard let b = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return ([:], [:], []) }
+        var lines: [String: BarkLines] = [:]
+        if let flat = b["lines"] as? [String: Any] {
+            for (k, v) in flat { lines[k] = BarkLines(subtitles: v as? [String] ?? []) }
+        }
+        for (_, v) in b["hobs"] as? [String: Any] ?? [:] {
+            let barksByEvent = (v as? [String: Any])?["barks"] as? [String: Any] ?? [:]
+            for (_, bark) in barksByEvent {
+                guard let o = bark as? [String: Any], let sound = o["sound"] as? String else { continue }
+                var entry = BarkLines(subtitles: o["subtitles"] as? [String] ?? [])
+                for (mate, list) in o["with_mate"] as? [String: Any] ?? [:] {
+                    entry.withMate[mate] = list as? [String] ?? []
+                }
+                entry.withRival = o["with_rival"] as? [String] ?? []
+                if let c = o["chance"] { entry.chance = Track.num(c) }
+                lines[sound] = entry
+            }
+        }
+        var chance: [String: Double] = [:]
+        for (event, v) in b["events"] as? [String: Any] ?? [:] {
+            if let c = (v as? [String: Any])?["chance"] { chance[event] = Track.num(c) }
+        }
+        let crew = (b["crew"] as? [String: Any])?["win"] as? [String: Any]
+        return (lines, chance, crew?["subtitles"] as? [String] ?? [])
     }
 
     private static func parse(_ data: Data, barks: Data) -> (sounds: [String: SoundEntry], launch: [String: String],
                                                               blast: [String: String], material: [String: MaterialSound],
-                                                              duck: [String: Double], subs: [String: [String]]) {
-        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return ([:], [:], [:], [:], [:], [:]) }
+                                                              duck: [String: Double], worldDuck: Double,
+                                                              subs: [String: [String]]) {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return ([:], [:], [:], [:], [:], -4, [:]) }
         var sounds: [String: SoundEntry] = [:]
         for case let s as [String: Any] in root["sounds"] as? [Any] ?? [] {
             guard let id = s["id"] as? String, let files = s["files"] as? [String: Any], let m4a = files["m4a"] as? String else { continue }
@@ -95,27 +163,17 @@ final class SoundManifest: @unchecked Sendable {
             material[k] = MaterialSound(hit: o["hit"] as? String, brk: o["brk"] as? String)
         }
         var duck: [String: Double] = [:]
+        var worldDuck = -4.0
         if let mix = root["mix"] as? [String: Any], let buses = mix["buses"] as? [String: Any] {
             for (k, v) in buses {
-                if let o = v as? [String: Any], let d = o["ducks_music_db"] { duck[k] = Track.num(d) }
-            }
-        }
-        var subs: [String: [String]] = [:]
-        if let b = (try? JSONSerialization.jsonObject(with: barks)) as? [String: Any] {
-            // barks.json: {"lines": {"bark_marge_fire": [..]}} or per Hob, per event.
-            if let lines = b["lines"] as? [String: Any] {
-                for (k, v) in lines { subs[k] = v as? [String] ?? [] }
-            } else if let hobs = b["hobs"] as? [String: Any] {
-                for (_, v) in hobs {
-                    let barksByEvent = (v as? [String: Any])?["barks"] as? [String: Any] ?? [:]
-                    for (_, bark) in barksByEvent {
-                        guard let o = bark as? [String: Any], let sound = o["sound"] as? String else { continue }
-                        subs[sound] = o["subtitles"] as? [String] ?? []
-                    }
+                if let o = v as? [String: Any] {
+                    if let d = o["ducks_music_db"] { duck[k] = Track.num(d) }
+                    if k == "world", let wd = o["ducked_by_voice_db"] { worldDuck = Track.num(wd) }
                 }
             }
         }
-        return (sounds, launch, blast, material, duck, subs)
+        let subs = parseBarks(barks).lines.mapValues(\.subtitles)
+        return (sounds, launch, blast, material, duck, worldDuck, subs)
     }
 }
 
@@ -123,6 +181,52 @@ final class SoundManifest: @unchecked Sendable {
 final class UncheckedBox<T>: @unchecked Sendable {
     let value: T
     init(_ value: T) { self.value = value }
+}
+
+/// Holds NotificationCenter tokens and the fade timer so `nonisolated deinit` can tear both down safely in Swift 6.
+private final class SoundCleanupBag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var observers: [NSObjectProtocol] = []
+    private var fadeTimer: Timer?
+
+    func addObserver(_ token: NSObjectProtocol) {
+        lock.lock()
+        observers.append(token)
+        lock.unlock()
+    }
+
+    var hasTimer: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return fadeTimer != nil
+    }
+
+    func setTimer(_ timer: Timer?) {
+        lock.lock()
+        let old = fadeTimer
+        fadeTimer = timer
+        lock.unlock()
+        old?.invalidate()
+    }
+
+    func tearDown() {
+        lock.lock()
+        let obs = observers
+        observers = []
+        let timer = fadeTimer
+        fadeTimer = nil
+        lock.unlock()
+        let nc = NotificationCenter.default
+        for token in obs { nc.removeObserver(token) }
+        if let timer {
+            let box = UncheckedBox(timer)
+            if Thread.isMainThread {
+                box.value.invalidate()
+            } else {
+                DispatchQueue.main.async { box.value.invalidate() }
+            }
+        }
+    }
 }
 
 /// Decoded sound buffers, filled off the main thread, read from the main thread.
@@ -236,11 +340,13 @@ struct VoicePool: Equatable {
 final class SoundEngine {
     let manifest: SoundManifest
     private var engine = AVAudioEngine()
-    private var observers: [NSObjectProtocol] = []
+    private let cleanup = SoundCleanupBag()
     private var sfxMixer = AVAudioMixerNode()
+    private var worldMixer = AVAudioMixerNode()
     private var musicMixer = AVAudioMixerNode()
+    private var musicSpeed = AVAudioUnitVarispeed()
     private var voiceMixer = AVAudioMixerNode()
-    private var voices: [(player: AVAudioPlayerNode, pitch: AVAudioUnitVarispeed)] = []
+    private var voices: [(player: AVAudioPlayerNode, pitch: AVAudioUnitVarispeed, panner: AVAudioMixerNode)] = []
     private var pool = VoicePool(count: 16)
     private var loops: [String: (player: AVAudioPlayerNode, pitch: AVAudioUnitVarispeed)] = [:]
     /// What each running loop should be (gain, pitch), so a route change or the end of a
@@ -258,28 +364,46 @@ final class SoundEngine {
     /// The track to bring back when the engine runs again (after a pause or a route change).
     private var suspendedTrack: String?
     private var stingPlayer: AVAudioPlayerNode?
+    private var stingPlaying = false
+    private var stingToken = 0
+    private var pendingMusicAfterSting: String?
     private let store = BufferStore()
     private var recent: [String: [UInt64]] = [:]
     private var graphBuilt = false
     private var started = false
     private var failed = false
     private var loading = false
-    private var fadeTimer: Timer?
     private var duckGain: Float = 1
+    private var duckTarget: Float = 1
     private var duckUntil: UInt64 = 0
+    private var worldDuckGain: Float = 1
+    private var worldDuckTarget: Float = 1
+    private var worldDuckUntil: UInt64 = 0
+    private var slowMoScale: Float = 1
     private let format: AVAudioFormat
+    private let stereoFormat: AVAudioFormat
     private var lastBark: UInt64 = 0
     private var barkSides: Set<Int> = []
     private var lastLines: [String: String] = [:]
+    private var crewWinTask: Task<Void, Never>?
     private var rng: UInt32 = 0x1F12_3BB5
-    /// `secondaryAudioShouldBeSilencedHint`, read once and then on its notice (L4).
+    /// `secondaryAudioShouldBeSilencedHint`, read once and refreshed on notice / resume (L4).
     private var otherAudioPlaying = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint
 
     /// Sliders, 0 to 100.
     var volume = 85 { didSet { applyVolume() } }
     var musicVolume = 70 { didSet { applyVolume() } }
     var voiceVolume = 80 { didSet { applyVolume() } }
-    var muted = false { didSet { applyVolume() } }
+    var muted = false {
+        didSet {
+            applyVolume()
+            if muted {
+                for id in Array(loops.keys) { removeLoop(id) }
+            } else if !held {
+                restoreLoops()
+            }
+        }
+    }
     /// False until the first Play tap on first launch (no sound before it).
     var unlocked = true
     /// True while the battle's Pause card is up: the engine is paused and no sound starts.
@@ -293,7 +417,13 @@ final class SoundEngine {
         self.manifest = manifest
         format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)
             ?? AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 1, interleaved: false)!
+        stereoFormat = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)
+            ?? AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 2, interleaved: false)!
         observe()
+    }
+
+    deinit {
+        cleanup.tearDown()
     }
 
     // MARK: Session events
@@ -301,23 +431,25 @@ final class SoundEngine {
     private func observe() {
         let nc = NotificationCenter.default
         let me = WeakRef(self)
-        observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { note in
+        cleanup.addObserver(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { note in
             let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
             let began = raw == AVAudioSession.InterruptionType.began.rawValue
-            MainActor.assumeIsolated { me.value?.interrupted(began: began) }
+            let optRaw = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            let shouldResume = AVAudioSession.InterruptionOptions(rawValue: optRaw).contains(.shouldResume)
+            MainActor.assumeIsolated { me.value?.interrupted(began: began, shouldResume: shouldResume) }
         })
-        observers.append(nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { _ in
+        cleanup.addObserver(nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { me.value?.rebuild() }
         })
-        observers.append(nc.addObserver(forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main) { _ in
+        cleanup.addObserver(nc.addObserver(forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { me.value?.configurationChanged() }
         })
-        observers.append(nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { note in
+        cleanup.addObserver(nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { note in
             let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
             let lost = raw == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
             MainActor.assumeIsolated { if lost { me.value?.onOutputLost?() } }
         })
-        observers.append(nc.addObserver(forName: AVAudioSession.silenceSecondaryAudioHintNotification, object: nil, queue: .main) { _ in
+        cleanup.addObserver(nc.addObserver(forName: AVAudioSession.silenceSecondaryAudioHintNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated {
                 me.value?.otherAudioPlaying = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint
                 me.value?.applyVolume()
@@ -325,11 +457,12 @@ final class SoundEngine {
         })
     }
 
-    private func interrupted(began: Bool) {
+    private func interrupted(began: Bool, shouldResume: Bool) {
         guard started else { return }
         if began {
+            stopFades()
             engine.pause()
-        } else {
+        } else if shouldResume {
             try? AVAudioSession.sharedInstance().setActive(true)
             resume()
         }
@@ -340,13 +473,13 @@ final class SoundEngine {
     /// again from its first sample, and bring the loops back (review 2, M3).
     private func configurationChanged() {
         guard started else { return }
-        let track = musicTrack ?? suspendedTrack
+        let track = musicTrack ?? suspendedTrack ?? pendingMusicAfterSting
+        stopSting()
         stopMusic()
         suspendedTrack = track
         for v in voices { v.player.stop() }
         pool.reset()
         for p in barkVoices { p.stop() }
-        stingPlayer?.stop()
         let wanted = loopWanted
         removeAllLoops()
         loopWanted = wanted
@@ -356,7 +489,8 @@ final class SoundEngine {
 
     /// Media services were reset: every node is gone. Build the graph again on the next sound.
     private func rebuild() {
-        let track = musicTrack ?? suspendedTrack
+        stopFades()
+        let track = musicTrack ?? suspendedTrack ?? pendingMusicAfterSting
         let wanted = loopWanted
         voices = []
         pool = VoicePool(count: 16)
@@ -364,14 +498,27 @@ final class SoundEngine {
         loops = [:]
         layers = [:]
         layerFiles = [:]
+        layerGain = [:]
+        layerTarget = [:]
+        fadeStartedOnBar = [:]
         stingPlayer = nil
+        stingPlaying = false
+        pendingMusicAfterSting = nil
+        stingToken += 1
         graphBuilt = false
         started = false
         failed = false
         musicToken += 1
+        duckGain = 1
+        duckTarget = 1
+        worldDuckGain = 1
+        worldDuckTarget = 1
+        slowMoScale = 1
         engine = AVAudioEngine()
         sfxMixer = AVAudioMixerNode()
+        worldMixer = AVAudioMixerNode()
         musicMixer = AVAudioMixerNode()
+        musicSpeed = AVAudioUnitVarispeed()
         voiceMixer = AVAudioMixerNode()
         musicTrack = nil
         suspendedTrack = nil
@@ -386,6 +533,7 @@ final class SoundEngine {
 
     /// The app went to the background: let go of the audio session (UX 8.3).
     func release() {
+        stopFades()
         guard started else { return }
         engine.pause()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -393,6 +541,7 @@ final class SoundEngine {
 
     /// Stops all sound for an app switch; `resume()` brings it back.
     func pause() {
+        stopFades()
         guard started else { return }
         engine.pause()
     }
@@ -403,6 +552,7 @@ final class SoundEngine {
         guard on != held else { return }
         held = on
         if on {
+            stopFades()
             if started { engine.pause() }
         } else {
             resume()
@@ -412,6 +562,8 @@ final class SoundEngine {
     /// Back to the app (or out of a pause): start the engine, and only then the music and loops.
     func resume() {
         guard !held else { return }
+        otherAudioPlaying = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint
+        applyVolume()
         // One failed start does not silence the whole run: try again on each foreground (L4).
         failed = false
         guard started || suspendedTrack != nil || !loopWanted.isEmpty else { return }
@@ -419,6 +571,7 @@ final class SoundEngine {
         guard prepare() else { return }
         resumeMusicIfNeeded()
         restoreLoops()
+        if hasPendingFades { startFades() }
     }
 
     /// Only with the engine running (`play()` on a stopped engine raises an exception Swift cannot catch).
@@ -442,6 +595,19 @@ final class SoundEngine {
 
     // MARK: Graph
 
+    /// Verifies the engine is running immediately before any `AVAudioPlayerNode.play()`.
+    private func ensureRunning() -> Bool {
+        if engine.isRunning { return true }
+        guard !held, !failed, graphBuilt else { return false }
+        do {
+            try engine.start()
+        } catch {
+            failed = true
+            return false
+        }
+        return engine.isRunning
+    }
+
     /// Builds the graph once and starts the engine. False while held, after a failed start,
     /// or when the engine cannot run.
     private func prepare() -> Bool {
@@ -454,19 +620,26 @@ final class SoundEngine {
                 // Keep going: the engine still plays with the default session.
             }
             engine.attach(sfxMixer)
+            engine.attach(worldMixer)
             engine.attach(musicMixer)
+            engine.attach(musicSpeed)
             engine.attach(voiceMixer)
             engine.connect(sfxMixer, to: engine.mainMixerNode, format: nil)
-            engine.connect(musicMixer, to: engine.mainMixerNode, format: nil)
+            engine.connect(worldMixer, to: engine.mainMixerNode, format: nil)
+            engine.connect(musicMixer, to: musicSpeed, format: stereoFormat)
+            engine.connect(musicSpeed, to: engine.mainMixerNode, format: stereoFormat)
             engine.connect(voiceMixer, to: engine.mainMixerNode, format: nil)
             for _ in 0..<pool.count {
                 let p = AVAudioPlayerNode()
                 let v = AVAudioUnitVarispeed()
+                let panner = AVAudioMixerNode()
                 engine.attach(p)
                 engine.attach(v)
+                engine.attach(panner)
                 engine.connect(p, to: v, format: format)
-                engine.connect(v, to: sfxMixer, format: format)
-                voices.append((p, v))
+                engine.connect(v, to: panner, format: format)
+                engine.connect(panner, to: sfxMixer, format: format)
+                voices.append((p, v, panner))
             }
             for _ in 0..<2 {
                 let p = AVAudioPlayerNode()
@@ -548,10 +721,29 @@ final class SoundEngine {
 
     private func applyVolume() {
         let master: Float = muted ? 0 : 1
-        sfxMixer.outputVolume = master * Float(max(0, min(100, volume))) / 100
+        let sfx = master * Float(max(0, min(100, volume))) / 100
+        sfxMixer.outputVolume = sfx
+        worldMixer.outputVolume = sfx * worldDuckGain
         voiceMixer.outputVolume = master * Float(max(0, min(100, voiceVolume))) / 100
         // Another app's music wins over ours (silent switch is the session's job).
         musicMixer.outputVolume = otherAudioPlaying ? 0 : master * Float(max(0, min(100, musicVolume))) / 100 * duckGain
+    }
+
+    /// Shifts music and active loop playback rate gently during battle slow-motion moments.
+    func setSlowMotion(_ scale: Float) {
+        let clamped = max(0.35, min(1.0, scale))
+        guard abs(clamped - slowMoScale) > 0.005 else { return }
+        slowMoScale = clamped
+        let rate = audioSlowRate
+        musicSpeed.rate = rate
+        for (id, loop) in loops {
+            let pitch = loopWanted[id]?.pitch ?? 0
+            loop.pitch.rate = Float(pow(2, pitch / 12)) * rate
+        }
+    }
+
+    private var audioSlowRate: Float {
+        slowMoScale < 0.99 ? max(0.72, 0.6 + 0.4 * slowMoScale) : 1.0
     }
 
     // MARK: SFX
@@ -564,14 +756,15 @@ final class SoundEngine {
     }
 
     /// Plays one sound. `pitch` in semitones on top of the manifest's random shift.
-    func play(_ id: String, pitch: Double = 0, gain: Float = 1) {
+    /// `pan` is stereo placement from -1 (left) to +1 (right), clamped to +/-0.8.
+    func play(_ id: String, pitch: Double = 0, gain: Float = 1, pan: Float = 0) {
         guard unlocked, !muted, !held else { return }
         guard let entry = manifest.sounds[id] else { return }
         if entry.kind == "music" || entry.kind == "sting" {
             playSting(id)
             return
         }
-        guard prepare(), let buffer = buffer(id), !voices.isEmpty else { return }
+        guard prepare(), let buffer = buffer(id), buffer.frameLength > 0, !voices.isEmpty else { return }
         let now = DispatchTime.now().uptimeNanoseconds
         var times = (recent[id] ?? []).filter { now &- $0 < 50_000_000 }
         guard times.count < 3 else { return }
@@ -584,6 +777,7 @@ final class SoundEngine {
         let shift = pitch + (entry.pitchVar > 0 ? (nextRandom() * 2 - 1) * entry.pitchVar : 0)
         let rate = pow(2, shift / 12)
         v.pitch.rate = Float(rate)
+        v.panner.pan = max(-0.8, min(0.8, pan))
         v.player.volume = max(0, min(1, entry.volume * gain))
         let seconds = Double(buffer.frameLength) / max(1, buffer.format.sampleRate) / max(0.25, rate)
         let generation = pool.start(index, now: now, seconds: seconds, bus: entry.bus)
@@ -593,15 +787,22 @@ final class SoundEngine {
                 MainActor.assumeIsolated { me.value?.pool.finished(index, generation: generation) }
             }
         }
+        guard ensureRunning() else { return }
         v.player.play()
         if let db = manifest.duckDb[entry.bus], id != "hit_blast_tiny" { duck(db: db) }
     }
 
-    /// Ducks the music for a moment (30 ms down, 400 ms back).
+    /// Ducks the music for a moment (ramped over 30 ms down, 400 ms back).
     private func duck(db: Double) {
-        duckGain = min(duckGain, Float(pow(10, db / 20)))
+        duckTarget = min(duckTarget, Float(pow(10, db / 20)))
         duckUntil = DispatchTime.now().uptimeNanoseconds + 200_000_000
-        applyVolume()
+        startFades()
+    }
+
+    /// Ducks world ambience loops when a Hob bark plays (30 ms attack, 400 ms release).
+    private func duckWorld(db: Double) {
+        worldDuckTarget = min(worldDuckTarget, Float(pow(10, db / 20)))
+        worldDuckUntil = DispatchTime.now().uptimeNanoseconds + 250_000_000
         startFades()
     }
 
@@ -609,27 +810,34 @@ final class SoundEngine {
 
     /// Live loop voices (tests and the leak check: stopped loops leave the graph).
     var loopNodeCount: Int { loops.count }
+    /// Desired loops remembered across mute/pause/route changes.
+    var wantedLoopCount: Int { loopWanted.count }
     /// Nodes attached to the engine (tests: loops that stop leave nothing behind).
     var attachedNodeCount: Int { engine.attachedNodes.count }
 
     /// Starts or updates a looping sound (wind, Squall, whistles). Volume 0 stops it.
     func setLoop(_ id: String, gain: Float, pitch: Double = 0) {
         guard unlocked else { return }
-        if gain <= 0.001 || muted {
+        if gain <= 0.001 {
             loopWanted[id] = nil
             removeLoop(id)
             return
         }
         loopWanted[id] = (gain, pitch)
+        if muted {
+            removeLoop(id)
+            return
+        }
         guard let entry = manifest.sounds[id], prepare() else { return }
         if loops[id] == nil {
-            guard let buffer = buffer(id) else { return }
+            guard let buffer = buffer(id), buffer.frameLength > 0 else { return }
             let p = AVAudioPlayerNode()
             let v = AVAudioUnitVarispeed()
+            let targetMixer = entry.bus == "world" ? worldMixer : sfxMixer
             engine.attach(p)
             engine.attach(v)
             engine.connect(p, to: v, format: format)
-            engine.connect(v, to: sfxMixer, format: format)
+            engine.connect(v, to: targetMixer, format: format)
             if entry.repeatGap > 0 {
                 // A loop with a gap: the buffer padded with silence.
                 let gapFrames = AVAudioFrameCount(entry.repeatGap * format.sampleRate)
@@ -642,12 +850,16 @@ final class SoundEngine {
             } else {
                 p.scheduleBuffer(buffer, at: nil, options: [.loops], completionHandler: nil)
             }
-            p.play()
             loops[id] = (p, v)
+            guard ensureRunning() else {
+                removeLoop(id)
+                return
+            }
+            p.play()
         }
         if let l = loops[id] {
             l.player.volume = max(0, min(1, entry.volume * gain))
-            l.pitch.rate = Float(pow(2, pitch / 12))
+            l.pitch.rate = Float(pow(2, pitch / 12)) * audioSlowRate
         }
     }
 
@@ -669,6 +881,7 @@ final class SoundEngine {
 
     /// The loops that should sound, after the engine came back.
     private func restoreLoops() {
+        guard !muted else { return }
         for (id, want) in loopWanted where loops[id] == nil {
             setLoop(id, gain: want.gain, pitch: want.pitch)
         }
@@ -682,17 +895,20 @@ final class SoundEngine {
 
     /// Region 1 battle music: Base, Stir and Peril start on the same sample; Stir and Peril silent.
     func startBattleMusic() {
+        stopSting()
         guard musicTrack != "mus_r1" else { return }
         stopMusic()
         guard unlocked else { return }
         guard prepare() else {
-            if held { suspendedTrack = "mus_r1" }
+            suspendedTrack = "mus_r1"
             return
         }
         musicTrack = "mus_r1"
         let ids = ["base": "mus_r1_base", "stir": "mus_r1_stir", "peril": "mus_r1_peril"]
         for (layer, id) in ids {
             guard let entry = manifest.sounds[id], let url = Self.url(for: entry), let file = try? AVAudioFile(forReading: url) else { continue }
+            let rawFrames = entry.samples > 0 ? min(Int64(entry.samples), file.length) : file.length
+            guard rawFrames > 0 else { continue }
             let p = AVAudioPlayerNode()
             engine.attach(p)
             engine.connect(p, to: musicMixer, format: file.processingFormat)
@@ -702,9 +918,8 @@ final class SoundEngine {
             layerGain[layer] = gain
             layerTarget[layer] = gain
             p.volume = gain
-            let frames = AVAudioFrameCount(entry.samples > 0 ? min(Int64(entry.samples), file.length) : file.length)
             // Two copies queued; each finished copy queues the next, so the loop never gaps.
-            scheduleLoop(p, file: file, frames: frames, copies: 2)
+            scheduleLoop(p, file: file, frames: AVAudioFrameCount(rawFrames), copies: 2)
         }
         startLayersTogether(token: musicToken, tries: 25)
     }
@@ -714,7 +929,7 @@ final class SoundEngine {
     /// wait a short tick and look again, never start a layer alone (review 2, M5).
     private func startLayersTogether(token: Int, tries: Int) {
         guard token == musicToken, !layers.isEmpty else { return }
-        guard engine.isRunning else { return }
+        guard ensureRunning() else { return }
         if let last = engine.outputNode.lastRenderTime, last.isSampleTimeValid, last.sampleRate > 0 {
             let at = AVAudioTime(sampleTime: last.sampleTime + AVAudioFramePosition(0.12 * last.sampleRate), atRate: last.sampleRate)
             for p in layers.values { p.play(at: at) }
@@ -725,6 +940,7 @@ final class SoundEngine {
         }
         guard tries > 0 else {
             // The clock never came (no output device): start them in one go, the best left.
+            guard ensureRunning() else { return }
             for p in layers.values { p.play(at: nil) }
             return
         }
@@ -754,6 +970,7 @@ final class SoundEngine {
     #endif
 
     private func scheduleLoop(_ p: AVAudioPlayerNode, file: AVAudioFile, frames: AVAudioFrameCount, copies: Int) {
+        guard frames > 0 else { return }
         let me = WeakRef(self)
         let player = WeakRef(p)
         let fileBox = UncheckedBox(file)
@@ -771,14 +988,20 @@ final class SoundEngine {
 
     /// The map and menu theme (or another single looping track).
     func playMusic(_ id: String) {
+        if stingPlaying {
+            pendingMusicAfterSting = id
+            return
+        }
         guard musicTrack != id else { return }
         stopMusic()
         guard unlocked, let entry = manifest.sounds[id], let url = Self.url(for: entry) else { return }
         guard prepare() else {
-            if held { suspendedTrack = id }
+            suspendedTrack = id
             return
         }
         guard let file = try? AVAudioFile(forReading: url) else { return }
+        let rawFrames = entry.samples > 0 ? min(Int64(entry.samples), file.length) : file.length
+        guard rawFrames > 0 else { return }
         musicTrack = id
         let p = AVAudioPlayerNode()
         engine.attach(p)
@@ -787,8 +1010,12 @@ final class SoundEngine {
         layerFiles["base"] = file
         layerGain["base"] = 1
         layerTarget["base"] = 1
-        let frames = AVAudioFrameCount(entry.samples > 0 ? min(Int64(entry.samples), file.length) : file.length)
-        scheduleLoop(p, file: file, frames: frames, copies: 2)
+        scheduleLoop(p, file: file, frames: AVAudioFrameCount(rawFrames), copies: 2)
+        guard ensureRunning() else {
+            stopMusic()
+            suspendedTrack = id
+            return
+        }
         p.play()
     }
 
@@ -800,58 +1027,119 @@ final class SoundEngine {
         startFades()
     }
 
+    private var hasPendingFades: Bool {
+        for (layer, target) in layerTarget {
+            if abs((layerGain[layer] ?? 0) - target) > 0.001 { return true }
+        }
+        return duckGain < 0.999 || duckTarget < 0.999 || worldDuckGain < 0.999 || worldDuckTarget < 0.999
+    }
+
     private func startFades() {
-        guard fadeTimer == nil else { return }
+        guard !held, engine.isRunning, !cleanup.hasTimer else { return }
         let me = WeakRef(self)
-        fadeTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { _ in
             MainActor.assumeIsolated { me.value?.fadeStep() }
         }
+        cleanup.setTimer(timer)
+    }
+
+    private func stopFades() {
+        noClockTicks = 0
+        cleanup.setTimer(nil)
     }
 
     private var fadeStartedOnBar: [String: Bool] = [:]
+    private var noClockTicks = 0
 
     private func fadeStep() {
+        guard engine.isRunning else {
+            stopFades()
+            return
+        }
+        let dt = 1.0 / 60
         let bar = manifest.sounds["mus_r1_base"]?.barSeconds ?? 1.111111
         // Where the Base layer is in its loop, from its own sample clock.
-        var elapsed = 0.0
+        let hasClock: Bool
+        let intoBar: Double
         if let base = layers["base"], let node = base.lastRenderTime, let t = base.playerTime(forNodeTime: node), t.sampleRate > 0 {
-            elapsed = max(0, Double(t.sampleTime) / t.sampleRate)
+            let elapsed = max(0, Double(t.sampleTime) / t.sampleRate)
+            intoBar = bar > 0 ? elapsed.truncatingRemainder(dividingBy: bar) : 0
+            hasClock = true
+            noClockTicks = 0
+        } else {
+            intoBar = 0
+            hasClock = false
+            noClockTicks += 1
         }
-        let intoBar = bar > 0 ? elapsed.truncatingRemainder(dividingBy: bar) : 0
         var busy = false
         for (layer, target) in layerTarget {
             let gain = layerGain[layer] ?? 0
             guard abs(gain - target) > 0.001 else { fadeStartedOnBar[layer] = false; continue }
+            if !hasClock && noClockTicks > 90 {
+                // No render clock (e.g. headless output): stop spinning rather than running at 60 Hz forever.
+                layerGain[layer] = target
+                layers[layer]?.volume = target
+                fadeStartedOnBar[layer] = false
+                continue
+            }
             busy = true
-            // Wait for a bar line (within one frame of it) before a fade starts.
+            // Wait for a valid engine clock near a bar line before starting the fade.
             if fadeStartedOnBar[layer] != true {
-                guard intoBar < 1.0 / 30 + 0.005 else { continue }
+                guard hasClock, intoBar < dt + 0.008 else { continue }
                 fadeStartedOnBar[layer] = true
             }
-            let step = Float(1.0 / 30 / max(0.2, bar))
+            let step = Float(dt / max(0.2, bar))
             let next = gain < target ? min(target, gain + step) : max(target, gain - step)
             layerGain[layer] = next
             layers[layer]?.volume = next
         }
-        // Duck release over 400 ms.
-        if duckGain < 1, DispatchTime.now().uptimeNanoseconds > duckUntil {
-            duckGain = min(1, duckGain + Float(1.0 / 30 / 0.4))
-            applyVolume()
+        // Smooth duck envelope: 30 ms attack down, 400 ms release back up.
+        let now = DispatchTime.now().uptimeNanoseconds
+        let attackStep = Float(dt / 0.03)
+        let releaseStep = Float(dt / 0.4)
+        var volumeChanged = false
+        if now > duckUntil { duckTarget = 1 }
+        if abs(duckGain - duckTarget) > 0.001 {
+            if duckGain > duckTarget {
+                duckGain = max(duckTarget, duckGain - attackStep)
+            } else {
+                duckGain = min(duckTarget, duckGain + releaseStep)
+            }
+            volumeChanged = true
             busy = true
-        } else if duckGain < 1 {
+        } else if duckGain < 0.999 {
             busy = true
         }
-        if !busy {
-            fadeTimer?.invalidate()
-            fadeTimer = nil
+        if now > worldDuckUntil { worldDuckTarget = 1 }
+        if abs(worldDuckGain - worldDuckTarget) > 0.001 {
+            if worldDuckGain > worldDuckTarget {
+                worldDuckGain = max(worldDuckTarget, worldDuckGain - attackStep)
+            } else {
+                worldDuckGain = min(worldDuckTarget, worldDuckGain + releaseStep)
+            }
+            volumeChanged = true
+            busy = true
+        } else if worldDuckGain < 0.999 {
+            busy = true
         }
+        if volumeChanged { applyVolume() }
+        if !busy { stopFades() }
+    }
+
+    /// Stops any playing sting and clears any music queued behind it.
+    func stopSting() {
+        stingToken += 1
+        stingPlaying = false
+        pendingMusicAfterSting = nil
+        stingPlayer?.stop()
     }
 
     /// The win or lose sting: the layers stop, then the sting plays once.
     func playSting(_ id: String) {
-        guard unlocked, let entry = manifest.sounds[id], prepare(), let url = Self.url(for: entry),
-              let file = try? AVAudioFile(forReading: url) else { return }
         stopMusic()
+        guard unlocked, !muted, !held, let entry = manifest.sounds[id], prepare(),
+              let url = Self.url(for: entry), let file = try? AVAudioFile(forReading: url),
+              file.length > 0 else { return }
         let p = stingPlayer ?? AVAudioPlayerNode()
         if stingPlayer == nil {
             engine.attach(p)
@@ -860,7 +1148,27 @@ final class SoundEngine {
         engine.disconnectNodeOutput(p)
         engine.connect(p, to: musicMixer, format: file.processingFormat)
         p.stop()
-        p.scheduleFile(file, at: nil, completionHandler: nil)
+        stingToken += 1
+        let token = stingToken
+        stingPlaying = true
+        pendingMusicAfterSting = nil
+        let me = WeakRef(self)
+        p.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let sound = me.value, sound.stingToken == token else { return }
+                    sound.stingPlaying = false
+                    if let next = sound.pendingMusicAfterSting {
+                        sound.pendingMusicAfterSting = nil
+                        sound.playMusic(next)
+                    }
+                }
+            }
+        }
+        guard ensureRunning() else {
+            stingPlaying = false
+            return
+        }
         p.play()
     }
 
@@ -877,26 +1185,48 @@ final class SoundEngine {
         musicTrack = nil
         suspendedTrack = nil
         musicToken += 1
+        duckGain = 1
+        duckTarget = 1
+        applyVolume()
+        if !hasPendingFades { stopFades() }
     }
 
     // MARK: Barks (Hob-speak)
 
-    /// A bark: one per side per turn step, 1.5 s apart; most events 40% of the time, Bonks and wins always.
-    func bark(hob def: String, event: String, side: Int) {
+    /// A bark: one per side per turn step, 1.5 s apart; most events at the chance barks.json
+    /// gives (40%), Bonks and wins always. `mates` are the content ids of the Hob's crew, for the
+    /// `with_mate` lines; `rival` is the named Rival's short name, for the `with_rival` lines.
+    func bark(hob def: String, event: String, side: Int, mates: [String] = [], rival: String? = nil) {
         guard let art = SpriteImages.hobArtName(id: def, name: "") else { return }
         let id = "bark_\(art)_\(event)"
         guard manifest.sounds[id] != nil else { return }
+        let lines = manifest.barkLines[id]
         let always = event == "bonked" || event == "win"
+        let chance = lines?.chance ?? manifest.eventChance[event] ?? 0.4
         let now = DispatchTime.now().uptimeNanoseconds
-        guard always || (now &- lastBark > 1_500_000_000 && !barkSides.contains(side) && nextRandom() < 0.4) else { return }
+        guard always || (now &- lastBark > 1_500_000_000 && !barkSides.contains(side) && nextRandom() < chance) else { return }
         lastBark = now
         barkSides.insert(side)
         playVoice(id)
-        if let lines = manifest.subtitles[id], !lines.isEmpty {
-            var pick = lines[Int(nextRandom() * Double(lines.count)) % lines.count]
-            if pick == lastLines[id], lines.count > 1 { pick = lines.first { $0 != pick } ?? pick }
+        let pool = lines?.pool(mates: mates.filter { $0 != def }, rival: rival) ?? []
+        if !pool.isEmpty {
+            var pick = pool[Int(nextRandom() * Double(pool.count)) % pool.count]
+            if pick == lastLines[id], pool.count > 1 { pick = pool.first { $0 != pick } ?? pick }
             lastLines[id] = pick
             onSubtitle?(pick, side)
+        }
+        if event == "win" { crewWinLine(side: side) }
+    }
+
+    /// The crew's win line (`crew.win`), shown once after the Hob's own win line.
+    private func crewWinLine(side: Int) {
+        guard !manifest.crewWin.isEmpty else { return }
+        let line = manifest.crewWin[Int(nextRandom() * Double(manifest.crewWin.count)) % manifest.crewWin.count]
+        crewWinTask?.cancel()
+        crewWinTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.onSubtitle?(line, side)
         }
     }
 
@@ -904,12 +1234,15 @@ final class SoundEngine {
     func newTurnStep() { barkSides = [] }
 
     private func playVoice(_ id: String) {
-        guard unlocked, !muted, voiceVolume > 0, prepare(), let buffer = buffer(id), !barkVoices.isEmpty else { return }
+        guard unlocked, !muted, !held, voiceVolume > 0, prepare(),
+              let buffer = buffer(id), buffer.frameLength > 0, !barkVoices.isEmpty else { return }
         let p = barkVoices[nextBarkVoice % barkVoices.count]
         nextBarkVoice += 1
         p.stop()
         p.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+        guard ensureRunning() else { return }
         p.play()
         duck(db: manifest.duckDb["voice"] ?? -3)
+        duckWorld(db: manifest.worldDuckDb)
     }
 }

@@ -25,8 +25,12 @@ final class CoreGame {
     var speed = 1
     /// Rival turns resolve at 2x (a setting).
     var rivalFast = false
-    /// The Rival's think pose before `ai_turn`, in ms (rulings C3: 0.8 to 1.5 s).
+    /// The Rival's think pose before `ai_turn`, in ms. Per Rival from the snapshot's
+    /// `hud.think_ms[1]` (content `rival.think_ms`); the app sets it from content before the
+    /// first frame, and `app.json` `rival_think_seconds` is the fallback.
     var thinkMs = 1000
+    /// `app.json` `rival_think_seconds` in ms: the think pose when content gives none.
+    let defaultThinkMs: Int
     /// True while the pre-battle sheet is up: Rummage picks run, turns wait for Fight.
     var holdTurns = false
     /// Set when the core stops answering sensibly mid battle (M13). The session shows a notice.
@@ -66,6 +70,9 @@ final class CoreGame {
         self.host = host
         self.catalog = catalog
         self.assembler = FrameAssembler(catalog: catalog)
+        let fallbackThink = max(200, Int((catalog.appConfig.rivalThinkSeconds * 1000).rounded()))
+        self.defaultThinkMs = fallbackThink
+        self.thinkMs = fallbackThink
         let version = host.sync { $0.version }
         let obj = (try? JSONSerialization.jsonObject(with: Data(version.utf8))) as? [String: Any]
         rulesVersion = obj?["rules"] as? Int ?? 0
@@ -84,7 +91,8 @@ final class CoreGame {
     func start(_ setup: BattleSetup) -> String? {
         end()
         let json = setup.coreSetup().jsonString()
-        if let error = host.sync({ $0.start(setup: json, seed: setup.seed) }) {
+        let seed = setup.seed
+        if let error = host.sync({ $0.start(setup: json, seed: seed) }) {
             return error
         }
         self.setup = setup
@@ -100,12 +108,20 @@ final class CoreGame {
     }
 
     func end() {
-        host.waitUntilIdle()
-        if isRunning { host.sync { $0.end() } }
+        let wasRunning = isRunning
         isRunning = false
         setup = nil
         handoffTo = nil
         fault = nil
+        dirty = false
+        if wasRunning {
+            // Never stall the main thread waiting on an in-flight ai_turn or replay (M8).
+            if host.isBusy {
+                host.background { $0.end() }
+            } else {
+                host.sync { $0.end() }
+            }
+        }
     }
 
     private func resetClock() {
@@ -157,6 +173,9 @@ final class CoreGame {
     func recover() -> Bool {
         guard let setup, isRunning else { return false }
         guard recoveries < Self.maxRecoveries else {
+            host.sync { $0.end() }
+            isRunning = false
+            dirty = false
             fault = "The rules core stopped (\(recoveries) restarts)."
             return false
         }
@@ -167,9 +186,15 @@ final class CoreGame {
         let outcome: String? = host.sync { b in
             if let error = b.start(setup: json, seed: seed) { return error }
             let reply = CoreReply.decode(b.command(resume))
-            return reply.ok ? nil : (reply.reason ?? "resume")
+            if !reply.ok {
+                b.end()
+                return reply.reason ?? "resume"
+            }
+            return nil
         }
         if let outcome {
+            isRunning = false
+            dirty = false
             fault = "The rules core stopped and could not be restarted (\(outcome))."
             return false
         }
@@ -216,9 +241,9 @@ final class CoreGame {
     /// Wall-clock time passed. Steps the core only in resolve and settle, and
     /// asks the AI to play, off the main thread, once its think pose is over.
     func advance(milliseconds ms: Int) {
-        guard isRunning, ms > 0, !isBusy else { return }
+        guard isRunning, fault == nil, ms > 0, !isBusy else { return }
         readAiReply()
-        guard isRunning, aiRefusals < Self.maxAiRefusals else { return }
+        guard isRunning, fault == nil, aiRefusals < Self.maxAiRefusals else { return }
         guard !holdTurns else { return }
         if lastPhase == "plan", lastAwaiting == "ai", handoffTo == nil {
             thinkElapsed += ms
@@ -272,7 +297,7 @@ final class CoreGame {
     /// sent, shells fly or settle, or slow work just finished. Nil otherwise,
     /// and while the core queue is busy.
     func frameIfNeeded() -> BattleSnapshot? {
-        guard isRunning, !isBusy else { return nil }
+        guard isRunning, !isBusy, fault == nil else { return nil }
         guard dirty || lastPhase == "resolve" || lastPhase == "settle" else { return nil }
         return frame()
     }
@@ -280,9 +305,9 @@ final class CoreGame {
     /// The newest frame, or nil when no battle runs, the core queue is busy or
     /// the core sent nothing readable (then `fault` is set).
     func frame() -> BattleSnapshot? {
-        guard isRunning, !isBusy else { return nil }
+        guard isRunning, !isBusy, fault == nil else { return nil }
         readAiReply()
-        if aiRefusals >= Self.maxAiRefusals { return nil }
+        guard isRunning, fault == nil, aiRefusals < Self.maxAiRefusals else { return nil }
         dirty = false
         let text = host.sync { $0.snapshot() }
         guard var raw = CoreSnapshot.decode(text) else {
@@ -306,6 +331,11 @@ final class CoreGame {
         lastAwaiting = raw.awaiting
         lastSide = raw.side
         if raw.full, raw.hud.control.count >= 2 { humans = raw.hud.control.map { $0 == "human" } }
+        if raw.full {
+            // `hud.think_ms` is `[player, rival]`, null when unset (content-pass-core, section 4).
+            let think = raw.hud.thinkMs.count > 1 ? raw.hud.thinkMs[1] : nil
+            thinkMs = think.map { min(4000, max(200, $0)) } ?? thinkMs
+        }
         if raw.full { ghostCount = [raw.ghosts.filter { $0.side == 0 }.count, raw.ghosts.filter { $0.side == 1 }.count] }
         if raw.full, raw.phase == "plan" || raw.phase == "draft",
            raw.events.contains(where: { $0.t == "turn_start" || $0.t == "battle_start" || $0.t == "draft_start" }) {
@@ -403,9 +433,7 @@ final class CoreGame {
             let now = reply.hash ?? CoreReply.decode(bridge.command(CoreCommand.hash.jsonString())).hash
             if now != expectHash { return "hash" }
         }
-        // Drop the replay's events (no sounds for the past), then ask for the whole map again.
-        _ = bridge.snapshot()
-        _ = bridge.command(CoreCommand.terrainAll.jsonString())
+        // Core's `resume` already clears replay events, marks all terrain dirty and requests a full snapshot (M8).
         return nil
     }
 

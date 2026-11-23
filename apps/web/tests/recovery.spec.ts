@@ -98,7 +98,7 @@ test('a battle save from an older version is not replayed', async ({ page }) => 
   await idbPut(page, 'battle', battleRecord(JSON.stringify({ v: 1, core: 'wasm', setup: '{"level":"1-1"}', seed: '1', view: SETUP_1_1, log: [] })));
   await page.reload();
   await page.getByTestId('resume').click();
-  await expect(page.locator('.notice')).toContainText('older version');
+  await expect(page.locator('.notice')).toContainText('rules changed');
   expect(await idbGet(page, 'battle')).toBeUndefined();
 });
 
@@ -155,7 +155,7 @@ test('a real save resumes, and a save whose state hash does not match still load
   await idbPut(page, 'battle', { ...save, core: JSON.stringify({ ...core, log: [{ cmd: 'fire' }, { cmd: 'fire' }, { cmd: 'nonsense' }] }) });
   await page.goto('./?debug=4');
   await page.getByTestId('resume').click();
-  await expect(page.locator('.notice')).toContainText('no longer replays');
+  await expect(page.locator('.notice')).toContainText('damaged');
   await expect(page.locator('.screen.map')).toBeVisible();
   expect(errors).toEqual([]);
 });

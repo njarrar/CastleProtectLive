@@ -20,12 +20,24 @@
         360
       ],
       [
-        950,
-        300
+        935,
+        303
+      ],
+      [
+        944,
+        276
+      ],
+      [
+        958,
+        276
+      ],
+      [
+        967,
+        313
       ],
       [
         1200,
-        380
+        490
       ],
       [
         1450,
@@ -47,10 +59,10 @@
   },
   "pads": [
     {
-      "x": 420
+      "x": 431
     },
     {
-      "x": 1750
+      "x": 1762
     }
   ],
   "player": {
@@ -66,13 +78,15 @@
     ]
   },
   "rival": {
-    "name": "Lance Corporal Sod Turfwick",
+    "name": "Corporal Dibber",
     "habit": "Forgets the wind on his first shot of each front.",
+    "habit_id": "balanced",
+    "think_ms": 1400,
     "blueprint": "bp_r1_timber_3",
     "crew": [
-      "hedge_snipper",
-      "rake_hand",
-      "pebble_pitcher"
+      "mower_minder",
+      "pebble_pitcher",
+      "rake_hand"
     ],
     "aim": 1
   },
@@ -94,7 +108,7 @@
   "pennants": [
     {
       "type": "win",
-      "text": "Win"
+      "text": "See Dibber off the tops"
     },
     {
       "type": "hits_in_a_row",
@@ -102,10 +116,11 @@
       "value": 3
     },
     {
-      "type": "no_hob_bonked",
-      "text": "No Hob of yours Bonked"
+      "type": "win_by_round",
+      "text": "Win before the third front",
+      "value": 6
     }
   ],
-  "map_note": "Three rolling hills. Rival on the far crest, 80 cells above you.",
+  "map_note": "Three rolling hills with a narrow ditch in the first valley. Rival on the far crest, 80 cells above you, in a tall thin fort.",
   "new_thing": "+Jax. Wind, Weather Front, forecast."
 }

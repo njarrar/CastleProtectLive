@@ -5,6 +5,7 @@ import XCTest
 // the animation and audio manifests, and the field effects.
 
 final class CoreV02DecodeTests: XCTestCase {
+    @MainActor
     func testBossFixtureHasTheNewHudFields() throws {
         let raw = try XCTUnwrap(CoreSnapshot.decode(try fixtureText("snapshot_boss_1_10")))
         XCTAssertEqual(raw.map.chunk, 64)
@@ -23,6 +24,7 @@ final class CoreV02DecodeTests: XCTestCase {
         XCTAssertTrue(raw.castles.contains { $0.blocks.contains { $0.root } }, "the Sprinkler Root block")
     }
 
+    @MainActor
     func testEndedFixtureHasTheFullResult() throws {
         let raw = try XCTUnwrap(CoreSnapshot.decode(try fixtureText("snapshot_ended")))
         let r = try XCTUnwrap(raw.result)
@@ -31,17 +33,18 @@ final class CoreV02DecodeTests: XCTestCase {
         XCTAssertEqual(r.stats.count, 2)
         XCTAssertEqual(r.broke?.side, 1)
         XCTAssertEqual(r.broke?.last?.shotName, "Clodpot")
-        XCTAssertEqual(r.broke?.top.first?.dmg, 29)
+        XCTAssertEqual(r.broke?.top.first?.dmg, 19)
         let frame = FrameAssembler(catalog: ContentCatalog.load()).assemble(raw, handoffTo: nil, speed: 1)
         XCTAssertEqual(frame.result?.reason, "give_up")
         XCTAssertEqual(frame.result?.broke?.side, 1)
         XCTAssertEqual(frame.result?.stats.first?.shots, 1)
         XCTAssertEqual(frame.helpMarks, ["+", ""], "Help is shown openly")
-        XCTAssertEqual(ResultInfo.headline(how: "give_up", won: true), "They gave up")
-        XCTAssertEqual(ResultInfo.headline(how: "volley_points", won: true), "Won on Volley Points!")
+        XCTAssertEqual(ResultInfo.headline(how: "give_up", won: true, rival: "Sir Pudge"), "Pudge gave up")
+        XCTAssertEqual(ResultInfo.headline(how: "volley_points", won: true), "Top score")
     }
 
     /// API change 7: an `aim` gives a lean snapshot with the aim and preview; the HUD keeps everything else.
+    @MainActor
     func testLeanAimUpdatesAimAndPreview() throws {
         let assembler = FrameAssembler(catalog: ContentCatalog.load())
         let plan = try XCTUnwrap(CoreSnapshot.decode(try fixtureText("snapshot_plan")))
@@ -183,8 +186,8 @@ final class AnimationTests: XCTestCase {
         let lib = AnimationLibrary.shared
         XCTAssertGreaterThanOrEqual(lib.clips.count, 200, "assets/animations.json is in the bundle")
         let fire = try XCTUnwrap(lib.clip("hob_marge_blue_fire"))
-        XCTAssertEqual(fire.events["release"], 1)
-        XCTAssertEqual(fire.frames.first, "hob_marge_blue_fire_2", "play order, not the number in the name")
+        XCTAssertEqual(fire.events["release"], 0)
+        XCTAssertEqual(fire.frames.first, "hob_marge_blue_fire_3", "snappy fire release on frame 0")
         let aim = try XCTUnwrap(lib.clip("hob_marge_blue_aim"))
         XCTAssertEqual(aim.pickFrame(value: 0), aim.frames[0])
         XCTAssertEqual(aim.pickFrame(value: 100), aim.frames[2])
@@ -196,7 +199,7 @@ final class AnimationTests: XCTestCase {
 
     func testShippedAudioLoads() {
         let m = SoundManifest.shared
-        XCTAssertEqual(m.sounds.count, 140, "assets/audio/audio.json is in the bundle")
+        XCTAssertEqual(m.sounds.count, 147, "assets/audio/audio.json is in the bundle")
         XCTAssertEqual(m.shotLaunch["clodpot"], "launch_lob")
         XCTAssertEqual(m.materialSounds["cobble"]?.hit, "mat_cobble_hit")
         XCTAssertEqual(m.sounds["mus_r1_stir"]?.layer, "stir")
@@ -319,7 +322,7 @@ final class RealCoreV02Tests: XCTestCase {
     func testGiveUpOnTheRealCore() throws {
         guard CoreFactory.realCoreLinked else { throw XCTSkip("CastleCore.xcframework is not linked in this build") }
         let game = CoreGame(bridge: CoreFactory.make(preferStandIn: false), catalog: ContentCatalog.load())
-        XCTAssertEqual(game.rulesVersion, 4)
+        XCTAssertEqual(game.rulesVersion, 5)
         var setup = BattleSetup.campaign("1-1", preset: .fair, seed: 21)
         setup.progress = CoreProgress()
         XCTAssertNil(game.start(setup))

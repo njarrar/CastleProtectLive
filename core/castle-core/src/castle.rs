@@ -9,7 +9,7 @@ pub const BLOCK: i32 = 16;
 pub const MAX_W: i32 = 8;
 pub const MAX_H: i32 = 10;
 pub const BUDGET: i32 = 72;
-pub const KETTLE_HP: i32 = 300;
+pub const KETTLE_HP: i32 = 200;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Slot {
@@ -59,8 +59,10 @@ pub struct Castle {
     pub kettle_hp: i32,
     pub steam: i32,
     pub steam_turn: i32,
-    /// Fatigue (from round 10): damaged blocks reach one less to the side.
+    /// Fatigue (from round 10): battered blocks reach one less to the side.
     pub fatigue: bool,
+    /// Progressive Fatigue HP% threshold (0 off, 50 at round 10, 80 at round 12).
+    pub fatigue_pct: i32,
 }
 
 fn glyph_mat(content: &Content, g: char) -> Option<usize> {
@@ -171,7 +173,20 @@ fn is_block(slots: &[Slot], cols: i32, rows: i32, c: i32, r: i32) -> bool {
 
 /// The Workshop validator. `seats` is how many Hobs must be seated.
 pub fn validate_blueprint(content: &Content, bp: &Blueprint, seats: i32) -> Result<(), String> {
+    validate_blueprint_with(content, bp, seats, true)
+}
+
+/// Blueprint validator with optional boss Sprinkler Root (`'r'`) permission.
+pub fn validate_blueprint_with(
+    content: &Content,
+    bp: &Blueprint,
+    seats: i32,
+    allow_root: bool,
+) -> Result<(), String> {
     let (cols, rows, slots, nooks, k) = parse(content, bp)?;
+    if !allow_root && slots.iter().any(|s| matches!(s, Slot::Block(b) if b.root)) {
+        return Err("root blocks are only for boss forts".into());
+    }
     let footing = content.materials.blocks.iter().position(|m| m.never_falls);
     for c in 0..cols {
         match &slots[c as usize] {
@@ -327,6 +342,7 @@ impl Castle {
             steam,
             steam_turn: 0,
             fatigue: false,
+            fatigue_pct: 0,
         })
     }
 
@@ -463,6 +479,48 @@ impl Castle {
         (cx - 10, y1 - 19, cx + 10, y1)
     }
 
+    /// Current Fatigue HP% threshold (50 at round 10, 80 at round 12, 0 off).
+    pub fn fatigue_threshold(&self) -> i32 {
+        if self.fatigue_pct > 0 {
+            self.fatigue_pct
+        } else if self.fatigue {
+            50
+        } else {
+            0
+        }
+    }
+
+    /// True when Fatigue currently weakens this block's side support.
+    pub fn is_battered(&self, b: &Block) -> bool {
+        let pct = self.fatigue_threshold();
+        pct > 0 && b.hp * 100 < b.max * pct
+    }
+
+    /// True once the Heartkettle has cracked at or below half HP.
+    pub fn kettle_cracked(&self) -> bool {
+        self.kettle_hp <= KETTLE_HP / 2
+    }
+
+    /// True when `(c, r)` is one of the blocks enclosing the Kettle Room.
+    pub fn is_kettle_cover(&self, c: i32, r: i32) -> bool {
+        self.room_walls(&self.kettle)
+            .iter()
+            .flatten()
+            .any(|&p| p == (c, r))
+    }
+
+    /// Effective side-support reach for block `b` at `(c, r)`.
+    pub fn side_support_limit(&self, content: &Content, c: i32, r: i32, b: &Block) -> i32 {
+        let mut lim = content.materials.blocks[b.mat as usize].side_support;
+        if self.is_battered(b) {
+            lim -= 1;
+        }
+        if self.kettle_cracked() && self.is_kettle_cover(c, r) {
+            lim -= 1;
+        }
+        lim.max(0)
+    }
+
     /// Support solve. Returns per slot reach (None = unsupported). `held` lists
     /// slots that count as supported from below (Ridgepole).
     pub fn solve(&self, content: &Content, held: &[(i32, i32)]) -> Vec<Option<i32>> {
@@ -478,15 +536,6 @@ impl Castle {
                 reach[self.idx(c, r)] = Some(0);
             }
         }
-        let fatigue = self.fatigue;
-        let limit = |b: &Block| {
-            let base = content.materials.blocks[b.mat as usize].side_support;
-            if fatigue && b.hp < b.max {
-                (base - 1).max(0)
-            } else {
-                base
-            }
-        };
         let mut changed = true;
         let mut passes = 0;
         while changed && passes < 64 {
@@ -502,11 +551,12 @@ impl Castle {
                             best = Some(best.map_or(v, |x| x.min(v)));
                         }
                     }
+                    let lim = self.side_support_limit(content, c, r, b);
                     for dc in [-1, 1] {
                         let nc = c + dc;
                         if self.has_block(nc, r) {
                             if let Some(v) = reach[self.idx(nc, r)] {
-                                if v < limit(b) {
+                                if v < lim {
                                     let nv = v + 1;
                                     best = Some(best.map_or(nv, |x| x.min(nv)));
                                 }
@@ -587,8 +637,7 @@ impl Castle {
         for r in 1..self.rows {
             for c in 0..self.cols {
                 if let (Some(b), Some(v)) = (self.block(c, r), reach[self.idx(c, r)]) {
-                    let lim = content.materials.blocks[b.mat as usize].side_support
-                        - if self.fatigue && b.hp < b.max { 1 } else { 0 };
+                    let lim = self.side_support_limit(content, c, r, b);
                     if v > 0 && v == lim {
                         out.push((c, r));
                     }
@@ -617,6 +666,7 @@ impl Castle {
         hs.i32(self.steam);
         hs.i32(self.steam_turn);
         hs.i32(self.fatigue as i32);
+        hs.i32(self.fatigue_pct);
         for s in &self.slots {
             match s {
                 Slot::Empty => hs.i32(-1),

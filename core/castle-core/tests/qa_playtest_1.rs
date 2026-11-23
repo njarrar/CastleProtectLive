@@ -27,7 +27,7 @@ fn rot(b: &mut Battle, side: usize) {
     for r in 0..cs.rows {
         for c in 0..cs.cols {
             if let Some(bl) = cs.block_mut(c, r) {
-                bl.hp -= 1;
+                bl.hp = (bl.max / 2 - 1).max(1);
             }
         }
     }

@@ -62,6 +62,11 @@ final class FFICoreBridge: CoreBridge {
         take(cp_golden_hashes()) ?? ""
     }
 
+    /// `cp_daily_seed(date)`: deterministic Daily Dust-up seed for a local `yyyy-MM-dd` date.
+    static func dailySeed(_ date: String) -> UInt64 {
+        date.withCString { cp_daily_seed($0) }
+    }
+
     /// Copies a core string and frees it.
     private static func take(_ p: UnsafeMutablePointer<CChar>?) -> String? {
         guard let p else { return nil }

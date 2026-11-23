@@ -19,6 +19,7 @@ pub struct MatTable {
     pub carve_pct: [i32; 256],
     pub heavy_carve_pct: [i32; 256],
     pub bore_pct: [i32; 256],
+    pub mud: u8,
 }
 
 #[derive(Clone, Debug)]
@@ -142,7 +143,7 @@ impl Terrain {
             return 0;
         }
         let mut n = 0;
-        let r2 = (r * r) as i64;
+        let r2 = (r as i64) * (r as i64);
         for y in (cy - r).max(0)..=(cy + r).min(self.h - 1) {
             for x in (cx - r).max(0)..=(cx + r).min(self.w - 1) {
                 let v = self.get(x, y);
@@ -172,19 +173,56 @@ impl Terrain {
         n
     }
 
-    /// Stamp a disc of a material into air cells only. Cells where `skip`
-    /// is true (inside a fort's box) stay air.
+    /// Stamp a disc of a material into air cells, and turn liquid cells into
+    /// mud when mud is configured. Cells where `skip` is true (inside a fort's
+    /// box) stay unchanged.
     pub fn stamp<F: Fn(i32, i32) -> bool>(&mut self, cx: i32, cy: i32, r: i32, mat: u8, skip: F) {
+        let r2 = (r as i64) * (r as i64);
+        let mud = self.mats.mud;
         for y in (cy - r).max(0)..=(cy + r).min(self.h - 1) {
             for x in (cx - r).max(0)..=(cx + r).min(self.w - 1) {
-                let dx = x - cx;
-                let dy = y - cy;
-                if dx * dx + dy * dy <= r * r && self.get(x, y) == AIR && !skip(x, y) {
-                    self.set(x, y, mat);
+                let dx = (x - cx) as i64;
+                let dy = (y - cy) as i64;
+                if dx * dx + dy * dy <= r2 && !skip(x, y) {
+                    let cur = self.get(x, y);
+                    if cur == AIR {
+                        self.set(x, y, mat);
+                    } else if mud != 0 && self.mats.liquid[cur as usize] {
+                        self.set(x, y, mud);
+                    }
                 }
             }
         }
         self.mark_dirty(cx - r, cy - r, cx + r, cy + r);
+    }
+
+    /// Clear diggable ground behind or perpendicular to `(dx, dy)` within
+    /// radius `r`. Never clears cells strictly ahead along `(dx, dy)`.
+    pub fn clear_bore(&mut self, cx: i32, cy: i32, r: i32, dx: i32, dy: i32) -> i64 {
+        let mut n = 0;
+        let r2 = (r as i64) * (r as i64);
+        for oy in -r..=r {
+            let y = cy + oy;
+            if y < 0 || y >= self.h {
+                continue;
+            }
+            for ox in -r..=r {
+                let x = cx + ox;
+                if x < 0 || x >= self.w {
+                    continue;
+                }
+                let d2 = (ox as i64) * (ox as i64) + (oy as i64) * (oy as i64);
+                let dot = (ox as i64) * (dx as i64) + (oy as i64) * (dy as i64);
+                if d2 <= r2 && dot <= 0 && self.diggable(x, y) {
+                    self.set(x, y, AIR);
+                    n += 1;
+                }
+            }
+        }
+        if n > 0 {
+            self.mark_dirty(cx - r, cy - r, cx + r, cy + r);
+        }
+        n
     }
 
     /// Clear a rectangle to air (Shove Off, tunnels). Only ground a bore can
@@ -224,13 +262,19 @@ impl Terrain {
             let mut y = self.h - 1;
             while y >= 0 {
                 let v = self.get(x, y);
-                if v == AIR {
+                if v == AIR || self.mats.liquid[v as usize] {
                     if blocked(x, y) {
                         floor = y - 1;
                     }
                 } else if self.mats.loose[v as usize] {
                     if floor > y {
-                        self.set(x, floor, v);
+                        let dest = self.get(x, floor);
+                        let placed = if self.mats.mud != 0 && self.mats.liquid[dest as usize] {
+                            self.mats.mud
+                        } else {
+                            v
+                        };
+                        self.set(x, floor, placed);
                         self.set(x, y, AIR);
                         moved = true;
                         top = top.min(y);

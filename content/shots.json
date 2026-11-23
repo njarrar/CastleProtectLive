@@ -74,11 +74,12 @@
         ]
       }
     ],
-    "card": "Sneeze three stones in a fan."
+    "skill_pct": 50,
+    "card": "Three stones in a fan. Bless you."
   },
   {
     "id": "extra_shake",
-    "name": "Gravel Sneeze (Extra Shake)",
+    "name": "Gravel Sneeze, four stones",
     "kind": "plain",
     "weight": "L",
     "flight": {
@@ -92,12 +93,13 @@
             "op": "split",
             "child": "shake_stone",
             "count": 4,
-            "spread": 50
+            "spread": 46
           }
         ]
       }
     ],
-    "card": "Four stones in a fan."
+    "skill_pct": 50,
+    "card": "Four stones in a fan. Jax shakes harder."
   },
   {
     "id": "nibbler",
@@ -112,11 +114,11 @@
       "tunnel": 16
     },
     "triggers": [],
-    "card": "Bores a short hole in anything soft."
+    "card": "Chews a short hole in anything soft."
   },
   {
     "id": "bouncebean",
-    "name": "Bouncebean",
+    "name": "Jumping Bean",
     "kind": "plain",
     "weight": "L",
     "flight": {
@@ -142,7 +144,7 @@
   },
   {
     "id": "mendglob",
-    "name": "Mendglob",
+    "name": "Dollop",
     "kind": "plain",
     "weight": "L",
     "flight": {
@@ -193,11 +195,11 @@
       }
     ],
     "value": 60,
-    "card": "Huge dumpling. Hits the low row harder."
+    "card": "A very big dumpling. Worst for the bottom row."
   },
   {
     "id": "sunspear",
-    "name": "Sunspear",
+    "name": "Darning Needle",
     "kind": "knack",
     "weight": "M",
     "flight": {
@@ -226,7 +228,7 @@
     ],
     "value": 55,
     "skill_pct": 150,
-    "card": "A ray through one wall."
+    "card": "Dead straight. Goes clean through one wall."
   },
   {
     "id": "pepper_rain",
@@ -250,11 +252,12 @@
       }
     ],
     "value": 50,
+    "skill_pct": 50,
     "card": "Splits up high. Rains seven stones."
   },
   {
     "id": "burrowbomb",
-    "name": "Burrowbomb",
+    "name": "Seed Potato",
     "kind": "knack",
     "weight": "M",
     "flight": {
@@ -278,11 +281,11 @@
       }
     ],
     "value": 55,
-    "card": "Bores in, then bursts inside."
+    "card": "Plant it deep. It comes up loud."
   },
   {
     "id": "rolypoly",
-    "name": "Rolypoly",
+    "name": "Roly-Poly",
     "kind": "knack",
     "weight": "M",
     "flight": {
@@ -304,7 +307,7 @@
       }
     ],
     "value": 60,
-    "card": "Rolls along the ground, then bursts."
+    "card": "Rolls along the ground. Then bang."
   },
   {
     "id": "barn_raising",
@@ -341,7 +344,7 @@
       "puff_up"
     ],
     "value": 50,
-    "card": "Rebuild four blocks. Or bring back a Hob."
+    "card": "Rebuild four blocks. Or Puff Up a Hob."
   },
   {
     "id": "tick_tock_crock",
@@ -398,7 +401,7 @@
   },
   {
     "id": "pudding_bomb",
-    "name": "Pudding Bomb",
+    "name": "Suet Pudding",
     "kind": "trick",
     "weight": "M",
     "flight": {
@@ -423,7 +426,8 @@
     ],
     "match_class": "scatterjack",
     "value": 30,
-    "card": "Huge soft blast. Blows the roofs off."
+    "skill_pct": 50,
+    "card": "Soft, wide and heavy. Takes the roof off."
   },
   {
     "id": "lid_lifter",
@@ -449,11 +453,11 @@
     ],
     "match_class": "lobber",
     "value": 35,
-    "card": "The blast goes straight up the column."
+    "card": "The blast goes straight up. Mind what sits on top."
   },
   {
     "id": "marble_sack",
-    "name": "Marble Sack",
+    "name": "Bag of Marbles",
     "kind": "trick",
     "weight": "M",
     "flight": {
@@ -475,7 +479,7 @@
     ],
     "match_class": "scatterjack",
     "value": 30,
-    "card": "Bursts into eight rolling marbles."
+    "card": "Eight marbles. They roll where they like."
   },
   {
     "id": "nosy_goose",
@@ -604,7 +608,7 @@
   },
   {
     "id": "sod_sack",
-    "name": "Sod Sack",
+    "name": "Barrow Load",
     "kind": "trick",
     "weight": "L",
     "flight": {
@@ -623,7 +627,7 @@
     ],
     "match_class": "delver",
     "value": 25,
-    "card": "Drops a heap of dirt."
+    "card": "A heap of dirt, wherever you tip it."
   },
   {
     "id": "sneeze_stone",
@@ -661,7 +665,7 @@
         "do": [
           {
             "op": "explode",
-            "dmg": 11,
+            "dmg": 13,
             "dtype": "blast",
             "band": "tiny"
           }

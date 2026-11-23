@@ -486,8 +486,21 @@ pub struct PadDef {
 pub struct SideSetup {
     #[serde(default)]
     pub name: String,
+    /// Display line only (the Rival's Habit as the player reads it).
     #[serde(default)]
     pub habit: String,
+    /// The AI habit this side plays with, one of `HABIT_IDS`. None plays
+    /// "balanced".
+    #[serde(default)]
+    pub habit_id: Option<String>,
+    /// How long the app shows this Rival's think pose before each AI turn,
+    /// in milliseconds. Presentation only: not in the state hash.
+    #[serde(default)]
+    pub think_ms: Option<i32>,
+    /// Skirmish: named Rivals to pick from by seed when the setup gives no
+    /// name. Display name and think time only; the habit stays `habit_id`.
+    #[serde(default)]
+    pub roster: Vec<RosterEntry>,
     #[serde(default)]
     pub blueprint: Option<String>,
     #[serde(default)]
@@ -515,6 +528,25 @@ pub struct SideSetup {
     /// Region 1 Rivals.
     #[serde(default)]
     pub grades: Option<Grades>,
+}
+
+/// One named Rival a Skirmish map can pick by seed.
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct RosterEntry {
+    pub name: String,
+    #[serde(default)]
+    pub think_ms: Option<i32>,
+}
+
+impl SideSetup {
+    /// The roster entry a Skirmish picks for this app seed (seed mod count).
+    pub fn roster_pick(&self, seed: u64) -> Option<&RosterEntry> {
+        if self.roster.is_empty() {
+            return None;
+        }
+        self.roster.get((seed % self.roster.len() as u64) as usize)
+    }
 }
 
 /// Rival grades per AI preset.
@@ -737,6 +769,10 @@ pub struct Pennant {
     pub value: i32,
     #[serde(default)]
     pub text: String,
+    /// `ground_kept`: the stretch of map [x0, x1] in cells whose ground
+    /// must keep `value` percent of its height above its lowest point.
+    #[serde(default)]
+    pub area: Option<[i32; 2]>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -915,6 +951,21 @@ impl Content {
             self.materials.blocks.iter().map(|x| &x.id),
             &mut errs,
         );
+        dups(
+            "terrain",
+            self.materials.terrain.iter().map(|x| &x.id),
+            &mut errs,
+        );
+        let mut seen_codes: Vec<u8> = vec![];
+        for tm in &self.materials.terrain {
+            if tm.code == 255 {
+                errs.push(format!("terrain {} code 255 is reserved", tm.id));
+            }
+            if seen_codes.contains(&tm.code) {
+                errs.push(format!("duplicate terrain code {}", tm.code));
+            }
+            seen_codes.push(tm.code);
+        }
         for m in &self.materials.blocks {
             if m.hp <= 0 {
                 errs.push(format!("material {} needs HP above 0", m.id));
@@ -1013,6 +1064,12 @@ impl Content {
                             }
                         }
                     }
+                    Effect::Mound { radius } if *radius <= 0 || *radius > 2048 => {
+                        errs.push(format!(
+                            "shot {} mound radius {} out of range",
+                            s.id, radius
+                        ));
+                    }
                     _ => {}
                 }
             }
@@ -1061,6 +1118,46 @@ impl Content {
                         errs.push(format!("level {} loose shell {} missing", l.id, d));
                     }
                 }
+                if s.aim.is_some_and(|a| !(1..=5).contains(&a)) {
+                    errs.push(format!("level {} side {} aim out of range", l.id, side));
+                }
+                if s.knack_uses.is_some_and(|k| !(0..=2).contains(&k)) {
+                    errs.push(format!(
+                        "level {} side {} knack_uses out of range",
+                        l.id, side
+                    ));
+                }
+                if s.hp_pct.is_some_and(|p| !(50..=200).contains(&p)) {
+                    errs.push(format!("level {} side {} hp_pct out of range", l.id, side));
+                }
+                if let Some(gs) = &s.grades {
+                    for (name, g) in [
+                        ("cozy", &gs.cozy),
+                        ("fair", &gs.fair),
+                        ("stubborn", &gs.stubborn),
+                    ] {
+                        if let Some(g) = g {
+                            if g.aim.is_some_and(|a| !(1..=5).contains(&a)) {
+                                errs.push(format!(
+                                    "level {} grade {} aim out of range",
+                                    l.id, name
+                                ));
+                            }
+                            if g.knack_uses.is_some_and(|k| !(0..=2).contains(&k)) {
+                                errs.push(format!(
+                                    "level {} grade {} knack_uses out of range",
+                                    l.id, name
+                                ));
+                            }
+                            if g.hp_pct.is_some_and(|p| !(50..=200).contains(&p)) {
+                                errs.push(format!(
+                                    "level {} grade {} hp_pct out of range",
+                                    l.id, name
+                                ));
+                            }
+                        }
+                    }
+                }
             }
             if l.pennants.len() != 3 && l.kind != "skirmish" {
                 errs.push(format!("level {} needs 3 pennants", l.id));
@@ -1068,6 +1165,47 @@ impl Content {
             for p in &l.pennants {
                 if !PENNANT_TYPES.contains(&p.kind.as_str()) {
                     errs.push(format!("level {} unknown pennant type {}", l.id, p.kind));
+                }
+                if p.kind == "ground_kept" {
+                    let ok = p.area.is_some_and(|[a, b]| 0 <= a && a < b && b < l.width)
+                        && (1..=100).contains(&p.value);
+                    if !ok {
+                        errs.push(format!(
+                            "level {} ground_kept needs an area inside the map and a value 1 to 100",
+                            l.id
+                        ));
+                    }
+                }
+                if p.kind == "bonk_nook" && !(1..=l.rival.crew.len() as i32).contains(&p.value) {
+                    errs.push(format!(
+                        "level {} bonk_nook value must name a seated Rival Hob",
+                        l.id
+                    ));
+                }
+            }
+            match &l.rival.habit_id {
+                None => errs.push(format!("level {} rival needs a habit_id", l.id)),
+                Some(h) if !HABIT_IDS.contains(&h.as_str()) => {
+                    errs.push(format!("level {} unknown habit_id {}", l.id, h))
+                }
+                _ => {}
+            }
+            if let Some(h) = &l.player.habit_id {
+                if !HABIT_IDS.contains(&h.as_str()) {
+                    errs.push(format!("level {} unknown player habit_id {}", l.id, h));
+                }
+            }
+            let think_ok =
+                |t: Option<i32>| t.is_none_or(|t| (THINK_MS_MIN..=THINK_MS_MAX).contains(&t));
+            for s in [&l.player, &l.rival] {
+                if !think_ok(s.think_ms) || s.roster.iter().any(|r| !think_ok(r.think_ms)) {
+                    errs.push(format!(
+                        "level {} think_ms must be {} to {}",
+                        l.id, THINK_MS_MIN, THINK_MS_MAX
+                    ));
+                }
+                if s.roster.iter().any(|r| r.name.trim().is_empty()) {
+                    errs.push(format!("level {} roster names must not be empty", l.id));
                 }
             }
             if l.width < 640 || l.height < 240 || l.width > 8192 || l.height > 2048 {
@@ -1089,6 +1227,14 @@ impl Content {
             if l.rules.round_cap < 1 || l.rules.round_cap > 40 {
                 errs.push(format!("level {} round_cap must be 1 to 40", l.id));
             }
+            if !(-10..=10).contains(&l.rules.wind.min)
+                || !(-10..=10).contains(&l.rules.wind.max)
+                || l.rules.wind.min > l.rules.wind.max
+                || !(1..=20).contains(&l.rules.wind.front_rounds)
+                || l.rules.wind.fronts.iter().any(|w| !(-10..=10).contains(w))
+            {
+                errs.push(format!("level {} wind out of range", l.id));
+            }
             if l.kind == "rescue" && (l.rules.squall || l.rules.objective.is_none()) {
                 errs.push(format!(
                     "level {}: a Rescue has no Squall and needs an objective",
@@ -1101,7 +1247,10 @@ impl Content {
                 }
             }
             if let Some(bd) = &l.rules.boss {
-                if !(0..=100).contains(&bd.phase3_pct) || bd.phase3_pct > bd.phase2_pct {
+                if !(0..=100).contains(&bd.phase2_pct)
+                    || !(0..=100).contains(&bd.phase3_pct)
+                    || bd.phase3_pct > bd.phase2_pct
+                {
                     errs.push(format!("level {} boss phase percents", l.id));
                 }
                 if let Some(r) = &bd.roller {
@@ -1117,6 +1266,22 @@ impl Content {
             }
             if l.ground.points.len() < 2 {
                 errs.push(format!("level {} needs a heightline", l.id));
+            }
+            for pt in &l.ground.points {
+                if pt[0] < 0 || pt[0] > l.width || pt[1] < 0 || pt[1] > l.height {
+                    errs.push(format!("level {} ground point out of range", l.id));
+                }
+            }
+            if l.ground.points.windows(2).any(|w| w[0][0] > w[1][0]) {
+                errs.push(format!(
+                    "level {} ground points must not go backwards",
+                    l.id
+                ));
+            }
+            for (_, _, _, _, mat) in &l.ground.patches {
+                if !self.materials.terrain.iter().any(|m| m.id == *mat) {
+                    errs.push(format!("level {} patch material {} missing", l.id, mat));
+                }
             }
             for id in &l.rules.rummage.source {
                 if self.shot(id).is_none() {
@@ -1190,4 +1355,20 @@ pub const PENNANT_TYPES: &[&str] = &[
     "captive_safe",
     "root_by_round",
     "hill_half",
+    "ground_kept",
+    "bonk_nook",
 ];
+
+/// Rival habits the AI knows, by id. A level names one in `habit_id`; the
+/// free text `habit` line is for display only and never changes play.
+pub const HABIT_IDS: &[&str] = &[
+    "balanced",
+    "kettle_hunter",
+    "roof_wrecker",
+    "hob_sniper",
+    "cautious_mender",
+];
+
+/// Rival think time bounds, in milliseconds (presentation only).
+pub const THINK_MS_MIN: i32 = 200;
+pub const THINK_MS_MAX: i32 = 4000;

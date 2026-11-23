@@ -10,16 +10,20 @@ const CANVAS_WATCH = () => {
   const W = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width')!;
   const H = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'height')!;
   let maxOne = 0;
+  let maxEdge = 0;
   const track = (c: HTMLCanvasElement) => {
     if (!(c as unknown as { __t?: 1 }).__t) { (c as unknown as { __t?: 1 }).__t = 1; live.push(new WeakRef(c)); }
-    maxOne = Math.max(maxOne, W.get!.call(c) * H.get!.call(c));
+    const w = W.get!.call(c) as number;
+    const h = H.get!.call(c) as number;
+    maxOne = Math.max(maxOne, w * h);
+    maxEdge = Math.max(maxEdge, w, h);
   };
   Object.defineProperty(HTMLCanvasElement.prototype, 'width', { get() { return W.get!.call(this); }, set(v) { W.set!.call(this, v); track(this); }, configurable: true });
   Object.defineProperty(HTMLCanvasElement.prototype, 'height', { get() { return H.get!.call(this); }, set(v) { H.set!.call(this, v); track(this); }, configurable: true });
-  (window as unknown as { __canvasMem: () => { mb: number; maxOne: number } }).__canvasMem = () => {
+  (window as unknown as { __canvasMem: () => { mb: number; maxOne: number; maxEdge: number } }).__canvasMem = () => {
     let px = 0;
     for (const r of live) { const c = r.deref(); if (c) px += W.get!.call(c) * H.get!.call(c); }
-    return { mb: Math.round((px * 4) / 1e6), maxOne };
+    return { mb: Math.round((px * 4) / 1e6), maxOne, maxEdge };
   };
 };
 
@@ -44,7 +48,7 @@ test('B2: 1-8 plays past round 12 in WebKit without a crash, canvas memory in iO
   await expect(page.locator('.battle')).toBeVisible();
   // A real tap first, so sound runs as it does for a player.
   await page.locator('canvas.field').click({ position: { x: 40, y: 140 }, force: true });
-  let round = 0, phase = '', maxMb = 0, maxOne = 0, fatigue = false, k = 0;
+  let round = 0, phase = '', maxMb = 0, maxOne = 0, maxEdge = 0, fatigue = false, k = 0;
   const t0 = Date.now();
   while (Date.now() - t0 < 18 * 60_000 && !crashed) {
     const st = await page.evaluate((k) => {
@@ -57,11 +61,11 @@ test('B2: 1-8 plays past round 12 in WebKit without a crash, canvas memory in iO
         a.core.command({ cmd: 'aim', angle: 450 + (k % 4) * 25, power: 22 + (k % 3) * 3 });
         if (!a.core.command({ cmd: 'fire' }).ok) a.core.command({ cmd: 'pass' });
       } else if (s.hud.fire === 'fast') a.core.command({ cmd: 'fast', on: true });
-      return { round: s.round as number, phase: s.phase as string, fat: !!(s.fatigue?.[0] || s.fatigue?.[1]), mem: (window as unknown as { __canvasMem: () => { mb: number; maxOne: number } }).__canvasMem() };
+      return { round: s.round as number, phase: s.phase as string, fat: !!(s.fatigue?.[0] || s.fatigue?.[1]), mem: (window as unknown as { __canvasMem: () => { mb: number; maxOne: number; maxEdge: number } }).__canvasMem() };
     }, k++).catch(() => null);
     if (!st) { if (crashed) break; await page.waitForTimeout(300); continue; }
     round = st.round; phase = st.phase; fatigue ||= st.fat;
-    maxMb = Math.max(maxMb, st.mem.mb); maxOne = Math.max(maxOne, st.mem.maxOne);
+    maxMb = Math.max(maxMb, st.mem.mb); maxOne = Math.max(maxOne, st.mem.maxOne); maxEdge = Math.max(maxEdge, st.mem.maxEdge);
     if (phase === 'over' || round > 12) break;
     await page.waitForTimeout(250);
   }
@@ -72,6 +76,7 @@ test('B2: 1-8 plays past round 12 in WebKit without a crash, canvas memory in iO
   expect(round).toBeGreaterThan(12);
   expect(maxMb, 'canvas memory (MB)').toBeLessThan(300);
   expect(maxOne, 'largest canvas (px)').toBeLessThanOrEqual(4096 * 4096);
+  expect(maxEdge, 'largest canvas edge (px)').toBeLessThanOrEqual(4096);
   // The cause: sound files answered by the service worker. On WebKit they now bypass it, so the
   // worker's sound cache stays empty (the old build filled castle-audio here, and crashed behind
   // a slow network). The page is controlled by the worker, so the check means something.

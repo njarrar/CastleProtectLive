@@ -2,13 +2,17 @@
 // Every record has a version and is checked field by field on load: a bad field falls back
 // to its default, the raw record is kept under "<key>.broken", and the last good record is
 // kept under "<key>.bak". Nothing read from storage can stop the app from booting.
+import { list, t } from '../ui/text';
 import type { BattleSetup, Blueprint, BlueprintCell, Difficulty } from '../core/types';
 
 export interface Settings {
   version: number;
   sound: number; // 0 to 100
   music: number; // 0 to 100
+  voices: number; // 0 to 100
   mute: boolean;
+  mono: boolean;
+  captions: boolean;
   difficulty: Difficulty;
   windOff: boolean;
   reduceMotion: boolean;
@@ -50,7 +54,10 @@ export const DEFAULT_SETTINGS: Settings = {
   version: SETTINGS_VERSION,
   sound: 70,
   music: 70,
+  voices: 85,
   mute: false,
+  mono: false,
+  captions: false,
   difficulty: 'fair',
   windOff: false,
   reduceMotion: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -62,7 +69,7 @@ export const DEFAULT_SETTINGS: Settings = {
   seenFirstRun: false,
 };
 
-export const DEFAULT_PROGRESS: Progress = { version: PROGRESS_VERSION, levels: {}, buttons: 0, lastCrew: ['marge'], duelNames: ['Player 1', 'Player 2'], hints: [] };
+export const DEFAULT_PROGRESS: Progress = { version: PROGRESS_VERSION, levels: {}, buttons: 0, lastCrew: ['marge'], duelNames: [list('names.player_default')[0] ?? t('setup.player_label', { n: 1 }), list('names.player_default')[1] ?? t('setup.player_label', { n: 2 })], hints: [] };
 
 const DB = 'castle-protect';
 const STORE = 'kv';
@@ -141,7 +148,7 @@ export function checkBlueprint(v: unknown): Blueprint | undefined {
     if (!isObj(c) || !Number.isInteger(c.col) || !Number.isInteger(c.row) || !KINDS.includes(String(c.kind))) return undefined;
     cells.push({ col: c.col as number, row: c.row as number, kind: c.kind as BlueprintCell['kind'], ...(Number.isInteger(c.room) ? { room: c.room as number } : {}) });
   }
-  const bp: Blueprint = { name: typeof v.name === 'string' ? v.name.slice(0, 40) : 'My Fort', cols: num(v.cols, 1, 1, 32), rows: num(v.rows, 1, 1, 32), cells };
+  const bp: Blueprint = { name: typeof v.name === 'string' ? v.name.slice(0, 40) : t('workshop.my_fort'), cols: num(v.cols, 1, 1, 32), rows: num(v.rows, 1, 1, 32), cells };
   if (typeof v.id === 'string') bp.id = v.id;
   if (typeof v.kit === 'string') bp.kit = v.kit;
   if (Array.isArray(v.rowsText) && v.rowsText.every((x) => typeof x === 'string')) bp.rowsText = v.rowsText as string[];
@@ -160,7 +167,7 @@ export function migrateProgress(raw: unknown): { value: Progress; clean: boolean
   const levels: Record<string, LevelRecord> = {};
   if (isObj(raw.levels)) {
     for (const [id, r] of Object.entries(raw.levels)) {
-      if (!/^[\w-]{1,12}$/.test(id) || !isObj(r)) { bad(); continue; }
+      if (!/^\d+-\d+$/.test(id) || id === '__proto__' || id === 'constructor' || id === 'prototype' || !isObj(r)) { bad(); continue; }
       const pens = Array.isArray(r.pennants) ? [0, 1, 2].map((i) => (r.pennants as unknown[])[i] === true) : [false, false, false];
       levels[id] = { pennants: pens, wins: num(r.wins, 0, 0), losses: num(r.losses, 0, 0) };
     }
@@ -191,7 +198,10 @@ export function migrateSettings(raw: unknown): Settings {
     version: SETTINGS_VERSION,
     sound: num(raw.sound, d.sound, 0, 100),
     music: num(raw.music, d.music, 0, 100),
+    voices: num(raw.voices, d.voices, 0, 100),
     mute: bool(raw.mute, d.mute),
+    mono: bool(raw.mono, d.mono),
+    captions: bool(raw.captions, d.captions),
     difficulty: oneOf(raw.difficulty, ['cozy', 'fair', 'stubborn'] as const, d.difficulty),
     windOff: bool(raw.windOff, d.windOff),
     reduceMotion: bool(raw.reduceMotion, d.reduceMotion),
@@ -210,7 +220,7 @@ export function checkBattleSave(v: unknown): BattleSave | undefined {
   if (!['campaign', 'skirmish', 'duel', 'yard'].includes(String(s.mode)) || !Array.isArray(s.sides) || s.sides.length !== 2) return undefined;
   return {
     setup: s as unknown as BattleSetup, core: v.core, coreName: v.coreName,
-    label: typeof v.label === 'string' ? v.label.slice(0, 80) : 'Saved fight',
+    label: typeof v.label === 'string' ? v.label.slice(0, 80) : t('settings.save.fight_in_progress'),
     savedAt: num(v.savedAt, 0), handoff: v.handoff === true,
   };
 }
@@ -223,6 +233,14 @@ export async function loadSettings(): Promise<Settings> {
   return migrateSettings(await safeGet('settings'));
 }
 
+function progressRichness(p: Progress): number {
+  let n = Object.keys(p.levels).length * 1000;
+  for (const r of Object.values(p.levels)) n += r.wins * 50 + r.pennants.filter(Boolean).length * 20;
+  n += Math.min(500, p.buttons);
+  if (p.blueprint) n += 200;
+  return n;
+}
+
 /** The progress record, checked. A damaged one is kept as "progress.broken"; the last good copy is "progress.bak". */
 export async function loadProgress(): Promise<Progress> {
   const raw = await safeGet<unknown>('progress');
@@ -232,14 +250,18 @@ export async function loadProgress(): Promise<Progress> {
     return m.value;
   }
   void put('progress.broken', { at: Date.now(), raw }).catch(() => undefined);
-  const bak = migrateProgress(await safeGet<unknown>('progress.bak'));
-  const best = bak.clean && raw !== undefined && Object.keys(bak.value.levels).length >= Object.keys(m.value.levels).length ? bak.value : m.value;
+  const bakRaw = await safeGet<unknown>('progress.bak');
+  const bak = bakRaw !== undefined ? migrateProgress(bakRaw) : undefined;
+  const best = bak && bak.clean && raw !== undefined && progressRichness(bak.value) > progressRichness(m.value) ? bak.value : m.value;
   void put('progress', best).catch(() => undefined);
   return best;
 }
 
 export const saveSettings = (s: Settings) => put('settings', s);
-export const saveProgress = (p: Progress) => put('progress', p);
+export async function saveProgress(p: Progress): Promise<void> {
+  await put('progress', p);
+  void put('progress.bak', p).catch(() => undefined);
+}
 export const saveBattle = (b: BattleSave) => put('battle', b);
 export const clearBattle = () => del('battle');
 

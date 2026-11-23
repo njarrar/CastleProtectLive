@@ -131,6 +131,50 @@
         "habit": {
           "type": "string"
         },
+        "habit_id": {
+          "description": "AI habit id. The free text habit line is display only.",
+          "enum": [
+            "balanced",
+            "kettle_hunter",
+            "roof_wrecker",
+            "hob_sniper",
+            "cautious_mender"
+          ]
+        },
+        "think_ms": {
+          "description": "Think pose time in ms before each AI turn (presentation only).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 200,
+          "maximum": 4000
+        },
+        "roster": {
+          "description": "Skirmish: named Rivals picked by the app seed (seed mod count) when the setup gives no name.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "think_ms": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 200,
+                "maximum": 4000
+              }
+            }
+          }
+        },
         "blueprint": {
           "type": [
             "string",
@@ -299,6 +343,50 @@
         },
         "habit": {
           "type": "string"
+        },
+        "habit_id": {
+          "description": "AI habit id. The free text habit line is display only.",
+          "enum": [
+            "balanced",
+            "kettle_hunter",
+            "roof_wrecker",
+            "hob_sniper",
+            "cautious_mender"
+          ]
+        },
+        "think_ms": {
+          "description": "Think pose time in ms before each AI turn (presentation only).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 200,
+          "maximum": 4000
+        },
+        "roster": {
+          "description": "Skirmish: named Rivals picked by the app seed (seed mod count) when the setup gives no name.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "think_ms": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 200,
+                "maximum": 4000
+              }
+            }
+          }
         },
         "blueprint": {
           "type": [
@@ -690,7 +778,9 @@
               "hits_from_spots",
               "captive_safe",
               "root_by_round",
-              "hill_half"
+              "hill_half",
+              "ground_kept",
+              "bonk_nook"
             ]
           },
           "value": {
@@ -698,6 +788,15 @@
           },
           "text": {
             "type": "string"
+          },
+          "area": {
+            "description": "ground_kept: [x0, x1] in cells.",
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
           }
         }
       },

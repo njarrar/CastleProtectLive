@@ -5,9 +5,9 @@ enum RotationSetting: String, Codable, Sendable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .followDevice: return "Follow device"
-        case .stayWide: return "Stay wide"
-        case .stayTall: return "Stay tall"
+        case .followDevice: return tx("settings.controls.follow")
+        case .stayWide: return tx("settings.controls.wide")
+        case .stayTall: return tx("settings.controls.tall")
         }
     }
 }
@@ -15,19 +15,36 @@ enum RotationSetting: String, Codable, Sendable, CaseIterable, Identifiable {
 enum DragMode: String, Codable, Sendable, CaseIterable, Identifiable {
     case pullBack = "pull_back", point
     var id: String { rawValue }
-    var label: String { self == .pullBack ? "Pull-back" : "Point" }
+    var label: String { tx(self == .pullBack ? "settings.controls.pull_back" : "settings.controls.point") }
 }
 
 enum HapticsLevel: String, Codable, Sendable, CaseIterable, Identifiable {
     case off, light, full
     var id: String { rawValue }
-    var label: String { rawValue.capitalized }
+    var label: String {
+        switch self {
+        case .off: return tx("common.off")
+        case .light: return tx("setup.wind.light")
+        case .full: return tx("settings.comfort.full")
+        }
+    }
 }
 
 enum ColourSet: String, Codable, Sendable, CaseIterable, Identifiable {
     case brickabrac, dusk, ink
     var id: String { rawValue }
-    var label: String { rawValue.capitalized }
+    /// "Blue and Orange": the two side colours of the set.
+    var label: String { tx("common.list_and", ["a": sideName(0), "b": sideName(1)]) }
+
+    func sideName(_ side: Int) -> String {
+        let id: String
+        switch self {
+        case .brickabrac: id = side == 0 ? "blue" : "orange"
+        case .dusk: id = side == 0 ? "navy" : "gold"
+        case .ink: id = side == 0 ? "white" : "black"
+        }
+        return tx("settings.comfort.colours.\(id)")
+    }
 }
 
 /// Every player setting. Each change applies at once and is saved at once.
@@ -151,7 +168,8 @@ struct BattleSave: Codable, Equatable, Sendable {
 }
 
 struct DuelOptions: Codable, Equatable, Sendable {
-    var names = ["Player 1", "Player 2"]
+    /// `names.player_default` from text.json, else "Player 1" and "Player 2" (`setup.player_label`).
+    var names = DuelOptions.defaultNames
     var help: [HelpLevel] = [.none, .none]
     var forts = ["box_2", "box_1"]
     var map = "d1"
@@ -212,7 +230,7 @@ struct SkirmishOptions: Codable, Equatable, Sendable {
 /// The one fort the Workshop keeps: the core's glyph rows, top first, the Footing last
 /// (core/API.md, `sides[i].rows`).
 struct WorkshopFort: Codable, Equatable, Sendable {
-    var name = "My Fort"
+    var name = tx("workshop.my_fort")
     var rows: [String] = []
 }
 
@@ -261,5 +279,14 @@ struct SaveData: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case schema, counter, firstRunDone, settings, progress, battle, duel, skirmish, lastLevel, resumeInProgress
         case aimStarts, fort
+    }
+}
+
+extension DuelOptions {
+    /// The two names a new Couch Duel starts with (`names.player_default`).
+    static var defaultNames: [String] {
+        let pool = GameText.shared.pool("names.player_default")
+        if pool.count >= 2 { return Array(pool.prefix(2)) }
+        return [tx("setup.player_label", ["n": 1]), tx("setup.player_label", ["n": 2])]
     }
 }

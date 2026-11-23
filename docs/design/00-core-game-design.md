@@ -10,23 +10,23 @@ This doc sets the rules, names and numbers that every other design doc builds on
 
 **Numbers.** Every number in this doc is a tuning target unless it says "fixed". Bots and playtests set the final values [04 §14].
 
-**Release tags.** Content carries one tag: `[Launch]`, `[U1]` (Long Siege), `[U2]` (Frostwhisker Peaks) or `[U3]` (Clankmouth Mines) [R04 A]. A rule with no tag applies from Launch. Ideas cut for good sit in the appendix "Parked ideas".
+**Release tags.** Content carries one tag: `[Launch]`, `[U1]` (Long Siege), `[U2]` (Nithering Heights) or `[U3]` (Wheal Clank) [R04 A]. A rule with no tag applies from Launch. Ideas cut for good sit in the appendix "Parked ideas".
 
 ---
 
 ## Changes in this revision
 
 1. Added the **Canonical numbers** table below. Other docs follow it.
-2. Material HP is now Wicker 30, Timber 50, Cobble 80, Brassbound 110, Moonbrick 140. Moonbrick heals 7 a turn and not after a hit [R04 B1].
+2. Material HP is now Wicker 30, Timber 50, Cobble 80, Brassbound 110, Mossbrick 140. Mossbrick heals 7 a turn and not after a hit [R04 B1].
 3. Stone side support drops from 2 blocks to 1, so tall stone forts are top heavy. Falling chunks now crush the Heartkettle too [R04 B2].
 4. Crew cap is 5. Crew grows 1, 2, 3 in the tutorial, 4 at level 1-7, 5 at Grand Fort 2 as a free gift. Start grid 6 x 6; grid steps that seat the crew are free [R04 B3].
 5. Heartkettle is 300 HP on every fort, bosses included [R04 B4].
 6. **Sudden Squall** replaces the Last Bell tiebreak and the Final Volley [R04 B5].
 7. Any Hob may fire any Trick Shell. The **Match** Class fires it with no Rest and +10%. Grey cards, deny refunds and families are gone [R04 B6].
-8. Seat words, perks, Scamper, Scurry, Crowded, Perched and Porch are cut. Hob states are Open, Dropped, Tumbled, Squashed, Bonked [R04 B7].
+8. Seat words, perks, Scamper, Scurry, Crowded, Perched and Porch are cut. Hob states are Open, Fell a floor, Tumbled, Squashed, Bonked [R04 B7].
 9. Hob growth is 3 Ranks, each a Quirk pick. No HP per level, no Knack tiers [R04 B8].
-10. No lost turns: Tumble never skips a shot, extra Rest caps at 1, a buried Loophole greys the Fire button, revives are player side only [R04 B9].
-11. Enemy crew stays shown after the Muster. Hidden crew and the Peeper wait for U2 [R04 B10].
+10. No lost turns: Tumble never skips a shot, extra Rest caps at 1, a buried Loophole greys the Fire button, Puff Up is player side only [R04 B9].
+11. Enemy crew stays shown after the Muster. Hidden crew and the Lookout wait for U2 [R04 B10].
 12. Pins fade after one reuse; the AI walks out of a bracket after two hits from one aim [R04 B11].
 13. Tinker Tree has 4 branches (Aim, Fort, Crew, Kit), 36 nodes at launch, 60 in all. Forecast, Rival ghost lines, shot log and drift readout are free [R04 B13].
 14. New onboarding: levels 1-5 teach only aim, Hob pick, kettle, one Knack and wind. Workshop at 1-6, Rummage at 1-8, Tinker Tree at 1-10. 11 prompts in the first 10 minutes [R04 B14].
@@ -41,7 +41,7 @@ This doc sets the rules, names and numbers that every other design doc builds on
 23. Final verification pass [review 05]: the Sudden Squall now hits both sides at once at round end, and a double pop goes to the side with more total HP. The full-HP clamp is now "no single shot Bonks a Hob from full HP" (clamped to its HP minus 1). The per-shot Thwack cap is 110, as the weapons doc sets it. A Beam through a block deals half to the kettle. Duds are always labeled. If every Hob is dug in, the newest burial clears. Level 1-1 has a cap of 8 and no Squall. Onboarding order follows the campaign and UX docs (wind at 1-4, the Knack at 1-5). Launch maps (59) and enemy unit types (14) added to the scope table.
 24. **Owner decisions applied** [R04 D]. The game is free with no monetization: no price, no trial, no unlock, no in-app purchases, no ads. Couch Duel (two players on one device) ships at launch (section 6.1). Portrait and landscape both ship at launch; the UX and art docs own the layouts. Final art is by human artists. A Sudden Squall double pop goes to more total HP. Gentle wind from 1-4 with a Wind off assist. The first Doodad comes at 1-9.
 25. **Lessons from the reference games applied** [review 06, sections A and B]. Items 26 to 36 list them.
-26. **Couch Duel house rules** (G2, section 6.1): everything is open, Mole Mine included; player-only rules such as Puff Up apply to both sides; a **Hand-off card** between turns shows the last shot and a Ready button; an optional **Kind Clock**, off by default, nudges but never fires; a **Starter Box** of even loaner forts plays from first launch; handicaps show openly; **Table mode** in portrait. The Couch Duel Rummage rule is now one rule, the same as `01 §1.9`.
+26. **Couch Duel house rules** (G2, section 6.1): everything is open, Molehill included; player-only rules such as Puff Up apply to both sides; a **Hand-off card** between turns shows the last shot and a Ready button; an optional **Kind Clock**, off by default, nudges but never fires; a **Starter Box** of even loaner forts plays from first launch; handicaps show openly; **Table mode** in portrait. The Couch Duel Rummage rule is now one rule, the same as `01 §1.9`.
 27. **Pacing redone at real speed** (G3, sections 2.12 and 9.6). A round is about 32 s (two shots), not 16 to 20. The vertical slice gates on median seconds per round. Round cap 12 is the fallback if fights run long.
 28. **"Squall in 3" warning** (G4, section 2.11): two rounds before the cap a banner and the round counter count down.
 29. **Teach "aim low"** (G5): **Lean Lines** (hold a block to see what would fall), a shimmer on blocks that hang on weak support, and a **"Drop!"** callout on the first big collapse. All free aim data (sections 2.4, 2.10).
@@ -49,9 +49,10 @@ This doc sets the rules, names and numbers that every other design doc builds on
 31. **Shove Off** (G7, section 2.7): a dug-in Hob digs out for 15 Steam in the Walk step, not your Action.
 32. **Loose Trick Shells in 1-3 and 1-4** (G8, section 8.3), a **Rival wish** in the Rummage (G9, section 2.15), a **"No line" mark** on the pre-battle screen (G10, section 4.2), and a **Volley Points** option in Skirmish and Couch Duel (G11, section 6.2).
 33. **Portrait battle view** (G1, section 2.1): stacked lenses. The UX doc owns the layout.
-34. **"Next door"** joins the glossary for the new positional Passives in `03` (Grub, Hetty, Old Thumper, Nan). Fizz's Knack is now **Rising Fizz** [01]. Mendglob mends +50 everywhere (U11).
+34. **"Next door"** joins the glossary for the new positional Passives in `03` (Grub, Hetty, Old Thumper, Nan). Ginger's Knack is now **Rising Fizz** [01]. Dollop mends +50 everywhere (U11).
 35. **Enemy roster swap** (U10): the Shoring Crew ships at launch and the Silt Lobber moves to U1. Launch enemy types stay 14; U1 is now +4 and U3 +4.
 36. **Native tech plan** [research 04b]: one shared Rust core (sim, AI, content, saves, Daily, bots) in integer Q16.16 fixed point with no floats in rules; native iOS (Swift, SwiftUI, Metal) and Android (Kotlin, Compose, OpenGL ES 3.0) apps and a web app (TypeScript, WebGL2, core as Wasm, offline PWA). Team, effort and launch weeks updated in **Tech and team**.
+37. **Kettle and Creaks rebalance, rules v5** (bundle patch 02, verified in core): Heartkettle 200 HP (was 300), per-shot kettle cap 80 (was 60), kettle takes Blast at 75% and crush at 100% (was 50% each), no Beam-through-wall penalty, a **kettle crack** at half HP weakens the Kettle Room walls, **the progressive Creaks** (called Fatigue until the naming pass; round 10 under 50% HP, round 12 under 80%), and Tumbled fall damage 45 + (fall - 64) / 8, max 70 (was 20). Saves from rules v4 do not resume.
 
 ---
 
@@ -61,16 +62,16 @@ The single source for these values. Where another doc differs, this table wins u
 
 ### Scope by release [R04 A]
 
-| | Launch | U1 Long Siege | U2 Frostwhisker Peaks | U3 Clankmouth Mines | Total |
+| | Launch | U1 Long Siege | U2 Nithering Heights | U3 Wheal Clank | Total |
 |---|---|---|---|---|---|
-| Regions | 4: Puddingstone Downs, Crumblecrag, Soggybottom Fen, The Flats | | +1 | +1 | 6 |
+| Regions | 4: Puddingstone Downs, Crag End, Soggy Bottom Fen, The Flats | | +1 | +1 | 6 |
 | Campaign levels | 40 (4 Grand Forts) | | +10 | +10 | 60 |
 | Trials | 6 | +2 | +1 | +1 | 10 |
-| Classes | 7 (no Peeper) | | +Peeper | | 8 |
+| Classes | 7 (no Lookout) | | +Lookout | | 8 |
 | Hobs | 16 | +2 | +5 | +5 | 28 |
 | Trick Shells | 30 (2 Duds) | +8 | +10 | +10 | 58 |
 | Doodads | 8 | +2 | +2 | +2 | 14 |
-| Materials | Wicker, Timber, Cobble, Brassbound + Footing | | | +Moonbrick | 5 + Footing |
+| Materials | Wicker, Timber, Cobble, Brassbound + Footing | | | +Mossbrick | 5 + Footing |
 | Damage types | Blast, Pierce, Dig, Fire | | +Frost | +Zap | 6 |
 | Statuses | Burn, Soaked | | +Brittle | | 3, plus Rest |
 | Tinker nodes | 36 | | +12 | +12 | 60 |
@@ -78,7 +79,7 @@ The single source for these values. Where another doc differs, this table wins u
 | Modes | Campaign, Skirmish, Couch Duel, Test Yard, Trials, Daily Dust-up | +Long Siege | +Ironclad | +Baron Rush | 9 |
 | Pennants | 138 (120 levels, 18 Trials) | +6 | +33 | +33 | 210 |
 | Maps | 59 (41 campaign, 6 Trial, 12 shared) | +14 | +11 | +11 | 95 |
-| Enemy unit types | 14 (13 that fire, plus the Straw Stuffer) | +4 | +6 | +4 | 28 |
+| Enemy unit types | 14 (13 that fire, plus the Dummy) | +4 | +6 | +4 | 28 |
 | Grand Forts | 4 (the fourth is the Last Level) | | +1 | +1 | 6 |
 
 ### Battle
@@ -86,7 +87,7 @@ The single source for these values. Where another doc differs, this table wins u
 | Item | Value |
 |---|---|
 | Map | 2400 x 720 cells (Standard). Pocket 1200, Small 1600, Long 3200 wide |
-| Fort centre gap | Duels 1000 to 1400. Long maps up to 1800. Pocket and Small maps may go under 1000 for Puzzle and teaching levels only |
+| Fort gap (inner face) | Duels 1000 to 1400 (pad centre gap up to 1500). Long maps up to 1800. Pocket and Small maps may go under 1000 for Puzzle and teaching levels only |
 | Camera zoom | 0.6 floor, 1.25 max |
 | Sim clock | One clock, 120 Hz. Rendering at display rate. Deterministic: integer Q16.16 fixed point, no floats in rules [04b] |
 | Gravity, wind | 600 cells/s². Wind -10 to +10, 10 cells/s² per point |
@@ -115,28 +116,30 @@ The single source for these values. Where another doc differs, this table wins u
 | Block cap | 80 grid cells including Footing. Block Budget 72, shown as x / 72 |
 | Nooks | Never fewer than seated Hobs. Cap 5. Enemy forts 1 to 5 |
 | Kettle Room | 2 x 2, at least one block in from every outer face |
-| Materials (HP, Buttons, side support) | Wicker 30, 5, 2. Timber 50, 15, 1 (was 2, tuned for pacing in core v0.2). Cobble 80, 35, 1. Brassbound 110, 70, 2. Moonbrick [U3] 140, 150, 1. Footing 400, free, never falls |
-| Moonbrick heal [U3] | 7 HP at its owner's turn start; none if it was hit since its owner's last turn, if Brittle, or with a Cuckoo Clock on it |
-| Heartkettle | 300 HP on every fort, bosses included. Blast 50%, crush 50% (falling chunks hit it at 50%), Pierce 100%, Zap 100% [U3]. Fire, Dig, Frost 0. A Beam that has passed through a block deals half to it. Never Brittle |
-| Cover | 65% off area payloads (was 50%, tuned for pacing in core v0.2; value lives in `content/materials.json` as `cover_pct`) (Tiny band or larger, any type) centred outside an intact Nook. Intact: every block on all four sides stands |
+| Materials (HP, Buttons, side support) | Wicker 30, 5, 2. Timber 50, 15, 1 (was 2, tuned for pacing in core v0.2). Cobble 80, 35, 1. Brassbound 110, 70, 2. Mossbrick [U3] 140, 150, 1. Footing 400, free, never falls |
+| Mossbrick heal [U3] | 7 HP at its owner's turn start; none if it was hit since its owner's last turn, if Brittle, or with a Cuckoo Clock on it |
+| Heartkettle | 200 HP on every fort, bosses included (was 300, rules v5). Blast 75%, crush 100%, Pierce 100%, Zap 100% [U3]. Fire, Dig, Frost 0. A Beam that has passed through a block deals full damage to it (no wall penalty since rules v5). Never Brittle |
+| Kettle crack | At or under half HP (100) the kettle cracks once (`kettle_crack` event). From then on each block of the Kettle Room walls reaches one less to the side, so a hurt kettle room tends to cave in |
+| Cover | 35% off (65% taken) on area payloads (was 50%, tuned for pacing in core v0.2; value lives in `content/materials.json` as `cover_pct`) (Tiny band or larger, any type) centred outside an intact Nook. Intact: every block on all four sides stands |
 | Pacing tune (core v0.2) | Timber, Cobble and Hob crush raised. Measured on 96 Fair vs Fair bot battles: median end round 10, 63% end on rounds 7 to 11, 12.5% go past the round cap. Rerun with `cargo run -p castle-core --example pacing` |
 | Self damage | Your own blasts hurt your own blocks and Hobs at 50%. A self hit never Bonks your own Hob (stops at 1 HP) |
-| Thump, fall, crush | Drop over 48: 10 to every block and Hob. Fall over 32: 10 per 16, max 40. Crush 15 per block (Cobble x2, Wicker 0) |
+| Thump, fall, crush | Drop over 48: 10 to every block and Hob. Fell a floor, a fall over 32: 10 per 16, max 40. Tumbled (out of the fort, a fall over 64 that lands in no free Nook): 45 + (fall - 64) / 8, max 70. Crush 15 per block (Cobble x2, Wicker 0) |
+| The Creaks | Progressive, from round 10 (not in Volley Points or the Test Yard). Round 10: blocks under 50% HP reach one less to the side. Round 12: blocks under 80% HP. Blocks that no longer stand fall at the round start; that fall and its crush stop at 1 HP, so the Creaks alone never pop a kettle or Bonks a Hob. "Creaks next round" warning in round 9 |
 
 ### Crew and shots
 
 | Item | Value |
 |---|---|
 | Crew in battle | 1 (1-1), 2 (1-2, 1-3), 3 (1-4 to 1-6), 4 (from 1-7), 5 (from Grand Fort 2 clear). Cap 5 |
-| Class HP | Lobber 120, Zinger 80, Scatterjack 100, Delver 140, Boinker 90, Sizzler 100, Patcher 110, Peeper 80 [U2]. Named Hobs within 10 (bosses exempt) |
+| Class HP | Lobber 120, Zinger 80, Scatterjack 100, Digger 140, Bouncer 90, Stoker 100, Patcher 110, Lookout 80 [U2]. Named Hobs within 10 (bosses exempt) |
 | Hob Ranks | 0 to 3. Rank costs 300, 700, 1,500 Buttons (2,500 in all). Each Rank is a Quirk pick of 2. No HP growth |
 | Knack | 2 uses per battle |
 | Hand | Plain Shot, Knack, 4 Trick Shells from the Rummage, 2 Doodads |
 | Rummage | Pool 10, 4 picks each, alternate. Levels may set pool size and picks |
 | Match bonus | The shell's Match Class fires it with Rest 0 and +10% |
-| Hard caps per shot | 60 to one kettle (falls it causes included). No single shot Bonks a Hob from full HP: the sim clamps that shot's damage to the Hob at its HP minus 1. 110 Thwack |
+| Hard caps per shot | 80 to one kettle (falls it causes included). No single shot Bonks a Hob from full HP: the sim clamps that shot's damage to the Hob at its HP minus 1. 110 Thwack |
 | Blast bands | Point 0, Tiny 10, Small 18, Medium 28, Large 42, Huge 64 |
-| Plain Shots | Clodpot 35, Hatpin 32 (48 to a Hob), Gravel Sneeze 3 x 14, Nibbler 34 Dig, Bouncebean 30 +5 per hop, Emberpot 15 Fire, Mendglob +50 HP (every doc), Peep Pip 12 [U2] |
+| Plain Shots | Clodpot 35, Hatpin 32 (48 to a Hob), Gravel Sneeze 3 x 14, Nibbler 34 Dig, Jumping Bean 30 +5 per hop, Hot Coal 15 Fire, Dollop +50 HP (every doc), Chalk Dart 12 [U2] |
 | Next door | The Nooks touching a Hob's Nook left, right, above and below (sharing a wall, no room between). Used by four launch Passives [D03] |
 
 ### Economy and progress
@@ -217,7 +220,7 @@ Genre fans first, casual phone players second [R04 D8]. The simple rules in this
 
 **The hook.** The villain clan, the **Flatteners** under **Baron Levelwell**, want to stamp every hill in Brickabrac flat, because flat land is tidy. Their machines roll the world smooth. The player's clan fights to keep Brickabrac lumpy. This turns one of the genre's known faults, flat boring maps [02b §15, 02d §1.4 "Flat terrain"], into the story: every region we win back gets its hills back. The campaign is called **The Unflattening**.
 
-**Launch story shape.** The launch game runs Downs, Crag, Fen, then The Flats, so the Baron falls and the story ends at launch. In U2 and U3 two lieutenants who fled, the wings that got away, regroup in Frostwhisker Peaks and Clankmouth Mines [R04 A]. The campaign doc owns the story beats.
+**Launch story shape.** The launch game runs Downs, Crag, Fen, then The Flats, so the Baron falls and the story ends at launch. In U2 and U3 two lieutenants who fled, the wings that got away, regroup in Nithering Heights and Wheal Clank [R04 A]. The campaign doc owns the story beats.
 
 **The people.** **Hobs** are small, round, stubborn folk in patched coats and too-big hats. Each Hob has a trade (its **Class**) and a signature shot. Hobs are tough, vain and easily startled.
 
@@ -309,7 +312,7 @@ Three inputs at the core: angle, power, fire [02c §5.1]. Numbers always visible
 ### 2.4 Trajectory preview and free aim data
 
 1. The preview runs the real sim from the Loophole with real gravity and real wind, and draws fading dots [03 §9].
-2. Default length: the first **30%** of the arc's path length. Tinker nodes extend it to **45%** (Long Sight) and **60%** (Eagle Sight). It never shows the full arc in battle except with the Cozy assist "Training Arc" and in the Test Yard [03 §9, 02b §17.7]. Ironclad [U2] holds it at 30%.
+2. Default length: the first **30%** of the arc's path length. Tinker nodes extend it to **45%** (Long Sight) and **60%** (Eagle Sight). It never shows the full arc in battle except with the Cosy assist "Training Arc" and in the Test Yard [03 §9, 02b §17.7]. Ironclad [U2] holds it at 30%.
 3. For shells that split, roll or turn, the preview stops at the first trigger point. One exception: **Rising Fizz** splits at its apex into bubbles on one fixed path, so its preview runs on through the split, up to the preview length [D01].
 4. Beams (no gravity) show a straight line up to the first solid thing, since the line is plain to see anyway.
 5. The preview never reveals what the player cannot see.
@@ -335,7 +338,7 @@ Three inputs at the core: angle, power, fire [02c §5.1]. Numbers always visible
 - Wind is an integer from -10 to +10, shown as an arrow with a number and a moving streak of leaves on screen. Colour-blind safe: arrow shape and number carry it, not colour [01 "best ever" 14].
 - Wind is a constant horizontal push on shells for the whole turn [03 §7.1]. Each shell has a wind factor (heavy stones 0.6, feathers and balloons 1.5, beams 0).
 - **Weather Fronts.** Wind holds for 3 rounds, then changes. The **forecast** icon shows the next front's wind for the whole current front, for free. The Weathercock Doodad shows two fronts ahead. A miss then teaches the fix [02 §3.1 wind, 02 §5.11, audit C54].
-- **Wind is a chore only if it is always on.** `02c §3.3` and `02c §6.39` warn that Pocket Tanks cut wind on purpose and fans still loved it; `02 §3.1` shows strong wind made blind aim slow. So: levels 1-1 to 1-3 have no wind; 1-4 teaches it. Most later levels range 0 to 6. Strong wind (7 to 10) is a level feature (storm levels, the Flats bellows, Frostwhisker Peaks [U2]). Cozy can turn wind off. Some shells and Doodads make gusts (the weapons doc owns them).
+- **Wind is a chore only if it is always on.** `02c §3.3` and `02c §6.39` warn that Pocket Tanks cut wind on purpose and fans still loved it; `02 §3.1` shows strong wind made blind aim slow. So: levels 1-1 to 1-3 have no wind; 1-4 teaches it. Most later levels range 0 to 6. Strong wind (7 to 10) is a level feature (storm levels, the Flats bellows, Nithering Heights [U2]). Cosy can turn wind off. Some shells and Doodads make gusts (the weapons doc owns them).
 
 ### 2.6 Terrain rules
 
@@ -366,11 +369,11 @@ More rooms come with updates (Lookout, Decoy Kettle Room and Boiler Loft [U2], T
 
 **The validator (fixed).** Every fort, player or Rival, must pass the Workshop validator: Kettle Room placement, Nooks never fewer than seated Hobs, every Nook walled on all four sides at build time, Block Budget. Level data that fails the validator fails the build [R04 B3, audit C05].
 
-**Own shots pass through own castle.** Your own blocks never block your own shots. No one wants to shoot their own wall [02 §2.10 frustration]. **Foreign blocks** do block your shots: blocks or props the other side placed on or in your fort (a bush, a cork, scrap) count as foreign. A Hob whose Loophole is blocked by dirt or a foreign block has a **buried Loophole**: its portrait shows the dirt icon and its Fire button greys until any blast, any Delver shot or a Mendglob on the Nook clears it. It never fires into its own face. If every live Hob on a side is dug in at its turn start, the newest burial clears by itself, so no side is ever forced to pass [R04 B9, audit C15, D01].
+**Own shots pass through own castle.** Your own blocks never block your own shots. No one wants to shoot their own wall [02 §2.10 frustration]. **Foreign blocks** do block your shots: blocks or props the other side placed on or in your fort (a bush, a cork, scrap) count as foreign. A Hob whose Loophole is blocked by dirt or a foreign block has a **buried Loophole**: its portrait shows the dirt icon and its Fire button greys until any blast, any Digger shot or a Dollop on the Nook clears it. It never fires into its own face. If every live Hob on a side is dug in at its turn start, the newest burial clears by itself, so no side is ever forced to pass [R04 B9, audit C15, D01].
 
-**Shove Off (fixed rule, numbers tune)** [review 06 G7]. In your Walk step, tap the dirt icon on a dug-in Hob and pay **15 Steam**: that Loophole clears at once, and the Hob may fire this turn. It costs no Action. The 15 counts toward the 40 Steam per turn cap. One Shove Off per Hob per turn. With under 15 Steam left, the old ways (a blast, a Delver shot, a Mendglob, or the newest-burial rule) still clear it. The AI uses Shove Off by the same rule. Burial traps were the worst feel in the reference games; this keeps a mound a real wall without making it a lost turn.
+**Shove Off (fixed rule, numbers tune)** [review 06 G7]. In your Walk step, tap the dirt icon on a dug-in Hob and pay **15 Steam**: that Loophole clears at once, and the Hob may fire this turn. It costs no Action. The 15 counts toward the 40 Steam per turn cap. One Shove Off per Hob per turn. With under 15 Steam left, the old ways (a blast, a Digger shot, a Dollop, or the newest-burial rule) still clear it. The AI uses Shove Off by the same rule. Burial traps were the worst feel in the reference games; this keeps a mound a real wall without making it a lost turn.
 
-**Support rule (fixed for the sim).** A block stays up if it has a path of touching blocks (below or beside) down to the Footing. Side support reaches out from a block that has support below: **2 blocks for Wicker, Timber and Brassbound, 1 block for Cobble and Moonbrick**. Reach is inherited: a block resting on a side-supported block does not reset the count. A Brace line adds 2 to the reach along it. Any group of blocks that loses support falls as one chunk, straight down in the sim. Falling chunks break on landing and deal crush (2.10). The rule is deterministic so the AI, preview, replays and the Daily agree [03 §7.3, 04 §7, R04 B2].
+**Support rule (fixed for the sim).** A block stays up if it has a path of touching blocks (below or beside) down to the Footing. Side support reaches out from a block that has support below: **2 blocks for Wicker, Timber and Brassbound, 1 block for Cobble and Mossbrick**. Reach is inherited: a block resting on a side-supported block does not reset the count. A Brace line adds 2 to the reach along it. Any group of blocks that loses support falls as one chunk, straight down in the sim. Falling chunks break on landing and deal crush (2.10). The rule is deterministic so the AI, preview, replays and the Daily agree [03 §7.3, 04 §7, R04 B2].
 
 **Why stone reaches 1.** Collapse is the damage that grows with fort size [R04 B2]. A tall stone fort is top heavy: a good low hit on a late fort should drop about a third of it. Bots test a late fort by week 6.
 
@@ -390,10 +393,10 @@ Four build tiers at launch, a fifth in U3, plus Footing. HP climbs gently; the *
 | 2 | **Timber** | 50 | 15 | 2 | Burns. Cheap and stiff: good for wings and overhangs | [Launch] |
 | 3 | **Cobble** | 80 | 35 | 1 | Fireproof. Heavy: crush x2 when it falls | [Launch] |
 | 4 | **Brassbound** | 110 | 70 | 2 | Fireproof. Riveted: holds wings like wood. Takes half from Pierce and Dig. From U3, conducts Zap: a Zap hit chains to touching Brassbound at half damage | [Launch] |
-| 5 | **Moonbrick** | 140 | 150 | 1 | Heals 7 HP at the start of its owner's turn. No heal if it was hit since its owner's last turn, while Brittle, or with a Cuckoo Clock on it | [U3] |
+| 5 | **Mossbrick** | 140 | 150 | 1 | Heals 7 HP at the start of its owner's turn. No heal if it was hit since its owner's last turn, while Brittle, or with a Cuckoo Clock on it | [U3] |
 | fixed | **Footing** | 400 | free | n/a | Immune to Dig. Takes 25% from Blast. Never falls | [Launch] |
 
-**Moonbrick heal check.** A Clodpot does 35 x 0.6 = 21 to Moonbrick. The heal is 7, one third of that, and it stops on any turn after a hit, so a Plain Shot always dents it [R04 B1].
+**Mossbrick heal check.** A Clodpot does 35 x 0.6 = 21 to Mossbrick. The heal is 7, one third of that, and it stops on any turn after a hit, so a Plain Shot always dents it [R04 B1].
 
 ### 2.9 Crew: Hobs and Classes
 
@@ -402,38 +405,38 @@ Four build tiers at launch, a fifth in U3, plus Footing. HP climbs gently; the *
 - **Kit per Hob**: one **Plain Shot** (unlimited, Light) and one **Knack** (its own signature shot, 2 uses per battle, usually Medium). Any Hob may also fire any drafted Trick Shell (2.15).
 - Base Hob HP: 100. Classes range 80 to 140. Named Hobs sit within 10 of their Class base; bosses are exempt.
 - **Growth: 3 Ranks.** Training with Buttons raises a Hob from Rank 0 to Rank 3. Each Rank is a pick of one **Quirk** out of two. Ranks add no HP and no damage, and Knacks have no tiers [R04 B8]. The best old Knack tier ideas are now Quirk options (the crew doc owns them).
-- **Bonked** Hobs float away on a Snooze Balloon. They are out for this battle only. No lasting cost. Only the player's side can revive a Bonked Hob (the Patcher Knack); Rival Patchers rebuild walls instead [R04 B9]. In Couch Duel both human sides may revive (6.1).
+- **Bonked** Hobs float away on a Snooze Balloon. They are out for this battle only. No lasting cost. Only the player's side can Puff Up a Bonked Hob (the Patcher Knack); Rival Patchers rebuild walls instead [R04 B9]. In Couch Duel both human sides may Puff Up (6.1).
 
 **Hob states (fixed list).** Five states, each with a clear picture [R04 B7]:
 
 | State | What happened | Rule |
 |---|---|---|
 | **Open** | A block on any side of its Nook is gone, or it stands outside a Nook | No Cover |
-| **Dropped** | Its Nook floor broke | It falls straight down to the first standing surface. Fall damage if over 32 cells. In a free Nook it takes that seat; anywhere else it is Open |
-| **Tumbled** | It fell out of the castle | 20 damage, then it climbs into the lowest free Nook. It does **not** skip a shot. If no Nook is free it stands on the Footing lip, Open |
+| **Fell a floor** | Its Nook floor broke | It falls straight down to the first standing surface. Fall damage if over 32 cells. In a free Nook it takes that seat; anywhere else it is Open |
+| **Tumbled** | It fell out of the castle | 45 + (fall - 64) / 8 damage, max 70, then it climbs into the lowest free Nook. It does **not** skip a shot. If no Nook is free it stands on the Footing lip, Open |
 | **Squashed** | A chunk landed on it | Takes crush (2.10), pops back up |
 | **Bonked** | 0 HP | Out for the battle |
 
 Slapstick, not punishment [02 §5.20]. Hobs never leave the battle by knockback.
 
-Seven Classes at launch, the Peeper in U2. The crew doc names the Hobs: 16 at launch, 28 in all.
+Seven Classes at launch, the Lookout in U2. The crew doc names the Hobs: 16 at launch, 28 in all.
 
 | Class | Role | Plain Shot | Knack style | Tag |
 |---|---|---|---|---|
-| **Lobber** | Demolisher | Clodpot: high arc pot, Medium blast | Big lob, Large blast | [Launch] |
-| **Zinger** | Crew sniper | Hatpin: flat fast pin, Pierce, threads Loopholes | Beam through one wall | [Launch] |
-| **Scatterjack** | Area | Gravel Sneeze: fan of 3 small stones | Split at apex into many | [Launch] |
-| **Delver** | Underminer | Nibbler: short tunnel shot, Dig | Long bore then burst | [Launch] |
-| **Boinker** | Trick shots | Bouncebean: bouncing bean, 2 hops | Roller or skipper | [Launch] |
-| **Sizzler** | Zones | Emberpot: fire pot that leaves an ember patch | Fluid or fire field | [Launch] |
-| **Patcher** | Support | Mendglob: repairs 1 own block, or chips an enemy block | Rebuild 4 blocks, or re-inflate one Bonked Hob at 40 HP once per battle (player side only against the AI; both sides in Couch Duel) | [Launch] |
-| **Peeper** | Scout | Peep Pip: marker that reveals a hidden Nook | Fan of chalk arcs that reveal rooms | [U2] |
+| **Lobber** | Breaks walls | Clodpot: high arc pot, Medium blast | Big lob, Large blast | [Launch] |
+| **Zinger** | Picks off Hobs | Hatpin: flat fast pin, Pierce, threads Loopholes | Beam through one wall | [Launch] |
+| **Scatterjack** | Hits a wide patch | Gravel Sneeze: fan of 3 small stones | Split at apex into many | [Launch] |
+| **Digger** | Digs under | Nibbler: short tunnel shot, Dig | Long bore then burst | [Launch] |
+| **Bouncer** | Goes round corners | Jumping Bean: bouncing bean, 2 hops | Roller or skipper | [Launch] |
+| **Stoker** | Burns and soaks | Hot Coal: fire pot that leaves an ember patch | Fluid or fire field | [Launch] |
+| **Patcher** | Mends | Dollop: repairs 1 own block, or chips an enemy block | Rebuild 4 blocks, or re-inflate one Bonked Hob at 40 HP once per battle (player side only against the AI; both sides in Couch Duel) | [Launch] |
+| **Lookout** | Finds their crew | Chalk Dart: marker that reveals a hidden Nook | Fan of chalk arcs that reveal rooms | [U2] |
 
 Roles follow `02b §7` (Slayers, Demolishers, Tacticians) in original form. Every Class must have a hard counter visible on the map [02c §6 combo rules, 02d §1.6.12].
 
 **Seating.** You seat Hobs in Nooks in the Workshop, saved per Blueprint. Where a Hob sits matters through the plain physics: a high Loophole lobs better, a low one fires flat and skims, what stands above a Nook can crush it, and Cover needs whole walls. There are no seat words or seat perks [R04 B7].
 
-**Enemy crew info.** At battle start a 2 s **Muster** fly-by shows each enemy Nook with the Class icon of the Hob inside. The icons stay on after the Muster, and HP pips show on the HUD for both sides [R04 B10]. The AI knows the same: it sees your crew icons and HP, never your aim plans. Hidden crew returns in U2 with the Peeper, where fog and blizzard give it a job [U2].
+**Enemy crew info.** At battle start a 2 s **Muster** fly-by shows each enemy Nook with the Class icon of the Hob inside. The icons stay on after the Muster, and HP pips show on the HUD for both sides [R04 B10]. The AI knows the same: it sees your crew icons and HP, never your aim plans. Hidden crew returns in U2 with the Lookout, where fog and blizzard give it a job [U2].
 
 ### 2.10 Damage model
 
@@ -443,7 +446,7 @@ Roles follow `02b §7` (Slayers, Demolishers, Tacticians) in original form. Ever
 
 **Material multipliers (tuning targets):**
 
-| Type | Wicker | Timber | Cobble | Brassbound | Moonbrick [U3] | Footing | vs Hob | Kettle |
+| Type | Wicker | Timber | Cobble | Brassbound | Mossbrick [U3] | Footing | vs Hob | Kettle |
 |---|---|---|---|---|---|---|---|---|
 | Blast | 1.2 | 1.0 | 0.8 | 0.7 | 0.6 | 0.25 | 1.0 | 0.5 |
 | Pierce | 1.0 | 1.0 | 0.6 | 0.5 | 0.5 | 0.1 | 1.5 | 1.0 |
@@ -457,7 +460,7 @@ Roles follow `02b §7` (Slayers, Demolishers, Tacticians) in original form. Ever
 
 - **Burn** [Launch]: 8 damage at the start of the owner's turn for 2 turns. Spreads once to touching Wicker and Timber. At wind 5 or more, each tick it may also jump one wood block downwind, even over a one-block gap; at most one downwind jump per tick [audit C23]. Water ends it.
 - **Soaked** [Launch]: from water. Ends Burn, blocks new Burn for 1 turn, turns Loam to Mud. From U3, a Soaked target takes Zap x1.5, applied after the material or Hob multiplier; it does not stack with Brittle [audit C22].
-- **Brittle** [U2]: from Frost. The next Blast or Pierce hit on that block or Hob does x1.5. Lasts until hit or 2 turns. Fire ends Brittle. A Brittle Moonbrick block does not heal. Brittle and Soaked bonuses never stack. The Heartkettle is never Brittle [audit C24, C25].
+- **Brittle** [U2]: from Frost. The next Blast or Pierce hit on that block or Hob does x1.5. Lasts until hit or 2 turns. Fire ends Brittle. A Brittle Mossbrick block does not heal. Brittle and Soaked bonuses never stack. The Heartkettle is never Brittle [audit C24, C25].
 - **Rest** (from Frost and some shots): adds 1 to a Hob's Rest cog, within the cap of 1 extra (2.2). This replaces the old Chill status.
 
 Combo rules from `02c §6`: Fire lights wood, Water stops fire and makes mud, Frost makes things brittle, Tunnelers beat walls, Footing beats tunnelers, Bounce beats direct fire, sticky ground beats bounce and rollers. Every counter must be visible before the shot [02c §6].
@@ -466,17 +469,17 @@ Combo rules from `02c §6`: Fire lights wood, Water stops fire and makes mud, Fr
 
 **Loophole Flap (fixed rule)** [review 06 G6]. When a Thread passes a Loophole (the game calls "Threaded!"), a flap drops over that Loophole. Until the Weather Front changes, Threads cannot pass it: a point shot that reaches the slot hits the wall block instead. The Hob inside still fires as normal, and area shots, Beams through blocks and Burn are not changed. The flap shows on the fort with the rounds left in the front, for both sides, and lifts when the new front starts. It applies to every side, player and AI, on every preset, and in Couch Duel. **Why.** A kept aim plus a Loophole Thread could Bonk a 120 HP Lobber in two turns, again and again. Now each Loophole takes at most one Thread per front, and each new Thread needs a new aim. This replaces the old hidden AI rule "one Thread per battle on Fair" [D04 §6.5].
 
-**Crush.** A falling chunk deals 15 per block in it (x2 for Cobble, 0 for Wicker) to the blocks, Hobs and Heartkettle it lands on. The kettle takes crush at 50%. Big forts fall harder; that is how damage scales late in the campaign [R04 B2].
+**Crush.** A falling chunk deals 15 per block in it (x2 for Cobble, 0 for Wicker) to the blocks, Hobs and Heartkettle it lands on. The kettle takes crush in full (100%). Big forts fall harder; that is how damage scales late in the campaign [R04 B2].
 
-**Fall.** A Hob that drops more than 32 cells takes 10 per 16 cells, max 40.
+**Fall.** A Hob that drops more than 32 cells takes 10 per 16 cells, max 40. A Tumbled Hob (it fell more than 64 cells and landed in no free Nook) takes 45 + (fall - 64) / 8, max 70.
 
 **Self damage.** Your blasts can hurt your own blocks and Hobs if they land near you, at 50%, and a self hit never Bonks one of your own Hobs (it stops at 1 HP). The Ghost and Pins mark a self hit in red so the cause is plain. Your shots still pass through your own castle in flight. No Rival shell may trap a fort with no way out: a buried side always digs out [02e §3.4, §3.8].
 
-**Heartkettle (fixed HP).** 300 HP on every fort, bosses included; boss fights are gated by phases, not by a bigger kettle [R04 B4]. Its glow shows through walls on both castles at all times, so the core path is always plain [02d §1.6.5]. Multipliers are in the table above. Two kettle rules (fixed): falling chunks hit the Heartkettle at 50% of their crush, and a Beam that has passed through any block deals half to the Heartkettle, so open the wall first for full damage [R04 B2, D01].
+**Heartkettle (fixed HP).** 200 HP on every fort, bosses included; boss fights are gated by phases, not by a bigger kettle [R04 B4]. Its glow shows through walls on both castles at all times, so the core path is always plain [02d §1.6.5]. Multipliers are in the table above. Kettle rules (rules v5): Blast hits it at 75% and falling chunks at their full crush; a Beam that has passed through a block deals full damage (the old half-damage wall penalty is gone). At or under half HP the kettle cracks once: the blocks walling the Kettle Room each reach one less to the side, so a hurt kettle room tends to fall in on it [R04 B2, D01].
 
 **Hard caps per shot (fixed, sim clamps) [audit C27, C28].**
 
-- One shot deals at most 60 to one Heartkettle, counting the falls it causes. A Kettle Pop takes at least five good hits after the wall opens.
+- One shot deals at most 80 to one Heartkettle, counting the falls it causes. A Kettle Pop takes at least three good hits after the wall opens.
 - No single shot Bonks a Hob from full HP. If a Hob starts a shot at full HP, the sim clamps that shot's direct damage to it at its HP minus 1, whatever its Class. Crush, falls and Burn ticks are not shot damage and do not count [review 05].
 - One shot deals at most 110 Thwack in all, Match bonus included [D01].
 
@@ -505,7 +508,7 @@ Two paths, plus the **Sudden Squall** after the round cap [02 §2.9, 02d §1.6.5
 - A kettle popped by a shot during a Squall round ends the fight at once, as at any time.
 - Squall damage ignores Cover, shields, lids and armour, and is not clamped by the per-shot caps. Heals and mends still work, but nothing heals a kettle.
 - If wind is 0 when the Squall starts, it starts blowing toward a side picked by the battle seed.
-- A kettle at 300 loses 50 + 100 + 150 = 300, so it pops at the end of Squall round 3 at the latest. **Every fight ends by the end of the third round after the cap.** Section 9.6 shows the check.
+- A kettle at 200 has lost 150 after Squall round 2 (it cracks there) and pops at the end of Squall round 3 at the latest; the crack and its crush often pop it a round sooner. **Every fight ends by the end of the third round after the cap.** Section 9.6 shows the check.
 - Grand Forts use the Squall too. If a boss kettle drops through a phase in the Squall, the phase is skipped.
 - **Level 1-1 is the one exception.** It has no Squall: when its cap of 8 runs out, Sir Pudge dozes off, his fort sits down and the player wins with 1 Pennant, so no first match ends in a storm the player was never taught [D05 §3.3, D07 §5.2].
 - Mission types whose round or shot limit is the mission rule (Demolition, Puzzle, Rescue, Escort) have no Squall [D05 §3.1].
@@ -516,7 +519,7 @@ The HUD shows both win paths at all times: Hob portraits with HP pips on each si
 
 **"Squall in 3" warning (fixed)** [review 06 G4]. At the start of the round two before the cap (round 13 at cap 15), a banner reads "Squall in 3", clouds gather on the horizon and the round counter turns amber. The next round shows "Squall in 2", the cap round "Squall in 1". The round counter (`Round 13/15`) stays on the HUD all battle. Levels with no Squall (1-1, Demolition, Puzzle, Rescue, Escort) show their own round count and no banner.
 
-**Siege Score.** Every battle also keeps a score for Pennant goals, the Daily Dust-up and the Long Siege [U1]. Balance by payoff against ease [02c §3.4, 02c §5.5]:
+**Score.** Every battle also keeps a score for Pennant goals, the Daily Dust-up and the Long Siege [U1]. Balance by payoff against ease [02c §3.4, 02c §5.5]:
 
 - Damage dealt x the shot's **Skill Factor** (0.5 for wide easy shots, 1.0 for Plain Shots, 1.5 for point shots and beams).
 - +150 per Bonk. +400 for a Kettle Pop.
@@ -568,7 +571,7 @@ Each battle hand has three parts. Around 8 to 10 meaningful choices, most scarce
    - Each Trick Shell is single use. Shells have no rarity [R04 B16].
    - **The Rival's wish** [review 06 G9]. Before the first pick, the Rival glances at one tile and a small pin marks it: "I want that one." The pin is the shell the draft AI scores highest for itself, so it is true. The Rival takes it at its first chance if it is still there. On Stubborn and Ironclad the Rival may keep its wish to itself (the card says "plays its cards close"). No wish in Couch Duel, where no AI runs. This makes a deny pick a read, not a guess [D04 §6.8].
    - **Quick Pick** fills both hands at once using the Fair draft AI, and never takes a Dud for the player [audit C77]. **Pool lock**: a level may fix the pool for puzzle design. A level's fixed pool may lend shells from the Rival's list, marked "on loan".
-   - The pool includes a **Dud** now and then (a joke shell), so denying it to the Rival is part of the fun [02c §6.55]. Every Dud is labeled "Dud" on its tile and card, for both sides, from launch on; there is no hidden Dud and no stamp rule. Firing one is funny and a little useful [D01]. From U2, a Peeper in the crew shows the Rival's draft picks as they are made [U2].
+   - The pool includes a **Dud** now and then (a joke shell), so denying it to the Rival is part of the fun [02c §6.55]. Every Dud is labeled "Dud" on its tile and card, for both sides, from launch on; there is no hidden Dud and no stamp rule. Firing one is funny and a little useful [D01]. From U2, a Lookout in the crew shows the Rival's draft picks as they are made [U2].
 3. **Doodads.** Two slots, chosen before battle from what you have unlocked. One use each. Using one costs your Action. The weapons doc names them (launch examples: Mend Bucket, Pot Lid, Coal Scuttle, Weathercock) [02b §16.12].
 
 **Level data may change** Steam, front length, pool size, picks and round cap. The pre-battle screen shows each change [audit C72].
@@ -614,7 +617,7 @@ The two best seconds are the impact and the 1 s after it, when things fall [02 �
 
 ### 4.2 Battle loop
 
-**One pre-battle screen** [R04 B15, audit C87]: the level card (Rival, its one stated habit, map preview, rule changes, Pennant goals), crew and Blueprint, a Rummage strip and the Doodad slots, all on one page. A Hob card shows a **"No line"** mark when no Plain Shot of that Hob can reach any enemy Nook or the kettle wall from your start pad or any spot a 40 Steam Walk reaches, at power 100, across the level's wind range [review 06 G10]. Skippers and rollers show a "rough ground" mark on maps where their Knack meets no surface it can skip or roll on. The marks come from a bot sweep of each map at build time [D05 §4.5], like the Rock warning for Delvers [D03 §4.5]. They warn; they never block a pick. Last picks are kept. One tap to fight. On a replay the default button is **Same again** → Muster fly-by → turns until Clean Sweep, Kettle Pop or the Squall pops a kettle → result card (Pennants, Buttons, Siege Score, best shot replay) → Next, Retry or Map.
+**One pre-battle screen** [R04 B15, audit C87]: the level card (Rival, its one stated habit, map preview, rule changes, Pennant goals), crew and Blueprint, a Rummage strip and the Doodad slots, all on one page. A Hob card shows a **"No line"** mark when no Plain Shot of that Hob can reach any enemy Nook or the kettle wall from your start pad or any spot a 40 Steam Walk reaches, at power 100, across the level's wind range [review 06 G10]. Skippers and rollers show a "rough ground" mark on maps where their Knack meets no surface it can skip or roll on. The marks come from a bot sweep of each map at build time [D05 §4.5], like the Rock warning for Diggers [D03 §4.5]. They warn; they never block a pick. Last picks are kept. One tap to fight. On a replay the default button is **Same again** → Muster fly-by → turns until Clean Sweep, Kettle Pop or the Squall pops a kettle → result card (Pennants, Buttons, Score, best shot replay) → Next, Retry or Map.
 
 **After a loss**, the result card first plays a short slow-motion **"what broke you"** replay over your Blueprint: the shot that did the most harm, with one plain line ("your loft had one leg") [R04 B17].
 
@@ -641,7 +644,7 @@ Open the app → land on the Brickabrac Map with the next level glowing → play
 - **Test Yard** [Launch]. Sandbox. Any unlocked shot, endless ammo, dummy castles, your blueprints, wind slider, and the Raid button [02c §5.17].
 - **Trials** [Launch]. Puzzle levels: one shot, fixed pool, special goals (topple the straw tower in 1 shot). 3 Pennants each. 6 at launch, 10 in all.
 - **Daily Dust-up** [Launch]. A Skirmish seeded from the date on existing maps, fully offline. Same map, Rival and pool for everyone on that date. It has no maps of its own [R04 B18]. Best score kept locally. Last 30 days playable.
-- **Long Siege** [U1]. Endless waves of rival castles. Your castle keeps its damage between waves. Between waves pick 1 of 3 **Odds and Ends** (run-only boons) and spend run-only Scrap to patch. Score is waves cleared and Siege Score [01 §6 Tank Stars tournament, 02 §6.13].
+- **Long Siege** [U1]. Endless waves of rival castles. Your castle keeps its damage between waves. Between waves pick 1 of 3 **Odds and Ends** (run-only boons) and spend run-only Scrap to patch. Score is waves cleared and Score [01 §6 Tank Stars tournament, 02 §6.13].
 - **Ironclad** [U2]. Replay any region on Ironclad difficulty for Iron Pennants (cosmetic badges only).
 - **Baron Rush** [U3]. All Grand Forts back to back with one crew, no repairs between.
 
@@ -658,7 +661,7 @@ Open the app → land on the Brickabrac Map with the next level glowing → play
 
 Nothing in the game is sold, so "Never" holds for everything (5.5).
 
-**Pennant rating per level (the star rating):** 1 Pennant for the win, plus 2 level goals (examples: win by Round 8, Heartkettle above 50%, no Hob Bonked, Siege Score over 2,000). Earned Pennants never go away. You can earn missing ones on replay [01 §10, 01 §12].
+**Pennant rating per level (the star rating):** 1 Pennant for the win, plus 2 level goals (examples: win by Round 8, Heartkettle above 50%, no Hob Bonked, Score over 2,000). Earned Pennants never go away. You can earn missing ones on replay [01 §10, 01 §12].
 
 Iron Pennants [U2] and Keepsakes (Curio Shelf) are collectibles, not currencies. Scrap [U1] lives only inside a Long Siege run.
 
@@ -683,7 +686,7 @@ Pennants: 40 levels x 3 + 6 Trials x 3 = **138 at launch**. With all updates: 60
 
 ### 5.3 Sinks
 
-- Workshop blocks (2.8 costs). A full Moonbrick castle (about 40 solid blocks, since Footing is free and rooms are hollow) costs about 6,000 [U3]. A mixed Cobble and Brassbound castle is affordable by Region 4.
+- Workshop blocks (2.8 costs). A full Mossbrick castle (about 40 solid blocks, since Footing is free and rooms are hollow) costs about 6,000 [U3]. A mixed Cobble and Brassbound castle is affordable by Region 4.
 - Hob Training: Rank 1 300, Rank 2 700, Rank 3 1,500 (2,500 per Hob). Target: 5 Hobs at Rank 2 by the final boss without replay farming.
 - Decor: flags, roof shapes, paint, Stomper styles. Endless, cosmetic only. Answers "spend extra wood on decorations" [02d §1.4 requests].
 - No sink takes away earned things. Removing a block refunds it fully.
@@ -732,15 +735,15 @@ Pennants: 40 levels x 3 + 6 Trials x 3 = **138 at launch**. With all updates: 60
 
 **House rules (fixed)** [review 06 G2]. Rules written for a human against the AI break between two people. These apply whenever both sides are human:
 
-1. **Everything is open.** Crews, Class icons, HP, Steam, Rest cogs, hands, Doodads and props show for both sides all battle. Items that are hidden from the AI Rival elsewhere show to both players here: a Mole Mine draws in plain view on the ground where it was buried [D01 §5]. Hidden crew and the Peeper [U2] are off; a Peeper may join a crew, but its reveals do nothing.
-2. **Player-only rules apply to both sides.** Puff Up (the Patcher's revive, once per battle, player side only against the AI) is open to each side once per battle. The same goes for any later rule marked "player side only". A setup toggle turns Puff Up off for both.
+1. **Everything is open.** Crews, Class icons, HP, Steam, Rest cogs, hands, Doodads and props show for both sides all battle. Items that are hidden from the AI Rival elsewhere show to both players here: a Molehill draws in plain view on the ground where it was buried [D01 §5]. Hidden crew and the Lookout [U2] are off; a Lookout may join a crew, but its reveals do nothing.
+2. **Player-only rules apply to both sides.** Puff Up (the Patcher brings back a Bonked Hob, once per battle, player side only against the AI) is open to each side once per battle. The same goes for any later rule marked "player side only". A setup toggle turns Puff Up off for both.
 3. **Hand-off card.** After each shot settles, a card fills the screen: the next player's name and colour, a one-line recap of the last shot ("Kettle -35, one Hob Tumbled") with its Pin shown on a small Field Strip, and a big **Ready** button. It hides nothing. Its job is to stop a stray tap while the device changes hands. A "Skip hand-off card" toggle suits two players side by side.
 4. **Kind Clock** (off by default). Each side may set 30, 45 or 60 s. The clock runs during that side's Plan step and shows as a ring on its Fire button. At zero a soft chime plays and the ring turns amber. That is all: it never fires, never skips a turn, never locks aim or Walk, and the shot is never taken away. It exists so a slow player feels a gentle nudge, not a penalty.
 5. **Starter Box.** Even loaner forts that play from the first launch, before any campaign level: three mirror kits, each a validator-passing fort with a crew of 4 from the Region 1 Hobs at Rank 0, the six start shells as the Rummage source, and Mend Bucket plus Pot Lid. Both sides pick from the same three kits, so a guest is never short of anything.
 6. **Handicaps in plain sight.** Every handicap a side takes (Steam, preview, crew size, Take Back) shows as a badge on that side's HUD and on the Hand-off card, for both players, all battle.
 7. **Table mode** (portrait only). The device lies flat between two players. The screen splits: each half carries its player's HUD, Hob portraits and Fire button, turned to face that player. The shared battle view sits in the middle and turns to face the active side at each Hand-off. The UX doc owns the layout.
 
-**Quick start.** Couch Duel sits on the main menu from the first launch. It does not wait for any campaign level. Three taps to the first shot: Couch Duel, Quick Match (Starter Box kits, Twin Puddings, default rules), Fight. A player who has not played 1-1 gets a three-card "how to play" panel (drag to aim, Fire, pop the kettle) that one tap skips. These cards do not count toward the campaign's 12-prompt cap.
+**Quick start.** Couch Duel sits on the main menu from the first launch. It does not wait for any campaign level. Three taps to the first shot: Couch Duel, Quick Match (Starter Box kits, Two Lumps, default rules), Fight. A player who has not played 1-1 gets a three-card "how to play" panel (drag to aim, Fire, pop the kettle) that one tap skips. These cards do not count toward the campaign's 12-prompt cap.
 
 **Setup screen.** One screen, like the pre-battle screen [R04 B15]. Last settings are kept, and "Same again" is the default after a match.
 
@@ -782,7 +785,7 @@ Pennants: 40 levels x 3 + 6 Trials x 3 = **138 at launch**. With all updates: 60
 An optional rule set for Skirmish and Couch Duel only, never the campaign [review 06 G11]. Couch players love a points race in which nobody sits out and a late shot can flip it.
 
 - **Length.** Each side gets a fixed number of Actions: 6, 10 (default) or 14. A Doodad counts as an Action. The HUD shows "Shots left 7/10" for each side. No round cap, no Squall.
-- **Score.** Each side's Siege Score (2.11), counted only from damage x Skill Factor, +150 per Bonk and +400 per Kettle Pop. The "unused round" and "no Hob Bonked" bonuses do not apply. Both scores show on the HUD all match.
+- **Score.** Each side's Score (2.11), counted only from damage x Skill Factor, +150 per Bonk and +400 per Kettle Pop. The "unused round" and "no Hob Bonked" bonuses do not apply. Both scores show on the HUD all match.
 - **Nothing ends early.** A Bonked Hob puffs back at the start of its side's next turn at half its HP in the lowest free Nook (that turn still counts for Rest). A popped kettle relights at 150 HP at the start of its owner's next turn. Blocks stay broken.
 - **Winner.** Highest score after both sides fire their last Action. On a tie, the side that went second wins, as for a double pop.
 - Every other rule holds: Rest, Steam, Shove Off, Loophole Flap, the per-shot caps and the full-HP clamp.
@@ -801,7 +804,7 @@ An optional rule set for Skirmish and Couch Duel only, never the campaign [revie
 | 4 | Castle structure: blocks, materials, Footing, Nooks, Kettle Room, support rule, Thump, validator | This doc, Workshop UX |
 | 5 | Crew: Hobs, Classes, kits, Rest, Hob states, Ranks, Quirks | Crew |
 | 6 | Damage and status: types, falloff, multipliers, Burn, Soaked, Brittle, crush, fall, per-shot caps | This doc, weapons |
-| 7 | Turn manager: turn steps, Walk, Action, rounds, Weather Fronts, win paths, Sudden Squall, Siege Score | This doc |
+| 7 | Turn manager: turn steps, Walk, Action, rounds, Weather Fronts, win paths, Sudden Squall, Score | This doc |
 | 8 | Rummage draft, Match bonus and Doodads | Weapons |
 | 9 | AI: shot search in work units, error and bracketing, personality weights, Rival habits and lines [03 §8] | Enemies |
 | 10 | Aim and HUD: Aim Drag, Fine Tune, preview, ghost, pins, Recall, shot log, drift readout, Lean Lines, shimmer, Loophole Flap marks, "Drop!" callout, "Squall in 3", Fire button | UX |
@@ -826,14 +829,15 @@ An optional rule set for Skirmish and Couch Duel only, never the campaign [revie
 | **Brickabrac Map** | The campaign map screen |
 | **Flatteners** | The villain clan |
 | **Baron Levelwell** | The villain leader, the Last Level |
-| **Rival** | Any named AI commander and its castle |
+| **Rival** | Any named AI commander and its castle. In Skirmish the Rival is one of the named Region 1 Rivals, picked by seed |
+| **Notice of Flattening** | The Flatteners' letter on the level card, signed by the Rival, with the Habit as the small print |
 | **Habit** | The one play pattern a Rival states on its card |
 | **Grand Fort** | A boss castle, one per region |
 | **Last Level** | The final Grand Fort: 2 Stages, each its own battle |
 | **Hob** | A crew member |
 | **Class** | A Hob's trade, which sets its Plain Shot and Knack style |
-| **Lobber, Zinger, Scatterjack, Delver, Boinker, Sizzler, Patcher** | The seven launch Classes |
-| **Peeper** | The eighth Class [U2] |
+| **Lobber, Zinger, Scatterjack, Digger, Bouncer, Stoker, Patcher** | The seven launch Classes |
+| **Lookout** | The eighth Class [U2] |
 | **Rank** | A Hob's growth step, 0 to 3, bought by Training. Each Rank is a Quirk pick |
 | **Quirk** | A behavior perk picked at each Rank, one of two, free to swap |
 | **Plain Shot** | A Hob's unlimited basic shot |
@@ -846,15 +850,18 @@ An optional rule set for Skirmish and Couch Duel only, never the campaign [revie
 | **Doodad** | A one-use gadget, costs the Action |
 | **Weight** (Light, Medium, Heavy) | How heavy a shot is; sets Rest |
 | **Rest** | Turns a Hob sits out after a Medium or Heavy shot, shown by a cog. Also what Frost adds. Replaces Reload and Chill. Extra Rest caps at 1 |
-| **Open, Dropped, Tumbled, Squashed** | Hob states: no Cover; fell to a lower floor; fell out of the castle and climbs back; crushed by a chunk |
+| **Open, Fell a floor, Tumbled, Squashed** | Hob states: no Cover; fell to a lower floor (was "Dropped": "Drop!" is the wall shout); fell out of the castle and climbs back; crushed by a chunk |
 | **Bonked** | A Hob at 0 HP, out for the battle |
 | **Snooze Balloon** | What carries a Bonked Hob away |
+| **Puff Up** | Bring a Bonked Hob back at 40 HP (Barn Raising). Never "revive" on screen |
+| **Cracked** | A block at a third of its HP or less (was "Battered"). One word for hurt, battered and damaged |
+| **The Creaks** | Late in a fight, Cracked and worn blocks hold less and let go (was "Fatigue"). On the HUD: "Creaks in 3". On the banner: "The fort creaks." |
 | **Muster** | The battle-start fly-by of enemy Nooks; Class icons stay shown after it |
-| **Heartkettle** | The castle core, 300 HP on every fort |
+| **Heartkettle** | The castle core, 200 HP on every fort. On screen it is just "kettle"; Heartkettle is the Almanac word |
 | **Kettle Room** | The room that holds the Heartkettle |
 | **Nook** | A crew room |
 | **Loophole** | A Nook's firing window |
-| **Buried Loophole** | A Loophole blocked by dirt or a foreign block; that Hob's Fire button greys. If a whole crew is dug in, the newest burial clears |
+| **Dug in** | A Hob whose Loophole is blocked by dirt or a foreign block; that Hob's Fire button greys. If a whole crew is dug in, the newest burial clears |
 | **Shove Off** | Pay 15 Steam in the Walk step to clear one buried Loophole; costs no Action |
 | **Peephole** | A small gap cut in a block that point shots can pass |
 | **Thread** | A point shot that enters a Loophole and hits the Hob with no Cover |
@@ -866,7 +873,7 @@ An optional rule set for Skirmish and Couch Duel only, never the campaign [revie
 | **Footing** | The bottom row of every castle |
 | **Foreign block** | A block or prop the other side placed in your fort; it blocks your shots |
 | **Wicker, Timber, Cobble, Brassbound** | Material tiers 1 to 4 |
-| **Moonbrick** | Material tier 5 [U3] |
+| **Mossbrick** | Material tier 5 [U3] |
 | **Stompers** | The castle's clockwork legs |
 | **Steam** | Walking fuel |
 | **Steam Shot** | Spend 15 Steam for +10% launch speed on one shot |
@@ -880,7 +887,9 @@ An optional rule set for Skirmish and Couch Duel only, never the campaign [revie
 | **Clean Sweep** | Win by Bonking all enemy Hobs |
 | **Kettle Pop** | Win by destroying the enemy Heartkettle |
 | **Sudden Squall** | The storm after the round cap; at each Squall round end both sides' kettles and blocks lose HP at once until a kettle pops; a double pop goes to the side with more total HP |
-| **Siege Score** | Per-battle score |
+| **Score** | Per-battle score (was "Siege Score") |
+| **Blown Out** | Win when the Squall pops their kettle first (was "Squall Pop") |
+| **Dozed off** | Win at the round cap, said with the Rival's name: "Sir Pudge dozed off." |
 | **Skill Factor** | Score weight of a shot |
 | **Point** | The zero-radius blast band; a "point shot" hits only what it touches |
 | **Buttons** | Soft currency |
@@ -911,11 +920,14 @@ An optional rule set for Skirmish and Couch Duel only, never the campaign [revie
 | **Kind Clock** | Optional Couch Duel clock, off by default; at zero it chimes and never fires or skips |
 | **Starter Box** | Three even loaner kits for Couch Duel, playable from first launch |
 | **Table mode** | Couch Duel portrait layout with the device flat and each player's HUD facing them |
-| **Volley Points** | Skirmish and Couch Duel rule set: fixed Actions each, highest Siege Score wins |
+| **Volley Points** | Skirmish and Couch Duel rule set: fixed Actions each, highest Score wins |
 | **Loaner fort** | A ready fort and crew from the Daily loan tables, used in the Daily and the Couch Duel Starter Box |
-| **Cozy, Fair, Stubborn, Ironclad** | Difficulty presets (Ironclad [U2]) |
+| **Cosy, Fair, Stubborn, Ironclad** | Difficulty presets (Ironclad [U2]). The content id is still `cozy` |
+| **Fight** | The word on screen for one match. Never "battle" on screen; this doc still says battle in rules prose |
 
-Regions, in campaign order: Puddingstone Downs (grass hills, tutorial), Crumblecrag (cliffs), Soggybottom Fen (water and mud), The Flats (the Baron's rolled land; levels about raising ground back) at launch; Frostwhisker Peaks (ice, strong wind) [U2]; Clankmouth Mines (caves, metal) [U3].
+Regions, in campaign order: Puddingstone Downs (grass hills, tutorial), Crag End (cliffs), Soggy Bottom Fen (water and mud), The Flats (the Baron's rolled land; levels about raising ground back) at launch; Nithering Heights (ice, strong wind) [U2]; Wheal Clank (caves, metal) [U3].
+
+**Words on screen.** Every line a player reads comes from `content/text.json`, one table for web, Android and iOS. Display names come from the content JSON. Ids in code, saves and content keep their old spelling (`delver`, `boinker`, `sunspear`, `sod_sack`, `cozy`); only what the player sees has changed. Where a design doc quotes a line and `content/text.json` says something else, the string table wins. Voice and naming rules: `docs/review/naming-and-voice-review-fable.md` section 2, as fixed by `docs/review/naming-decisions.md`.
 
 Shot, Doodad and Hob names belong to the weapons and crew docs. All names need a trademark and store search before art production [R04 D9].
 
@@ -925,9 +937,9 @@ Shot, Doodad and Hob names belong to the weapons and crew docs. All names need a
 
 ### 8.1 Difficulty presets
 
-Difficulty is a set of knobs, not one number [03 §8.4]. The player picks a preset any time, even mid-campaign. Pennants count the same on Cozy, Fair and Stubborn. Pennant goals that need a hard setting do not exist.
+Difficulty is a set of knobs, not one number [03 §8.4]. The player picks a preset any time, even mid-campaign. Pennants count the same on Cosy, Fair and Stubborn. Pennant goals that need a hard setting do not exist.
 
-| Knob | Cozy | Fair (default) | Stubborn | Ironclad [U2] |
+| Knob | Cosy | Fair (default) | Stubborn | Ironclad [U2] |
 |---|---|---|---|---|
 | AI angle error (deg, sigma, first shot) | 5 | 3 | 1.5 | 0.8 |
 | AI power error (%, sigma, first shot) | 10 | 6 | 3 | 1.5 |
@@ -974,7 +986,7 @@ Show, do not tell. One idea per beat, at most three words of on-screen text per 
 | 2:10 | Own castle goes see-through; pointer on the Rival's crew icon | 6. "Bonk them all" | Your crew lives inside; Clean Sweep |
 | 3:30 | Win. Result card: Pennants with the two goals as icons. Buttons tick up | 7. "Pennants!" | Pennants and goals |
 | 3:40 | Brickabrac Map. Hills rise around the cleared node. The Baron's roller rumbles far off | | Story hook in 10 s |
-| 4:30 | Level 1-2: Quill the Zinger joins | 8. "Tap a Hob" | Choose the shooter |
+| 4:30 | Level 1-2: Miss Quill the Zinger joins | 8. "Tap a Hob" | Choose the shooter |
 | 4:50 | Fine Tune pad lights up for one nudge | 9. "Nudge it" | Fine Tune |
 | 7:30 | Level 1-3: the Rival's kettle glows through its walls. One loose Trick Shell, Lid Lifter, sits in the hand; its card glows under the same prompt | 10. "Pop the kettle" | Second win path, and a first special shell |
 | 9:30 | Level 1-3 result card shows the other path as "Also works" | 11. "Also works" | Two win paths |
@@ -983,15 +995,15 @@ A new player reaches about the end of 1-3 in the first 10 minutes [review 02 §1
 
 | Level | New idea |
 |---|---|
-| 1-4 | **Wind** and the forecast, pointed out once. Jax the Scatterjack joins. One loose Trick Shell, Marble Sack, in the hand; its card glows, with no new prompt |
+| 1-4 | **Wind** and the forecast, pointed out once. Jax the Scatterjack joins. One loose Trick Shell, Bag of Marbles, in the hand; its card glows, with no new prompt |
 | 1-5 | **One Knack** (Marge's) and "needs a rest". Skirmish opens after the win |
-| 1-6 | **Workshop** opens before this level, with a real choice: three Cobble blocks and two good spots. Test Yard button. The first Rival habit to build against. Grub the Delver joins |
+| 1-6 | **Workshop** opens before this level, with a real choice: three Cobble blocks and two good spots. Test Yard button. The first Rival habit to build against. Grub the Digger joins |
 | 1-7 | Rescue: Hetty the Patcher is freed. Crew of 4; the free grid step seats her |
-| 1-8 | **Rummage**: a small pool of 4, two picks each. Bobbin the Boinker joins. Trial 1 on the side path |
+| 1-8 | **Rummage**: a small pool of 4, two picks each. Bobbin the Bouncer joins. Trial 1 on the side path |
 | 1-9 | **Walk** and Steam, on a level that needs a better angle |
 | 1-10 | Grand Fort 1. The win opens the **Tinker Tree**; the first visit spotlights Trick Sight. Daily Dust-up opens |
 
-**Loose Trick Shells** [review 06 G8]. Levels 1-3 and 1-4 each lend one fixed Trick Shell for that level only: one use, no draft, no unlock. Lid Lifter (1-3) points at the kettle lesson; Marble Sack (1-4) fits Jax, its Match. The first four levels would otherwise be Plain Shots only. Neither adds a prompt, so the count stays at 11 (12 for a fast player). Both join the pool with the start six when the Rummage opens at 1-8.
+**Loose Trick Shells** [review 06 G8]. Levels 1-3 and 1-4 each lend one fixed Trick Shell for that level only: one use, no draft, no unlock. Lid Lifter (1-3) points at the kettle lesson; Bag of Marbles (1-4) fits Jax, its Match. The first four levels would otherwise be Plain Shots only. Neither adds a prompt, so the count stays at 11 (12 for a fast player). Both join the pool with the start six when the Rummage opens at 1-8.
 
 Winning 1-9 gives the first Doodad, Mend Bucket, and one Doodad slot, so the 1-10 boss has a gadget turn without 1-9 teaching two things [PLAN decision 14]. The second slot, Pot Lid and Fire on Timber (2-1), Training and Thump (2-2) come in Region 2. The campaign doc owns the level list.
 
@@ -1027,15 +1039,17 @@ Fail-safe: if the player misses 5 times in a row in levels 1-1 to 1-5, the previ
 | Nooks | Never fewer than seated Hobs; cap 5 |
 | Hobs per battle | 1, 2, 3 in levels 1-1 to 1-6; 4 from 1-7; 5 from Grand Fort 2; cap 5 |
 | Hob HP | 100 (class range 80 to 140); no growth with Rank |
-| Heartkettle HP | 300, every fort |
-| Block HP | Wicker 30, Timber 50, Cobble 80, Brassbound 110, Moonbrick 140 [U3], Footing 400 |
+| Heartkettle HP | 200, every fort; cracks at 100 |
+| Block HP | Wicker 30, Timber 50, Cobble 80, Brassbound 110, Mossbrick 140 [U3], Footing 400 |
 | Side support | Wood and brass 2, stone 1; Brace line +2 |
 | Steam | 100 per battle, max 40 per turn |
 | Walk cost | 1 Steam per 4 cells flat, x2 uphill, x3 mud |
 | Thump | over 48 cells drop: 10 to every block and Hob |
-| Fall damage | over 32 cells: 10 per 16 cells, max 40 |
-| Crush | 15 per falling block (Cobble x2, Wicker 0); kettle takes 50% |
-| Cover rule | 50% from area payloads centred outside an intact Nook |
+| Fall damage | over 32 cells: 10 per 16 cells, max 40. Tumbled: 45 + (fall - 64) / 8, max 70 |
+| Crush | 15 per falling block (Cobble x2, Wicker 0); kettle takes 100% |
+| Kettle intake | Blast 75%, crush 100%, Pierce 100%; cap 80 per shot |
+| The Creaks | Round 10: blocks under 50% HP lose one side reach. Round 12: under 80% |
+| Cover rule | 65% taken (35% off) from area payloads centred outside an intact Nook (`cover_pct`) |
 
 ### 9.3 Damage and blast bands
 
@@ -1086,13 +1100,13 @@ See 5.2 and 5.3. Pennants: 138 at launch, 210 in all. Tinker Tree hold 100 at la
 
 This check now runs on the clock, not only on rounds [review 06 G3]. Both reference games ran close to 20 s per shot in our play, with a camera move each turn [02e §2.2, §3.2]. A round here is two shots, so the check uses **about 32 s per round** (player turn about 20 s, Rival turn about 12 s). The damage maths below is unchanged; the minutes are new.
 
-**The problem it fixes.** With the old numbers (Moonbrick 240 healing 24 a turn, Brassbound 180, six Hobs, 400 HP boss kettles) a late fort needed about 1,050 Thwack to break and a typical hand reached about 420 by Round 12. Most late fights would have ended on the Last Bell sum [review 02 §3.4].
+**The problem it fixes.** With the old numbers (Mossbrick 240 healing 24 a turn, Brassbound 180, six Hobs, 400 HP boss kettles) a late fort needed about 1,050 Thwack to break and a typical hand reached about 420 by Round 12. Most late fights would have ended on the Last Bell sum [review 02 §3.4].
 
 **Inputs.** All tuning targets; bots replace them by week 6 [R04 B2].
 
 - **Thwack per Action at standard aim** (from `D01 §7.4`, misses and grazes included): Plain Shot 26, Knack 58, Trick Shell 56. Late, Rank 2 and 3 Quirks lift Knacks and shells to about 62.
 - **Win cost**, the cheaper path, usually the kettle:
-  - **Mid** (Soggybottom Fen, a 7 x 8 Timber and Cobble fort, 4 Rival Hobs): open the Kettle Room face (one Cobble block, 80 / 0.8 = 100 Blast) plus the 300 HP kettle by a mix of about 70% Blast at x0.5 and 30% Pierce at x1.0 (300 / 0.65 = about 460). About **560**.
+  - **Mid** (Soggy Bottom Fen, a 7 x 8 Timber and Cobble fort, 4 Rival Hobs): open the Kettle Room face (one Cobble block, 80 / 0.8 = 100 Blast) plus the 300 HP kettle by a mix of about 70% Blast at x0.5 and 30% Pierce at x1.0 (300 / 0.65 = about 460). About **560**.
   - **Late** (The Flats, an 8 x 10 Cobble and Brassbound fort, 5 Rival Hobs): open a thicker Kettle Room (about 200) plus the kettle (about 460). About **660**.
 - **Falls.** From Round 3, once walls are cracked, each good hit also drops blocks. Crush lands on blocks, Hobs and the kettle. With stone side support at 1, a late fort drops more per hit than a mid one: falls add about **25%** on a mid fort and **45%** on a late one. Early Wicker forts add none (Wicker deals no crush).
 - **Rival repairs.** A mid Rival mends once (about 50). A late Rival mends about every 4 rounds (50 each).
@@ -1125,19 +1139,19 @@ This check now runs on the clock, not only on rounds [review 06 G3]. Both refere
 
 So a typical mid and late fight ends by Round 8 to 12 (about 4.3 to 6.4 minutes), and the round cap of 15 is a real edge, not the normal end. At 32 s a round, a weak-aim fight that reaches the Squall runs past the 8 minute rule. That is the case the fallback below exists for. The Rival plays the same sums on your fort, so whichever side is ahead after Round 8 most often wins by a pop, not a score.
 
-**Why it now holds.** Win cost fell from about 1,050 to about 660 on a late fort (flat HP ladder, 5 Hobs, kettle 300, Moonbrick heal down to 7). Falls now scale with fort size (stone reach 1, crush on the kettle), so bigger forts fall harder instead of standing longer [R04 B1 to B4].
+**Why it now holds.** Win cost fell from about 1,050 to about 660 on a late fort (flat HP ladder, 5 Hobs, kettle 300, Mossbrick heal down to 7). Rules v5 cut the kettle part again (200 HP, Blast at 75%, crush at 100%: about 240 instead of 460), so Kettle Pop is now a real rival to Clean Sweep; the worked table above still uses the v4 kettle and is kept as the upper bound. Falls now scale with fort size (stone reach 1, crush on the kettle), so bigger forts fall harder instead of standing longer [R04 B1 to B4].
 
-**Sudden Squall check.** Worst case: both kettles still at 300 when the cap ends, and no one lands a hit after it.
+**Sudden Squall check.** Worst case: both kettles still full (200, rules v5) when the cap ends, and no one lands a hit after it.
 
 | Squall round (default round) | Each kettle after the round-end hit | Blocks lost so far (each) | Wind (from 0) |
 |---|---|---|---|
-| 1 (16) | 250 | 10 | 3 |
-| 2 (17) | 100 | 30 | 6 |
+| 1 (16) | 150 | 10 | 3 |
+| 2 (17) | 50 (cracked: Kettle Room walls weaken and often fall in, which can pop it here) | 30 | 6 |
 | 3 (18) | **0: both pop at once; more total HP wins** | 60 | 9 |
 
 - Even with no hits at all, the fight ends at the end of round 18, three rounds after the cap. Any damage dealt earlier only brings the pop sooner.
 - Turn order no longer matters: both forts take each Squall hit in the same tick. A double pop goes to the side with more kettle, Hob and block HP left, so kills and standing walls still count at the very end.
-- Typical case: kettles near 40% (about 120) at the cap. 120 - 50 - 100 is below 0, so the lower kettle pops at the end of Squall round 2 (round 17).
+- Typical case: kettles near 40% (about 80) at the cap. 80 - 50 - 100 is below 0, so the lower kettle pops at the end of Squall round 2 (round 17).
 - After two Squall rounds every Wicker block is gone and Timber is at 20 of 50, so wood forts start to fall at once. Stone stands longer but its Hobs lose Cover as wood wings drop.
 - **Worst case on the clock.** Cap 15 plus 3 Squall rounds is 18 rounds: 9.6 minutes at 32 s. Cap 12 plus 3 is 15 rounds: 8.0 minutes. Each Last Level Stage (cap 12) ends by its round 15, so a Stage stays at 8 minutes.
 - **Grand Forts** other than the Last Level (cap 18 to 20) can run to round 23: about 12 minutes. Boss fights are allowed to run long, but the slice gate below watches them, and the fallback drops their caps by 3 (to 15 to 17, at most about 10 minutes).
@@ -1192,7 +1206,7 @@ The default cap stays 15 until the slice data says otherwise. Round cap 12 is th
 | Rest plus 5 Hobs feels like bookkeeping | Turns slow down while players count cogs | Cogs on portraits, greyed shots, Match Rest 0, extra Rest cap 1; drop Medium Rest to 0 if tests show friction |
 | One Class dominates (one free bomber ruled 90% of Castle Busters lineups) | Kills variety | Pick-rate checks in bots and playtests; every Class has a visible counter [02d §1.6.12] |
 | Any Hob firing any shell blurs Classes | Classes feel the same | Plain Shot and Knack stay Class-only; Match bonus; bots track how often a shell is fired by its Match |
-| Wind too strong on phones | Blind aim returns | Ranges per region, free forecast and drift readout, Cozy off switch |
+| Wind too strong on phones | Blind aim returns | Ranges per region, free forecast and drift readout, Cosy off switch |
 | Phone screen too small for 16-cell blocks at full zoom-out | Units unreadable | Auto-frame min zoom 0.6, Lump Rule height cap, art doc sets readable Hob silhouettes at 24 px |
 | New players drown by minute 15 | They quit before Region 2 | Five-idea opening, 12 prompt cap, one pre-battle screen; slice test with casual players |
 | Frame rate on low-end Android | 30 fps floor at risk with debris | Native OpenGL ES 3.0 view over the shared core; quality tiers, particles over bodies, 80-cell cap [03 §13, 04b] |
@@ -1213,7 +1227,7 @@ Cut for good from the launch plan and all updates [R04 A, review 02 §2.3]. Kept
 | Seat Perks and Neighbor Perks | Perks behind words behind nodes | Nothing; placement speaks through physics |
 | Scamper stat (Slow, Steady, Quick) | No one feels 16 cells of fall safety | Cushion Loft |
 | Scurry (move a Hob as an Action) | A whole Action to move one Hob | The Musical Chairs Doodad, if the weapons doc keeps it |
-| Crowded, Perched, Porch, Rattled and Skylight states | Nine states to learn | Five: Open, Dropped, Tumbled, Squashed, Bonked |
+| Crowded, Perched, Porch, Rattled and Skylight states | Nine states to learn | Five: Open, Fell a floor, Tumbled, Squashed, Bonked |
 | Knack tiers at Hob levels 4 and 8 | 56 extra rule variants | Quirk options |
 | Ten Hob levels at +1.5% HP each | Six of nine level-ups gave nothing you could see | Three Ranks, each a Quirk pick |
 | Tumble skipping the Hob's next shot | A lost turn in a one-Action game | 20 damage and the climb back |
@@ -1224,9 +1238,9 @@ Cut for good from the launch plan and all updates [R04 A, review 02 §2.3]. Kept
 | Deny refund of 10 Buttons | A rule for pocket change | Nothing |
 | Rarity on Trick Shells | Offline, earned, no gacha: rarity means nothing | Nothing |
 | Brisk turn timer | A timer in a game that promises none | Nothing |
-| Take Back as its own toggle | One more switch | Part of the Cozy preset |
-| Enemy crew hidden after a 2 s Muster at launch | A memory test on a phone | Icons stay shown; hidden crew returns with the Peeper in U2 |
-| Moonbrick healing 10% a turn | A Plain Shot did less than nothing | Heal 7, none after a hit |
+| Take Back as its own toggle | One more switch | Part of the Cosy preset |
+| Enemy crew hidden after a 2 s Muster at launch | A memory test on a phone | Icons stay shown; hidden crew returns with the Lookout in U2 |
+| Mossbrick healing 10% a turn | A Plain Shot did less than nothing | Heal 7, none after a hit |
 | Boss kettles at 400 | Longer boss fights for no new idea | Kettle 300 everywhere; phases gate bosses |
 | Raid Rehearsal as a mode | A mode for one button | Test Yard Raid button |
 | Trick-shot Challenge and Defend a Cart as their own mission types | Two more rule sets | Merged into Puzzle and Escort |

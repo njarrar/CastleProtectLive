@@ -1,16 +1,26 @@
-// Game sprites for Castle Protect v0.1.
+// Game sprites for Castle Protect.
 // Builds every sprite as an SVG in assets/svg/ and writes assets/manifest.json.
 // Run render-sprites.mjs after this to make the PNG files, the atlases and the contact sheet.
-//   node tools/art-gen/gen-sprites.mjs && node tools/art-gen/render-sprites.mjs
+//   node tools/art-gen/gen-sprites.mjs                       legacy mode (blue + orange Hobs)
+//   node tools/art-gen/gen-sprites.mjs --dedup-hobs          neutral single-pass Hobs + 16x16 scarf overlays
+//   node tools/art-gen/gen-sprites.mjs --v2                  Part 2 mode (--dedup-hobs + v2 metadata)
+//   node tools/art-gen/gen-sprites.mjs --out-dir /tmp/test   write into an alternate assets directory
 import fs from 'fs';
 import path_ from 'path';
 import * as L from './lib.mjs';
-import { posedHob, snoozeBalloon, HOBS, POSES, TEAMS, V01_FRAMES } from './sprite-hob.mjs';
+import { posedHob, snoozeBalloon, HOBS, POSES, TEAMS, V01_FRAMES, SCARF_OVERLAYS, scarfOverlaySvg, HAT_PATCH_OVERLAYS, hatPatchSvg } from './sprite-hob.mjs';
+import { posedFlattener, squareSnoozeBalloon, FLATTENERS, FLATTENER_POSES } from './sprite-flattener.mjs';
+import { addRedesignAssets } from './gen-redesign-ui.mjs';
+import { buildDedupTables } from './atlas-pack.mjs';
 import { buildAnim } from './sprite-anim.mjs';
 const { C, rr, circ, ell, path, line, g, star4, burst, puff, clipped, shade, f, rng, MAT } = L;
 const ink = C.ink;
 const ROOT = path_.resolve(path_.dirname(new URL(import.meta.url).pathname), '../..');
-const ASSETS = path_.join(ROOT, 'assets');
+const args = process.argv.slice(2);
+const V2 = args.includes('--v2');
+const DEDUP_HOBS = V2 || args.includes('--dedup-hobs');
+const outIdx = args.indexOf('--out-dir');
+const ASSETS = outIdx >= 0 && args[outIdx + 1] ? path_.resolve(args[outIdx + 1]) : path_.join(ROOT, 'assets');
 
 const sprites = [];
 // add(name, group, w, h, viewBox, body, purpose, opts)
@@ -112,24 +122,55 @@ for (const tk of ['blue', 'orange']) {
 
 // ================================================================ Hobs
 const HOB_NAME = { marge: 'Marge Dumpling', quill: 'Quill Needlesworth', jax: 'Jax Peppercorn', grub: 'Grub Mudgett', bobbin: 'Bobbin Springheel', hetty: 'Hetty Mortarboard', thumper: 'Old Thumper Grumbleby', nan: 'Nan Clatterpot' };
+// 'rival' is a real baked look (slate hat with a level vial, hatched orange scarf), not an alias: Rival Hobs never wear your class hats.
+const HOB_TEAMS = DEDUP_HOBS ? ['neutral', 'rival'] : ['blue', 'orange', 'rival'];
 for (const hk of Object.keys(HOB_NAME)) {
-  for (const tk of ['blue', 'orange']) {
+  for (const tk of HOB_TEAMS) {
     for (const [pose, n] of Object.entries(V01_FRAMES)) {
       // the v0.1 frames. The extra frames for smoother play are made in sprite-anim.mjs
       POSES[pose].slice(0, n).forEach((p, i) => {
         const tall = pose === 'bonked';
         const vb = tall ? [-60, -224, 144, 232] : [-60, -152, 144, 160];
-        add(`hob_${hk}_${tk}_${pose}_${i}`, 'hobs', 72, vb[3] / 2, vb, posedHob(hk, tk, p),
-          `${HOB_NAME[hk]}, ${tk} team${tk === 'orange' ? ' (hatched scarf, diamond patch)' : ''}, ${pose} frame ${i}${tall ? ', with Snooze Balloon' : ''}. Faces right. Anchor is the feet`,
+        const desc = tk === 'rival'
+          ? `${HOB_NAME[hk]}, Rival look (slate hat with a green level vial, hatched orange scarf), ${pose} frame ${i}${tall ? ', with Snooze Balloon' : ''}. Faces right. Anchor is the feet`
+          : tk === 'neutral'
+          ? `${HOB_NAME[hk]}, neutral base (composite 16x16 hob_scarf_* overlay), ${pose} frame ${i}. Faces right. Anchor is the feet`
+          : `${HOB_NAME[hk]}, ${tk} team${tk === 'orange' ? ' (hatched scarf, diamond patch)' : ''}, ${pose} frame ${i}${tall ? ', with Snooze Balloon' : ''}. Faces right. Anchor is the feet`;
+        add(`hob_${hk}_${tk}_${pose}_${i}`, 'hobs', 72, vb[3] / 2, vb, posedHob(hk, tk, p), desc,
           { anchor: [30, -vb[1] / 2] });
       });
     }
   }
   // portrait: head and hat, for crew rings
-  for (const tk of ['blue', 'orange']) {
+  for (const tk of HOB_TEAMS) {
     add(`portrait_${hk}_${tk}`, 'portraits', 48, 48, [-46, -122, 96, 96], clipped(circ(2, -74, 47, '#000'), circ(2, -74, 48, C.cream) + g(posedHob(hk, tk, { face: 'happy' }), 'translate(2 -70) scale(.8) translate(-2 78)')),
-      `${HOB_NAME[hk]} portrait disc, ${tk} team. Sits inside a crew ring`);
+      `${HOB_NAME[hk]} portrait disc, ${tk === 'neutral' ? 'neutral base' : tk === 'rival' ? 'Rival look (slate hat)' : `${tk} team`}. Sits inside a crew ring`);
   }
+}
+// Compact 16x16 team scarf & pennant badge overlays (always generated so both legacy and --dedup-hobs builds can inspect them)
+for (const [sname, spec] of Object.entries(SCARF_OVERLAYS)) {
+  add(sname, 'hobs', 16, 16, [-16, -16, 32, 32], scarfOverlaySvg(sname), spec.purpose, { anchor: [8, 8] });
+}
+for (const [pname, spec] of Object.entries(HAT_PATCH_OVERLAYS)) {
+  add(pname, 'hobs', 8, 8, [-8, -8, 16, 16], hatPatchSvg(), spec.purpose, { anchor: [4, 4] });
+}
+
+// ================================================================ Flatteners (enemy faction)
+// Matching docs/plan-page/art/10-flattener-lineup.jpg: pressed grey-and-cream uniforms,
+// flat spirit-level pancake caps with green bubble, hatched orange rival tie, square snooze balloon.
+for (const [fk, fdef] of Object.entries(FLATTENERS)) {
+  for (const [pose, n] of Object.entries(V01_FRAMES)) {
+    FLATTENER_POSES[pose].slice(0, n).forEach((p, i) => {
+      const tall = pose === 'bonked';
+      const vb = tall ? [-60, -224, 144, 232] : [-60, -152, 144, 160];
+      add(`flattener_${fk}_${pose}_${i}`, 'flatteners', 72, vb[3] / 2, vb, posedFlattener(fk, p),
+        `${fdef.name} (${fdef.cls}, ${fdef.unit}), ${pose} frame ${i}${tall ? ', with square Snooze Balloon' : ''}. Faces right. Anchor is the feet`,
+        { anchor: [30, -vb[1] / 2] });
+    });
+  }
+  add(`portrait_flattener_${fk}`, 'portraits', 48, 48, [-46, -122, 96, 96],
+    clipped(circ(2, -74, 47, '#000'), circ(2, -74, 48, C.indigoL) + g(posedFlattener(fk, { face: 'happy' }), 'translate(2 -70) scale(.82) translate(-2 78)')),
+    `${fdef.name} portrait disc (Flattener rival). Sits inside a crew ring`);
 }
 
 // ================================================================ shells
@@ -170,7 +211,175 @@ for (const [n, [purpose, body]] of Object.entries(SHELLS)) {
   add('shell_hatpin', 'shells', 40, 10, [0, 0, 160, 40], pin, 'Hatpin, Zinger Plain Shot (Pierce). Long pin with a pearl head, point to the right. In flight', { anchor: [20, 5] });
   add('icon_hatpin', 'icons', 48, 48, [-6, -6, 112, 112], g(pin, 'translate(50 50) rotate(-35) scale(.66) translate(-80 -20)'), 'Hatpin, Zinger Plain Shot (Pierce). Tray and card icon');
   const st = (x, y, k) => g(SHELLS.gravel[1], `translate(${x} ${y}) scale(${k}) translate(-50 -50)`);
-  add('icon_gravel', 'icons', 48, 48, [-6, -6, 112, 112], path('M12 86 Q40 40 70 22 M12 86 Q50 60 84 52 M12 86 Q50 84 80 84', 'none', { stroke: ink, sw: 3, dash: '3 8' }) + st(72, 22, .44) + st(82, 52, .44) + st(74, 84, .44), 'Gravel Sneeze, Scatterjack Plain Shot. Three stones in a fan. Tray and card icon');
+  add('icon_gravel_sneeze', 'icons', 48, 48, [-6, -6, 112, 112], path('M12 86 Q40 40 70 22 M12 86 Q50 60 84 52 M12 86 Q50 84 80 84', 'none', { stroke: ink, sw: 3, dash: '3 8' }) + st(72, 22, .44) + st(82, 52, .44) + st(74, 84, .44), 'Gravel Sneeze, Scatterjack Plain Shot. Three stones in a fan. Tray and card icon');
+  // Legacy name: the apps still ask for icon_gravel. --dedup-hobs / --v2 builds alias it to icon_gravel_sneeze.
+  if (!DEDUP_HOBS) add('icon_gravel', 'icons', 48, 48, [-6, -6, 112, 112], path('M12 86 Q40 40 70 22 M12 86 Q50 60 84 52 M12 86 Q50 84 80 84', 'none', { stroke: ink, sw: 3, dash: '3 8' }) + st(72, 22, .44) + st(82, 52, .44) + st(74, 84, .44), 'Gravel Sneeze (legacy name). Tray and card icon');
+  add('shell_gravel_sneeze', 'shells', 10, 10, [0, 0, 100, 100], SHELLS.gravel[1], 'Gravel Sneeze stone, Scatterjack Plain Shot (Blast). In flight');
+  add('shell_sneeze_stone', 'shells', 10, 10, [0, 0, 100, 100], SHELLS.gravel[1], 'Gravel Sneeze child stone. In flight');
+
+  // Extra Shake (Jax passive Plain Shot): 4 stones in a tight pepper-mill fan
+  const shakeStone = path('M22 56 C18 36 38 22 60 26 C78 30 86 52 74 70 C62 84 28 78 22 56 Z', '#7A5A48', O())
+    + path('M34 44 Q42 35 54 35', 'none', { stroke: '#C9A27A', sw: 6 })
+    + circ(58, 56, 5, C.gold) + circ(42, 64, 3.5, C.saffron);
+  const shSt = (x, y, k) => g(shakeStone, `translate(${x} ${y}) scale(${k}) translate(-50 -50)`);
+  add('shell_extra_shake', 'shells', 12, 12, [0, 0, 100, 100], shakeStone, 'Extra Shake (Jax Passive Plain Shot). Spiced gravel stone. In flight');
+  add('shell_shake_stone', 'shells', 10, 10, [0, 0, 100, 100], shakeStone, 'Extra Shake child stone. In flight');
+  add('icon_extra_shake', 'icons', 48, 48, [-6, -6, 112, 112],
+    path('M10 86 Q38 36 66 16 M10 86 Q44 50 82 38 M10 86 Q48 68 86 64 M10 86 Q50 86 78 88', 'none', { stroke: ink, sw: 2.8, dash: '3 7' })
+      + shSt(66, 16, .38) + shSt(82, 38, .38) + shSt(84, 64, .38) + shSt(76, 86, .38)
+      + star4(22, 32, 11, C.gold, O(3)),
+    'Gravel Sneeze (Extra Shake), Jax Plain Shot. Four stones in a fan. Tray and card icon');
+
+  // 8 Knack shells & icons (matching content/shots.json)
+  // 1. Grand Dumpling (Lobber Knack): plump pleated golden dumpling with steam wisp
+  const grandDumpling = path('M14 66 C10 42 26 26 40 24 C42 14 58 14 60 24 C74 26 90 42 86 66 C84 82 68 88 50 88 C32 88 16 82 14 66 Z', '#F5E6C4', O())
+    + clipped(path('M14 66 C10 42 26 26 40 24 C42 14 58 14 60 24 C74 26 90 42 86 66 C84 82 68 88 50 88 C32 88 16 82 14 66 Z', '#000'),
+      circ(74, 72, 34, '#D9B882', { op: .55 }) + path('M10 74 Q50 92 90 72 L90 94 L10 94 Z', C.saffronD, { op: .35 }))
+    + path('M14 66 C10 42 26 26 40 24 C42 14 58 14 60 24 C74 26 90 42 86 66 C84 82 68 88 50 88 C32 88 16 82 14 66 Z', 'none', O())
+    + path('M34 32 Q42 46 38 62 M50 26 Q50 44 50 64 M66 32 Q58 46 62 62', 'none', { stroke: '#C9A27A', sw: 4.5 })
+    + path('M28 52 Q34 40 44 38', 'none', { stroke: '#FFFFFF', sw: 5, op: .75 })
+    + path('M36 10 Q32 4 38 -1 M64 10 Q68 4 62 -1', 'none', { stroke: '#FFFFFF', sw: 4, op: .8 })
+    + star4(80, 22, 10, C.gold, O(3));
+  add('shell_grand_dumpling', 'shells', 24, 24, [0, 0, 100, 100], grandDumpling, 'Grand Dumpling, Lobber Knack (Large Blast, heavy on low rows). In flight');
+  add('icon_grand_dumpling', 'icons', 48, 48, [-6, -6, 112, 112], grandDumpling, 'Grand Dumpling, Lobber Knack. Tray and card icon');
+
+  // 2. Sunspear (Zinger Knack): gleaming golden sun-ray spear, horizontal right in flight, angled in icon
+  const sunspear = line(14, 24, 134, 24, ink, 11) + line(14, 24, 132, 24, C.gold, 5.5) + line(18, 22, 126, 22, '#FFF3C4', 2)
+    + burst(34, 24, 18, 9, 8, C.saffron, O(4)) + circ(34, 24, 6.5, '#FFFFFF', O(2.5, C.goldD))
+    + path('M118 11 L156 24 L118 37 L128 24 Z', '#FFF3C4', O(4.5))
+    + path('M126 17 L148 24 L126 31 Z', C.gold);
+  add('shell_sunspear', 'shells', 40, 12, [0, 0, 160, 48], sunspear, 'Sunspear, Zinger Knack (Pierce beam through one wall). Point to the right. In flight', { anchor: [20, 6] });
+  add('icon_sunspear', 'icons', 48, 48, [-6, -6, 112, 112], g(sunspear, 'translate(50 50) rotate(-35) scale(.66) translate(-80 -24)'), 'Sunspear, Zinger Knack. Tray and card icon');
+
+  // 3. Pepper Rain (Scatterjack Knack): cracked spicy pod & 7 falling peppercorns
+  const pepGrain = (x, y, col, r = 9) => circ(x, y, r, col, O(3.5)) + hi(x - r * .3, y - r * .3, r * .28);
+  const pepperStone = circ(50, 50, 28, '#4A3328', O()) + clipped(circ(50, 50, 28, '#000'), circ(62, 62, 28, ink, { op: .25 })) + circ(38, 38, 6, C.fire) + hi(38, 36, 4.5);
+  const pepperRain = path('M22 34 C22 14 78 14 78 34 L68 48 L56 40 L48 50 L36 40 Z', '#B8472E', O(5.5))
+    + path('M34 26 Q48 18 62 24', 'none', { stroke: '#F28B82', sw: 5 })
+    + path('M34 52 L22 76 M50 54 L50 84 M66 52 L78 76', 'none', { stroke: ink, sw: 3, dash: '3 6' })
+    + pepGrain(20, 74, '#4A3328', 8.5) + pepGrain(36, 84, C.fire, 8) + pepGrain(50, 68, '#4A3328', 8.5)
+    + pepGrain(64, 84, C.saffronD, 8) + pepGrain(80, 74, '#4A3328', 8.5) + pepGrain(50, 88, C.fire, 7.5);
+  add('shell_pepper_rain', 'shells', 20, 20, [0, 0, 100, 100], pepperRain, 'Pepper Rain, Scatterjack Knack (splits into 7 stones at apex). In flight');
+  add('shell_pepper_stone', 'shells', 10, 10, [0, 0, 100, 100], pepperStone, 'Pepper Rain child peppercorn stone. In flight');
+  add('icon_pepper_rain', 'icons', 48, 48, [-6, -6, 112, 112], pepperRain, 'Pepper Rain, Scatterjack Knack. Tray and card icon');
+
+  // 4. Burrowbomb (Delver Knack): iron round bomb with brass spiral drill nose & sparking fuse
+  const burrowbomb = path('M14 26 Q6 14 18 10', 'none', { stroke: ink, sw: 6 }) + path('M14 26 Q6 14 18 10', 'none', { stroke: '#C9A27A', sw: 2.5 })
+    + star4(20, 10, 10, C.gold, O(2.5)) + circ(20, 10, 3.5, '#FFFFFF')
+    + circ(40, 56, 28, '#4A4248', O()) + clipped(circ(40, 56, 28, '#000'), circ(54, 70, 28, ink, { op: .28 }))
+    + circ(40, 56, 28, 'none', O()) + path('M24 44 Q30 34 40 34', 'none', { stroke: C.steelL, sw: 5, op: .6 })
+    + path('M58 34 L94 56 L58 78 Z', C.br, O(5.5))
+    + path('M64 42 L74 68 M74 47 L82 64 M83 52 L87 60', 'none', { stroke: C.brD, sw: 4 })
+    + line(62, 41, 86, 54, C.brL, 3);
+  add('shell_burrowbomb', 'shells', 20, 20, [0, 0, 100, 100], burrowbomb, 'Burrowbomb, Delver Knack (bores in, then explodes inside). In flight');
+  add('icon_burrowbomb', 'icons', 48, 48, [-6, -6, 112, 112], burrowbomb, 'Burrowbomb, Delver Knack. Tray and card icon');
+
+  // 5. Rolypoly (Boinker Knack): curled armored berry-pink woodlouse roller with wind-up key
+  const rolypoly = path('M80 28 L94 18 M88 12 A7 7 0 1 1 82 22 M94 18 A7 7 0 1 1 90 28', 'none', { stroke: ink, sw: 7 })
+    + path('M80 28 L94 18', 'none', { stroke: C.br, sw: 3 })
+    + circ(86, 15, 6, C.br, O(3)) + circ(91, 24, 6, C.br, O(3))
+    + circ(48, 54, 34, C.boinker, O())
+    + clipped(circ(48, 54, 34, '#000'),
+      path('M48 20 C68 20 82 38 78 58 C74 74 58 84 44 82 C30 80 22 66 26 52 C30 40 42 36 52 42', 'none', { stroke: '#A83A70', sw: 6 })
+        + line(48, 54, 22, 32, ink, 4) + line(48, 54, 52, 20, ink, 4) + line(48, 54, 78, 38, ink, 4)
+        + line(48, 54, 76, 70, ink, 4) + line(48, 54, 42, 86, ink, 4) + line(48, 54, 18, 66, ink, 4)
+        + circ(62, 68, 34, ink, { op: .16 }))
+    + circ(48, 54, 34, 'none', O())
+    + circ(48, 54, 14, '#FAD0E4', O(4.5))
+    + circ(51, 52, 4, ink) + hi(52.5, 50.5, 1.5);
+  add('shell_rolypoly', 'shells', 22, 22, [0, 0, 100, 100], rolypoly, 'Rolypoly, Boinker Knack (motorized roller that bursts). In flight');
+  add('icon_rolypoly', 'icons', 48, 48, [-6, -6, 112, 112], rolypoly, 'Rolypoly, Boinker Knack. Tray and card icon');
+
+  // 6. Barn Raising (Patcher Knack): cozy timber gable frame rising on green mend sparkles
+  const barnRaising = path('M14 48 L50 16 L86 48 V86 H14 Z', C.tb, O())
+    + path('M8 50 L50 12 L92 50', 'none', { stroke: ink, sw: 11 }) + path('M8 50 L50 12 L92 50', 'none', { stroke: C.tbL, sw: 5 })
+    + rr(34, 54, 32, 32, 3, C.tbD, O(4))
+    + line(34, 54, 66, 86, C.tbL, 3.5) + line(66, 54, 34, 86, C.tbL, 3.5)
+    + rr(46, 26, 8, 22, 2.5, C.heal, O(3, C.healD)) + rr(39, 33, 22, 8, 2.5, C.heal, O(3, C.healD)) + rr(47.5, 27.5, 5, 19, 1.5, C.heal)
+    + star4(20, 20, 9, C.heal, O(2.5, C.healD)) + star4(82, 22, 8, '#EFFFF0', O(2, C.healD));
+  add('shell_barn_raising', 'shells', 20, 20, [0, 0, 100, 100], barnRaising, 'Barn Raising, Patcher Knack (rebuilds 4 blocks or revives a Hob). Effect icon');
+  add('icon_barn_raising', 'icons', 48, 48, [-6, -6, 112, 112], barnRaising, 'Barn Raising, Patcher Knack. Tray and card icon');
+
+  // 7. Tick-Tock Crock (Old Thumper Knack): glazed crock with twin alarm bells & ticking clock face
+  const tickTockCrock = circ(26, 22, 13, C.br, O(5)) + circ(74, 22, 13, C.br, O(5))
+    + path('M14 10 l-6 -6 M86 10 l6 -6', 'none', { stroke: ink, sw: 4 })
+    + path('M22 36 C12 46 14 82 26 88 H74 C86 82 88 46 78 36 Z', CLAY, O())
+    + clipped(path('M22 36 C12 46 14 82 26 88 H74 C86 82 88 46 78 36 Z', '#000'), circ(76, 72, 34, ink, { op: .18 }))
+    + rr(20, 28, 60, 11, 5, CLAYD, O(5)) + rr(44, 20, 12, 10, 3, C.brD, O(4))
+    + circ(50, 62, 19, C.paper, O(5))
+    + path('M50 62 L50 45 A17 17 0 0 1 65 55 Z', C.danger, { op: .85 })
+    + line(50, 62, 50, 48, ink, 4) + line(50, 62, 61, 58, ink, 3.5) + circ(50, 62, 3.5, ink);
+  add('shell_tick_tock_crock', 'shells', 24, 24, [0, 0, 100, 100], tickTockCrock, 'Tick-Tock Crock, Old Thumper Knack (heavy bomb prop that detonates next turn). In flight');
+  add('icon_tick_tock_crock', 'icons', 48, 48, [-6, -6, 112, 112], tickTockCrock, 'Tick-Tock Crock, Old Thumper Knack. Tray and card icon');
+
+  // 8. Pan Parade (Nan Knack): marching copper saucepans
+  const onePan = (cx, cy, k = 1) => g(
+    line(18, 0, 46, -10, ink, 11) + line(18, 0, 46, -10, C.steelD, 5)
+      + circ(0, 0, 24, C.copper, O(6)) + circ(0, 0, 17, '#F2A469', O(3, '#A4521F')) + hi(-7, -7, 5),
+    `translate(${cx} ${cy}) scale(${k})`,
+  );
+  const panParade = path('M14 84 H86', 'none', { stroke: ink, sw: 3.5, dash: '4 6' })
+    + onePan(28, 32, .55) + onePan(56, 50, .62) + onePan(34, 70, .68)
+    + star4(82, 24, 9, C.gold, O(2.5));
+  add('shell_pan_parade', 'shells', 20, 20, [0, 0, 100, 100], onePan(40, 54, .95), 'Pan Parade, Nan Knack (5 marching pans). In flight');
+  add('shell_pan', 'shells', 14, 14, [0, 0, 100, 100], onePan(40, 54, .95), 'Pan Parade child pan. In flight');
+  add('icon_pan_parade', 'icons', 48, 48, [-6, -6, 112, 112], panParade, 'Pan Parade, Nan Knack. Five marching copper pans. Tray and card icon');
+}
+
+// ================================================================ level props
+// Dedicated art replacing procedural Canvas2D strokes for cage_bar, roller, shears, turnip, crock
+{
+  // 1. cage_bar (1-7 Hetty rescue cage bar)
+  const cageBar = rr(10, 176, 28, 12, 3, C.steelD, O(4))
+    + rr(16, 14, 16, 166, 3, C.steel, O(4.5))
+    + line(21, 20, 21, 174, C.steelL, 3.5, { op: .8 })
+    + line(29, 20, 29, 174, C.steelD, 2.5)
+    + rr(8, 6, 32, 14, 4, C.br, O(4)) + line(12, 11, 34, 11, C.brL, 2.5)
+    + circ(16, 182, 2.5, C.steelL) + circ(32, 182, 2.5, C.steelL);
+  add('prop_cage_bar', 'props', 12, 48, [0, 0, 48, 192], cageBar, 'Rescue cage iron bar (1-7). Anchor is bottom centre', { anchor: [6, 48] });
+
+  // 2. roller (Big Smoothie Jr. steamroller prop)
+  const roller = ell(80, 148, 64, 9, ink, { op: .2 })
+    + circ(48, 114, 34, C.steelD, O(5.5)) + circ(48, 114, 20, C.steel, O(4)) + rr(38, 110, 20, 8, 3, C.steelL)
+    + rr(68, 78, 72, 44, 7, C.indigo, O(5.5))
+    + [0, 1, 2, 3, 4].map(i => path(`M${72 + i * 13} 112 l9 0 l-8 10 l-9 0 Z`, C.rival)).join('')
+    + rr(68, 110, 72, 4, 0, ink, { op: .3 })
+    + circ(124, 130, 17, C.steelD, O(5)) + circ(124, 130, 6, C.steel)
+    + rr(116, 38, 13, 42, 3, '#3A3236', O(4.5)) + puff(132, 22, 10, '#EDEDF2', { sw: 3 })
+    + rr(84, 58, 28, 22, 5, C.br, O(4.5)) + line(88, 63, 106, 63, C.brL, 3);
+  add('prop_roller', 'props', 48, 48, [0, 0, 160, 160], roller, 'Big Smoothie Jr. Flattener steamroller prop. Anchor is bottom centre', { anchor: [24, 46] });
+
+  // 3. shears (1-10 Topiary Keep Boss roof shears)
+  const shears = g(
+    path('M24 26 L138 66 L128 78 L18 42 Z', C.steelL, O(5)) + line(34, 36, 126, 68, '#FFFFFF', 2.5, { op: .6 })
+      + path('M24 94 L138 54 L128 42 L18 78 Z', C.steel, O(5)) + line(34, 84, 126, 52, C.steelL, 2.5, { op: .6 })
+      + path('M124 44 L156 26 L160 36 L130 56 Z', C.rival, O(4.5))
+      + path('M124 76 L156 94 L160 84 L130 64 Z', C.rival, O(4.5))
+      + circ(84, 60, 13, C.br, O(4.5)) + circ(84, 60, 5, C.brL, O(2, C.brD)),
+    '',
+  );
+  add('prop_shears', 'props', 56, 40, [0, 0, 168, 120], shears, 'Grand Fort 1-10 giant hedge shears prop. Anchor is hinge centre', { anchor: [28, 20] });
+
+  // 4. turnip (planted Old Turnip prop that blocks rollers)
+  const propTurnip = path('M10 108 C16 90 36 84 50 86 C64 84 84 90 90 108 Z', '#7A4A2E', O(5))
+    + g(SHELLS.old_turnip[1], 'translate(50 56) scale(.86) translate(-50 -50)')
+    + path('M18 106 Q50 96 82 106', 'none', { stroke: '#9A6440', sw: 5 });
+  add('prop_turnip', 'props', 24, 28, [0, 0, 100, 116], propTurnip, 'Rooted Old Turnip ground prop (stops rollers). Anchor is base centre', { anchor: [12, 26] });
+
+  // 5. crock (planted Tick-Tock Crock bomb prop)
+  const propCrock = ell(56, 118, 36, 7, ink, { op: .22 })
+    + g(
+      circ(26, 22, 13, C.br, O(5)) + circ(74, 22, 13, C.br, O(5))
+        + path('M10 14 l-8 -6 M10 26 l-9 1 M90 14 l8 -6 M90 26 l9 1', 'none', { stroke: ink, sw: 4 })
+        + path('M22 36 C12 46 14 82 26 88 H74 C86 82 88 46 78 36 Z', CLAY, O())
+        + rr(20, 28, 60, 11, 5, CLAYD, O(5)) + rr(44, 20, 12, 10, 3, C.brD, O(4))
+        + circ(50, 62, 19, C.paper, O(5))
+        + path('M50 62 L50 45 A17 17 0 0 1 65 55 Z', C.danger, { op: .9 })
+        + line(50, 62, 50, 48, ink, 4) + line(50, 62, 61, 58, ink, 3.5) + circ(50, 62, 3.5, ink),
+      'translate(6 26)',
+    )
+    + star4(56, 14, 9, C.gold, O(2.5));
+  add('prop_crock', 'props', 28, 32, [0, 0, 112, 128], propCrock, 'Planted Tick-Tock Crock bomb prop (detonates next turn). Anchor is base centre', { anchor: [14, 30] });
 }
 
 // ================================================================ effects
@@ -219,6 +428,7 @@ for (const [n, [purpose, body]] of Object.entries(SHELLS)) {
   }
   add('fx_snooze_balloon', 'effects', 40, 52, [-34, -98, 80, 104], snoozeBalloon(0, 0, {}), 'Snooze Balloon alone (round). Use when a Bonked Hob floats off. Anchor is the string end', { anchor: [17, 49] });
   add('fx_snooze_balloon_p2', 'effects', 40, 52, [-34, -98, 80, 104], snoozeBalloon(0, 0, { tag: true }), 'Snooze Balloon with the player 2 diamond tag on the string', { anchor: [17, 49] });
+  add('fx_snooze_balloon_square', 'effects', 40, 52, [-34, -98, 80, 104], squareSnoozeBalloon(0, 0, { tag: true }), 'Square Snooze Balloon for Bonked Flatteners (Art Pillar 3: Round vs Flat). Anchor is the string end', { anchor: [17, 49] });
 }
 
 // ================================================================ terrain (Puddingstone Downs)
@@ -394,6 +604,9 @@ const shared = {};
   }
 }
 
+// ================================================================ Part 2 Redesign UI, Props, Fort Cutaway & Soil Strata
+addRedesignAssets(add);
+
 // ================================================================ app icon
 {
   const S = 1024;
@@ -414,12 +627,13 @@ const shared = {};
 
 // ================================================================ animation frames and data
 // All new frames are added after the v0.1 sprites, so the old SVG files do not change.
-const anim = buildAnim({ find: (n) => sprites.find(s => s.name === n), add: (n, grp, w, h, vb, body, purpose, o = {}) => add(n, grp, w, h, vb, body, purpose, { ...o, anim: true }), solidBlock, SHELLS, shared, HOB_NAME });
+const anim = buildAnim({ find: (n) => sprites.find(s => s.name === n), add: (n, grp, w, h, vb, body, purpose, o = {}) => add(n, grp, w, h, vb, body, purpose, { ...o, anim: true }), solidBlock, SHELLS, shared, HOB_NAME, FLATTENERS, dedupHobs: DEDUP_HOBS });
 
 // ================================================================ write
 fs.rmSync(path_.join(ASSETS, 'svg'), { recursive: true, force: true });
 fs.mkdirSync(path_.join(ASSETS, 'svg'), { recursive: true });
-const manifest = { name: 'Castle Protect v0.1 sprites', generator: 'tools/art-gen/gen-sprites.mjs + render-sprites.mjs', scales: ['1x', '2x'], note: 'w and h are px at @1x. anchor is px at @1x from the top left. Hobs face right; flip them for the right-hand fort.', sprites: [] };
+const manifest = { name: V2 ? 'Castle Protect v2 sprites' : 'Castle Protect v0.1 sprites', generator: 'tools/art-gen/gen-sprites.mjs + render-sprites.mjs', scales: ['1x', '2x'], note: 'w and h are px at @1x. anchor is px at @1x from the top left. Hobs face right; flip them for the right-hand fort.', sprites: [] };
+if (V2) manifest.v2 = true;
 for (const s of sprites) {
   const [vx, vy, vw, vh] = s.vb;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vx} ${vy} ${vw} ${vh}" width="${s.w}" height="${s.h}">${s.defs ? `<defs>${s.defs}</defs>` : ''}${s.body}</svg>\n`;
@@ -438,6 +652,10 @@ manifest.groups = groups;
 manifest.count = sprites.length;
 manifest.animations = 'animations.json';
 manifest.data = { fort_bob: anim.data.fort_bob };
+if (DEDUP_HOBS) {
+  const dedup = buildDedupTables(sprites);
+  manifest.dedup = { mode: dedup.mode, scarfOverlays: dedup.scarfOverlays, aliases: dedup.aliases, overlays: dedup.overlays };
+}
 fs.writeFileSync(path_.join(ASSETS, 'animations.json'), anim.json);
 fs.writeFileSync(path_.join(ASSETS, 'manifest.json'), JSON.stringify(manifest, null, 1) + '\n');
-console.log('sprites', sprites.length, groups);
+console.log('sprites', sprites.length, groups, DEDUP_HOBS ? '(dedup-hobs)' : '(legacy)');

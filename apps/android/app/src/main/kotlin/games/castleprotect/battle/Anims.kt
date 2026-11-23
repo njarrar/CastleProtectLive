@@ -21,6 +21,10 @@ class AnimDef(
     val hold: String?,
     /** "power" for the aim pose set: not timed, frame by power. */
     val pick: String?,
+    /** Idle clips: start at a random time in the loop (`random_start`). */
+    val randomStart: Boolean = false,
+    /** Where to start when not at random (`start_offset_ms`), per Hob and per team. */
+    val startOffsetMs: Int = 0,
 ) {
     val total: Int = ms.sum()
     /** Start time of each frame in ms. */
@@ -97,6 +101,7 @@ class Anims(val defs: Map<String, AnimDef>, val bobDy: FloatArray, val bobTilt: 
                     an?.optDouble(0, 0.0)?.toFloat() ?: 0f, an?.optDouble(1, 0.0)?.toFloat() ?: 0f,
                     Array(frames.size) { evs[it].toTypedArray() },
                     a.optString("next").ifEmpty { null }, a.optString("hold").ifEmpty { null }, a.optString("pick").ifEmpty { null },
+                    a.optBoolean("random_start", false), a.optInt("start_offset_ms", 0).coerceAtLeast(0),
                 )
             }
             val data = root.optJSONObject("data") ?: JSONObject()
@@ -216,4 +221,25 @@ class AnimClip(private val anims: Anims, start: AnimDef, private val backwards: 
 
     /** Starts [d] from its first frame. */
     fun play(d: AnimDef) { def = d; t = 0f; frame = -1; pos = -1; done = false }
+
+    /** Jumps to [ms] into the current pass with no events (an idle that starts part way through its loop). */
+    fun seek(ms: Int) {
+        if (def.pick != null || def.total <= 0) return
+        val at = (ms % def.total).coerceAtLeast(0)
+        t = at.toFloat(); pos = def.frameAt(t); frame = idx(pos); done = false
+    }
+
+    companion object {
+        /**
+         * Where an idle starts, in ms: a point in the loop picked from [seed] when the clip says
+         * `random_start`, else its `start_offset_ms` (assets/README.md, Hob timing).
+         */
+        fun idleStart(d: AnimDef, seed: Long): Int {
+            if (!d.randomStart) return d.startOffsetMs
+            if (d.total <= 0) return 0
+            var x = seed * -0x61c8864680b583ebL
+            x = x xor (x ushr 31)
+            return Math.floorMod(x, d.total.toLong()).toInt()
+        }
+    }
 }

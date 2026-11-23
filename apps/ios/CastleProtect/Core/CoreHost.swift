@@ -10,7 +10,7 @@ import Foundation
 /// replay and the per-thread `cp_last_error(NULL)` all share it.
 final class CoreThread: @unchecked Sendable {
     private let condition = NSCondition()
-    private var jobs: [() -> Void] = []
+    private var jobs: [@Sendable () -> Void] = []
     private var finishing = false
     /// Set once in `init`, before the thread starts.
     private(set) var thread: Thread?
@@ -43,7 +43,7 @@ final class CoreThread: @unchecked Sendable {
     }
 
     /// Queues a job; jobs run one at a time, in the order they were queued.
-    func enqueue(_ job: @escaping () -> Void) {
+    func enqueue(_ job: @escaping @Sendable () -> Void) {
         condition.lock()
         jobs.append(job)
         condition.signal()
@@ -75,8 +75,8 @@ final class CoreHost: @unchecked Sendable {
 
     deinit {
         // The handle is freed on its own thread too, then the thread ends.
-        let bridge = self.bridge
-        thread.enqueue { bridge.end() }
+        let bridge = UncheckedBox(self.bridge)
+        thread.enqueue { bridge.value.end() }
         thread.finish()
     }
 
@@ -98,17 +98,17 @@ final class CoreHost: @unchecked Sendable {
     }
 
     /// A quick call: runs on the core thread and waits for it.
-    func sync<T>(_ work: @escaping (any CoreBridge) -> T) -> T {
+    func sync<T: Sendable>(_ work: @escaping @Sendable (any CoreBridge) -> T) -> T {
         if thread.isCurrent { return work(bridge) }
         let done = DispatchSemaphore(value: 0)
-        var result: T?
-        let bridge = self.bridge
+        let box = LockedValue<T?>(nil)
+        let bridge = UncheckedBox(self.bridge)
         thread.enqueue {
-            result = work(bridge)
+            box.set(work(bridge.value))
             done.signal()
         }
         done.wait()
-        switch result {
+        switch box.take(reset: nil) {
         case .some(let value): return value
         case .none: preconditionFailure("the core thread did not run the call")
         }
@@ -117,9 +117,9 @@ final class CoreHost: @unchecked Sendable {
     /// Slow work that returns nothing the caller waits for (the Rival's turn).
     func background(_ work: @escaping @Sendable (any CoreBridge) -> Void) {
         setBusy(true)
-        let bridge = self.bridge
+        let bridge = UncheckedBox(self.bridge)
         thread.enqueue {
-            work(bridge)
+            work(bridge.value)
             self.setBusy(false)
         }
     }

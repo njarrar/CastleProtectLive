@@ -14,7 +14,7 @@ This doc fills the crew system set out in `00-core-game-design.md`. It owns the 
 
 **Cites.** `[00 §2.9]` means section 2.9 of the core doc. `[C02]` is row C02 of the consistency audit. `[B7]` is ruling B7 in review 04. Research cites follow the core doc style, for example `[02b §7]`.
 
-**Tags.** Every content item carries one tag: `[Launch]` ships in 1.0. `[U1]` ships in Update 1, Long Siege. `[U2]` ships in Update 2, Frostwhisker Peaks. `[U3]` ships in Update 3, Clankmouth Mines [review 04 §A]. All numbers are tuning targets.
+**Tags.** Every content item carries one tag: `[Launch]` ships in 1.0. `[U1]` ships in Update 1, Long Siege. `[U2]` ships in Update 2, Nithering Heights. `[U3]` ships in Update 3, Wheal Clank [review 04 §A]. All numbers are tuning targets.
 
 ---
 
@@ -23,26 +23,26 @@ This doc fills the crew system set out in `00-core-game-design.md`. It owns the 
 | # | Change | Why |
 |---|---|---|
 | 1 | Cut the seat layer: seat words, Seat Perks, Neighbor Perks, Scamper, Scurry, Crowded, Perched, Porch. Moved to Parked ideas | [B7] |
-| 2 | Hob states are now five: Open, Dropped, Tumbled, Squashed, Bonked. Rattled and Skylight are gone as states | [B7] |
+| 2 | Hob states are now five: Open, Fell a floor, Tumbled, Squashed, Bonked. Rattled and Skylight are gone as states | [B7] |
 | 3 | Hob growth is 3 ranks. Each rank is one Quirk pick from 2. No HP per level. No Knack tiers. The best tier idea of each Knack is now a rank 3 Quirk option | [B8] |
 | 4 | Any Hob may fire any Trick Shell. The Match Class fires it with Rest 0 and +10%. Class "Trick families" are gone | [B6] |
 | 5 | Crew cap 5. Crew grows 1, 2, 3 in the tutorial, 4 at 1-7, 5 as a free gift at Grand Fort 2 (per `00`) | [B3] |
 | 6 | No lost turns. Tumble never skips a shot. A buried Loophole greys the Fire button. Puff Up is player side only | [B9] |
-| 7 | Enemy crew Class icons stay visible all battle. Hidden crew and the Peeper Class move to `[U2]` | [B10] |
+| 7 | Enemy crew Class icons stay visible all battle. Hidden crew and the Lookout Class move to `[U2]` | [B10] |
 | 8 | 16 Hobs at launch, 2 in U1, 5 in U2, 5 in U3 (28 in all). Every Hob is tagged. Launch list in section 3.0 | [A] |
 | 9 | Join levels follow the audit and the 4-region launch: Hetty 1-7, Dame Flicka 2-8, Truffle 3-7, Nan on the T3 path or at 2-10. The Flats are Region 4. Pip is the Flats rescue at 4-8 (was Tansy, now U2) | [C02], [A] |
 | 10 | Mastery and Deeds move to `[U1]`. Bonds move to `[U2]` | Review 02 §2.3 |
 | 11 | Class sheets use `01` numbers and Knack names. Five no-damage Knacks are Light | [C07], [C08] |
 | 12 | Cover reads as the audit says: area payloads centred outside an intact Nook are halved, any type. Point hits are not | [C09], [C10] |
-| 13 | Renames: Flicka's passive is "Joust", Nan's is "Pan Shield", the Quirk "Second Wind" is "Big Breath". The Sizzler Quirk "Wick" is "Wildfire" (clash with Wick Glimmer) | [C45], [C49] |
-| 14 | Passives that relied on cut systems are rewritten for launch: Truffle (Good Nose), Poultice (Tea Round), Hetty (Tidy Up) | [B7], [B10] |
+| 13 | Renames: Flicka's passive is "Joust", Nan's is "Pan Shield", the Quirk "Second Wind" is "Big Breath". The Stoker Quirk "Wick" is "Wildfire" (clash with Wick Chandler) | [C45], [C49] |
+| 14 | Passives that relied on cut systems are rewritten for launch: Truffle (Good Nose), Nurse Plumley (Tea Round), Hetty (Tidy Up) | [B7], [B10] |
 | 15 | Last Bell crew plans (The Slow Cook, the Turtle trio aim) are rewritten for Sudden Squall | [B5] |
 | 16 | Per-Hob voice lines become subtitle lines over one voice set per Class | [C86] |
 | 17 | Final verification pass: "Reload" and "Chill" read as **Rest** everywhere; the Match Class fires a shell with Rest 0 and +10% [00]. Old Thumper joins at 2-3 and Tansy at 5-8 (not a rescue), per `05`. Petra is the Canary Row (6-6) captive. The late-recruit rule follows `02`. If a whole crew is dug in, the newest burial clears, as in `00` and `01` | Review 05 |
-| 18 | Four Passives replaced with positional rules that use the new word **next door** (section 1): Grub **Broad Back** (was Sure Feet), Hetty **Ridgepole** (was Tidy Up, which did nothing at launch), Old Thumper **Old Grudge** (was Can't Hear You), Nan **Clatter Call** (was Pan Shield). Each has a rule, a counter and a bark | Review 06 U1 to U4 |
-| 19 | Fizz's Knack is **Rising Fizz** (was Popple Pod), with a new Knack Quirk, **Shaken Up** | Review 06 U5 |
-| 20 | Knack lines follow `01`: Grand Dumpling's **Low Blow**, Long Skewer leaves the skewer in, Skimmerstone's 50 Blast floor | Review 06 U6 to U8 |
-| 21 | Loophole Flap and Shove Off in the Loophole rules (7.2). Puff Up is open to both sides in Couch Duel. Peep Pip deals 12, as `01` sets it | Review 06 G2, G6, G7 |
+| 18 | Four Passives replaced with positional rules that use the new word **next door** (section 1): Grub **Broad Back** (was Sure Feet), Hetty **Ridgepole** (was Tidy Up, which did nothing at launch), Old Thumper **Old Grudge** (was Can't Hear You), Nan **Dinner Bell** (was Pan Shield). Each has a rule, a counter and a bark | Review 06 U1 to U4 |
+| 19 | Ginger's Knack is **Rising Fizz** (was Popple Pod), with a new Knack Quirk, **Shaken Up** | Review 06 U5 |
+| 20 | Knack lines follow `01`: Grand Dumpling's **Low Blow**, Long Skewer leaves the skewer in, Ducks and Drakes's 50 Blast floor | Review 06 U6 to U8 |
+| 21 | Loophole Flap and Shove Off in the Loophole rules (7.2). Puff Up is open to both sides in Couch Duel. Chalk Dart deals 12, as `01` sets it | Review 06 G2, G6, G7 |
 
 ---
 
@@ -80,7 +80,7 @@ Five states, each with a clear picture and one rule. Section 7.4 has the detail.
 | State | What happened | Rule |
 |---|---|---|
 | **Open** | A block on any side of the Nook is gone, or the Hob stands outside a Nook | No Cover |
-| **Dropped** | The Nook floor broke | Falls to the first standing surface. Fall damage over 32 cells |
+| **Fell a floor** | The Nook floor broke | Falls to the first standing surface. Fall damage over 32 cells |
 | **Tumbled** | Fell out of the castle | 20 damage. Climbs back to the lowest free Nook. Keeps its shot |
 | **Squashed** | A chunk landed on it | Crush damage |
 | **Bonked** | HP 0 | Floats off on a Snooze Balloon |
@@ -89,14 +89,14 @@ Five states, each with a clear picture and one rule. Section 7.4 has the detail.
 
 | Class | Role | HP | Good Loophole | Tag |
 |---|---|---|---|---|
-| **Lobber** | Demolisher | 120 | High, any depth | `[Launch]` |
-| **Zinger** | Crew sniper | 80 | Level with enemy Nooks | `[Launch]` |
-| **Scatterjack** | Area | 100 | High or middle, near the front | `[Launch]` |
-| **Delver** | Underminer | 140 | Low, on the Footing | `[Launch]` |
-| **Boinker** | Trick shots | 90 | Low | `[Launch]` |
-| **Sizzler** | Zones | 100 | Middle, in fireproof walls | `[Launch]` |
-| **Patcher** | Support | 110 | Middle, near the Kettle Room | `[Launch]` |
-| **Peeper** | Scout | 80 | Top row | `[U2]` |
+| **Lobber** | Breaks walls | 120 | High, any depth | `[Launch]` |
+| **Zinger** | Picks off Hobs | 80 | Level with enemy Nooks | `[Launch]` |
+| **Scatterjack** | Hits a wide patch | 100 | High or middle, near the front | `[Launch]` |
+| **Digger** | Digs under | 140 | Low, on the Footing | `[Launch]` |
+| **Bouncer** | Goes round corners | 90 | Low | `[Launch]` |
+| **Stoker** | Burns and soaks | 100 | Middle, in fireproof walls | `[Launch]` |
+| **Patcher** | Mends | 110 | Middle, near the Kettle Room | `[Launch]` |
+| **Lookout** | Finds their crew | 80 | Top row | `[U2]` |
 
 "Good Loophole" is advice, not a rule. Height and cover do the work [B7]: a high Loophole clears hills, a low one gives flat runs, and a deep Nook sits behind more blocks.
 
@@ -108,7 +108,7 @@ Each Class sheet lists role, stats, Plain Shot, strengths, weaknesses, counters 
 
 ### 2.1 Lobber `[Launch]`
 
-**Role.** Demolisher. Opens roofs, drops floors, cracks the path to the Heartkettle.
+**Role.** Breaks walls. Opens roofs, drops floors, cracks the path to the Heartkettle.
 
 | Item | Value |
 |---|---|
@@ -135,7 +135,7 @@ Each Class sheet lists role, stats, Plain Shot, strengths, weaknesses, counters 
 
 ### 2.2 Zinger `[Launch]`
 
-**Role.** Crew sniper. Hunts Hobs and pricks the Heartkettle.
+**Role.** Picks off Hobs. Hunts Hobs and pricks the Heartkettle.
 
 | Item | Value |
 |---|---|
@@ -164,7 +164,7 @@ Each Class sheet lists role, stats, Plain Shot, strengths, weaknesses, counters 
 
 ### 2.3 Scatterjack `[Launch]`
 
-**Role.** Area. Chips many blocks, punishes open Nooks, finishes hurt Hobs.
+**Role.** Hits a wide patch. Chips many blocks, punishes open Nooks, finishes hurt Hobs.
 
 | Item | Value |
 |---|---|
@@ -189,23 +189,23 @@ Each Class sheet lists role, stats, Plain Shot, strengths, weaknesses, counters 
 
 **Where it sits.** High or middle, near the front, so the fan is still tight when it lands.
 
-### 2.4 Delver `[Launch]`
+### 2.4 Digger `[Launch]`
 
-**Role.** Underminer. Tunnels ground, bores walls from the side, drops castles into pits.
+**Role.** Digs under. Tunnels ground, bores walls from the side, drops castles into pits.
 
 | Item | Value |
 |---|---|
 | HP | 140 |
 | Plain Shot | **Nibbler.** Low shot that bores 48 cells of Loam (Clay at half) and leaves a tunnel. Against a block: 34 Dig and a Peephole. Light |
 | Knack style | Long bore, then a burst |
-| Shell badge | Delver shells: diggers and ground shots |
+| Shell badge | Digger shells: diggers and ground shots |
 
 **Plain Shot behavior.** A low arc shot that keeps going through Loam or Clay and leaves a tunnel one block wide. It stops at Rock, Bedrock and Footing. Against a castle block it deals Dig damage, leaves a Peephole and stops.
 
 **Strengths.**
 - Removes the hill a Zinger hides behind. Opens lines for the whole crew.
 - Can carve ground from under a castle and cause a Thump [00 §2.7].
-- Highest HP. A Delver holds a low Nook for a long time.
+- Highest HP. A Digger holds a low Nook for a long time.
 - Dig hurts the wall, not the Hob behind it, so Cover rarely matters.
 - Digs out a buried Loophole (section 7.2).
 
@@ -216,18 +216,18 @@ Each Class sheet lists role, stats, Plain Shot, strengths, weaknesses, counters 
 
 **Counters.** Footing. Rock ground. Clay, which carves at half rate. A Patcher who fills the hole. Water, which floods a tunnel dug below the water line.
 
-**Where it sits.** Low, on the Footing. A low Loophole gives a flat run into the ground. The Footing never falls, so the Delver is never Dropped there.
+**Where it sits.** Low, on the Footing. A low Loophole gives a flat run into the ground. The Footing never falls, so the Digger never falls a floor there.
 
-### 2.5 Boinker `[Launch]`
+### 2.5 Bouncer `[Launch]`
 
-**Role.** Trick shots. Reaches spots no straight shot can: under ledges, behind mounds, along the ground into a low Nook.
+**Role.** Goes round corners. Reaches spots no straight shot can: under ledges, behind mounds, along the ground into a low Nook.
 
 | Item | Value |
 |---|---|
 | HP | 90 |
-| Plain Shot | **Bouncebean.** Hops twice, bursts on the third touch or at once on a Hob. 30 Blast, Small blast (18), +5 per hop. Light |
+| Plain Shot | **Jumping Bean.** Hops twice, bursts on the third touch or at once on a Hob. 30 Blast, Small blast (18), +5 per hop. Light |
 | Knack style | Roller or skipper |
-| Shell badge | Boinker shells: rollers and bouncers |
+| Shell badge | Bouncer shells: rollers and bouncers |
 
 **Plain Shot behavior.** The bean keeps 70% of its speed on each hop. It bounces off ground and off castle blocks. The preview stops at the first bounce [00 §2.4].
 
@@ -244,16 +244,16 @@ Each Class sheet lists role, stats, Plain Shot, strengths, weaknesses, counters 
 
 **Where it sits.** Low. A low Loophole makes long flat hops.
 
-### 2.6 Sizzler `[Launch]`
+### 2.6 Stoker `[Launch]`
 
-**Role.** Zones. Burns wood, soaks ground. Shapes the next two turns.
+**Role.** Burns and soaks. Sets wood alight, wets the ground. Shapes the next two turns.
 
 | Item | Value |
 |---|---|
 | HP | 100 |
-| Plain Shot | **Emberpot.** Fire pot. 15 Fire, Small blast (18). Burn on wood and Hobs. Leaves an Ember Patch for 2 turns. Light |
+| Plain Shot | **Hot Coal.** Fire pot. 15 Fire, Small blast (18). Burn on wood and Hobs. Leaves an Ember Patch for 2 turns. Light |
 | Knack style | Fluid or field |
-| Shell badge | Sizzler shells: fluids and fire (Frost shells join in `[U2]`) |
+| Shell badge | Stoker shells: fluids and fire (Frost shells join in `[U2]`) |
 
 **Plain Shot behavior.** A medium arc pot. It breaks on first touch and lights what it hits. Burn spreads to touching Wicker and Timber [00 §2.10]. Water puts it out.
 
@@ -274,12 +274,12 @@ Each Class sheet lists role, stats, Plain Shot, strengths, weaknesses, counters 
 
 ### 2.7 Patcher `[Launch]`
 
-**Role.** Support. Mends blocks, shields rooms, brings one friend back.
+**Role.** Mends. Patches blocks, shields rooms, brings one friend back.
 
 | Item | Value |
 |---|---|
 | HP | 110 |
-| Plain Shot | **Mendglob.** Own block: +50 HP. A broken block with support comes back at half HP in its old material. Rival block: 8 Blast, Tiny. Light |
+| Plain Shot | **Dollop.** Own block: +50 HP. A broken block with support comes back at half HP in its old material. Rival block: 8 Blast, Tiny. Light |
 | Knack style | Rebuild, shield or wall |
 | Shell badge | Patcher shells: builders and shields |
 
@@ -299,22 +299,22 @@ Each Class sheet lists role, stats, Plain Shot, strengths, weaknesses, counters 
 
 **Where it sits.** Middle, near the Kettle Room, so it can mend the kettle's walls first.
 
-### 2.8 Peeper `[U2]`
+### 2.8 Lookout `[U2]`
 
-The Peeper Class and the hidden crew game arrive together with Frostwhisker Peaks, where fog and blizzard give scouting a job [B10]. Until then enemy Class icons stay shown and there is nothing to scout.
+The Lookout Class and the hidden crew game arrive together with Nithering Heights, where fog and blizzard give scouting a job [B10]. Until then enemy Class icons stay shown and there is nothing to scout.
 
-**Role.** Scout. Finds the crew, marks the target, makes every other shot easier.
+**Role.** Finds their crew. Spots a Nook, marks the target, makes every other shot easier.
 
 | Item | Value |
 |---|---|
 | HP | 80 |
-| Plain Shot | **Peep Pip.** Fast chalk dart. Reveals the nearest enemy Nook within 32 cells of where it lands, all battle. 12 Pierce, point shot (18 to a Hob). Light |
+| Plain Shot | **Chalk Dart.** Fast chalk dart. Reveals the nearest enemy Nook within 32 cells of where it lands, all battle. 12 Pierce, point shot (18 to a Hob). Light |
 | Knack style | Reveal and mark |
-| Shell badge | Peeper shells: scout shots |
+| Shell badge | Lookout shells: scout shots |
 
 **Strengths.** Ends the guessing in fog and hidden-crew levels [02b §16.8]. Light shots, so it can act every turn. Its bold Ghost line doubles as a range finder.
 
-**Weaknesses.** Does next to no damage. 80 HP. Worth less on Cozy, where the enemy crew is always shown [00 §8.1]. Takes a crew slot from a shooter.
+**Weaknesses.** Does next to no damage. 80 HP. Worth less on Cosy, where the enemy crew is always shown [00 §8.1]. Takes a crew slot from a shooter.
 
 **Counters.** Smoke. Moving the castle so old chalk arcs no longer line up. Bonking it early.
 
@@ -327,17 +327,17 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 | Lobber | Wood forts, roofs, stacked Nooks | Wind, thick stone roofs, Zinger | `[Launch]` |
 | Zinger | Low HP Hobs, open kettle paths | Mounds, hills, smoke, Scatterjack | `[Launch]` |
 | Scatterjack | Open Nooks, Wicker, Zinger | Cobble faces, range | `[Launch]` |
-| Delver | Hills, Clay cover, Wicker bases | Footing, Rock, Patcher | `[Launch]` |
-| Boinker | Ledges, low walls, low Nooks | Mud, sticky ground, pits | `[Launch]` |
-| Sizzler | Wicker, Timber, slow forts | Cobble and up, Water, Patcher | `[Launch]` |
-| Patcher | Chip damage, Sizzler | Focus fire, collapses, kettle rush | `[Launch]` |
-| Peeper | Hidden crews, fog | Smoke, any direct hit | `[U2]` |
+| Digger | Hills, Clay cover, Wicker bases | Footing, Rock, Patcher | `[Launch]` |
+| Bouncer | Ledges, low walls, low Nooks | Mud, sticky ground, pits | `[Launch]` |
+| Stoker | Wicker, Timber, slow forts | Cobble and up, Water, Patcher | `[Launch]` |
+| Patcher | Chip damage, Stoker | Focus fire, collapses, kettle rush | `[Launch]` |
+| Lookout | Hidden crews, fog | Smoke, any direct hit | `[U2]` |
 
 ---
 
 ## 3. The roster: 28 Hobs
 
-**Count.** 28 Hobs in all: 16 at launch, then +2, +5, +5 [review 04 §A]. Lobber, Zinger, Scatterjack and Boinker have 4 each. Delver, Sizzler, Patcher and Peeper have 3 each [C01].
+**Count.** 28 Hobs in all: 16 at launch, then +2, +5, +5 [review 04 §A]. Lobber, Zinger, Scatterjack and Bouncer have 4 each. Digger, Stoker, Patcher and Lookout have 3 each [C01].
 
 **How Hobs in one Class differ.** They share the Class Plain Shot. Each has its own Passive and its own Knack. No Hob is a straight upgrade of another.
 
@@ -345,35 +345,35 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 
 **Looks.** Every Hob is small and round with a hat too big for it [00 §1.5]. The hat is the read. Each Hob must be clear as a black shape at 24 px [00 §10.3]. The art doc owns final style.
 
-**Barks.** Short lines for: pick, fire, ouch, cheer. They show as captions over the Class voice set [C86].
+**Barks.** Short lines for: pick, fire, ouch, cheer. They show as captions over the Class voice set [C86]. The lines in the game are in `assets/audio/barks.json`; the samples below are a taste. Bark rules: seven words at most; one line in three at most may use a word from the Hob's trade, the rest are about what just happened; Hobs name each other and the Rival; counts are uneven; a Bonked line need not be about sleep; "Lumpy forever!" is said once by the whole crew on a win, never by one Hob. Each Hob has an attitude first and a trade second: Marge fusses over everyone, Miss Quill cannot bear a crooked thing, Jax is always selling, Grub likes the dark, Bobbin cannot stand still, Hetty is marking you, Nan has seen worse, Old Thumper thinks it was all better before.
 
-**Unlocks.** Level codes are Region-Level, so 2-5 is Region 2, level 5. Launch regions: 1 Puddingstone Downs, 2 Crumblecrag, 3 Soggybottom Fen, 4 The Flats. Update regions: 5 Frostwhisker Peaks `[U2]`, 6 Clankmouth Mines `[U3]`. Tutorial Hobs join at the start of their level. All others join on first clear. `05` owns final levels.
+**Unlocks.** Level codes are Region-Level, so 2-5 is Region 2, level 5. Launch regions: 1 Puddingstone Downs, 2 Crag End, 3 Soggy Bottom Fen, 4 The Flats. Update regions: 5 Nithering Heights `[U2]`, 6 Wheal Clank `[U3]`. Tutorial Hobs join at the start of their level. All others join on first clear. `05` owns final levels.
 
 ### 3.0 Launch list
 
-**The 16 launch Hobs** (7 Classes, no Peeper):
+**The 16 launch Hobs** (7 Classes, no Lookout):
 
 | Class | Launch Hobs | Count |
 |---|---|---|
-| Lobber | Marge Dumpling, Old Thumper Grumbleby, Pip Skyward | 3 |
-| Zinger | Quill Needlesworth, Dame Flicka Brightspur | 2 |
-| Scatterjack | Jax Peppercorn, Nan Clatterpot, Fizz Popkin | 3 |
-| Delver | Grub Mudgett, Truffle Snoutworth | 2 |
-| Boinker | Bobbin Springheel, Skip Pebblewick | 2 |
-| Sizzler | Ember Toastwell, Brine Picklewick | 2 |
-| Patcher | Hetty Mortarboard, Poultice Plumley | 2 |
+| Lobber | Marge Dumpling, Old Thumper, Young Pip | 3 |
+| Zinger | Miss Quill, Dame Flicka | 2 |
+| Scatterjack | Jax Pepper, Nan, Ginger Popkin | 3 |
+| Digger | Grub Mudgett, Truffle Hogg | 2 |
+| Bouncer | Bobbin Springheel, Skip Drake | 2 |
+| Stoker | Edna Toast, Walt Brine | 2 |
+| Patcher | Hetty Mortarboard, Nurse Plumley | 2 |
 
 **Updates.**
 
 | Tag | Hobs | Count | Why there |
 |---|---|---|---|
-| `[U1]` Long Siege | Gus Wobblebottom (Boinker), Rivet Brasstack (Patcher) | 2 | Both work with launch rules. Long Siege rewards them |
-| `[U2]` Frostwhisker Peaks | Frostine Nippet, Dotty Hailstone, Winkle Spyglass, Echo Hootley, Tansy Featherlight | 5 | Frost and Brittle arrive. The Peeper Class arrives |
-| `[U3]` Clankmouth Mines | Wick Glimmer, Bartleby Boulderbun, Sprocket Tumm, Lady Carom Bankshot, Petra Chiselwick | 5 | Zap and Moonbrick arrive. Petra's Hairline needs Brittle, so she waits until both updates are out |
+| `[U1]` Long Siege | Gus Bottomley (Bouncer), Tacks Brassey (Patcher) | 2 | Both work with launch rules. Long Siege rewards them |
+| `[U2]` Nithering Heights | Aunty Nip, Dotty Hailstone, Winkle Peake, Owl-Eyed Olive, Tansy Downe | 5 | Frost and Brittle arrive. The Lookout Class arrives |
+| `[U3]` Wheal Clank | Wick Chandler, Bartleby Bunn, Ernest Tumm, Lady Carom, Petra Mason | 5 | Zap and Mossbrick arrive. Petra's Hairline needs Brittle, so she waits until both updates are out |
 
 **Rules the list keeps.**
 
-- No launch Knack needs Frost, Zap, Brittle, Moonbrick or hidden crew.
+- No launch Knack needs Frost, Zap, Brittle, Mossbrick or hidden crew.
 - Every launch rescue level frees a launch Hob: Hetty (1-7), Dame Flicka (2-8), Truffle (3-7), Pip (4-8) [C02].
 - Region 1 gives 6 Hobs in 6 Classes. All 7 launch Classes are in hand by 2-1.
 
@@ -383,7 +383,7 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 
 - **Look.** Short and wide, like a cottage loaf. Cream apron, cherry red dress. A huge floppy cook's hat that sags over one eye. Carries a long bread peel and flings pots off it.
 - **Personality.** Calm, warm, feeds everyone. Treats every bomb as a bake.
-- **Barks.** "In the oven it goes." / "Mind the crust!" / "Oof. My good apron." / "That rose nicely."
+- **Barks.** "Ready, love." / "In the oven it goes." / "Who slammed the door?" / "Ooh, his hat."
 - **HP.** 120.
 - **Passive, Steady Hands.** Her preview is 10% longer on Plain Shots.
 - **Knack, Grand Dumpling.** One fat pot on a high arc. 60 Blast, Large blast. **Low Blow:** blocks in the row just above the Footing take x1.3. Her Knack teaches "aim low, let it fall" [01 §3.1].
@@ -391,11 +391,11 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Unlock.** Start of 1-1. The first Hob.
 - **Why players love her.** She is the first face and the first hit. Her kit is simple and never stops being useful.
 
-#### 2. Old Thumper Grumbleby `[Launch]`
+#### 2. Old Thumper `[Launch]`
 
 - **Look.** Bent, long nose, white whiskers to the belt. Moss green coat, mustard scarf. A striped nightcap that trails to the floor. A brass ear horn. His cane has a spoon on the end that flips the bomb.
 - **Personality.** Grumpy, deaf when it suits him, sure that all was better long ago.
-- **Barks.** "Eh? Speak up!" / "Back in my day we threw harder." / "I felt that in my knees." / "Hmph. Not bad." Grudge bark: "Right. Now I'm cross."
+- **Barks.** "Eh? Speak up." / "We threw rocks. Proper ones." / "I felt that in my knees." / "Hmph. Not bad." Grudge bark: "Right. Now I'm cross."
 - **HP.** 130.
 - **Passive, Old Grudge.** When a Hob next door to him is Bonked, his next Clodpot is one blast band larger: Large (42) in place of Medium (28). Damage stays 35. He holds one grudge at a time (a second Bonk does not stack); it is spent when he fires a Clodpot and lasts all battle until then. His Knack and Trick Shells are not changed. **Read:** his nightcap turns red and a small storm cloud sits on his portrait. **Counter:** Bonk him first, Bonk Hobs that are not next to him, or keep your Cover whole so the bigger pot is still halved. The AI reads the grudge like a player.
 - **Knack, Tick-Tock Crock.** A crock that lands and sits. It blows with a Large blast at the start of his next turn. The rival sees it and has one turn to Walk away, shove it, mend or shield. Heavy.
@@ -403,7 +403,7 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Unlock.** First clear of 2-3.
 - **Why players love him.** The pot that sits and ticks is a threat the rival must answer. He is the trap setter.
 
-#### 3. Pip Skyward `[Launch]`
+#### 3. Young Pip `[Launch]`
 
 - **Look.** The smallest Hob. Sky blue smock, orange boots. A kite for a hat, with a ribbon tail that shows the wind. A sling stick taller than she is.
 - **Personality.** Eager, loud, never tired. Counts out loud while the bomb flies.
@@ -415,7 +415,7 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Unlock.** Rescued in 4-8 (The Flats). She was caught flying her kite over the Baron's plate and locked in the filing tower.
 - **Why players love her.** She makes the windy Flats fair. The long wait while the bomb falls is pure drama.
 
-#### 4. Bartleby Boulderbun `[U3]`
+#### 4. Bartleby Bunn `[U3]`
 
 - **Look.** The biggest Hob, a slate grey boulder with arms. Plum vest. A tiny bowler hat he outgrew years ago and will not give up. No tool. He throws by hand.
 - **Personality.** Gentle, shy, says sorry to things he breaks.
@@ -424,36 +424,36 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Passive, Heavy Hand.** His shots feel wind at 0.6. His top power is 90.
 - **Knack, Anvil Bun.** One great stone. Small blast, high damage. If it breaks the block it hits, it keeps going down and hits the block below too. Heavy.
 - **Knack Quirk, Day-Old.** Anvil Bun treats Cobble as Timber.
-- **Unlock.** Clankmouth Mines, suggested 6-3.
+- **Unlock.** Wheal Clank, suggested 6-3.
 - **Why players love him.** He punches through a roof and the floor under it. He is the one Hob with a small hat, and he knows it.
 
 ### 3.2 Zingers
 
-#### 5. Quill Needlesworth `[Launch]`
+#### 5. Miss Quill `[Launch]`
 
 - **Look.** Thin and upright, the tallest silhouette in the early crew. Navy coat, silver thread. A pincushion hat full of pins. A spring flinger made from a sewing frame.
 - **Personality.** Fussy, exact, cannot stand a crooked line.
-- **Barks.** "Measure twice." / "Hold still, please." / "Tsk. A tear." / "Neat."
+- **Barks.** "Hold my hat straight." / "Hold still, please." / "That was not even aimed." / "As I said."
 - **HP.** 80.
 - **Passive, Thread the Needle.** Her threaded shots (section 7.2) deal 25% more.
-- **Knack, Sunspear.** A straight beam with no gravity. It passes through the first block and hits what stands behind.
-- **Knack Quirk, Mirror Polish.** Sunspear reflects once off Brassbound or Water.
+- **Knack, Darning Needle.** A straight beam with no gravity. It passes through the first block and hits what stands behind.
+- **Knack Quirk, Mirror Polish.** Darning Needle reflects once off Brassbound or Water.
 - **Unlock.** Start of 1-2.
 - **Why players love her.** She teaches that the crew is a target too. A threaded Loophole shot feels like a magic trick.
 
-#### 6. Dame Flicka Brightspur `[Launch]`
+#### 6. Dame Flicka `[Launch]`
 
 - **Look.** A round knight in dented red and gold. A bucket helm with a plume three times her height. A jousting lance with a spring in the grip.
 - **Personality.** Bold, grand, announces every shot like a herald.
 - **Barks.** "Have at thee, wall!" / "For the lumps!" / "A scratch! Merely!" / "Huzzah!"
 - **HP.** 90.
 - **Passive, Joust.** If her castle walked this turn, her Plain Shot deals 20% more [C45].
-- **Knack, Long Skewer.** A lance bolt. It pierces up to 3 Wicker or Timber blocks in a line, or 1 block of Cobble or better, and loses damage per block. The skewer stays in: every Nook whose wall it passed is Open until that wall is mended [01 §3.2]. Quill hits what stands behind a wall; Flicka opens rooms for the crew's area shots.
+- **Knack, Long Skewer.** A lance bolt. It pierces up to 3 Wicker or Timber blocks in a line, or 1 block of Cobble or better, and loses damage per block. The skewer stays in: every Nook whose wall it passed is Open until that wall is mended [01 §3.2]. Miss Quill hits what stands behind a wall; Flicka opens rooms for the crew's area shots.
 - **Knack Quirk, Greased.** After Long Skewer threads a Loophole, it goes on through the Hob to the back wall.
 - **Unlock.** Rescued in 2-8 [C02].
 - **Why players love her.** She pays you for spending Steam. Walk, then joust.
 
-#### 7. Wick Glimmer `[U3]`
+#### 7. Wick Chandler `[U3]`
 
 - **Look.** Small, hunched, dusk purple cloak. A lantern for a hat with a real glow that lights his face. A long lighter pole.
 - **Personality.** Shy, soft spoken, afraid of the dark he works in.
@@ -462,10 +462,10 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Passive, Lamplight.** Any Nook he hits stays revealed all battle.
 - **Knack, Glimmerjolt.** A spark beam. Straight, no gravity, Zap damage. It passes one wall and chains along touching Brassbound blocks [00 §2.8].
 - **Knack Quirk, Live Wire.** The first chain link does not halve.
-- **Unlock.** Clankmouth Mines, suggested 6-1.
+- **Unlock.** Wheal Clank, suggested 6-1.
 - **Why players love him.** He turns the best armor in the game into a wire.
 
-#### 8. Sprocket Tumm `[U3]`
+#### 8. Ernest Tumm `[U3]`
 
 - **Look.** A kid in a teal boiler suit with copper patches. A top hat with goggles strapped on and a key in the crown. Launches a wind-up brass beetle from a box.
 - **Personality.** Curious, chatty, takes things apart to see why they work.
@@ -474,30 +474,30 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Passive, Spare Key.** Guided Trick Shells she fires get one extra steer.
 - **Knack, Clockwork Beetle.** A slow guided dart. Steered: tap once in flight and it turns toward the tap. Pierce, point shot.
 - **Knack Quirk, Second Wind-Up.** Two taps.
-- **Unlock.** Clankmouth Mines, suggested 6-9.
+- **Unlock.** Wheal Clank, suggested 6-9.
 - **Why players love her.** One tap in flight gives a second chance to aim. Players who hate wind love her.
 
 ### 3.3 Scatterjacks
 
-#### 9. Jax Peppercorn `[Launch]`
+#### 9. Jax Pepper `[Launch]`
 
 - **Look.** Barrel shaped, paprika red coat, black and white check trousers. A tall pepper mill for a hat. Fires from a giant grinder he cranks by hand.
 - **Personality.** A market showman. Sells every shot to the crowd.
-- **Barks.** "Step right up!" / "A little spice!" / "Achoo! Who threw that?" / "Sold!"
+- **Barks.** "Any more for any more?" / "Free sample." / "Achoo. Who threw that?" / "Ta very much."
 - **HP.** 100.
-- **Passive, Extra Shake.** His Plain Shot fires 4 stones. Each deals a little less, for the same total plus one Chip.
+- **Passive, Fourth Stone.** His Plain Shot fires 4 stones. Each deals a little less, for the same total plus one Chip.
 - **Knack, Pepper Rain.** One shell splits at the top of its arc into 7 stones that rain on a wide strip.
 - **Knack Quirk, Shaker.** Before firing, set Pepper Rain to a narrow or a wide strip.
 - **Unlock.** Start of 1-4.
 - **Why players love him.** The first Hob that hits lots of things at once. Good for players still learning to aim.
 
-#### 10. Nan Clatterpot `[Launch]`
+#### 10. Nan `[Launch]`
 
 - **Look.** Tiny, bent, quick. Lavender shawl. A stack of copper pots and pans for a hat that rattles when she moves. Slings with a soup ladle.
 - **Personality.** Sharp tongued granny. Calls everyone "dear" and means it as a warning.
-- **Barks.** "Eat up, dear." / "Wash these after!" / "Mind my pots!" / "Told you so." Clatter Call bark: "Dinner bell! Get them, dears!"
+- **Barks.** "I've seen worse." / "Wash these after." / "Is that all?" / "Told you so." Dinner Bell note on screen: "Dinner bell."
 - **HP.** 100.
-- **Passive, Clatter Call.** When Nan's shot (any shot she fires) deals damage to an enemy Hob, each of your Hobs next door to her deals +15% with its next shot. The bonus does not stack (at most +15%), lasts until that Hob fires, and sits inside the 110 Thwack cap and the full-HP clamp. **Read:** a pan icon pops over each next-door Hob's portrait. **Counter:** keep your Nooks closed (her pans are weak on Cobble), Bonk Nan, or shield the Hob she buffs before it fires. Pan Parade walks a line across rooms, so it finds Hobs often; seating her between two shooters is the plan.
+- **Passive, Dinner Bell.** When Nan's shot (any shot she fires) deals damage to an enemy Hob, each of your Hobs next door to her deals +15% with its next shot. The bonus does not stack (at most +15%), lasts until that Hob fires, and sits inside the 110 Thwack cap and the full-HP clamp. **Read:** a pan icon pops over each next-door Hob's portrait. **Counter:** keep your Nooks closed (her pans are weak on Cobble), Bonk Nan, or shield the Hob she buffs before it fires. Pan Parade walks a line across rooms, so it finds Hobs often; seating her between two shooters is the plan.
 - **Knack, Pan Parade.** A run of 5 pans on one aim. Each lands a little farther than the last, so the hits walk across a castle face.
 - **Knack Quirk, Marching Orders.** Before firing, set the step between pans to short or long.
 - **Unlock.** Clear Trial T3 on the Region 2 side path. If the player skips it, she joins on clearing 2-10 [C02].
@@ -512,36 +512,36 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Passive, Forecast.** The next Weather Front shows all front long, not just in its last round [C54].
 - **Knack, Hailbasket.** The shell splits at the top into 8 ice pellets. Each does Chip Frost damage and makes what it hits Brittle.
 - **Knack Quirk, Black Ice.** Ground the pellets hit gets an Ice coat for 3 turns.
-- **Unlock.** Frostwhisker Peaks, suggested 5-5.
+- **Unlock.** Nithering Heights, suggested 5-5.
 - **Why players love her.** She makes a whole castle face Brittle in one go. Then the Lobber steps up.
 
-#### 12. Fizz Popkin `[Launch]`
+#### 12. Ginger Popkin `[Launch]`
 
 - **Look.** A bouncing kid in pink and lime. A cone party hat with streamers taller than the Hob. A big paper popper under one arm.
 - **Personality.** Every day is a party. Cannot keep a secret.
 - **Barks.** "Surprise!" / "Pop pop pop!" / "Hey! Party foul." / "Again again!"
 - **HP.** 90.
-- **Passive, Party Trick.** When Fizz fires a Dud [00 §2.15], it becomes a real burst of confetti bomblets with Chip damage.
+- **Passive, Party Trick.** When Ginger fires a Dud [00 §2.15], it becomes a real burst of confetti bomblets with Chip damage.
 - **Knack, Rising Fizz.** A soda bottle on a normal arc. At the top it pops into three bubbles that fall upward. Each bubble pops on first touch for 20 Blast, Small. Aim low and flat so the bubbles rise into roof lips, overhangs, wing necks and high Nook floors from below [01 §3.3].
 - **Knack Quirk, Shaken Up.** Before firing, set Rising Fizz to split at the top of its arc or 120 cells after it leaves the Loophole, so the bubbles can rise under a ledge close to the shot.
 - **Unlock.** First clear of 3-5.
 - **Why players love her.** She makes the joke shell worth a pick in the Rummage. Her bubbles fall the wrong way, and the roof you thought was safe is not.
 
-### 3.4 Delvers
+### 3.4 Diggers
 
 #### 13. Grub Mudgett `[Launch]`
 
 - **Look.** Low and wide, like a turnip. Brown coat caked in dirt. A miner's helmet so big it hides his eyes, with a candle on top. A corkscrew spade.
 - **Personality.** Says little. Mumbles. Happy only below ground.
-- **Barks.** "Mm. Digging." / "Down we go." / "Mmf." / "Heh. Hole." Broad Back bark: "Mm. Behind me."
+- **Barks.** "Mm." / "Down we go." / "Mmf." / "Heh. Hole." Half the time he is picked he says nothing
 - **HP.** 140.
-- **Passive, Broad Back.** While Grub is not Bonked, the Hob next door behind him (same row, on the side away from the rival) keeps Cover even if their shared wall breaks. Only the shared wall is excused: if any other block around that Nook goes, Cover goes as normal. If Grub is Bonked, Dropped or Tumbled out of his Nook, the excuse ends at once. **Read:** the shield pip of the Hob behind him shows a small link to Grub's portrait. **Counter:** open Grub's Nook first or Bonk him (140 HP is a lot), lob over him onto the rear Nook's roof, or hit the rear Nook from its other walls. Seat him in the front of the low row with a Zinger or Patcher behind him.
-- **Knack, Burrowbomb.** A long bore through ground or 2 castle blocks, then a Medium blast where it stops.
-- **Knack Quirk, Clay Teeth.** Burrowbomb bores Clay at full speed and reaches farther.
+- **Passive, Broad Back.** While Grub is not Bonked, the Hob next door behind him (same row, on the side away from the rival) keeps Cover even if their shared wall breaks. Only the shared wall is excused: if any other block around that Nook goes, Cover goes as normal. If Grub is Bonked, falls a floor or is Tumbled out of his Nook, the excuse ends at once. **Read:** the shield pip of the Hob behind him shows a small link to Grub's portrait. **Counter:** open Grub's Nook first or Bonk him (140 HP is a lot), lob over him onto the rear Nook's roof, or hit the rear Nook from its other walls. Seat him in the front of the low row with a Zinger or Patcher behind him.
+- **Knack, Seed Potato.** A long bore through ground or 2 castle blocks, then a Medium blast where it stops.
+- **Knack Quirk, Clay Teeth.** Seed Potato bores Clay at full speed and reaches farther.
 - **Unlock.** First clear of 1-6.
 - **Why players love him.** He removes the hill in the way. His mumbles are the funniest barks in Region 1.
 
-#### 14. Petra Chiselwick `[U3]`
+#### 14. Petra Mason `[U3]`
 
 - **Look.** Straight backed, marble white smock, dusty rose scarf. A huge chalky beret. A mallet and a chisel on a spring.
 - **Personality.** An artist. Sees every crater as her work and signs it.
@@ -553,7 +553,7 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Unlock.** Rescued in the Mines, suggested 6-6 (the old Canary Row rescue).
 - **Why players love her.** She is the answer to stone forts. She sets up the next big hit.
 
-#### 15. Truffle Snoutworth `[Launch]`
+#### 15. Truffle Hogg `[Launch]`
 
 - **Look.** Pear shaped with a very big nose. Tan coat. A red spotted mushroom cap for a hat. Carries a basket of drill beets, root vegetables that burrow.
 - **Personality.** A happy forager. Sniffs before every shot. Thinks with his nose.
@@ -565,33 +565,33 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Unlock.** Rescued in 3-7 [C02].
 - **Why players love him.** He adds ground in a game about losing it. Burying a Loophole is a sneaky, legal joy.
 
-### 3.5 Boinkers
+### 3.5 Bouncers
 
 #### 16. Bobbin Springheel `[Launch]`
 
 - **Look.** Long legs, short body. Grass green jacket, tan leather apron. A boot for a hat, laces flying. Kicks balls out of a spring loaded shoe.
 - **Personality.** A sunny cobbler. Bounces on his toes. Cannot stand still.
-- **Barks.** "Best foot forward!" / "Boing!" / "Right in the laces." / "Sole survivor!"
+- **Barks.** "Me? Me!" / "Up and over." / "Not the boots." / "Did it hop? It hopped."
 - **HP.** 90.
-- **Passive, Extra Hop.** Before firing his Plain Shot, pick 2 hops or 3.
-- **Knack, Rolypoly.** A big roller. It rolls along the ground, climbs gentle slopes and bursts at the first wall with a Medium blast. Mud stops it.
-- **Knack Quirk, Little Jump.** Rolypoly hops gaps and small steps.
+- **Passive, One More Hop.** Before firing his Plain Shot, pick 2 hops or 3.
+- **Knack, Roly-Poly.** A big roller. It rolls along the ground, climbs gentle slopes and bursts at the first wall with a Medium blast. Mud stops it.
+- **Knack Quirk, Little Jump.** Roly-Poly hops gaps and small steps.
 - **Unlock.** First clear of 1-8.
 - **Why players love him.** The roller reaches a low Nook that no arc can touch.
 
-#### 17. Skip Pebblewick `[Launch]`
+#### 17. Skip Drake `[Launch]`
 
 - **Look.** Slouched, sleepy eyed. River blue shirt. A straw hat as wide as a cart wheel, hung with fishing lures. Casts stones with a fishing rod.
 - **Personality.** Lazy, calm, half asleep. Hits anyway.
 - **Barks.** "Mm? My turn?" / "Skip, skip, skip." / "Hey. I was napping." / "Got a bite."
 - **HP.** 90.
 - **Passive, Flat Stone.** His shots skip on Water (and Ice in `[U2]`) and lose no speed.
-- **Knack, Skimmerstone.** A low flat stone that skips up to 4 times. Each skip is a Tiny blast. The last is Small, 50 Blast. Any touch that cannot skip counts as the last one, so a hill or a ridge still gets the full 50 [01 §3.5]. Skip is never a dead pick on rough ground.
-- **Knack Quirk, Roof Skim.** Skimmerstone skips on castle roofs too.
-- **Unlock.** First clear of 3-1 (Soggybottom Fen).
-- **Why players love him.** Water stops every other Boinker. For Skip it is a road.
+- **Knack, Ducks and Drakes.** A low flat stone that skips up to 4 times. Each skip is a Tiny blast. The last is Small, 50 Blast. Any touch that cannot skip counts as the last one, so a hill or a ridge still gets the full 50 [01 §3.5]. Skip is never a dead pick on rough ground.
+- **Knack Quirk, Roof Skim.** Ducks and Drakes skips on castle roofs too.
+- **Unlock.** First clear of 3-1 (Soggy Bottom Fen).
+- **Why players love him.** Water stops every other Bouncer. For Skip it is a road.
 
-#### 18. Lady Carom Bankshot `[U3]`
+#### 18. Lady Carom `[U3]`
 
 - **Look.** Tall, poised, burgundy coat. A felt green top hat with a blue chalk cube on the brim. A long cue stick.
 - **Personality.** Smug trick shot artist. Calls the shot before she takes it.
@@ -600,10 +600,10 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Passive, Called Shot.** Her preview runs past the first bounce to the second.
 - **Knack, Clackerball.** A hard ball that bounces off any surface 3 times and bursts on a Hob or when it comes to rest. It can go into an Open Nook and rattle around inside.
 - **Knack Quirk, Room Rattle.** Each bounce inside a room also pops for a little damage.
-- **Unlock.** Clankmouth Mines, suggested 6-4. The brass walls of the Mines are her table.
+- **Unlock.** Wheal Clank, suggested 6-4. The brass walls of the Mines are her table.
 - **Why players love her.** She shows the bounce no one else can see. Expert players main her.
 
-#### 19. Gus Wobblebottom `[U1]`
+#### 19. Gus Bottomley `[U1]`
 
 - **Look.** The roundest Hob. Raspberry coat, mint trim. A jelly mould for a hat with a jelly still in it that shakes. Flings jellies off a spoon.
 - **Personality.** Jolly, giggles at everything, most of all at himself.
@@ -613,23 +613,23 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Knack, Wobble Jelly.** A jelly blob. Small blast, Light damage. It leaves a sticky patch for 3 rounds. Balls and rollers that touch the patch stop dead [00 §2.10].
 - **Knack Quirk, Family Size.** The sticky patch is half again as wide.
 - **Unlock.** Long Siege, a first-run milestone (`05` and `02` set which wave).
-- **Why players love him.** He is the Boinker who shuts down Boinkers. He survives collapses that flatten the rest.
+- **Why players love him.** He is the Bouncer who shuts down Bouncers. He survives collapses that flatten the rest.
 
-### 3.6 Sizzlers
+### 3.6 Stokers
 
-#### 20. Ember Toastwell `[Launch]`
+#### 20. Edna Toast `[Launch]`
 
 - **Look.** Thin, sooty, ember orange scarf. A tall stovepipe hat that puffs real smoke. A coal scuttle on a sling.
 - **Personality.** A cheerful sweep. Loves fire. Lectures others on fire safety.
 - **Barks.** "Safety first!" / "Mind the hot bits." / "Singed my hat!" / "Toasty."
 - **HP.** 100.
 - **Passive, Slow Burn.** Burn she causes lasts 3 turns, not 2.
-- **Knack, Scaldspill.** Hot soup. A fluid that flows downhill, pools in low spots, then burns for 2 turns. It fills pits, tunnels and Open low Nooks.
-- **Knack Quirk, Skin on Top.** Scaldspill floats and burns on Water.
+- **Knack, Boiled Over.** Hot soup. A fluid that flows downhill, pools in low spots, then burns for 2 turns. It fills pits, tunnels and Open low Nooks.
+- **Knack Quirk, Skin on Top.** Boiled Over floats and burns on Water.
 - **Unlock.** First clear of 2-1.
-- **Why players love her.** Fluid finds its own way in. She pairs with every Delver.
+- **Why players love her.** Fluid finds its own way in. She pairs with every Digger.
 
-#### 21. Frostine Nippet `[U2]`
+#### 21. Aunty Nip `[U2]`
 
 - **Look.** Small, bundled up, mint and white with pink mittens. A bobble hat with ear flaps down to her knees. A big ice scoop.
 - **Personality.** Chirpy, always cold, sniffles between words.
@@ -638,20 +638,20 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Passive, Cold Hands.** Frost never adds Rest to her.
 - **Knack, Shiverpuff.** A cold cloud. A Large field that lasts 2 turns. Blocks in it turn Brittle. Hobs in it need a rest (Rest +1, within the cap of 1 extra). Water in it turns to Ice.
 - **Knack Quirk, Fog Bank.** The cloud drifts with the wind each turn.
-- **Unlock.** Frostwhisker Peaks, suggested 5-1.
+- **Unlock.** Nithering Heights, suggested 5-1.
 - **Why players love her.** She slows the rival's best Hob and softens its walls in one shot.
 
-#### 22. Brine Picklewick `[Launch]`
+#### 22. Walt Brine `[Launch]`
 
 - **Look.** Squat, pickle green coat, glass blue gloves. A pickle jar for a hat with one pickle afloat in it. A barrel with a squirt pump.
 - **Personality.** Sour and deadpan. Not one smile. Secretly the kindest of the lot.
 - **Barks.** "Fine. I'll do it." / "Brine." / "Typical." / "Could be worse."
 - **HP.** 110.
 - **Passive, Briny.** His Plain Shot can be aimed at your own castle. There it does no damage, ends Burn and leaves Soaked.
-- **Knack, Drenchbarrel.** A flood. Water that pools, makes Soaked, ends fires and turns Loam to Mud. Mud triples the rival's Walk cost and stops rollers. Light.
-- **Knack Quirk, Flash Flood.** Drenchbarrel shoves props twice as far and washes off every coat.
+- **Knack, Water Butt.** A flood. Water that pools, makes Soaked, ends fires and turns Loam to Mud. Mud triples the rival's Walk cost and stops rollers. Light.
+- **Knack Quirk, Flash Flood.** Water Butt shoves props twice as far and washes off every coat.
 - **Unlock.** First clear of 3-9.
-- **Why players love him.** He is the fire brigade and the mud maker. A defensive Sizzler is a fresh idea.
+- **Why players love him.** He is the fire brigade and the mud maker. A defensive Stoker is a fresh idea.
 
 ### 3.7 Patchers
 
@@ -659,27 +659,27 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 
 - **Look.** Square, sturdy, brick red dress, grey apron. A flat mason's board for a hat with a blob of mortar on top. A big trowel.
 - **Personality.** A bossy school teacher. Marks everyone's work, the rival's too.
-- **Barks.** "Sit up straight." / "Do it again, properly." / "Who did that?" / "Full marks." Ridgepole bark: "Nobody moves. The roof stays."
+- **Barks.** "Right. Who broke what?" / "Do it again, properly." / "That wall was new." / "Full marks." Win line: "The roof stays."
 - **HP.** 110.
-- **Passive, Ridgepole.** While Hetty is not Bonked, the blocks in her column above her Nook (the two block columns straight above it, up to the top of the fort) cannot fall from lost support. They still break at 0 HP, and Heavy Gravy and the Squall still work on them. If Hetty is Bonked, or Dropped or Tumbled out of her Nook, the support check runs at once and what she held falls as one chunk, with crush. Same sim rule as the Shoring Crew's brace [01 Twist 5]. **Read:** a glowing rafter line runs up her column. **Counter:** focus her (110 HP and Cover like anyone), hit the blocks beside her column, or use Heavy Gravy. Her Bonk is often the biggest collapse of the fight, so a daring overhang on her is a real choice for both players.
+- **Passive, Ridgepole.** While Hetty is not Bonked, the blocks in her column above her Nook (the two block columns straight above it, up to the top of the fort) cannot fall from lost support. They still break at 0 HP, and Heavy Gravy and the Squall still work on them. If Hetty is Bonked, or falls a floor or is Tumbled out of her Nook, the support check runs at once and what she held falls as one chunk, with crush. Same sim rule as the Shoring Crew's brace [01 Twist 5]. **Read:** a glowing rafter line runs up her column. **Counter:** focus her (110 HP and Cover like anyone), hit the blocks beside her column, or use Heavy Gravy. Her Bonk is often the biggest collapse of the fight, so a daring overhang on her is a real choice for both players.
 - **Knack, Barn Raising.** Pick one. Rebuild up to 4 lost blocks that still have support. Or, once per battle, Puff Up: re-inflate one Bonked Hob at 40 HP in the lowest free Nook [00 §2.9]. Puff Up is for the player side only against the AI; in Couch Duel both sides may use it [00 §6.1]. Rival Patchers rebuild but never re-inflate [B9].
 - **Knack Quirk, Fresh Paint.** Rebuilt blocks and the blocks they touch lose Burn (and Brittle in `[U2]`).
 - **Unlock.** Rescued in 1-7 [C02]. This gives the player a Patcher for the cart in 1-9.
 - **Why players love her.** She brings a friend back, and she holds the roof up while she stands. No other moment gets a bigger cheer.
 
-#### 24. Poultice Plumley `[Launch]`
+#### 24. Nurse Plumley `[Launch]`
 
 - **Look.** Soft and slow, sage green robe, cream shawl. A teapot in a knitted cosy for a hat, spout forward, with steam. Pours from a second teapot.
 - **Personality.** Soothing, sleepy, offers tea in the middle of a siege.
 - **Barks.** "Tea, anyone?" / "There, there." / "Oh my. Spilled." / "Lovely."
 - **HP.** 110.
 - **Passive, Tea Round.** Once per battle, at the start of your turn, if a Hob in your crew is under half HP, she pours it a cup: it heals 20. No Action spent.
-- **Knack, Bubble Bonnet.** A steam bubble around one of your Nooks or the Kettle Room. It soaks the next hit, up to Heavy band damage, or fades after 2 rounds.
+- **Knack, Tea Cosy.** A steam bubble around one of your Nooks or the Kettle Room. It soaks the next hit, up to Heavy band damage, or fades after 2 rounds.
 - **Knack Quirk, Double Bubble.** The bubble soaks two hits, with the same total cap.
 - **Unlock.** First clear of 3-3.
 - **Why players love her.** She is the crew's nurse. The bubble on the kettle wins close races.
 
-#### 25. Rivet Brasstack `[U1]`
+#### 25. Tacks Brassey `[U1]`
 
 - **Look.** Broad shoulders, oil blue overalls, brass buckles. A welder's helmet tipped back, far too big, with a row of rivets. A rivet hammer.
 - **Personality.** Blunt, tough, proud of her work. Hates a weak joint.
@@ -691,9 +691,9 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Unlock.** Long Siege, a first-run milestone (`05` and `02` set which wave).
 - **Why players love her.** Her repairs come back stronger than before. The scrap wall is the hard answer to Zingers.
 
-### 3.8 Peepers `[U2]`
+### 3.8 Lookouts `[U2]`
 
-#### 26. Winkle Spyglass `[U2]`
+#### 26. Winkle Peake `[U2]`
 
 - **Look.** Thin and twitchy, sky grey coat, robin red scarf. A bird's nest for a hat with a small bird in it that points where she looks. A spyglass that puffs chalk.
 - **Personality.** A whispering bird watcher. Gets far too excited and then shushes herself.
@@ -702,10 +702,10 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Passive, Sharp Eyes.** Hobs she reveals also show their Rest cog and their Knack uses left.
 - **Knack, Chalk Fan.** A fan of 5 harmless chalk arcs. They stay all battle and reveal every room they cross. Light.
 - **Knack Quirk, Sharp Chalk.** Each arc ends in a pin you can Recall.
-- **Unlock.** Frostwhisker Peaks, suggested 5-3. The first Peeper.
+- **Unlock.** Nithering Heights, suggested 5-3. The first Lookout.
 - **Why players love her.** She draws five aim lines for the whole crew to use. Her bird has its own fans.
 
-#### 27. Echo Hootley `[U2]`
+#### 27. Owl-Eyed Olive `[U2]`
 
 - **Look.** Round chest, midnight blue coat, gold buttons. A great brass bell for a hat that rings when hit. A hand bell on a long handle.
 - **Personality.** A town crier. A scout who cannot whisper. Proud of it.
@@ -714,10 +714,10 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Passive, Hear Ye.** When an enemy Hob fires, its Nook stays revealed for one round.
 - **Knack, Tattle Bell.** A ringing bell. No damage. Light. It reveals every Nook in a Huge radius. Hobs it reveals are Marked: the next hit on each deals 20% more [C20].
 - **Knack Quirk, Long Ring.** Its reveals hold through soot and smoke.
-- **Unlock.** Frostwhisker Peaks, suggested 5-7.
+- **Unlock.** Nithering Heights, suggested 5-7.
 - **Why players love him.** The loud scout is a great joke. His mark turns a scout shot into real damage.
 
-#### 28. Tansy Featherlight `[U2]`
+#### 28. Tansy Downe `[U2]`
 
 - **Look.** Light and long limbed, paper white tunic, ink blue trim, a red ribbon. A folded paper boat for a hat. Flies paper kites from a reel.
 - **Personality.** A day dreamer. Looks at clouds. Speaks in half thoughts.
@@ -726,23 +726,23 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 - **Passive, Paper Trail.** Ghost lines of every Hob on your side stay for 3 shots, not 2.
 - **Knack, Snoop Kite.** A kite you fly. Steered: drag steers it for 3 seconds. It reveals each Nook it passes over and ends in a Chip pop. Light.
 - **Knack Quirk, Tail Bow.** Before firing, pick: end in a pop or in a small soot cloud.
-- **Unlock.** Frostwhisker Peaks, suggested first clear of 5-8. She drifted north on a kite when the Countess's wing fled, and lands at your fort after the dam falls.
+- **Unlock.** Nithering Heights, suggested first clear of 5-8. She drifted north on a kite when the Countess's wing fled, and lands at your fort after the dam falls.
 - **Why players love her.** Flying the kite is a calm, hands-on break in a tense fight. Her passive helps every aimer.
 
 ### 3.9 Unlock order
 
 | Region | Hobs that join | Running total | Tag |
 |---|---|---|---|
-| 1 Puddingstone Downs | Marge (1-1), Quill (1-2), Jax (1-4), Grub (1-6), Hetty (1-7, rescued), Bobbin (1-8) | 6 | `[Launch]` |
-| 2 Crumblecrag | Ember (2-1), Old Thumper (2-3), Dame Flicka (2-8, rescued), Nan (T3 path or 2-10) | 10 | `[Launch]` |
-| 3 Soggybottom Fen | Skip (3-1), Poultice (3-3), Fizz (3-5), Truffle (3-7, rescued), Brine (3-9) | 15 | `[Launch]` |
+| 1 Puddingstone Downs | Marge (1-1), Miss Quill (1-2), Jax (1-4), Grub (1-6), Hetty (1-7, rescued), Bobbin (1-8) | 6 | `[Launch]` |
+| 2 Crag End | Edna (2-1), Old Thumper (2-3), Dame Flicka (2-8, rescued), Nan (T3 path or 2-10) | 10 | `[Launch]` |
+| 3 Soggy Bottom Fen | Skip (3-1), Nurse Plumley (3-3), Ginger (3-5), Truffle (3-7, rescued), Walt (3-9) | 15 | `[Launch]` |
 | 4 The Flats | Pip (4-8, rescued) | 16 | `[Launch]` |
-| Long Siege | Gus, Rivet (first-run milestones) | 18 | `[U1]` |
-| 5 Frostwhisker Peaks | Frostine (5-1), Winkle (5-3), Dotty (5-5), Echo (5-7), Tansy (5-8) | 23 | `[U2]` |
-| 6 Clankmouth Mines | Wick (6-1), Bartleby (6-3), Lady Carom (6-4), Petra (6-6, rescued), Sprocket (6-9) | 28 | `[U3]` |
+| Long Siege | Gus, Tacks (first-run milestones) | 18 | `[U1]` |
+| 5 Nithering Heights | Aunty Nip (5-1), Winkle (5-3), Dotty (5-5), Olive (5-7), Tansy (5-8) | 23 | `[U2]` |
+| 6 Wheal Clank | Wick (6-1), Bartleby (6-3), Lady Carom (6-4), Petra (6-6, rescued), Ernest (6-9) | 28 | `[U3]` |
 
 - Region 1 gives 6 Hobs in 6 Classes. That is enough to feel squad choice before Region 2.
-- All 7 launch Classes are in hand by 2-1. The Peeper Class arrives in Region 5.
+- All 7 launch Classes are in hand by 2-1. The Lookout Class arrives in Region 5.
 - Each region's Hobs fit its ground: fen Hobs like water, peak Hobs like wind and frost, mine Hobs like metal.
 - The Flats add one Hob only. The last stretch before the Baron tests the squad you have.
 - Update levels are suggestions. `05` owns them.
@@ -756,7 +756,7 @@ The Peeper Class and the hidden crew game arrive together with Frostwhisker Peak
 | Stage | Hobs in battle | Hobs owned | Note |
 |---|---|---|---|
 | 1-1 | 1 | 1 | Marge alone [00 §8.3] |
-| 1-2 and 1-3 | 2 | 2 | Quill joins |
+| 1-2 and 1-3 | 2 | 2 | Miss Quill joins |
 | 1-4 to 1-6 | 3 | 3 | Jax joins |
 | 1-7 on | 4 | 4 to 6 | Grub joined at 1-6. Hetty is rescued here. First real choice: who stays home |
 | After Grand Fort 2 (2-10) | 5 | about 10 to 12 | A free gift, per `00`. No level needs it |
@@ -776,55 +776,55 @@ A good crew of 4 covers four jobs. The pre-battle screen shows four small lamps 
 
 | Job | Who covers it |
 |---|---|
-| Break walls | Lobber, Delver, Scatterjack |
-| Hunt Hobs | Zinger, Boinker, Scatterjack |
-| Shape the field | Sizzler, Delver, Boinker |
-| Help the team | Patcher (and Peeper in `[U2]`) |
+| Break walls | Lobber, Digger, Scatterjack |
+| Hunt Hobs | Zinger, Bouncer, Scatterjack |
+| Shape the field | Stoker, Digger, Bouncer |
+| Help the team | Patcher (and Lookout in `[U2]`) |
 
 Starter shapes the Almanac suggests:
 
-- **The Hammer** `[Launch]`: 2 Lobbers, Delver, Patcher. Go for the Kettle Pop.
-- **The Hunt** `[Launch]`: 2 Zingers, Scatterjack, Boinker. Go for the Clean Sweep. In `[U2]` swap the Boinker for a Peeper.
-- **The Slow Burn** `[Launch]`: 2 Sizzlers, Patcher, Lobber. Set the fort alight, hold your own walls, then pop the kettle while the rival burns. Sudden Squall from round 15 means a crew cannot win by waiting [B5].
-- **The Circus** `[Launch]`: 2 Boinkers, Delver, Scatterjack. For players who want Brag Clips.
+- **The Hammer** `[Launch]`: 2 Lobbers, Digger, Patcher. Go for the Kettle Pop.
+- **The Hunt** `[Launch]`: 2 Zingers, Scatterjack, Bouncer. Go for the Clean Sweep. In `[U2]` swap the Bouncer for a Lookout.
+- **The Slow Burn** `[Launch]`: 2 Stokers, Patcher, Lobber. Set the fort alight, hold your own walls, then pop the kettle while the rival burns. Sudden Squall from round 15 means a crew cannot win by waiting [B5].
+- **The Circus** `[Launch]`: 2 Bouncers, Digger, Scatterjack. For players who want Brag Clips.
 
 ### 4.3 Synergy pairs
 
 | # | Pair | Why it works | Tag |
 |---|---|---|---|
 | 1 | Dotty Hailstone + Marge Dumpling | Hail makes a whole face Brittle. Marge's big pot then hits every block at x1.5 | `[U2]` |
-| 2 | Petra Chiselwick + Bartleby Boulderbun | Petra cracks stone. Bartleby's stone punches through the cracked block and the one below | `[U3]` |
-| 3 | Winkle Spyglass + Quill Needlesworth | Chalk arcs find the Nook. Quill threads the Loophole on the first try | `[U2]` |
-| 4 | Pip Skyward + Dame Flicka Brightspur | Pip's Chimney Drop opens a roof. Flicka walks, then jousts the Hob below | `[Launch]` |
-| 5 | Grub Mudgett + Ember Toastwell | Grub digs a channel to the base. Ember's hot soup runs down it and pools at the wall | `[Launch]` |
-| 6 | Truffle Snoutworth + Bobbin Springheel | Truffle builds a ramp. Bobbin's roller runs up it and over a low wall | `[Launch]` |
-| 7 | Brine Picklewick + Wick Glimmer | Brine soaks Hobs and blocks. Wick's spark beam deals x1.5 to Soaked targets [C22] | `[U3]` |
-| 8 | Fizz Popkin + Jax Peppercorn | Seven stones strip the roof top. Fizz's bubbles crack the roof lip from below, and the loosened roof drops | `[Launch]` |
-| 9 | Hetty Mortarboard + Old Thumper Grumbleby | Thumper's ticking pot draws fire to him. Hetty mends his Nook each turn until it blows | `[Launch]` |
-| 10 | Poultice Plumley + Quill Needlesworth | The 80 HP sniper gets a steam bubble when hunted and a cup of tea when low | `[Launch]` |
-| 11 | Rivet Brasstack + Sprocket Tumm | The scrap wall blocks flat shots at your fort. Sprocket's beetle steers around it | `[U3]` |
-| 12 | Skip Pebblewick + Brine Picklewick | Brine floods the low ground. Skip's stone runs across the new pond | `[Launch]` |
-| 13 | Gus Wobblebottom + Brine Picklewick | Sticky patch plus Mud. Enemy rollers stop and the rival's Walk costs triple | `[U1]` |
-| 14 | Fizz Popkin + Pip Skyward | Pip hits the roof from above, Fizz from below. A roof hit from both sides falls in two turns | `[Launch]` |
-| 15 | Tansy Featherlight + Lady Carom Bankshot | Three ghosts per Hob plus a two-bounce preview. Bank shots become a science | `[U3]` |
-| 16 | Wick Glimmer + Echo Hootley | Two cheap reveal sources. The rival's whole crew is known by Round 3 | `[U3]` |
-| 17 | Nan Clatterpot + Ember Toastwell | Nan's pans strip a Wicker face. Fire spreads through what is left | `[Launch]` |
-| 18 | Grub Mudgett + Quill Needlesworth | Grub in the front low Nook, Quill right behind him. Broad Back keeps her Cover when the wall between them goes, so the 80 HP sniper lasts | `[Launch]` |
-| 19 | Nan Clatterpot + Old Thumper Grumbleby | Seat them next door. Nan's pan finds a Hob and Thumper's crock or pot hits 15% harder next turn | `[Launch]` |
-| 20 | Hetty Mortarboard + Dame Flicka Brightspur | Ridgepole holds a daring overhang above Hetty. Flicka sits in it with a clear lance line | `[Launch]` |
+| 2 | Petra Mason + Bartleby Bunn | Petra cracks stone. Bartleby's stone punches through the cracked block and the one below | `[U3]` |
+| 3 | Winkle Peake + Miss Quill | Chalk arcs find the Nook. Miss Quill threads the Loophole on the first try | `[U2]` |
+| 4 | Young Pip + Dame Flicka | Pip's Chimney Drop opens a roof. Flicka walks, then jousts the Hob below | `[Launch]` |
+| 5 | Grub Mudgett + Edna Toast | Grub digs a channel to the base. Edna's hot soup runs down it and pools at the wall | `[Launch]` |
+| 6 | Truffle Hogg + Bobbin Springheel | Truffle builds a ramp. Bobbin's roller runs up it and over a low wall | `[Launch]` |
+| 7 | Walt Brine + Wick Chandler | Walt soaks Hobs and blocks. Wick's spark beam deals x1.5 to Soaked targets [C22] | `[U3]` |
+| 8 | Ginger Popkin + Jax Pepper | Seven stones strip the roof top. Ginger's bubbles crack the roof lip from below, and the loosened roof drops | `[Launch]` |
+| 9 | Hetty Mortarboard + Old Thumper | Old Thumper's ticking pot draws fire to him. Hetty mends his Nook each turn until it blows | `[Launch]` |
+| 10 | Nurse Plumley + Miss Quill | The 80 HP sniper gets a steam bubble when hunted and a cup of tea when low | `[Launch]` |
+| 11 | Tacks Brassey + Ernest Tumm | The scrap wall blocks flat shots at your fort. Ernest's beetle steers around it | `[U3]` |
+| 12 | Skip Drake + Walt Brine | Walt floods the low ground. Skip's stone runs across the new pond | `[Launch]` |
+| 13 | Gus Bottomley + Walt Brine | Sticky patch plus Mud. Enemy rollers stop and the rival's Walk costs triple | `[U1]` |
+| 14 | Ginger Popkin + Young Pip | Pip hits the roof from above, Ginger from below. A roof hit from both sides falls in two turns | `[Launch]` |
+| 15 | Tansy Downe + Lady Carom | Three ghosts per Hob plus a two-bounce preview. Bank shots become a science | `[U3]` |
+| 16 | Wick Chandler + Owl-Eyed Olive | Two cheap reveal sources. The rival's whole crew is known by Round 3 | `[U3]` |
+| 17 | Nan + Edna Toast | Nan's pans strip a Wicker face. Fire spreads through what is left | `[Launch]` |
+| 18 | Grub Mudgett + Miss Quill | Grub in the front low Nook, Miss Quill right behind him. Broad Back keeps her Cover when the wall between them goes, so the 80 HP sniper lasts | `[Launch]` |
+| 19 | Nan + Old Thumper | Seat them next door. Nan's pan finds a Hob and Old Thumper's crock or pot hits 15% harder next turn | `[Launch]` |
+| 20 | Hetty Mortarboard + Dame Flicka | Ridgepole holds a daring overhang above Hetty. Flicka sits in it with a clear lance line | `[Launch]` |
 
 ### 4.4 Synergy trios
 
 | # | Trio | Plan | Tag |
 |---|---|---|---|
 | 1 | **Crack, Frost, Crash:** Petra + Dotty + Marge | Two ways to make Brittle, one big blast to cash it in | `[U3]` |
-| 2 | **See, Mark, Stick:** Winkle + Echo + Quill | Reveal, mark for 20% more, then thread. A Clean Sweep engine | `[U2]` |
-| 3 | **Dig, Pour, Light:** Grub + Ember + Jax | Channel, hot soup, then stones on the burning rubble | `[Launch]` |
-| 4 | **The Bog:** Brine + Gus + Truffle | Mud, sticky patch and a mound. The rival cannot walk, roll or shoot flat | `[U1]` |
-| 5 | **The Turtle:** Hetty + Rivet + Poultice | Mend, overbuild and bubble while the rival spends its Knacks, then a late Kettle Pop. Sudden Squall stops a pure wait [B5] | `[U1]` |
-| 6 | **The Ice Rink:** Frostine + Skip + Lady Carom | Ice field, then skips and banks that gain speed | `[U3]` |
-| 7 | **Kettle Crackers:** Wick + Quill + Bartleby | Bartleby opens the path. Two beams do full damage to the Heartkettle | `[U3]` |
-| 8 | **Sky Crew:** Pip + Fizz + Flicka | Drop on the roof, bubble it from below, skewer the rooms that open | `[Launch]` |
+| 2 | **See, Mark, Stick:** Winkle + Olive + Miss Quill | Reveal, mark for 20% more, then thread. A Clean Sweep engine | `[U2]` |
+| 3 | **Dig, Pour, Light:** Grub + Edna + Jax | Channel, hot soup, then stones on the burning rubble | `[Launch]` |
+| 4 | **The Bog:** Walt + Gus + Truffle | Mud, sticky patch and a mound. The rival cannot walk, roll or shoot flat | `[U1]` |
+| 5 | **The Turtle:** Hetty + Tacks + Nurse Plumley | Mend, overbuild and bubble while the rival spends its Knacks, then a late Kettle Pop. Sudden Squall stops a pure wait [B5] | `[U1]` |
+| 6 | **The Ice Rink:** Aunty Nip + Skip + Lady Carom | Ice field, then skips and banks that gain speed | `[U3]` |
+| 7 | **Kettle Crackers:** Wick + Miss Quill + Bartleby | Bartleby opens the path. Two beams do full damage to the Heartkettle | `[U3]` |
+| 8 | **Sky Crew:** Pip + Ginger + Flicka | Drop on the roof, bubble it from below, skewer the rooms that open | `[Launch]` |
 
 ### 4.5 Anti-synergies
 
@@ -832,17 +832,17 @@ The pre-battle screen shows a small "clash" icon when a crew has one of these. I
 
 | # | Mix | What goes wrong | Tag |
 |---|---|---|---|
-| 1 | Ember + Frostine on one target | Fire melts Ice to Water and Water ends Burn. They erase each other's work | `[U2]` |
-| 2 | Brine + Ember | A flood puts out your own fires. Aim them at different sides of the fort | `[Launch]` |
-| 3 | Gus or Brine + your own Boinkers | Your sticky patch and Mud stop your rollers too | `[Launch]` |
-| 4 | Truffle or Rivet + your own Zingers | Your mound or scrap wall blocks your flat pins. Own shots pass your castle, not your ground | `[Launch]` |
-| 5 | Three or more Heavy Knack Hobs | Thumper, Bartleby and friends all sit resting at once | `[Launch]` |
-| 6 | Two Peepers | A second scout adds little | `[U2]` |
+| 1 | Edna + Aunty Nip on one target | Fire melts Ice to Water and Water ends Burn. They erase each other's work | `[U2]` |
+| 2 | Walt + Edna | A flood puts out your own fires. Aim them at different sides of the fort | `[Launch]` |
+| 3 | Gus or Walt + your own Bouncers | Your sticky patch and Mud stop your rollers too | `[Launch]` |
+| 4 | Truffle or Tacks + your own Zingers | Your mound or scrap wall blocks your flat pins. Own shots pass your castle, not your ground | `[Launch]` |
+| 5 | Three or more Heavy Knack Hobs | Old Thumper, Bartleby and friends all sit resting at once | `[Launch]` |
+| 6 | Two Lookouts | A second scout adds little | `[U2]` |
 | 7 | Two Patchers and no demolisher | You hold, but you cannot finish. Sudden Squall wears both forts down and the rival hits harder | `[Launch]` |
-| 8 | Sizzler in a Wicker fort | One return fire pot and your own zone maker burns | `[Launch]` |
+| 8 | Stoker in a Wicker fort | One return fire pot and your own zone maker burns | `[Launch]` |
 | 9 | Four Hobs under 100 HP | One good burst shell into the fort ends the fight | `[Launch]` |
-| 10 | Delvers on Rock maps | The map preview shows Rock. Leave them home | `[Launch]` |
-| 11 | Old Thumper or Nan with no one next door | Old Grudge and Clatter Call never fire. The Workshop shows the empty links | `[Launch]` |
+| 10 | Diggers on Rock maps | The map preview shows Rock. Leave them home | `[Launch]` |
+| 11 | Old Thumper or Nan with no one next door | Old Grudge and Dinner Bell never fire. The Workshop shows the empty links | `[Launch]` |
 | 12 | Hetty under a Cobble overhang with no columns | Bonk Hetty and the whole held stack falls on your crew at x2 crush | `[Launch]` |
 
 ### 4.6 Balance guards
@@ -867,18 +867,18 @@ The pre-battle screen shows a small "clash" icon when a crew has one of these. I
 
 A Quirk is a behavior perk. Swaps are free at any time outside battle [00 §3]. Ranks 1 and 2 offer a Class pair, so learning one Lobber teaches them all. Rank 3 offers one Class Quirk or the Hob's own **Knack Quirk** (listed on each Hob in section 3). The Knack Quirks are the best ideas from the old Knack tiers [B8]. `01` owns their numbers.
 
-Launch count: 7 Classes x 2 ranks x 2 = 28 Class Quirks, 7 rank 3 Class Quirks, and 16 Knack Quirks. The Peeper rows and the 12 update Knack Quirks ship with their Hobs.
+Launch count: 7 Classes x 2 ranks x 2 = 28 Class Quirks, 7 rank 3 Class Quirks, and 16 Knack Quirks. The Lookout rows and the 12 update Knack Quirks ship with their Hobs.
 
 | Class | Rank 1: pick one | Rank 2: pick one | Rank 3 Class option (or the Knack Quirk) | Tag |
 |---|---|---|---|---|
 | Lobber | **Short Fuse:** Plain Shot bursts just above the first thing it would hit. **Thick Pot:** Plain Shot feels wind at 0.8 | **Dust Up:** blasts carve 20% more ground. **Soft Touch:** your blasts deal half damage to your own blocks and Hobs | **Big Finish:** the last Knack use has a blast one band larger | `[Launch]` |
 | Zinger | **Long Draw:** pin speed up 15%. **Light Pin:** pin ignores wind | **Follow Up:** hitting the same Hob twice in a row adds 10 damage. **Chipper:** pins deal x0.8 to Cobble in place of x0.6 | **Clean Line:** the Knack passes 2 walls at 70% damage | `[Launch]` |
 | Scatterjack | **Tight Pack:** fan narrows by a third. **Wide Cast:** fan is 5 stones at 8 damage each | **Ricochet:** stones that hit Cobble or better bounce once before they pop. **Grit:** stones deal x1.0 to Cobble | **Double Batch:** Knack bomblets up by a third, each 20% weaker | `[Launch]` |
-| Delver | **Deep Breath:** Plain Shot bores 1 block farther. **Wide Bore:** tunnels are 2 cells taller | **Prop It:** tunnels you dig under your own castle do not cause a Thump. **Loose Dirt:** dug Loam piles up as a mound at the tunnel mouth | **Back Door:** the Knack burst is one band larger | `[Launch]` |
-| Boinker | **Dead Ball:** pick 1 hop for 25% more damage. **Live Ball:** balls keep 80% speed per hop | **Mud Shoes:** balls hop once on Mud before they stop. **Wall Hug:** balls roll up one-block steps | **Encore:** if a Knack shot Bonks a Hob, it does not use a charge | `[Launch]` |
-| Sizzler | **Wide Pot:** Plain Shot blast one band larger, damage down 20%. **Hot Pot:** the first Burn tick lands at once | **Wildfire:** Burn you cause spreads twice. **Stew:** your fields last 1 more turn | **Deep Pour:** fluid volume up by a third | `[Launch]` |
-| Patcher | **Thick Mix:** mended blocks gain 20 HP over their cap until hit. **Long Arm:** mend works on blocks with no support if they touch a standing block | **Field Kit:** mending a Nook wall also heals the Hob inside 10. **Splat:** the glob deals 20 to enemy blocks | **Two Trowels:** Mendglob may mend two touching blocks for 30 each | `[Launch]` |
-| Peeper | **Bright Chalk:** marker Ghost lines last all battle. **Sting:** marker deals 12 | **Wide Eye:** reveals reach 1 block farther. **Tag:** the last Hob you revealed takes 10% more from all hits | **Eagle Line:** one chalk arc of your choice shows the full path | `[U2]` |
+| Digger | **Deep Breath:** Plain Shot bores 1 block farther. **Wide Bore:** tunnels are 2 cells taller | **Prop It:** tunnels you dig under your own castle do not cause a Thump. **Loose Dirt:** dug Loam piles up as a mound at the tunnel mouth | **Back Door:** the Knack burst is one band larger | `[Launch]` |
+| Bouncer | **Dead Ball:** pick 1 hop for 25% more damage. **Live Ball:** balls keep 80% speed per hop | **Mud Shoes:** balls hop once on Mud before they stop. **Wall Hug:** balls roll up one-block steps | **Encore:** if a Knack shot Bonks a Hob, it does not use a charge | `[Launch]` |
+| Stoker | **Wide Pot:** Plain Shot blast one band larger, damage down 20%. **Hot Pot:** the first Burn tick lands at once | **Wildfire:** Burn you cause spreads twice. **Stew:** your fields last 1 more turn | **Deep Pour:** fluid volume up by a third | `[Launch]` |
+| Patcher | **Thick Mix:** mended blocks gain 20 HP over their cap until hit. **Long Arm:** mend works on blocks with no support if they touch a standing block | **Field Kit:** mending a Nook wall also heals the Hob inside 10. **Splat:** the glob deals 20 to enemy blocks | **Two Trowels:** Dollop may mend two touching blocks for 30 each | `[Launch]` |
+| Lookout | **Bright Chalk:** marker Ghost lines last all battle. **Sting:** marker deals 12 | **Wide Eye:** reveals reach 1 block farther. **Tag:** the last Hob you revealed takes 10% more from all hits | **Eagle Line:** one chalk arc of your choice shows the full path | `[U2]` |
 
 Notes:
 
@@ -894,7 +894,7 @@ Mastery is a play track for each Hob. It runs beside ranks and costs nothing. It
 - **How it grows.** Each Hob has a page of **Deeds** in the Almanac. A Deed is a small feat done in battle with that Hob. Each Deed done adds one Mastery point.
 - **Ranks.** Five Mastery ranks: Green, Handy, Seasoned, Proud, Legend. `02` sets the points per rank.
 - **Rewards.** All cosmetic or story: an Outfit, a new cheer, a hat trim in gold thread, an Almanac story page, a Keepsake for the Curio Shelf at Legend.
-- **No grind rule.** Deeds count in any mode on any difficulty. Cozy counts. No Deed needs a loss, a long wait or a huge count.
+- **No grind rule.** Deeds count in any mode on any difficulty. Cosy counts. No Deed needs a loss, a long wait or a huge count.
 - **Size.** 6 Deeds per Hob in U1 (108 for 18 Hobs). Later Hobs bring their own Deeds.
 
 Deed patterns:
@@ -904,13 +904,13 @@ Deed patterns:
 | Class basics | Marge: hit a block with a Plain Shot from the top row |
 | Passive in use | Dame Flicka: land a shot after a Walk, 5 times |
 | Knack pay-off | Old Thumper: Bonk a Hob with the Tick-Tock Crock |
-| Skill shot | Quill: thread 3 Loopholes in one battle |
+| Skill shot | Miss Quill: thread 3 Loopholes in one battle |
 | Slapstick | Gus: survive a floor drop of 3 blocks or more |
-| Win path | Ember: land the last hit of a Kettle Pop with Burn |
+| Win path | Edna: land the last hit of a Kettle Pop with Burn |
 
 ### 5.4 Crew Bonds `[U2]`
 
-When two Hobs finish a pair Deed together, they gain a Bond: one new caption line each aimed at the other ("Nice pour, Ember." / "Nice hole, Grub."). No stats. It rewards trying the synergy pairs in section 4.3.
+When two Hobs finish a pair Deed together, they gain a Bond: one new caption line each aimed at the other ("Nice pour, Edna." / "Nice hole, Grub."). No stats. It rewards trying the synergy pairs in section 4.3.
 
 ### 5.5 What never happens
 
@@ -978,33 +978,33 @@ Each Hob has its own idle fidget, fire style, cheer and Snooze Balloon. The ball
 | Hob | Idle fidget | Fire | Cheer | Snooze Balloon |
 |---|---|---|---|---|
 | Marge Dumpling | Dusts flour off her hands | Slides the pot off the peel | Claps flour clouds | Cream, shaped like a bread roll |
-| Old Thumper Grumbleby | Nods off, snaps awake | Flips the cane spoon | One small nod | Striped like his nightcap |
-| Pip Skyward | Jumps to see over the sill | Whole body sling, falls over | Runs in a circle | A tiny kite balloon with a tail |
-| Bartleby Boulderbun | Straightens his tiny hat | Slow overhand heave | Shy thumbs up | Very big balloon, strains to lift him |
-| Quill Needlesworth | Picks lint off her sleeve | One crisp snap | Small tidy bow | Silver, with a stitched seam |
-| Dame Flicka Brightspur | Salutes no one | Lunges with the lance | Raises the lance, plume bobs | Red and gold with a pennant |
-| Wick Glimmer | Cups the lantern flame | Taps with the pole, flinches | Lantern flares bright | Glows from inside like a lamp |
-| Sprocket Tumm | Winds the hat key | Opens the box, beetle zooms | Goggles down, fist pump | Brass colored, with a key that turns |
-| Jax Peppercorn | Juggles pepper pots | Cranks the grinder fast | Arms wide to the crowd | Check pattern, sneezes pepper |
-| Nan Clatterpot | Stirs a pot on her head | Ladle flick, pans clang | Bangs two lids | Copper pot lid with a balloon under it |
+| Old Thumper | Nods off, snaps awake | Flips the cane spoon | One small nod | Striped like his nightcap |
+| Young Pip | Jumps to see over the sill | Whole body sling, falls over | Runs in a circle | A tiny kite balloon with a tail |
+| Bartleby Bunn | Straightens his tiny hat | Slow overhand heave | Shy thumbs up | Very big balloon, strains to lift him |
+| Miss Quill | Picks lint off her sleeve | One crisp snap | Small tidy bow | Silver, with a stitched seam |
+| Dame Flicka | Salutes no one | Lunges with the lance | Raises the lance, plume bobs | Red and gold with a pennant |
+| Wick Chandler | Cups the lantern flame | Taps with the pole, flinches | Lantern flares bright | Glows from inside like a lamp |
+| Ernest Tumm | Winds the hat key | Opens the box, beetle zooms | Goggles down, fist pump | Brass colored, with a key that turns |
+| Jax Pepper | Juggles pepper pots | Cranks the grinder fast | Arms wide to the crowd | Check pattern, sneezes pepper |
+| Nan | Stirs a pot on her head | Ladle flick, pans clang | Bangs two lids | Copper pot lid with a balloon under it |
 | Dotty Hailstone | Holds a hand out for rain | Tips the barrel | Spins the umbrella hat | Grey cloud that drips |
-| Fizz Popkin | Blows a party horn | Pulls the popper string | Throws confetti | Bright party balloon with streamers |
+| Ginger Popkin | Blows a party horn | Pulls the popper string | Throws confetti | Bright party balloon with streamers |
 | Grub Mudgett | Sniffs the floor | Stabs and twists the spade | Low chuckle, candle flares | Brown, with a clod of dirt on top |
-| Petra Chiselwick | Frames the view with her fingers | Mallet tap on chisel | Signs the air | White, with a paint smear |
-| Truffle Snoutworth | Sniffs left, sniffs right | Drops a beet, it drills off | Pats his nose | Red with white spots |
+| Petra Mason | Frames the view with her fingers | Mallet tap on chisel | Signs the air | White, with a paint smear |
+| Truffle Hogg | Sniffs left, sniffs right | Drops a beet, it drills off | Pats his nose | Red with white spots |
 | Bobbin Springheel | Bounces on his toes | Kicks the spring shoe | Back flip | Boot shaped |
-| Skip Pebblewick | Asleep under the hat | Lazy cast, one eye open | Yawns, small wave | Straw yellow, drifts sideways |
-| Lady Carom Bankshot | Chalks her cue | Lines up, one clean strike | Blows chalk off the tip | Felt green, round as a ball |
-| Gus Wobblebottom | Hat jelly wobbles, he giggles | Spoon fling | Belly laugh, whole body shakes | Pink jelly dome that wobbles |
-| Ember Toastwell | Warms her hands at her hat | Swings the scuttle | Tips her smoking hat | Soot black with an orange glow |
-| Frostine Nippet | Shivers, rubs mittens | Scoop and toss | Sneezes a snowflake | Mint, frosted, sheds snow |
-| Brine Picklewick | Sighs, checks the pickle | Two bored pumps | One slow blink | Jar glass blue, pickle inside |
+| Skip Drake | Asleep under the hat | Lazy cast, one eye open | Yawns, small wave | Straw yellow, drifts sideways |
+| Lady Carom | Chalks her cue | Lines up, one clean strike | Blows chalk off the tip | Felt green, round as a ball |
+| Gus Bottomley | Hat jelly wobbles, he giggles | Spoon fling | Belly laugh, whole body shakes | Pink jelly dome that wobbles |
+| Edna Toast | Warms her hands at her hat | Swings the scuttle | Tips her smoking hat | Soot black with an orange glow |
+| Aunty Nip | Shivers, rubs mittens | Scoop and toss | Sneezes a snowflake | Mint, frosted, sheds snow |
+| Walt Brine | Sighs, checks the pickle | Two bored pumps | One slow blink | Jar glass blue, pickle inside |
 | Hetty Mortarboard | Taps her foot, checks walls | Trowel flick | Draws a tick in the air | Brick red, square edged |
-| Poultice Plumley | Sips tea | Pours a long arc | Raises a cup | Tea cosy pattern, steams |
-| Rivet Brasstack | Tests a wall with her fist | Hammer swing | Flips her mask down, nods | Brass, with rivets |
-| Winkle Spyglass | Bird and Hob look opposite ways | Puff from the spyglass | Bird sings | Grey with a red breast, bird rides on top |
-| Echo Hootley | Clears his throat, loud | Rings the hand bell | Hat bell rings, he beams | Gold bell shape, bongs softly |
-| Tansy Featherlight | Watches a cloud | Lets the kite go | Soft smile, small wave | A folded paper balloon |
+| Nurse Plumley | Sips tea | Pours a long arc | Raises a cup | Tea cosy pattern, steams |
+| Tacks Brassey | Tests a wall with her fist | Hammer swing | Flips her mask down, nods | Brass, with rivets |
+| Winkle Peake | Bird and Hob look opposite ways | Puff from the spyglass | Bird sings | Grey with a red breast, bird rides on top |
+| Owl-Eyed Olive | Clears his throat, loud | Rings the hand bell | Hat bell rings, he beams | Gold bell shape, bongs softly |
+| Tansy Downe | Watches a cloud | Lets the kite go | Soft smile, small wave | A folded paper balloon |
 
 ### 6.5 Sound hooks
 
@@ -1032,7 +1032,7 @@ The core doc says each Nook has a Loophole on the side that faces the rival, and
 - **Threading.** A point shot with the Threads keyword (a Hatpin, a beam, a guided dart) that enters the slot hits the Hob inside for full damage. Cover does not apply. The game calls out "Threaded!" and scores Skill Factor 1.5. Blasts, fluids and fields never thread [C14].
 - **Loophole Flap** [00 §2.10]. After a Thread passes a Loophole, a flap drops over it. Until the Weather Front changes, no Thread can pass that Loophole: a point shot that reaches it hits the wall block. The Hob inside still fires. The flap shows on the fort with the rounds left. Both sides, every preset. So a found line pays once per front, and the next Thread needs a new Loophole or a new front.
 - **Front wall gone.** The Hob fires from the open gap. The Nook is Open (section 7.4).
-- **Buried Loophole.** Your shots pass your castle, not the ground or blocks the other side placed. If ground or a foreign block (a mound, a pit wall, a bush, a scrap wall) covers a Loophole, that Hob's Fire button greys and its portrait shows a "dug in" icon [B9], [C15]. Pick another Hob, or **Shove Off**: in your Walk step pay 15 Steam to clear that Loophole, and the Hob may fire this turn with no Action lost [00 §2.7]. Any blast on the dirt clears it. Any Delver shot or a Mendglob on the Nook clears it too. If every live Hob in your crew is dug in at the start of your turn, the newest burial clears by itself, so you never lose a turn [00 §2.7, 01 §1.6].
+- **Dug in.** Your shots pass your castle, not the ground or blocks the other side placed. If ground or a foreign block (a mound, a pit wall, a bush, a scrap wall) covers a Loophole, that Hob's Fire button greys and its portrait shows a "dug in" icon [B9], [C15]. Pick another Hob, or **Shove Off**: in your Walk step pay 15 Steam to clear that Loophole, and the Hob may fire this turn with no Action lost [00 §2.7]. Any blast on the dirt clears it. Any Digger shot or a Dollop on the Nook clears it too. If every live Hob in your crew is dug in at the start of your turn, the newest burial clears by itself, so you never lose a turn [00 §2.7, 01 §1.6].
 - **High and low.** A high Loophole clears hills and adds range. A low Loophole gives flat runs for pins, balls and bores. This is the main seat choice.
 - **What the rival sees.** Loopholes show on the outside of every castle at all times, as dark slots.
 
@@ -1055,7 +1055,7 @@ The core doc says each Nook has a Loophole on the side that faces the rival, and
 | Timber (50) | Two hits. Burns | `[Launch]` |
 | Cobble (80) | Solid cover. If it falls on a Hob, crush is doubled. Side support reaches only 1 block [B2] | `[Launch]` |
 | Brassbound (110) | Strong, fireproof. Zap chains along it into the next Nook in `[U3]` | `[Launch]` |
-| Moonbrick (140) | Heals a little each turn it is not hit [B1] | `[U3]` |
+| Mossbrick (140) | Heals a little each turn it is not hit [B1] | `[U3]` |
 
 ### 7.4 When a Nook breaks `[Launch]`
 
@@ -1064,7 +1064,7 @@ Five Hob states. Each has a clear picture, a bark and one rule [B7].
 | State | What happened | Rule | Hob reaction |
 |---|---|---|---|
 | **Open** | A block on any side is gone, or the Hob stands outside a Nook | No Cover [00 §2.10] | Crouches, peeks out |
-| **Dropped** | The floor is gone | The Hob falls straight down to the first standing surface. Fall damage if the drop is over 32 cells [00 §2.10]. Then see "Where it ends up" | Hangs in the air a beat, then falls |
+| **Fell a floor** | The floor is gone | The Hob falls straight down to the first standing surface. Fall damage if the drop is over 32 cells [00 §2.10]. Then see "Where it ends up" | Hangs in the air a beat, then falls |
 | **Tumbled** | It falls out of the castle | 20 damage. At the end of the turn it climbs to the lowest free Nook. It keeps its next shot [B9] | Rolls, sits up with stars, scrambles back |
 | **Squashed** | A chunk lands on it | Crush: 15 per block, x2 for Cobble, 0 for Wicker [00 §2.10] | Flattened like a pancake, pops back |
 | **Bonked** | HP 0 | Floats off on a Snooze Balloon. Puff Up can bring it back, player side only (both sides in Couch Duel) | Eyes spin, balloon pops out |
@@ -1077,7 +1077,7 @@ Five Hob states. Each has a clear picture, a bark and one rule [B7].
 - A Tumbled Hob with no free Nook stands on the Footing lip at the front, Open.
 - A Hob keeps its Rest count and its last aim through any drop.
 - A Nook is a 2 x 2 hollow, so a one-floor drop into the room below is 32 cells and does no fall damage. Longer drops do.
-- The Footing never falls [00 §2.8]. A Hob in a Nook on the Footing can be Open and Squashed, never Dropped.
+- The Footing never falls [00 §2.8]. A Hob in a Nook on the Footing can be Open and Squashed, but can never fall a floor.
 - If a whole chunk falls with a Nook in it, the Hob rides it down, takes fall damage for the drop, then ends up as above.
 
 **Class reactions.** Barks and poses only. The only rule effects come from Passives.
@@ -1087,11 +1087,11 @@ Five Hob states. Each has a clear picture, a bark and one rule [B7].
 | Lobber | Annoyed. Folds arms | Lands hard. Slow to get up |
 | Zinger | Ducks low, hat flat | Lands in a neat crouch |
 | Scatterjack | Shakes a fist at the rival | Drops its shots, grabs them in the air |
-| Delver | Does not notice | Lands on its feet with a grunt |
-| Boinker | Laughs | Bounces twice |
-| Sizzler | Guards its pot from the draft | Juggles the hot pot all the way down |
+| Digger | Does not notice | Lands on its feet with a grunt |
+| Bouncer | Laughs | Bounces twice |
+| Stoker | Guards its pot from the draft | Juggles the hot pot all the way down |
 | Patcher | Starts fixing the hole out of habit | Checks the others first |
-| Peeper `[U2]` | Hides behind its hat | Glides a little, arms out |
+| Lookout `[U2]` | Hides behind its hat | Glides a little, arms out |
 
 ### 7.5 Falling floors `[Launch]`
 
@@ -1117,14 +1117,14 @@ These are the build and seat problems the game is made to pose. The campaign doc
 | 4 | **The wing** | A hanging Nook gets angles no one else has | One neck block holds it all up. Stone wings reach only 1 block | `[Launch]` |
 | 5 | **Kettle guard** | Hobs in front of the Kettle Room soak hits for it | Blasts meant for the kettle hurt your crew | `[Launch]` |
 | 6 | **The cage** | Brassbound walls stop fire and most blasts | In `[U3]` Zap chains through the whole cage into every Nook that shares it | `[Launch]` |
-| 7 | **Low and safe** | Nooks on the Footing never drop. Delvers and Boinkers love them | Rollers, skippers and fluids all end up at the bottom | `[Launch]` |
+| 7 | **Low and safe** | Nooks on the Footing never drop. Diggers and Bouncers love them | Rollers, skippers and fluids all end up at the bottom | `[Launch]` |
 | 8 | **Spare room** | An empty Nook is a refuge after a drop or Tumble | It costs wall blocks and gives the rival one more room to open | `[Launch]` |
 | 9 | **Wicker hat** | A Wicker loft is cheap and falls soft | It burns, and fire spreads down to Timber | `[Launch]` |
 | 10 | **The pit** | Walk into a dip for cover from flat shots | Low Loopholes get buried and fluids pool on you [00 §2.7] | `[Launch]` |
 | 11 | **Glass sniper** | A Zinger at the front gets its line | 80 HP at the front wall. Give it a Brassbound sill | `[Launch]` |
 | 12 | **Split or cluster** | Spread Nooks so no blast hits two | A spread fort is wider and needs more wall blocks | `[Launch]` |
-| 13 | **Open on purpose** | Leave a low Nook with a low front wall so a Boinker has a clear run on a pit map | That Hob starts with no Cover | `[Launch]` |
-| 14 | **Crow's Nest** | A Peeper in the top row sees the most | The top row has the least support and the longest fall | `[U2]` |
+| 13 | **Open on purpose** | Leave a low Nook with a low front wall so a Bouncer has a clear run on a pit map | That Hob starts with no Cover | `[Launch]` |
+| 14 | **Crow's Nest** | A Lookout in the top row sees the most | The top row has the least support and the longest fall | `[U2]` |
 
 ### 7.7 Reading the enemy crew
 
@@ -1134,7 +1134,7 @@ The same rules face the other way. They give the player a hunt.
 - Loopholes show at all times. `[Launch]`
 - A Hob that fires shows a small flash at its Loophole. `[Launch]`
 - The AI reads your fort by the same rules. It does not see through walls [00 §3]. `[Launch]`
-- **Hidden crew** `[U2]`: in fog, blizzard and hidden-crew levels, icons fade after the Muster to "last known", and Peepers turn guesses into facts.
+- **Hidden crew** `[U2]`: in fog, blizzard and hidden-crew levels, icons fade after the Muster to "last known", and Lookouts turn guesses into facts.
 
 ---
 
@@ -1172,8 +1172,8 @@ Passives and Quirks must be pure sim rules with no random rolls, so replays and 
 | 3 | **Rank costs** and the late-recruit rule: closed. `02` sets 300, 700, 1,500 and "joins at the Rank of your fifth-highest Hob" | Closed | 5.1 |
 | 4 | **Knack Quirk numbers** for all 28 Hobs | For 01 | 3, 5.2 |
 | 5 | **Match bonus** on Trick Shells: Rest 0 and +10%. Closed: `00` and `01` set it | Closed | 1 |
-| 6 | **Long Siege milestones** that give Gus and Rivet | For 05, 02 | 3.9 |
-| 7 | **Rewritten passives:** Truffle (Good Nose), Poultice (Tea Round), and the four next-door Passives (Broad Back, Ridgepole, Old Grudge, Clatter Call). Bots must show that forts with Hetty or Grub do not last more than one round longer on average, and that Old Grudge and Clatter Call fire in at least a third of battles where the Hob is seated with a neighbour. Check Tea Round heal value | Balance | 3 |
+| 6 | **Long Siege milestones** that give Gus and Tacks | For 05, 02 | 3.9 |
+| 7 | **Rewritten passives:** Truffle (Good Nose), Nurse Plumley (Tea Round), and the four next-door Passives (Broad Back, Ridgepole, Old Grudge, Dinner Bell). Bots must show that forts with Hetty or Grub do not last more than one round longer on average, and that Old Grudge and Dinner Bell fire in at least a third of battles where the Hob is seated with a neighbour. Check Tea Round heal value | Balance | 3 |
 | 8 | **All-dug-in rule:** closed. If every Hob is dug in, the newest burial clears at turn start, as `00` and `01` say | Closed | 7.2 |
 | 9 | **Hob names:** all 28 need the trademark check [review 04 §D9] | Check | 3 |
 
@@ -1196,21 +1196,21 @@ Cut for good by review 04 [B7, B8] and review 02 §2.3. Kept here so nothing des
 | Lobber | High Perch: in a Loft Nook, 10% more preview | Loader: once per battle, a neighbor's Reload ends a turn early |
 | Zinger | Steady Sill: while its walls stand, Fine Tune shows the first hit | Call the Mark: neighbors get 10% more preview on a Hob the Zinger hit |
 | Scatterjack | Wide Window: in a Front Nook, pick tight or wide fan | Duck!: neighbors take 10% less from Chip and Light hits |
-| Delver | Ground Floor: in a Cellar, Plain Shot bores 1 block farther | Shored Up: neighbor floors take half Dig |
-| Boinker | Springboard: low seat, first hop keeps 80% speed | Springy Floor: first floor drop each battle does no fall damage |
-| Sizzler | Cool Hearth: in fireproof walls, cannot Burn | Warm Hands: neighbors cannot be Chilled |
+| Digger | Ground Floor: in a Cellar, Plain Shot bores 1 block farther | Shored Up: neighbor floors take half Dig |
+| Bouncer | Springboard: low seat, first hop keeps 80% speed | Springy Floor: first floor drop each battle does no fall damage |
+| Stoker | Cool Hearth: in fireproof walls, cannot Burn | Warm Hands: neighbors cannot be Chilled |
 | Patcher | Hub: 3 or more neighbors, Mend heals 7 | Mend (later "Tend"): heals neighbors 5 HP each turn |
-| Peeper | Crow's Nest: top row marker reveals within 3 blocks | Point It Out: neighbors deal 10% more to Hobs it revealed |
+| Lookout | Crow's Nest: top row marker reveals within 3 blocks | Point It Out: neighbors deal 10% more to Hobs it revealed |
 
 **Extra Nook states.** Rattled (a wall under half HP, warning only). Skylight (ceiling gone). Perched (landed on a block top). Crowded (two Hobs in one Nook, neither with Cover, a blast hits both). Porch (Tumbled with no free Nook). Open covers all of them now.
 
 **Tumble skips the next shot.** Replaced by "keeps its shot" [B9].
 
-**Old Passives replaced in review 06.** Grub's Sure Feet (no fall damage; he sat on the Footing, where he never fell). Hetty's Tidy Up (her mend ends Burn; every Mendglob already does). Old Thumper's Can't Hear You (no Thump damage; Thumps are rare). Nan's Pan Shield (25% less from Chip hits and Burn ticks; an unseen number). Replaced by Broad Back, Ridgepole, Old Grudge and Clatter Call.
+**Old Passives replaced in review 06.** Grub's Sure Feet (no fall damage; he sat on the Footing, where he never fell). Hetty's Tidy Up (her mend ends Burn; every Dollop already does). Old Thumper's Can't Hear You (no Thump damage; Thumps are rare). Nan's Pan Shield (25% less from Chip hits and Burn ticks; an unseen number). Replaced by Broad Back, Ridgepole, Old Grudge and Dinner Bell.
 
-**Fizz's Popple Pod** (splits on impact, seeds hop out). Too close to Marble Sack; Rising Fizz took its slot [01 B.3].
+**Ginger's Popple Pod** (splits on impact, seeds hop out). Too close to Bag of Marbles; Rising Fizz took its slot [01 B.3].
 
-**Buried Loophole bursts in your face.** Replaced by the greyed Fire button [B9].
+**Dug-in shot bursts in your face.** Replaced by the greyed Fire button [B9].
 
 **Hob levels 1 to 10 at +1.5% HP each, Quirks at levels 3, 6, 9.** Replaced by 3 ranks [B8].
 

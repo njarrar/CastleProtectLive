@@ -35,14 +35,23 @@
         1600,
         370
       ]
+    ],
+    "patches": [
+      [
+        1004,
+        1015,
+        346,
+        318,
+        "clay"
+      ]
     ]
   },
   "pads": [
     {
-      "x": 380
+      "x": 388
     },
     {
-      "x": 1300
+      "x": 1306
     }
   ],
   "player": {
@@ -57,11 +66,13 @@
     ]
   },
   "rival": {
-    "name": "Corporal Fernsby Clip",
+    "name": "Lance Corporal Fernsby",
     "habit": "Hides his crew deep. Leaves the kettle near the wall.",
+    "habit_id": "kettle_hunter",
+    "think_ms": 1200,
     "blueprint": "bp_r1_kettle_knoll",
     "crew": [
-      "hedge_snipper",
+      "rake_hand",
       "rake_hand",
       "straw_stuffer"
     ],
@@ -81,18 +92,18 @@
   "pennants": [
     {
       "type": "win",
-      "text": "Win"
+      "text": "Chase Fernsby off the knoll"
     },
     {
       "type": "kettle_pop",
-      "text": "Win by Kettle Pop"
+      "text": "Pop the kettle by his wall"
     },
     {
-      "type": "kettle_above_pct",
-      "text": "Your kettle above 50%",
-      "value": 50
+      "type": "win_by_round",
+      "text": "Win by Round 9",
+      "value": 9
     }
   ],
-  "map_note": "Shallow valley. Rival on a knoll 100 cells up, kettle one block behind a thin wall.",
+  "map_note": "Shallow valley with an old stump on the far slope. Rival on a knoll 100 cells up, his crew in a tall back tower, the kettle one thin wall from the front.",
   "new_thing": "Kettle Pop."
 }

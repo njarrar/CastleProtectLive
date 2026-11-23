@@ -59,7 +59,7 @@ test('map, pre-battle, Couch Duel setup and settings open', async ({ page }) => 
   await expect(page.locator('.battle')).toBeVisible();
   // A hash change never drops a fight (M12), so load the settings link as a fresh page.
   await page.goto('./?debug=2#settings');
-  await expect(page.getByText('Reduce motion')).toBeVisible();
+  await expect(page.getByText('Less motion')).toBeVisible();
 });
 
 test('Give up ends a Couch Duel at once, with the result from the core', async ({ page }) => {

@@ -36,9 +36,9 @@ class SaveStoreTest {
         val dir = tmp.newFolder()
         val s = SaveStore(dir, "castle.sav"); s.load()
         val retry = battle.copy(setup = games.castleprotect.core.BattleSpec(battle.setup, battle.seed, "campaign", "1-1").retry().setup)
-        assertTrue(s.write(SaveData(fort = games.castleprotect.game.FortGrid.HOME, last = retry)))
+        assertTrue(s.write(SaveData(fort = Fixtures.homeRows, last = retry)))
         val d = (SaveStore(dir, "castle.sav").load() as SaveStore.Loaded.Ok).data
-        assertEquals(games.castleprotect.game.FortGrid.HOME, d.fort)
+        assertEquals(Fixtures.homeRows, d.fort)
         assertEquals(1, games.castleprotect.core.BattleSpec(d.last!!.setup, d.last!!.seed, "campaign", "1-1").attempt)
         // An older save without a fort reads as none.
         assertEquals(emptyList<String>(), SaveData.parse("""{"v":1,"pennants":{}}""").fort)

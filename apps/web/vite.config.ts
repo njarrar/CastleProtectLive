@@ -8,6 +8,22 @@ import { buildArt } from './scripts/build-art.mjs';
 
 const here = import.meta.dirname;
 
+// The app's name and its one-line pitch come from the one string table, like every other line.
+const TEXT = JSON.parse(readFileSync(resolve(here, '../../content/text.json'), 'utf8')) as { app: { title: string; tagline: string; promise: string } };
+const DESCRIPTION = `${TEXT.app.tagline} ${TEXT.app.promise}`;
+const esc = (x: string) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+
+/** index.html carries the table's title and description, not its own copy. */
+function castleHtml(): Plugin {
+  return {
+    name: 'castle-html',
+    transformIndexHtml: (html) => html
+      .replace(/<title>[^<]*<\/title>/, `<title>${esc(TEXT.app.title)}</title>`)
+      .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(DESCRIPTION)}$2`)
+      .replace(/(<div class="boot">)[^<]*(<\/div>)/, `$1${esc(TEXT.app.title)}$2`),
+  };
+}
+
 // The core is built to WebAssembly by scripts/build-wasm.sh (cargo + wasm-bindgen, target web).
 // We look for its pkg folder and copy it to public/core so the app can load it at
 // runtime from `core/castle_wasm.js`. There is no stand-in core in a production build, so
@@ -92,6 +108,7 @@ export default defineConfig({
   base: process.env.VITE_BASE ?? '/',
   plugins: [
     castleCopy(),
+    castleHtml(),
     VitePWA({
       // 'prompt': a new version waits; the app offers "Update" on the title or map, never mid fight.
       registerType: 'prompt',
@@ -101,9 +118,9 @@ export default defineConfig({
       // they are not part of the first load or of offline play.
       includeManifestIcons: false,
       manifest: {
-        name: 'Castle Protect',
-        short_name: 'Castle Protect',
-        description: 'Build a fort, aim a shot, pop the kettle.',
+        name: TEXT.app.title,
+        short_name: TEXT.app.title,
+        description: DESCRIPTION,
         theme_color: '#FFC23D',
         background_color: '#9ED8EC',
         // iOS has no fullscreen display mode; standalone works on both.

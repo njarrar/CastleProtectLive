@@ -35,14 +35,30 @@
         1600,
         320
       ]
+    ],
+    "patches": [
+      [
+        784,
+        816,
+        318,
+        292,
+        "rock"
+      ],
+      [
+        790,
+        810,
+        326,
+        300,
+        "rock"
+      ]
     ]
   },
   "pads": [
     {
-      "x": 380
+      "x": 374
     },
     {
-      "x": 1320
+      "x": 1331
     }
   ],
   "player": {
@@ -54,12 +70,14 @@
     "blueprint": "bp_home_3"
   },
   "rival": {
-    "name": "Private Tuft Edgerly",
+    "name": "Private Tuft",
     "habit": "Shoots your top Hob first.",
+    "habit_id": "hob_sniper",
+    "think_ms": 1300,
     "blueprint": "bp_r1_two_hats",
     "crew": [
       "pebble_pitcher",
-      "hedge_snipper"
+      "pebble_pitcher"
     ],
     "aim": 1,
     "knack_uses": 0,
@@ -79,17 +97,18 @@
   "pennants": [
     {
       "type": "win",
-      "text": "Win"
+      "text": "Send Tuft packing"
+    },
+    {
+      "type": "bonk_nook",
+      "text": "Bonk the Hob in the tower first",
+      "value": 1
     },
     {
       "type": "bonk_with_each_hob",
       "text": "Bonk a Hob with each of your Hobs"
-    },
-    {
-      "type": "no_hob_bonked",
-      "text": "No Hob of yours Bonked"
     }
   ],
-  "map_note": "Twin humps with a dip between. The Rival has a tall tower and a low room.",
+  "map_note": "Twin humps with a dip between and a boulder sat in the dip. The Rival has a tall tower and a low room.",
   "new_thing": "+Quill. Pick the shooter. Fine Tune."
 }

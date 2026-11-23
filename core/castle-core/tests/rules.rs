@@ -194,7 +194,7 @@ fn collapse_crushes_and_kettle_takes_half() {
     b.resolve_collapse(1);
     let after = b.castles[1].kettle_hp;
     assert!(after < before, "kettle took crush");
-    assert!(before - after <= KETTLE_CAP, "capped at 60 per shot");
+    assert!(before - after <= KETTLE_CAP, "capped at 80 per shot");
     let _ = c;
 }
 
@@ -410,7 +410,20 @@ fn squall_warning_and_squall_ends_the_fight() {
         vec![2, 1],
         "cap 3: round 1 starts the battle, then 2 and 1"
     );
-    assert_eq!(squalls, 3, "the third Squall pops a full kettle");
+    // Squall alone: 50 + 100 stays under a full kettle, + 150 pops it, so
+    // every fight still ends by the third Squall round.
+    let k = castle_core::castle::KETTLE_HP;
+    assert!(50 + 100 < k && 50 + 100 + 150 >= k);
+    // Since bundle patch 02 (Kettle 200, crush 100%) the second Squall
+    // already pops kit_oak forts: it leaves the kettle at 50, under half,
+    // so kettle_crack drops the side support of the Timber round the Kettle
+    // Room by one; that cover falls and crushes the kettle for 30 twice
+    // (50 + 100 + 60 >= 200). Before it was 300 HP, no crack, crush at 50%,
+    // so it took the third. Both sides pop at once: still a double pop.
+    assert_eq!(
+        squalls, 2,
+        "the second Squall plus its crush pops the kettle"
+    );
     let r = b.result.as_ref().unwrap();
     assert_eq!(r.how, "double_pop");
     assert_eq!(r.winner, 1, "equal HP: the second side wins");
@@ -500,7 +513,7 @@ fn doodads_mend_bucket_and_pot_lid() {
         b.resolve_tick();
     }
     assert!(!b.castles[1].kettle.lid, "lid used");
-    assert_eq!(b.castles[1].kettle_hp, 300);
+    assert_eq!(b.castles[1].kettle_hp, castle_core::castle::KETTLE_HP);
 }
 
 #[test]
@@ -509,13 +522,30 @@ fn fatigue_from_round_ten_weakens_battered_stone() {
     let bp = arm_fort('c', 1);
     let mut cs = castle_core::castle::Castle::from_blueprint(&c, &bp, 0, 100).unwrap();
     assert!(cs.falling_chunks(&c, &[]).is_empty());
-    cs.block_mut(1, 5).unwrap().hp -= 1;
-    assert!(cs.falling_chunks(&c, &[]).is_empty(), "no fatigue yet");
+    // light scratch (79/80): stands under both stage 1 (<50%) and stage 2 (<80%)
+    cs.block_mut(1, 5).unwrap().hp = 79;
     cs.fatigue = true;
+    cs.fatigue_pct = 50;
+    assert!(cs.falling_chunks(&c, &[]).is_empty(), "79/80 survives R10");
+    cs.fatigue_pct = 80;
+    assert!(cs.falling_chunks(&c, &[]).is_empty(), "79/80 survives R12");
+    // 60/80 (75%): survives R10 (<50%), falls at R12 (<80%)
+    cs.block_mut(1, 5).unwrap().hp = 60;
+    cs.fatigue_pct = 50;
+    assert!(cs.falling_chunks(&c, &[]).is_empty(), "60/80 survives R10");
+    cs.fatigue_pct = 80;
     assert_eq!(
         cs.falling_chunks(&c, &[]),
         vec![vec![(1, 5)]],
-        "battered Cobble reaches 0"
+        "60/80 falls at R12 (<80%)"
+    );
+    // 39/80 (<50%): falls immediately at R10
+    cs.block_mut(1, 5).unwrap().hp = 39;
+    cs.fatigue_pct = 50;
+    assert_eq!(
+        cs.falling_chunks(&c, &[]),
+        vec![vec![(1, 5)]],
+        "battered Cobble (<50%) reaches 0 at R10"
     );
 }
 

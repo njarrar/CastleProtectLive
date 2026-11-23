@@ -1,6 +1,6 @@
 # Castle Protect core API (v0.2)
 
-Rules version 4 (`cp_version().rules`). What changed from v0.1 is listed in
+Rules version 5 (`cp_version().rules`). What changed from v0.1 is listed in
 "Changes in v0.2" at the end of this file and in the Fixes section of
 `docs/review/code/core-review-1.md`. What changed for QA playtest 1 is in
 "Changes for QA playtest 1" at the end, and in the "Core fixes" section of
@@ -19,7 +19,7 @@ snapshots as JSON. Same calls on all three platforms:
 | `void cp_free_string(char*)` | (not needed) | Free any string the C ABI returned |
 | `void cp_free(CpGame*)` | `game.free()` | Free the battle |
 | `char* cp_last_error(CpGame*)` | `last_error()` / `cp_last_error()` | The last refusal reply (JSON) or panic text for that handle; with NULL, this thread's last `cp_new` error. NULL when there is none |
-| `char* cp_version(void)` | `cp_version()` | `{"sim":"0.2.0","rules":4,"tick_hz":120}` |
+| `char* cp_version(void)` | `cp_version()` | `{"sim":"0.2.0","rules":5,"tick_hz":120}` |
 | `char* cp_golden_hashes(void)` | `golden_hashes()` | Golden replay hashes, one `name hash` line each |
 | `uint64_t cp_daily_seed(const char* date)` | `daily_seed(date)` | Daily Dust-up seed from the local date text (`2026-11-22`) and the rules version |
 | | `default_content()` | The built in content bundle as JSON |
@@ -283,7 +283,7 @@ Terrain material codes (from `content/materials.json`): 0 air, 1 Loam,
 {"side": 0, "x": 344, "base_y": 390, "cols": 7, "rows": 7, "block": 16,
  "blocks": [{"c": 0, "r": 0, "x": 344, "y": 374, "mat": "footing", "hp": 400, "max": 400, "peephole": false, "root": false, "battered": false}],
  "rooms": [{"kind": "nook", "id": 0, "c": 1, "r": 4, "box": [360, 278, 391, 309], "intact": true, "flap": false, "lid": false, "loophole": [392, 290, 407, 295]}],
- "kettle": {"hp": 300, "max": 300, "box": [366, 337, 386, 357], "room": [360, 326, 391, 357], "c": 1, "r": 1, "lid": false, "intact": true},
+ "kettle": {"hp": 200, "max": 200, "box": [366, 337, 386, 357], "room": [360, 326, 391, 357], "c": 1, "r": 1, "lid": false, "intact": true},
  "steam": 100, "steam_turn": 0, "fatigue": false,
  "shimmer": [[c, r]], "held": [[c, r]]}
 ```
@@ -362,7 +362,8 @@ order.
 | `hands` | Per side, Trick Shells in hand: `{"id", "name", "match", "weight", "dud", "card"}` |
 | `doodads` | Per side, Doodad ids left |
 | `selected` | `{"hob", "shot"}` for the active side |
-| `names`, `control` | Side names; `human` or `ai` per side |
+| `names`, `control` | Side names; `human` or `ai` per side. A Skirmish Rival with no `name` in the setup is a named Rival from the level's `rival.roster`, picked by the app seed (`roster[seed % roster.length]`, the same on a Retry) |
+| `think_ms` | Think pose time per side in ms from the level (`rival.think_ms`, or the roster entry in Skirmish); `null` means use `app.json` `rival_think_seconds`. Presentation only, not in the hash |
 | `score` | Siege Score per side |
 | `puff_up` | Per side, whether Puff Up is still available |
 | `steam_max` | `[side0, side1]` Steam at the start (the bar's 100%; the second side starts with +20) |
@@ -422,8 +423,9 @@ Every event has `t` (type) and `tick`. Positions are world cells.
 | `grudge`, `clatter` | `hob` | Passives switched on |
 | `regrow` | `side`, `c`, `r` | Boss hedge regrows |
 | `column` | `side`, `c`, `r` | Lid Lifter blast up a column |
-| `fatigue_warning` | `round`, `text` | One round before Fatigue (round 9 start): "Fatigue next round" |
-| `fatigue` | `round` | Fatigue starts (round 10): battered blocks lose side reach. The collapse it causes follows as `collapse` events with `why: "fatigue"` |
+| `fatigue_warning` | `round`, `text` | One round before the Creaks (round 9 start): "The Creaks next round: cracked blocks hold less" |
+| `fatigue` | `round`, `pct` | Fatigue steps up: round 10 (`pct` 50, blocks under 50% HP are battered), round 12 (`pct` 80, under 80%). Battered blocks lose side reach. The collapse it causes follows as `collapse` events with `why: "fatigue"` |
+| `kettle_crack` | `side`, `hp` | A kettle fell to half HP (100) or less, once per battle per side: the Kettle Room walls lose one side reach, so their collapse follows |
 | `shot_switch` | `side`, `hob`, `from`, `to` (`"plain"`), `why`, `when` (`turn_start`, `pick_hob`) | The picked shot could not fire (Rest, Knack used up, shell spent), so the pick moved to the Plain Shot |
 | `miss` | `x`, `y` | A shell left the map |
 | `pass` | `side` | |
@@ -481,7 +483,7 @@ blocks lost to a Thump (`why: "thump"`) or a Squall (`why: "squall"`).
   never null. `by` says who dealt it: `hob` (`hob` is the Hob id, `hob_name`
   its name), or, with `hob` null, `squall` (`shot` `squall`, `hob_name`
   "The Squall"), `ground` (a fall with no shot: "A fall"), `fatigue` (the
-  round 10 collapse: "Fatigue"), `self` ("Your own shot"), `shears` (1-10:
+  round 10 collapse: "The Creaks"), `self` ("Your own shot"), `shears` (1-10:
   "The shears"), `prop` (a woken prop shell such as a Tick-Tock Crock:
   "A Tick-Tock Crock"). Apps can print `hob_name` as is.
 
@@ -660,3 +662,34 @@ to the same fight).
   gives the Rival, so the loaner forts are even.
 - **1-7 Rescue (m7).** Cage bars 100 HP (was 80), Hetty 140 HP (was 110).
 - **Frame sizes (B2).** Measured and bounded; see "Frame sizes".
+
+## Changes for bundle patch 02 (rules version 5)
+
+Rules version 5: saves from rules version 4 do not resume (kettle HP, kettle
+intake, Fatigue, fall damage, AI and level content changed, so an old log
+would not replay to the same fight).
+
+- **Heartkettle.** 200 HP (was 300); `kettle.max` is 200. Kettle intake:
+  Blast 75% (was 50%), crush 100% (was 50%), Pierce 100%. No half damage
+  for a Beam that passed through a block. Per-shot cap 80 (was 60).
+- **Kettle crack.** At 100 HP or less the kettle cracks once: new event
+  `kettle_crack` (`side`, `hp`). The blocks walling the Kettle Room then
+  reach one less to the side.
+- **Progressive Fatigue.** Round 10: blocks under 50% HP are battered.
+  Round 12: under 80%. The `fatigue` event now carries `pct`. Off in Volley
+  Points and the Test Yard. `blocks[].battered` follows the current step.
+- **Tumbled fall.** 45 + (fall - 64) / 8, max 70 (was 20).
+- **Starter Box forts** are stepped now (not full rectangles), and level
+  content in Region 1 and `d2` changed (crew joins, Walk from 1-5, Doodads
+  from 1-7).
+- Setup checks: an unknown `preset`, an unknown Rummage shell, `wind.min`
+  above `wind.max` and fronts out of -10 to 10 are refused. Inline `rows`
+  may not hold the boss Sprinkler Root (`r`).
+- Measured balance: `docs/review/code/bundle-core-verify.md`.
+
+## Changes for the content pass (rules version 5, unreleased)
+
+- Levels name the Rival AI habit with `rival.habit_id` (`balanced`, `kettle_hunter`, `roof_wrecker`, `hob_sniper`, `cautious_mender`). The free text `rival.habit` is display only. Content checks refuse an unknown id.
+- `rival.think_ms` (200 to 4000) and Skirmish `rival.roster` (`[{name, think_ms}]`); snapshot `hud.think_ms`.
+- New Pennant types: `ground_kept` (with `area: [x0, x1]`: that ground keeps `value` percent of its height above its lowest point) and `bonk_nook` (the Rival Hob seated in Nook `value` is the first Rival Hob Bonked).
+- Field blow names say "The Creaks" for the round 10 collapse; the `fatigue_warning` text is "The Creaks next round: cracked blocks hold less".

@@ -126,11 +126,11 @@
     "crush": 200
   },
   "kettle": {
-    "blast": 50,
+    "blast": 75,
     "pierce": 100,
     "dig": 0,
     "fire": 0,
-    "crush": 50
+    "crush": 100
   },
   "cover_pct": 65
 }

@@ -68,10 +68,19 @@ class Audio(private val ctx: Context, private val settings: Settings) {
     /** Headphones were pulled out: silent until the player acts again. */
     @Volatile private var noisy = false
     private val focus = FocusState()
-    /** View slow motion: new sounds drop 3 semitones. */
-    @Volatile var slowMo = false
+    /** View slow motion: new sounds drop 3 semitones, active music and loops pitch down smoothly. */
+    @Volatile var slowMo: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            engine.setSlowMo(value)
+            if (!released) h.post { applyLoops() }
+        }
     @Volatile private var impactAt = -10_000L
-    @Volatile private var barkAt = -10_000L
+    /** Last time an audible bark played, for music (-3 dB) and world-loop (-4 dB) ducking. */
+    @Volatile private var barkDuckAt = -10_000L
+    /** Last time any bark (or subtitle) fired, for 1.5 s non-spam throttling. */
+    private var barkThrottleAt = -10_000L
     private val barkTurn = IntArray(2) { -1 }
     private var lastSub = HashMap<String, Int>()
     /** Called on the main thread when headphones are pulled out. */
@@ -101,10 +110,11 @@ class Audio(private val ctx: Context, private val settings: Settings) {
         h.post {
             manifest = AudioManifest.parse(read("audio/audio.json"))
             barks = BarkLines.parse(read("audio/barks.json"))
-            // Barks load with the crew in play (preloadBarks), not all 48 at start (review 2 N-L8).
+            // Barks load with the crew in play (preloadBarks), not all 48 at start (review 2 N-L8),
+            // except bark_marge_picked which Settings uses for the Voices slider preview (Android-M6).
             for (s in manifest.sounds.values) {
                 if (released) return@post
-                if (s.kind == "music" || s.loopTrack || s.id.startsWith("bark_")) continue
+                if (s.kind == "music" || s.loopTrack || (s.id.startsWith("bark_") && s.id != "bark_marge_picked")) continue
                 load(s)
             }
             applyLoops()
@@ -177,9 +187,10 @@ class Audio(private val ctx: Context, private val settings: Settings) {
     private val loopWants = LoopWants()
     private val loopTracks = HashMap<String, LoopTrack>()
     private val loopPcm = HashMap<String, Pcm>()
+    private val loopLoading = HashSet<String>()
     private var retryPosted = false
 
-    /** Starts, updates or stops a looping sound (wind bed, Squall, whistle, aim band). */
+    /** Starts, updates or stops a looping sound (wind bed, Squall, whistle, aim band, roll). */
     fun loop(id: String, on: Boolean, gain: Float = 1f, semis: Float = 0f) {
         if (released) return
         h.post {
@@ -193,30 +204,61 @@ class Audio(private val ctx: Context, private val settings: Settings) {
 
     private fun stopLoopTracks() { for (t in loopTracks.values) t.stop(); for (id in loopWants.all()) loopWants.started(id, false) }
 
-    /** Audio thread: plays every wanted loop that can play now; a loop that cannot start is tried again shortly. */
+    /** Audio thread: plays every wanted loop that can play now; decoding runs off castle-audio on mh (Android-M5). */
     private fun applyLoops() {
         if (released) return
         val can = gate.open && foreground && !gamePaused && !noisy
         if (!can) { stopLoopTracks(); return }
+        val now = SystemClock.uptimeMillis()
+        val barkDuck = if (now - barkDuckAt < 1200) 0.631f else 1f // -4 dB under barks
+        val slowShift = if (slowMo) -3f else 0f
+        var needRetry = false
         for (id in loopWants.all()) {
             val w = loopWants[id] ?: continue
             val s = manifest[id] ?: continue
+            val busDuck = if (s.bus == "world") barkDuck else 1f
+            val v = (s.volume * w.gain * slider(s.bus) * focus.effects * busDuck).coerceIn(0f, 1f)
+            if (v <= 0f) {
+                loopTracks[id]?.stop()
+                loopWants.started(id, false)
+                continue
+            }
             val t = loopTracks[id] ?: loopTrackFor(s)
-            val v = (s.volume * w.gain * slider(s.bus) * focus.effects).coerceIn(0f, 1f)
-            val ok = t?.play(v, 2f.pow(w.semis / 12f)) ?: false
-            if (!ok && t != null) { t.release(); loopTracks.remove(id) } // dead track: make a new one next time
+            if (t == null) {
+                loopWants.started(id, false)
+                if (id !in loopLoading) needRetry = true
+                continue
+            }
+            val ok = t.play(v, 2f.pow((w.semis + slowShift) / 12f))
+            if (!ok) { t.release(); loopTracks.remove(id); needRetry = true } // dead track: make a new one next time
             loopWants.started(id, ok)
         }
-        if (loopWants.pending().isNotEmpty() && !retryPosted) {
+        if (needRetry && !retryPosted) {
             retryPosted = true
             h.postDelayed({ retryPosted = false; applyLoops() }, 500)
         }
     }
 
     private fun loopTrackFor(s: SoundDef): LoopTrack? {
-        val pcm = loopPcm[s.id] ?: try {
-            ctx.assets.openFd("audio/" + path(s)).use { PcmDecoder.decode(it, s.frames(SAMPLE_RATE)) }
-        } catch (e: Exception) { null }?.also { loopPcm[s.id] = it } ?: return null
+        val pcm = synchronized(loopPcm) { loopPcm[s.id] }
+        if (pcm == null) {
+            if (loopLoading.add(s.id)) {
+                val assetPath = "audio/" + path(s)
+                val want = s.frames(SAMPLE_RATE)
+                mh.post {
+                    val decodedPcm = try { ctx.assets.openFd(assetPath).use { PcmDecoder.decode(it, want) } } catch (e: Exception) { null }
+                    h.post {
+                        loopLoading.remove(s.id)
+                        if (released) return@post
+                        if (decodedPcm != null) {
+                            synchronized(loopPcm) { loopPcm[s.id] = decodedPcm }
+                            applyLoops()
+                        }
+                    }
+                }
+            }
+            return null
+        }
         return try { LoopTrack(pcm).also { loopTracks[s.id] = it } } catch (e: Exception) { Log.w(TAG, "loop ${s.id}", e); null }
     }
 
@@ -224,23 +266,37 @@ class Audio(private val ctx: Context, private val settings: Settings) {
      * A Hob bark (07 section 9.4): one per side per turn step, 1.5 s apart, 40% of the time
      * except Bonks and wins. [say] gets the subtitle line, which shows even with Voices at 0.
      */
-    fun bark(hobDef: String, event: String, side: Int, turn: Int, pan: Float, say: (String) -> Unit) {
+    /**
+     * A Hob's bark and its subtitle. [mates] are the content ids on its crew (for `with_mate`
+     * lines); [rival] the Rival's short name in a fight against a named Rival (for `with_rival`).
+     * [crewLine] (the crew's win line) follows the Hob's own line.
+     */
+    fun bark(
+        hobDef: String, event: String, side: Int, turn: Int, pan: Float, say: (String) -> Unit,
+        mates: Set<String> = emptySet(), rival: String? = null, crewLine: String? = null,
+    ) {
         if (released || !gate.open) return
         h.post {
             val now = SystemClock.uptimeMillis()
             val always = event == "bonked" || event == "win"
-            if (!always) {
-                if (now - barkAt < 1500) return@post
-                if (side in 0..1 && barkTurn[side] == turn) return@post
-                if (rnd.nextFloat() > (barks.chance[event] ?: 0.4f)) return@post
-            }
             val id = "bark_${Cues.barkKey(hobDef)}_$event"
             val s = manifest[id] ?: return@post
-            // The music ducks only for a bark that can be heard (review 2 N-L7).
-            if (slider(s.bus) > 0f) barkAt = now
+            val audible = slider(s.bus) > 0f && !noisy && foreground
+            if (!always) {
+                if (audible && now - barkThrottleAt < 1500) return@post
+                if (side in 0..1 && barkTurn[side] == turn) return@post
+                if (rnd.nextFloat() > barks.chanceOf(id, event)) return@post
+            }
+            // Only an audible bark ducks music/world loops and updates the voice throttle (Audio.kt:240).
+            if (audible) {
+                barkThrottleAt = now
+                barkDuckAt = now
+                applyLoops()
+                h.postDelayed({ applyLoops() }, 1250)
+            }
             if (side in 0..1) barkTurn[side] = turn
             playNow(id, pan, 1f, 0f)
-            val lines = barks.lines[id].orEmpty()
+            val lines = barks.entries[id]?.pool(mates - hobDef, rival).orEmpty()
             if (lines.isNotEmpty()) {
                 // A random line with no repeat of the last one.
                 var i = rnd.nextInt(lines.size)
@@ -248,6 +304,7 @@ class Audio(private val ctx: Context, private val settings: Settings) {
                 lastSub[id] = i
                 say(lines[i])
             }
+            if (crewLine != null) h.postDelayed({ say(crewLine) }, if (lines.isEmpty()) 0L else 1800L)
         }
     }
 
@@ -261,7 +318,8 @@ class Audio(private val ctx: Context, private val settings: Settings) {
     private var musicIds: List<String> = emptyList()
     private var musicLevel = 1f
     private var loadedKey = ""
-    /** Decoded music sets, the current and the one before (map and battle), dropped on a memory trim. */
+    private var musicRate = SAMPLE_RATE
+    /** Decoded music cache capped to 1 active set to limit peak Java heap on 2 GB devices (Android-H3). */
     private val decoded = LinkedHashMap<String, List<Pcm>>()
 
     /** Map, menus and pre-battle. [quiet] after a loss. */
@@ -277,14 +335,16 @@ class Audio(private val ctx: Context, private val settings: Settings) {
         h.post { musicKey = ""; loadedKey = ""; engine.set(null, SAMPLE_RATE); playNow(if (win) "sting_win" else "sting_lose", 0f, 1f, 0f) }
     }
 
-    /** Fades Stir and Peril in or out on the next bar line, over one bar. */
+    /** Fades Stir and Peril in or out on the next bar line, over one bar. Peril always keeps Stir on. */
     fun setLayers(stir: Boolean, peril: Boolean) {
         h.post {
             if (loadedKey != "r1") return@post
-            val bar = ((manifest["mus_r1_base"]?.barS ?: 1f) * SAMPLE_RATE).toInt().coerceAtLeast(SAMPLE_RATE / 5)
+            val wantStir = stir || peril
+            val rate = musicRate.coerceAtLeast(8000)
+            val bar = ((manifest["mus_r1_base"]?.barS ?: 1f) * rate).toInt().coerceAtLeast(rate / 5)
             engine.withMix { m ->
                 val at = m.nextBar(bar)
-                if (m.target(1) != (if (stir) 1f else 0f)) m.fade(1, if (stir) 1f else 0f, at, bar.toLong())
+                if (m.target(1) != (if (wantStir) 1f else 0f)) m.fade(1, if (wantStir) 1f else 0f, at, bar.toLong())
                 if (m.target(2) != (if (peril) 1f else 0f)) m.fade(2, if (peril) 1f else 0f, at, bar.toLong())
             }
         }
@@ -298,7 +358,7 @@ class Audio(private val ctx: Context, private val settings: Settings) {
             val same = musicKey == key
             musicKey = key; musicIds = ids; musicLevel = level
             if (same && loadedKey == key) {
-                engine.withMix { m -> m.fade(0, level, m.played, (0.6f * SAMPLE_RATE).toLong()) }
+                engine.withMix { m -> m.fade(0, level, m.played, (0.6f * musicRate).toLong()) }
                 ensureFocus(true); applyMusic()
                 return@post
             }
@@ -313,16 +373,24 @@ class Audio(private val ctx: Context, private val settings: Settings) {
         val defs = ids.mapNotNull { manifest[it] }
         engine.set(null, SAMPLE_RATE); loadedKey = ""
         mh.post {
-            val pcms = synchronized(decoded) { decoded[key] } ?: defs.map { d ->
+            // Drop any inactive music set BEFORE decoding the new one so peak heap stays bounded (Android-H3).
+            val cached = synchronized(decoded) {
+                val hit = decoded[key]
+                if (hit == null) decoded.clear()
+                hit
+            }
+            val pcms = cached ?: defs.map { d ->
                 try { ctx.assets.openFd("audio/" + path(d)).use { PcmDecoder.decode(it, d.frames(SAMPLE_RATE)) } } catch (e: Exception) { null }
             }.takeIf { l -> l.isNotEmpty() && l.all { it != null } }?.map { it!! }
             if (pcms == null) { Log.w(TAG, "music $key could not be decoded"); return@post }
-            synchronized(decoded) { decoded[key] = pcms; while (decoded.size > 2) decoded.remove(decoded.keys.first()) }
+            synchronized(decoded) { decoded.clear(); decoded[key] = pcms }
             h.post {
                 if (released || musicKey != key) return@post
-                val mix = LayerMix(pcms.map { LayerMix.Layer(it.data, it.channels) })
-                mix.fade(0, level, 0, (0.4f * SAMPLE_RATE).toLong())
-                engine.set(mix, pcms[0].rate)
+                val rate = pcms[0].rate.coerceAtLeast(8000)
+                musicRate = rate
+                val mix = LayerMix(pcms.map { LayerMix.Layer(it.data, it.channels, it.offset, it.sampleCount) })
+                mix.fade(0, level, 0, (0.4f * rate).toLong())
+                engine.set(mix, rate)
                 loadedKey = key
                 ensureFocus(true)
                 applyMusic()
@@ -330,15 +398,38 @@ class Audio(private val ctx: Context, private val settings: Settings) {
         }
     }
 
-    /** Drops decoded music that is not playing (a memory trim). */
-    fun trim() { h.post { synchronized(decoded) { decoded.keys.retainAll(setOf(loadedKey)) }; loopPcm.clear() } }
-
-    private fun applyMusic() {
-        engine.play(gate.open && foreground && !gamePaused && !noisy && focus.music > 0f && loadedKey.isNotEmpty())
+    /** Called when Music, Sound, Voices or Mute all changes in Settings (Android-M6). */
+    fun onSettingsChanged() {
+        if (released) return
+        h.post {
+            noisy = false
+            ensureFocus(true)
+            applyMusic()
+            applyLoops()
+        }
     }
 
-    /** Music thread: the music bus gain now (slider, focus, ducking). */
-    private fun musicGain(): Float = slider("music") * focus.music * duck(SystemClock.uptimeMillis())
+    /** Lifts headphone-unplug silence on an explicit player action outside Battle (Android-L10). */
+    fun onPlayerAction() {
+        if (released || !noisy) return
+        h.post {
+            noisy = false
+            ensureFocus(true)
+            applyMusic()
+            applyLoops()
+        }
+    }
+
+    /** Drops decoded music that is not playing (a memory trim). */
+    fun trim() { h.post { synchronized(decoded) { decoded.keys.retainAll(setOf(loadedKey)) }; synchronized(loopPcm) { loopPcm.clear() } } }
+
+    private fun applyMusic() {
+        val audible = slider("music") > 0f
+        engine.play(gate.open && foreground && !gamePaused && !noisy && focus.music > 0f && loadedKey.isNotEmpty() && audible)
+    }
+
+    /** Music thread: the music bus gain now (slider, focus, ducking, gentle slow-mo dip). */
+    private fun musicGain(): Float = slider("music") * focus.music * duck(SystemClock.uptimeMillis()) * (if (slowMo) 0.8f else 1f)
 
     /** Music gain under impacts (-6 dB, 30 ms attack, 400 ms release) and barks (-3 dB). */
     private fun duck(now: Long): Float {
@@ -349,7 +440,7 @@ class Audio(private val ctx: Context, private val settings: Settings) {
             dt < 430 -> 0.5f + 0.5f * (dt - 30) / 400f
             else -> 1f
         }
-        val bark = if (now - barkAt < 1200) 0.708f else 1f
+        val bark = if (now - barkDuckAt < 1200) 0.708f else 1f
         return min(impact, bark)
     }
 

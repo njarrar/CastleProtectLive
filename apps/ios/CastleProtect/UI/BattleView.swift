@@ -25,6 +25,7 @@ private struct ViewportKey: Equatable {
 struct BattleView: View {
     @EnvironmentObject private var model: AppModel
     @ObservedObject var session: BattleSession
+    @State private var inspectedShot: ShotChip?
 
     init(session: BattleSession) {
         self.session = session
@@ -37,9 +38,9 @@ struct BattleView: View {
                 BattleCanvas(session: session)
                     .accessibilityIdentifier("battlefield")
                 if session.layout.mode == .tall {
-                    TallHud(session: session)
+                    TallHud(session: session, inspectedShot: $inspectedShot)
                 } else {
-                    WideHud(session: session, insets: insets)
+                    WideHud(session: session, insets: insets, inspectedShot: $inspectedShot)
                 }
                 DragBandLayer(model: session.dragModel, side: session.hud.activeSide, colours: session.settings.colourSet)
                 if let nudge = session.aimNudge {
@@ -55,14 +56,26 @@ struct BattleView: View {
                         .id(banner)
                         .padding(.horizontal, 16)
                         .frame(maxWidth: .infinity)
-                        .padding(.top, insets.top + (session.layout.mode == .tall ? 120 : 56))
+                        .padding(.top, insets.top + (session.layout.mode == .tall ? 124 : 58))
                         .transition(.opacity)
                 }
                 if let line = session.subtitle {
                     SubtitleView(text: line.text, side: line.side, colours: session.settings.colourSet)
                         .frame(maxWidth: .infinity)
-                        .padding(.top, insets.top + (session.layout.mode == .tall ? 170 : 104))
+                        .padding(.top, insets.top + (session.layout.mode == .tall ? 176 : 108))
                         .transition(.opacity)
+                }
+                if let shot = inspectedShot, !session.showPauseCard {
+                    ZStack {
+                        Theme.ink.opacity(0.45)
+                            .ignoresSafeArea()
+                            .onTapGesture { inspectedShot = nil }
+                        ShellInspectCard(chip: shot, catalog: session.game.catalog, selectedHob: session.selectedHobView?.def) {
+                            inspectedShot = nil
+                        }
+                        .padding(20)
+                    }
+                    .transition(.opacity)
                 }
                 if let handoff = session.hud.handoff, session.setup.seats == .sideBySide, !session.showPauseCard {
                     HandOffCard(session: session, handoff: handoff)
@@ -78,12 +91,38 @@ struct BattleView: View {
             .onChange(of: ViewportKey(size: geo.size, insets: insets)) { key in
                 updateViewport(key.size, key.insets)
             }
+            .onChange(of: session.hud.inFlight) { flying in
+                if flying { inspectedShot = nil }
+            }
         }
+        .background { keyboardShortcuts }
         .ignoresSafeArea()
         // A pull-back drag that ends near an edge must not be taken by the home gesture (M10).
         .defersSystemGestures(on: .all)
         .statusBarHidden(session.layout.mode == .wide)
         .persistentSystemOverlays(.hidden)
+    }
+
+    @ViewBuilder
+    private var keyboardShortcuts: some View {
+        Group {
+            Button("") { _ = session.nudge(angle: 5, power: 0) }.keyboardShortcut(.upArrow, modifiers: [])
+            Button("") { _ = session.nudge(angle: -5, power: 0) }.keyboardShortcut(.downArrow, modifiers: [])
+            Button("") { _ = session.nudge(angle: 0, power: 1) }.keyboardShortcut(.rightArrow, modifiers: [])
+            Button("") { _ = session.nudge(angle: 0, power: -1) }.keyboardShortcut(.leftArrow, modifiers: [])
+            Button("") { session.fire() }.keyboardShortcut(.return, modifiers: [])
+            Button("") { session.fire() }.keyboardShortcut(.space, modifiers: [])
+            Button("") { session.recall() }.keyboardShortcut("r", modifiers: [])
+            Button("") { _ = session.walk(-1) }.keyboardShortcut("[", modifiers: [])
+            Button("") { _ = session.walk(1) }.keyboardShortcut("]", modifiers: [])
+            Button("") {
+                if session.paused { session.resume() } else { session.pause() }
+            }.keyboardShortcut(.escape, modifiers: [])
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0.001)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func updateViewport(_ size: CGSize, _ insets: EdgeInsets) {
@@ -146,10 +185,11 @@ struct DragBandView: View {
 struct WideHud: View {
     @ObservedObject var session: BattleSession
     let insets: EdgeInsets
+    @Binding var inspectedShot: ShotChip?
 
     var body: some View {
         let hud = session.hud
-        let pad = session.isPad
+        let pad = session.layout.usePadScale
         let colours = session.settings.colourSet
         let canAct = hud.humanTurn && !session.paused
         let dragging = session.dragging
@@ -157,20 +197,27 @@ struct WideHud: View {
         let leftHand = session.settings.leftHand
         ZStack(alignment: .topLeading) {
         VStack(spacing: 0) {
-            // Top strip: display only, except Pause.
-            HStack(spacing: 8) {
+            // Tier-3 translucent top telemetry strip: Pause & Pass kept safely away from FIRE.
+            HStack(spacing: 6) {
                 PauseButton(session: session)
-                KettleGauge(percent: hud.kettlePercent[0], side: 0)
+                if showClusters {
+                    PassButton(session: session)
+                        .opacity(dragging ? 0.25 : 1)
+                        .allowsHitTesting(!dragging)
+                }
+                KettleGauge(percent: hud.kettlePercent[0], side: 0, colours: colours,
+                            label: hud.isDuel ? hud.names[0] : nil)
                 PipRow(crew: hud.crews[0], side: 0, colours: colours)
                 Spacer(minLength: 4)
                 RoundLabel(hud: hud)
                 WindView(wind: hud.wind, forecast: hud.forecast)
                     .padding(.horizontal, 8)
-                    .frame(minHeight: 32)
-                    .panel(corner: 12)
+                    .frame(minHeight: 34)
+                    .hudTier3Pill(corner: 12)
                 Spacer(minLength: 4)
                 PipRow(crew: hud.crews[1], side: 1, colours: colours)
-                KettleGauge(percent: hud.kettlePercent[1], side: 1)
+                KettleGauge(percent: hud.kettlePercent[1], side: 1, colours: colours,
+                            label: hud.isDuel ? hud.names[1] : nil)
             }
             .padding(.top, max(insets.top, 6))
             .padding(.leading, max(insets.leading, 10))
@@ -188,31 +235,51 @@ struct WideHud: View {
             .opacity(showClusters ? (dragging ? 0.25 : 1) : 0)
             .allowsHitTesting(showClusters && !dragging)
             .disabled(!showClusters)
+            .accessibilityHidden(!showClusters)
 
             Spacer(minLength: 0)
 
-            HStack(alignment: .bottom, spacing: 10) {
+            // Responsive zero-collision bottom flex bar (Plate 1): Walk | stitched Shot Tray | Aim + brass FIRE.
+            HStack(alignment: .bottom, spacing: 8) {
                 if leftHand {
                     aimCluster(hud, pad: pad, show: showClusters)
+                        .fixedSize()
                 } else {
                     WalkPad(session: session, key: pad ? 56 : 48)
+                        .fixedSize()
                         .opacity(showClusters ? (dragging ? 0.25 : 1) : 0)
                         .allowsHitTesting(showClusters && !dragging)
                         .disabled(!showClusters)
+                        .accessibilityHidden(!showClusters)
                 }
-                Spacer(minLength: 0)
-                ShotTray(session: session, chip: pad ? 64 : 52)
-                    .opacity(showClusters ? (dragging ? 0.25 : 1) : 0)
-                    .allowsHitTesting(showClusters && !dragging)
-                    .disabled(!showClusters)
-                Spacer(minLength: 0)
-                if leftHand {
-                    WalkPad(session: session, key: pad ? 56 : 48)
+                VStack(spacing: 4) {
+                    if showClusters && !dragging {
+                        if let why = hud.fireText {
+                            FireReason(text: why)
+                                .allowsHitTesting(false)
+                        }
+                        ActionOptionsBar(session: session)
+                    }
+                    ShotTray(session: session, chip: pad ? 64 : 52, inspectedShot: $inspectedShot)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 3)
+                        .hudTier2Panel(corner: 14)
                         .opacity(showClusters ? (dragging ? 0.25 : 1) : 0)
                         .allowsHitTesting(showClusters && !dragging)
                         .disabled(!showClusters)
+                        .accessibilityHidden(!showClusters)
+                }
+                .frame(maxWidth: .infinity)
+                if leftHand {
+                    WalkPad(session: session, key: pad ? 56 : 48)
+                        .fixedSize()
+                        .opacity(showClusters ? (dragging ? 0.25 : 1) : 0)
+                        .allowsHitTesting(showClusters && !dragging)
+                        .disabled(!showClusters)
+                        .accessibilityHidden(!showClusters)
                 } else {
                     aimCluster(hud, pad: pad, show: showClusters)
+                        .fixedSize()
                 }
             }
             .padding(.leading, max(insets.leading, 10))
@@ -220,6 +287,7 @@ struct WideHud: View {
             .padding(.bottom, max(insets.bottom, 8))
         }
             FineTuneDock(session: session, key: pad ? 56 : 48, show: showClusters && (session.fineTuneOpen || pad))
+            RivalPeekButton(session: session, insets: insets)
         }
     }
 
@@ -242,20 +310,163 @@ struct WideHud: View {
             SpeedButton(session: session)
         } else {
             HStack(alignment: .bottom, spacing: 8) {
-                VStack(alignment: .trailing, spacing: 4) {
-                    if let why = hud.fireText, show {
-                        FireReason(text: why)
-                    }
-                    ReadoutView(hud: hud) { session.toggleFineTune() }
+                ReadoutView(hud: hud, onAdjust: { _ = session.nudge(angle: $0, power: $1) }) {
+                    session.toggleFineTune()
                 }
-                VStack(spacing: 6) {
-                    PassButton(session: session)
-                    FireButton(hud: hud, size: pad ? 96 : 76, armedDoodad: session.armedDoodad) { session.fire() }
-                }
+                FireButton(hud: hud, size: pad ? 96 : 76, armedDoodad: session.armedDoodad) { session.fire() }
             }
             .opacity(show ? 1 : 0.0)
             .disabled(!show)
             .allowsHitTesting(show && !session.dragging)
+            .accessibilityHidden(!show)
+        }
+    }
+}
+
+/// Native SwiftUI "View Rival fort" / "Back to my fort" button (iOS-C1).
+/// Safe-area inset and positioned below Fine Tune when open on the same edge.
+struct RivalPeekButton: View {
+    @ObservedObject var session: BattleSession
+    let insets: EdgeInsets
+
+    var body: some View {
+        if let edge = session.rivalMarkerEdge, !session.dragging, !session.panning, !session.paused {
+            let hud = session.hud
+            let rivalSide = 1 - hud.activeSide
+            let colours = session.settings.colourSet
+            let pad = session.layout.usePadScale
+            let fineTuneVisible = hud.humanTurn && !hud.inFlight && (session.fineTuneOpen || pad)
+            let fineTuneRect = session.layout.fineTune
+            let fineTuneOnRight = hud.hudSide == 0
+            let sameEdgeAsPad = fineTuneVisible && fineTuneRect.width > 0 && ((edge > 0) == fineTuneOnRight)
+            let topY = sameEdgeAsPad
+                ? fineTuneRect.maxY + 8
+                : max(insets.top, 6) + (pad ? 52 : 44) + 10
+            let text = Camera.markerText(peek: session.rivalPeek)
+            HStack(spacing: 0) {
+                if edge > 0 { Spacer(minLength: 0) }
+                Button {
+                    session.toggleRivalPeek()
+                } label: {
+                    HStack(spacing: 6) {
+                        if edge < 0 {
+                            Image(systemName: "chevron.left").font(.system(size: 13, weight: .heavy))
+                        }
+                        Text(text)
+                            .font(Theme.label(13))
+                            .lineLimit(1)
+                        if edge > 0 {
+                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .heavy))
+                        }
+                    }
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 12)
+                    .frame(minWidth: 48, minHeight: 48)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Theme.parchmentCard.opacity(0.95))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Theme.side(rivalSide, colours), lineWidth: 2.5)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(text)
+                .accessibilityIdentifier("rivalPeek")
+                if edge < 0 { Spacer(minLength: 0) }
+            }
+            .padding(.leading, max(insets.leading, 10))
+            .padding(.trailing, max(insets.trailing, 10))
+            .padding(.top, topY)
+        }
+    }
+}
+
+/// Contextual shot dial / self-mend target / Doodad room & block-target picker (iOS-H4).
+struct ActionOptionsBar: View {
+    @ObservedObject var session: BattleSession
+
+    var body: some View {
+        let dials = session.availableDials
+        if !dials.isEmpty {
+            HStack(spacing: 6) {
+                ForEach(Array(dials.enumerated()), id: \.offset) { _, item in
+                    let active = session.selectedDial == item.id
+                        || (session.selectedDial == nil && item.id == dials.first?.id)
+                    Button {
+                        session.selectDial(item.id)
+                    } label: {
+                        Text(item.label)
+                            .font(Theme.label(12))
+                            .foregroundStyle(Theme.ink)
+                            .padding(.horizontal, 10)
+                            .frame(minHeight: 34)
+                            .panel(corner: 10, fill: active ? Theme.gold : Theme.paper)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!item.enabled)
+                    .opacity(item.enabled ? 1 : 0.45)
+                }
+            }
+        } else if session.canPickMendTarget {
+            let label: String = {
+                if session.pickingMendTarget { return tx("hud.mend.prompt") }
+                if let t = session.selectedBlockTarget, t.count >= 2 {
+                    return tx("hud.mend.target", ["col": t[0] + 1, "row": t[1] + 1]) + " \u{00D7}"
+                }
+                return tx("hud.mend.prompt")
+            }()
+            Button {
+                session.toggleMendTargetMode()
+            } label: {
+                Text(label)
+                    .font(Theme.label(12))
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 34)
+                    .panel(corner: 10, fill: (session.pickingMendTarget || session.selectedBlockTarget != nil) ? Theme.gold : Theme.paper)
+            }
+            .buttonStyle(.plain)
+        } else if session.armedDoodad == "pot_lid" {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(session.potLidRooms, id: \.id) { room in
+                        let active = session.armedDoodadRoom == room.id
+                        Button {
+                            session.selectDoodadRoom(room.id)
+                        } label: {
+                            Text(room.label)
+                                .font(Theme.label(12))
+                                .foregroundStyle(Theme.ink)
+                                .padding(.horizontal, 10)
+                                .frame(minHeight: 34)
+                                .panel(corner: 10, fill: active ? Theme.gold : Theme.paper)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+        } else if session.armedDoodad == "mend_bucket" {
+            let count = session.armedDoodadTargets.count
+            HStack(spacing: 6) {
+                Text(count == 0 ? tx("hud.mend.prompt_many", ["n": 3]) : tx("hud.mend.picked", ["n": count, "total": 3]))
+                    .font(Theme.label(12))
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 34)
+                    .panel(corner: 10, fill: Theme.cream)
+                if count > 0 {
+                    Button(tx("common.clear")) { session.clearDoodadTargets() }
+                        .font(Theme.label(12))
+                        .foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 8)
+                        .frame(minHeight: 34)
+                        .panel(corner: 10, fill: Theme.paper)
+                        .buttonStyle(.plain)
+                }
+            }
         }
     }
 }
@@ -264,78 +475,87 @@ struct WideHud: View {
 
 struct TallHud: View {
     @ObservedObject var session: BattleSession
+    @Binding var inspectedShot: ShotChip?
 
     var body: some View {
         let hud = session.hud
         let layout = session.layout
         let colours = session.settings.colourSet
-        let pad = session.isPad
+        let pad = layout.usePadScale
         let canAct = hud.humanTurn && !session.paused
         let dragging = session.dragging
         let showClusters = canAct && !hud.inFlight
         let fade = showClusters ? (dragging ? 0.25 : 1.0) : 0.0
         let bottomLens = layout.lenses.last?.viewport ?? .zero
         ZStack(alignment: .topLeading) {
-            // Top strip, two rows, display only.
-            VStack(spacing: 4) {
-                HStack {
-                    KettleGauge(percent: hud.kettlePercent[0], side: 0, compact: true)
-                    Spacer()
-                    RoundLabel(hud: hud)
-                    Spacer()
-                    KettleGauge(percent: hud.kettlePercent[1], side: 1, compact: true)
+            // Tier-3 frosted top telemetry strip: Pause & Pass sit safely away from FIRE!
+            VStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    PauseButton(session: session, compact: true)
+                    KettleGauge(percent: hud.kettlePercent[0], side: 0, compact: true, colours: colours,
+                                label: hud.isDuel ? hud.names[0] : nil)
+                    Spacer(minLength: 2)
+                    RoundLabel(hud: hud, compact: true)
+                    Spacer(minLength: 2)
+                    KettleGauge(percent: hud.kettlePercent[1], side: 1, compact: true, colours: colours,
+                                label: hud.isDuel ? hud.names[1] : nil)
                 }
-                HStack {
-                    PipRow(crew: hud.crews[0], side: 0, colours: colours, size: 18)
-                    Spacer()
+                HStack(spacing: 6) {
+                    PipRow(crew: hud.crews[0], side: 0, colours: colours, size: 17)
+                    Spacer(minLength: 2)
                     WindView(wind: hud.wind, forecast: hud.forecast)
-                    Spacer()
-                    PipRow(crew: hud.crews[1], side: 1, colours: colours, size: 18)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .hudTier3Pill(corner: 10)
+                    if showClusters {
+                        PassButton(session: session, size: 52, compact: true)
+                            .opacity(dragging ? 0.25 : 1)
+                            .allowsHitTesting(!dragging)
+                    }
+                    Spacer(minLength: 2)
+                    PipRow(crew: hud.crews[1], side: 1, colours: colours, size: 17)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Theme.cream)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                Rectangle()
+                    .fill(Theme.paper.opacity(0.90))
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(Theme.ink.opacity(0.22)).frame(height: 1)
+                    }
+            )
             .place(layout.topStrip)
 
             if !hud.inFlight {
-                // Floats along the Bottom lens foot: Pause and Walk on the left, readout or Fine Tune on the right.
-                HStack(alignment: .bottom) {
-                    PauseButton(session: session)
-                    WalkPad(session: session, key: 44)
-                        .opacity(fade)
-                        .allowsHitTesting(showClusters && !dragging)
-                        .disabled(!showClusters)
-                    PassButton(session: session)
-                        .opacity(fade == 0 ? 0.4 : fade)
-                        .allowsHitTesting(showClusters && !dragging)
-                        .disabled(!showClusters)
-                    Spacer()
-                    ReadoutView(hud: hud) { session.toggleFineTune() }
-                    .opacity(showClusters ? 1 : 0)
-                    .allowsHitTesting(showClusters && !dragging)
-                    .disabled(!showClusters)
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 6)
-                .frame(width: bottomLens.width, height: bottomLens.height, alignment: .bottom)
-                .position(x: bottomLens.midX, y: bottomLens.midY)
-
-                FineTuneDock(session: session, key: pad ? 56 : 44, show: showClusters && (session.fineTuneOpen || pad))
-
-                if let why = hud.fireText, showClusters {
-                    // By Fire in portrait: the core's reason Fire is grey (QA playtest 1, M1).
-                    FireReason(text: why)
-                        .frame(maxWidth: max(0, layout.size.width - 24), alignment: session.settings.leftHand ? .leading : .trailing)
-                        .position(x: layout.size.width / 2, y: max(0, layout.tray.minY - 14))
+                // Player's lower fort stays 100% UNOBSTRUCTED: Walk + Steam + Readout sit inside `walkRail`
+                // inside the stitched bottom dock instead of floating on top of the fort (Plate 2)!
+                if showClusters && !dragging {
+                    VStack(spacing: 4) {
+                        if let why = hud.fireText {
+                            FireReason(text: why)
+                                .allowsHitTesting(false)
+                        }
+                        ActionOptionsBar(session: session)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.top, 6)
+                    .frame(width: bottomLens.width, height: bottomLens.height, alignment: .top)
+                    .position(x: bottomLens.midX, y: bottomLens.midY)
                 }
 
-                ShotTray(session: session, chip: pad ? 60 : 48)
-                    .frame(maxWidth: .infinity)
-                    .background(Theme.cream)
+                FineTuneDock(session: session, key: pad ? 56 : 48, show: showClusters && (session.fineTuneOpen || pad))
+
+                WalkRail(session: session)
+                    .place(layout.walkRail)
+
+                ShotTray(session: session, chip: pad ? 58 : 50, inspectedShot: $inspectedShot)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Theme.parchmentCard)
                     .opacity(showClusters ? (dragging ? 0.25 : 1) : 0.4)
                     .allowsHitTesting(showClusters && !dragging)
                     .disabled(!showClusters)
+                    .accessibilityHidden(!showClusters)
                     .place(layout.tray)
 
                 HStack(spacing: 6) {
@@ -344,6 +564,7 @@ struct TallHud: View {
                             .opacity(showClusters ? 1 : 0.4)
                             .allowsHitTesting(showClusters && !dragging)
                             .disabled(!showClusters)
+                            .accessibilityHidden(!showClusters)
                         Spacer(minLength: 0)
                     }
                     ForEach(hud.myCrew) { hob in
@@ -355,26 +576,35 @@ struct TallHud: View {
                     .opacity(fade == 0 ? 0.4 : fade)
                     .allowsHitTesting(showClusters && !dragging)
                     .disabled(!showClusters)
+                    .accessibilityHidden(!showClusters)
                     if !session.settings.leftHand {
                         Spacer(minLength: 0)
                         FireButton(hud: hud, size: pad ? 96 : 76, armedDoodad: session.armedDoodad) { session.fire() }
                             .opacity(showClusters ? 1 : 0.4)
                             .allowsHitTesting(showClusters && !dragging)
                             .disabled(!showClusters)
+                            .accessibilityHidden(!showClusters)
                     }
                 }
                 .padding(.horizontal, 10)
-                .background(Theme.cream)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    Rectangle()
+                        .fill(Theme.cream)
+                        .overlay(alignment: .top) {
+                            Rectangle().fill(Theme.sepiaBorder.opacity(0.45)).frame(height: 1)
+                        }
+                )
                 .place(layout.crewRow)
-            } else if let joined = layout.lenses.first?.viewport {
+            } else if let host = (layout.lenses.first(where: { $0.focus == .follow }) ?? layout.lenses.last)?.viewport {
                 HStack {
                     PauseButton(session: session)
                     Spacer()
                     SpeedButton(session: session)
                 }
                 .padding(10)
-                .frame(width: joined.width, height: joined.height, alignment: .bottom)
-                .position(x: joined.midX, y: joined.midY)
+                .frame(width: host.width, height: host.height, alignment: .bottom)
+                .position(x: host.midX, y: host.midY)
             }
         }
     }
@@ -405,39 +635,77 @@ struct FireReason: View {
     var body: some View {
         Text(text)
             .font(Theme.label(13))
-            .foregroundStyle(Theme.ink)
+            .foregroundStyle(Theme.badInk)
             .lineLimit(2)
             .minimumScaleFactor(0.8)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .panel(corner: 10, fill: Theme.cream)
-            .accessibilityLabel("Fire is locked: \(text)")
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Theme.badBg)
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.badBorder, lineWidth: 1.5))
+            )
+            .accessibilityLabel(tx("hud.fire_locked", ["why": text]))
     }
 }
 
 struct ShotTray: View {
     @ObservedObject var session: BattleSession
     var chip: CGFloat = 52
+    @Binding var inspectedShot: ShotChip?
+
+    private var currentChip: ShotChip? {
+        if let d = session.armedDoodad {
+            return ShotChip(id: d, name: DoodadNames.name(d), kind: "doodad", art: d, uses: 1)
+        }
+        return session.hud.shots.first { $0.id == session.hud.selectedShot } ?? session.hud.shots.first
+    }
 
     var body: some View {
         let hud = session.hud
         let armed = session.armedDoodad
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
-                ForEach(hud.shots) { shot in
-                    ShotChipView(chip: shot, selected: armed == nil && shot.id == hud.selectedShot, size: chip) {
-                        session.pickShot(shot.id)
+        HStack(spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(hud.shots) { shot in
+                        ShotChipView(
+                            chip: shot,
+                            selected: armed == nil && shot.id == hud.selectedShot,
+                            size: chip,
+                            onInspect: { inspectedShot = shot }
+                        ) {
+                            session.pickShot(shot.id)
+                        }
+                    }
+                    ForEach(Array(hud.doodads.enumerated()), id: \.offset) { _, id in
+                        let doodadChip = ShotChip(id: id, name: DoodadNames.name(id), kind: "doodad", art: id, uses: 1)
+                        ShotChipView(
+                            chip: doodadChip,
+                            selected: armed == id,
+                            size: chip,
+                            onInspect: { inspectedShot = doodadChip }
+                        ) {
+                            session.armDoodad(id)
+                        }
                     }
                 }
-                ForEach(Array(hud.doodads.enumerated()), id: \.offset) { _, id in
-                    ShotChipView(chip: ShotChip(id: id, name: DoodadNames.name(id), kind: "doodad", art: id, uses: 1),
-                                 selected: armed == id, size: chip) {
-                        session.armDoodad(id)
-                    }
-                }
+                .padding(.vertical, 3)
+                .padding(.horizontal, 4)
             }
-            .padding(.vertical, 2)
-            .padding(.horizontal, 4)
+            if let current = currentChip {
+                Button {
+                    inspectedShot = current
+                } label: {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Theme.inkSoft)
+                        .frame(width: 48, height: 48)
+                        .hudTier3Pill(corner: 10, fill: Theme.paper)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tx("shell_card.a11y_open", ["shot": current.name]))
+                .accessibilityIdentifier("inspectShot")
+            }
         }
         .disabled(!hud.humanTurn)
     }
@@ -445,17 +713,20 @@ struct ShotTray: View {
 
 struct PauseButton: View {
     @ObservedObject var session: BattleSession
+    var compact: Bool = false
 
     var body: some View {
         Button {
             session.pause()
         } label: {
-            SpriteIcon(name: "ui_pause", fallback: "pause.fill", size: 28)
-                .frame(width: 44, height: 44)
-                .panel(corner: 12)
+            SpriteIcon(name: "ui_pause", fallback: "pause.fill", size: compact ? 20 : 24)
+                .frame(width: compact ? 36 : 44, height: compact ? 32 : 40)
+                .hudTier3Pill(corner: 10)
+                .frame(minWidth: 48, minHeight: compact ? 34 : 48)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Pause")
+        .accessibilityLabel(tx("hud.pause"))
         .accessibilityIdentifier("pause")
     }
 }
@@ -471,11 +742,11 @@ struct SpeedButton: View {
             Text(session.hud.speed >= 2 ? "1x" : "2x")
                 .font(Theme.title(20))
                 .foregroundStyle(Theme.ink)
-                .frame(width: 64, height: 48)
-                .panel(corner: 14, fill: Theme.gold)
+                .frame(width: 68, height: 48)
+                .hudTier1(corner: 14)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(session.hud.speed >= 2 ? "Normal speed" : "Double speed")
+        .accessibilityLabel(tx(session.hud.speed >= 2 ? "hud.speed_normal" : "hud.speed_double"))
     }
 }
 
@@ -492,55 +763,61 @@ struct PauseCard: View {
 
     private var capLine: String {
         let hud = session.hud
-        if hud.isVolley { return hud.volleyText }
-        return "Round cap \(hud.roundCap), then the Squall"
+        if hud.isYard { return tx("pause.rule_yard") }
+        if hud.isVolley { return tx("pause.rule_volley", ["n": hud.volleyActions]) }
+        return session.snapshot.squall
+            ? tx("pause.rule_rounds_squall", ["n": hud.roundCap])
+            : tx("pause.rule_rounds_count", ["n": hud.roundCap])
     }
 
     var body: some View {
         ZStack {
             Theme.ink.opacity(0.45).ignoresSafeArea()
             VStack(spacing: 14) {
-                Text("Paused").font(Theme.title(30)).foregroundStyle(Theme.ink)
+                Text(tx("pause.title")).font(Theme.title(30)).foregroundStyle(Theme.ink)
                 Text(session.title).font(Theme.label(16)).foregroundStyle(Theme.inkSoft)
                 Text(capLine)
                     .font(Theme.label(14)).foregroundStyle(Theme.inkSoft)
                 if session.hud.isYard {
                     // Test Yard: set the wind for this shot and every later front.
                     HStack(spacing: 10) {
-                        Text("Wind").font(Theme.label(15)).foregroundStyle(Theme.ink)
+                        Text(tx("hud.wind.label")).font(Theme.label(15)).foregroundStyle(Theme.ink)
                         Button { session.setWind(session.hud.wind - 1) } label: {
                             Image(systemName: "minus").frame(width: 44, height: 44)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Wind left")
+                        .accessibilityLabel(tx("hud.wind.left", ["n": abs(session.hud.wind - 1)]))
                         Text("\(session.hud.wind)").font(Theme.number(18)).frame(minWidth: 32)
                         Button { session.setWind(session.hud.wind + 1) } label: {
                             Image(systemName: "plus").frame(width: 44, height: 44)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Wind right")
+                        .accessibilityLabel(tx("hud.wind.right", ["n": abs(session.hud.wind + 1)]))
                     }
                     .foregroundStyle(Theme.ink)
                 }
-                Button("Resume") { session.resume() }
+                Button(tx("pause.carry_on")) { session.resume() }
                     .buttonStyle(GoldButtonStyle())
                     .accessibilityIdentifier("resume")
                 HStack(spacing: 10) {
-                    Button("Retry") { model.retry() }.buttonStyle(PaperButtonStyle())
-                    Button("Settings") { model.showSettings = true }.buttonStyle(PaperButtonStyle())
-                    Button("Map") { model.leaveToMap() }.buttonStyle(PaperButtonStyle())
+                    Button(tx("pause.again")) { model.retry() }.buttonStyle(PaperButtonStyle())
+                    Button(tx("pause.settings")) { model.showSettings = true }.buttonStyle(PaperButtonStyle())
+                    Button(tx("pause.save_and_leave")) { model.leaveToMap() }.buttonStyle(PaperButtonStyle())
                 }
-                Button("Give up") { confirmGiveUp = true }
+                Button(tx("pause.give_up")) { confirmGiveUp = true }
                     .buttonStyle(PaperButtonStyle(height: 44))
                     .accessibilityIdentifier("giveUp")
-                    .confirmationDialog("Give up this fight?", isPresented: $confirmGiveUp, titleVisibility: .visible) {
-                        Button(session.hud.isDuel ? "\(session.hud.activeName) gives up" : "Give up", role: .destructive) {
+                    .confirmationDialog(session.hud.isDuel
+                                            ? tx("pause.give_up_confirm.title_duel", ["name": session.hud.activeName])
+                                            : tx("pause.give_up_confirm.title"),
+                                        isPresented: $confirmGiveUp, titleVisibility: .visible) {
+                        Button(tx("pause.give_up_confirm.yes"), role: .destructive) {
                             model.giveUp()
                         }
                         .accessibilityIdentifier("confirmGiveUp")
-                        Button("Keep fighting", role: .cancel) {}
+                        Button(tx("pause.give_up_confirm.no"), role: .cancel) {}
                     } message: {
-                        Text(session.setup.mode == .campaign ? "It counts as a loss. You still get the Buttons for trying." : "The other side wins.")
+                        Text(session.hud.isDuel ? tx("pause.give_up_confirm.body_duel") : tx("pause.give_up_confirm.body"))
                     }
             }
             .padding(24)
@@ -569,7 +846,7 @@ struct HandOffCard: View {
     var body: some View {
         let hud = session.hud
         let side = handoff.toSide
-        let name = side < hud.names.count ? hud.names[side] : "Player \(side + 1)"
+        let name = side < hud.names.count ? hud.names[side] : tx("setup.player_label", ["n": side + 1])
         let help = side < session.setup.help.count ? session.setup.help[side] : .none
         let colours = session.settings.colourSet
         GeometryReader { geo in
@@ -593,30 +870,31 @@ struct HandOffCard: View {
                     .frame(width: m.crest, height: m.crest)
                     .overlay(Group { if side == 0 { Circle().stroke(Theme.ink, lineWidth: 3) } else { Diamond().stroke(Theme.ink, lineWidth: 3) } })
                     if m.compact {
-                        Text("Pass the device to").font(Theme.label(16)).foregroundStyle(Theme.ink)
+                        Text(tx("handoff.pass_to")).font(Theme.label(16)).foregroundStyle(Theme.ink)
                     }
                 }
                 if !m.compact {
-                    Text("Pass the device to").font(Theme.label(18)).foregroundStyle(Theme.ink)
+                    Text(tx("handoff.pass_to")).font(Theme.label(18)).foregroundStyle(Theme.ink)
                 }
                 Text(name.uppercased() + (side < hud.helpMarks.count && !hud.helpMarks[side].isEmpty ? " \(hud.helpMarks[side])" : ""))
-                    .font(Theme.title(m.title)).foregroundStyle(Theme.side(side, colours))
+                    .font(Theme.title(m.title)).foregroundStyle(Theme.sideInk(side, colours))
                     .lineLimit(1).minimumScaleFactor(0.6)
                 if help != .none {
-                    Text("Help: \(help.label) \(help.marks)").font(Theme.label(15)).foregroundStyle(Theme.goldDark)
+                    Text(tx("handoff.help", ["level": "\(help.label) \(help.marks)"])).font(Theme.label(15)).foregroundStyle(Theme.orangeInk)
                 }
                 HStack(spacing: 10) {
-                    KettleGauge(percent: hud.kettlePercent[side], side: side, compact: true)
+                    KettleGauge(percent: hud.kettlePercent[side], side: side, compact: true, colours: colours,
+                                label: hud.isDuel ? name : nil)
                     PipRow(crew: hud.crews[side], side: side, colours: colours, size: 18)
-                    Text("Round \(hud.round)/\(hud.roundCap)").font(Theme.label(15)).foregroundStyle(Theme.ink)
+                    Text(tx("hud.round", ["n": hud.round, "cap": hud.roundCap])).font(Theme.label(15)).foregroundStyle(Theme.ink)
                 }
-                Button("READY") {
+                Button(tx("handoff.ready").uppercased()) {
                     // Ignores input for the first 400 ms so a tap meant for the old turn cannot close it.
                     guard Date().timeIntervalSince(shownAt) >= 0.4 else { return }
                     session.ready()
                 }
                 .buttonStyle(GoldButtonStyle(height: m.ready, minWidth: 200))
-                .accessibilityLabel("Ready")
+                .accessibilityLabel(tx("handoff.ready"))
                 .accessibilityIdentifier("ready")
             }
             .padding(m.padding)
@@ -640,7 +918,7 @@ struct HandOffCard: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
-        .accessibilityLabel("Pass the device to \(name)")
+        .accessibilityLabel(tx("handoff.spoken", ["name": name]))
     }
 }
 
@@ -672,40 +950,58 @@ extension HandOffCard {
 }
 
 /// Scale and fade keyframes (animations.json `hand_off_card`) from `start`.
+/// Pauses its TimelineView once the finite keyframes finish (iOS-M5).
 struct KeyframeIn: ViewModifier {
     let scale: Track
     let opacity: Track
     let start: Date
     let reduceMotion: Bool
+    @State private var finished = false
+
+    private var totalMs: Double { max(scale.duration, opacity.duration) }
 
     func body(content: Content) -> some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: reduceMotion)) { context in
-            let t = context.date.timeIntervalSince(start) * 1000
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: reduceMotion || finished)) { context in
+            let t = finished ? totalMs + 1 : context.date.timeIntervalSince(start) * 1000
             content
                 .scaleEffect(reduceMotion ? 1 : CGFloat(scale.value(at: t)))
                 .opacity(reduceMotion ? 1 : opacity.value(at: t))
+        }
+        .task(id: start) {
+            finished = false
+            guard !reduceMotion else { finished = true; return }
+            let remaining = max(0, totalMs - Date().timeIntervalSince(start) * 1000) + 50
+            try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000))
+            if !Task.isCancelled { finished = true }
         }
     }
 }
 
 /// The turn banner, sliding in and settling by the `turn_banner` keyframes
-/// (a fade with Reduce motion). It never blocks taps.
+/// (a fade with Reduce motion). Pauses its TimelineView once settled (iOS-M5).
 struct MovingBanner: View {
     let text: String
     let side: Int
     var colours: ColourSet = .brickabrac
     var reduceMotion = false
     @State private var start = Date()
+    @State private var finished = false
 
     var body: some View {
         let m = AnimationLibrary.shared.motion
-        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: false)) { context in
-            let t = context.date.timeIntervalSince(start) * 1000
+        let totalMs = reduceMotion ? m.bannerFadeMs : max(m.bannerInY.duration, m.bannerInOpacity.duration)
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: finished)) { context in
+            let t = finished ? totalMs + 1 : context.date.timeIntervalSince(start) * 1000
             TurnBanner(text: text, side: side, colours: colours)
                 .offset(y: reduceMotion ? 0 : CGFloat(m.bannerInY.value(at: t)))
-                .opacity(reduceMotion ? min(1, t / m.bannerFadeMs) : m.bannerInOpacity.value(at: t))
+                .opacity(reduceMotion ? min(1, t / max(1, m.bannerFadeMs)) : m.bannerInOpacity.value(at: t))
         }
-        .onAppear { start = Date() }
+        .task(id: text) {
+            start = Date()
+            finished = false
+            try? await Task.sleep(nanoseconds: UInt64((totalMs + 50) * 1_000_000))
+            if !Task.isCancelled { finished = true }
+        }
         .allowsHitTesting(false)
     }
 }

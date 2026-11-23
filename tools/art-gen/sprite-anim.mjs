@@ -4,6 +4,7 @@
 // Rule for every frame set: all frames of one animation share one size and one anchor.
 import * as L from './lib.mjs';
 import { posedHob, HOBS, POSES, TEAMS, V01_FRAMES, NEXT_DOOR } from './sprite-hob.mjs';
+import { posedFlattener } from './sprite-flattener.mjs';
 const { C, rr, circ, ell, path, line, g, star4, burst, clipped, f, MAT } = L;
 const ink = C.ink;
 const O = (sw = 6, stroke = ink) => ({ stroke, sw });
@@ -15,14 +16,15 @@ const at = (inner, x, y, extra = '') => g(inner, `translate(${f(x)} ${f(y)})${ex
 // scale about a point
 const scl = (inner, sx, sy, cx, cy) => g(inner, `translate(${f(cx)} ${f(cy)}) scale(${sx.toFixed(3)} ${sy.toFixed(3)}) translate(${f(-cx)} ${f(-cy)})`);
 
-export function buildAnim({ add: addSprite, find, solidBlock, SHELLS, shared, HOB_NAME }) {
+export function buildAnim({ add: addSprite, find, solidBlock, SHELLS, shared, HOB_NAME, FLATTENERS = {}, dedupHobs = false }) {
   const A = {};      // animations
   const add = (name, group, w, h, vb, body, purpose, o = {}) => addSprite(name, group, w, h, vb, body, purpose, o);
+  const resolveSprite = (n) => find(n) || (dedupHobs ? find(n.replace(/^(hob_[a-z]+)_(blue|orange)_/, '$1_neutral_')) : null);
   // anim(key, frames, ms, opts). ms = one number for all frames, or one per frame.
-  // opts: loop, loop_from, events { name: frame index }, next (animation), hold (sprite), pick, note
+  // opts: loop, loop_from, events { name: frame index }, next (animation), hold (sprite), pick, note, random_start, start_offset_ms
   function anim(key, frames, ms, o = {}) {
     if (A[key]) throw new Error('duplicate animation ' + key);
-    const sp = frames.map(n => { const s = find(n); if (!s) throw new Error(`${key}: no sprite ${n}`); return s; });
+    const sp = frames.map(n => { const s = resolveSprite(n); if (!s) throw new Error(`${key}: no sprite ${n}`); return s; });
     for (const s of sp) if (s.w !== sp[0].w || s.h !== sp[0].h || s.anchor[0] !== sp[0].anchor[0] || s.anchor[1] !== sp[0].anchor[1]) throw new Error(`${key}: ${s.name} has a different size or anchor`);
     const e = { frames, ms: Array.isArray(ms) ? ms : frames.map(() => ms), loop: !!o.loop };
     if (e.ms.length !== frames.length) throw new Error(key + ': ms count');
@@ -30,22 +32,49 @@ export function buildAnim({ add: addSprite, find, solidBlock, SHELLS, shared, HO
     e.w = sp[0].w; e.h = sp[0].h;
     e.anchor = sp[0].anchor.map(n => Math.round(n * 100) / 100);
     e.events = o.events || {};
+    if (o.random_start) e.random_start = true;
+    if (o.start_offset_ms !== undefined) e.start_offset_ms = o.start_offset_ms;
     for (const k of ['next', 'hold', 'pick', 'note']) if (o[k]) e[k] = o[k];
     A[key] = e;
   }
   const seq = (base, n, from = 0) => Array.from({ length: n }, (_, i) => `${base}_${i + from}`);
 
   // ================================================================ 1. Hobs
+  const spriteTeams = dedupHobs ? ['neutral', 'rival'] : ['blue', 'orange', 'rival'];
+  // Clips are only made for the team names the apps play; neutral frames are reached through aliases.
+  // 'rival' frames are real sprites (slate hat, level vial): play hob_<name>_rival_* for Rival-side Hobs.
+  const animTeams = ['blue', 'orange', 'rival'];
+  // Each Hob has its own feel. idle = [in, hold, out, settle] for idle_0, idle_1, idle_0, idle_3.
+  // fire: release stays on frame 0, totals kept 320 to 390 ms (was 360). bonked: lift at frame 2 lands
+  // 480 to 580 ms in (was 540). start_offset_ms: where the idle loop starts if the app does not randomise.
+  const TEMPO = {
+    marge:   { feel: 'warm, easy breath',            idle: [440, 400, 440, 360], blink: 130, fire: [35, 90, 115, 130],  bonked: [380, 170, 280, 260], start: 0 },
+    quill:   { feel: 'precise, even stitches',       idle: [340, 380, 340, 380], blink: 100, fire: [30, 75, 100, 145],  bonked: [340, 170, 240, 240], start: 190 },
+    jax:     { feel: 'quick, never still',           idle: [280, 260, 280, 300], blink: 90,  fire: [30, 70, 95, 125],   bonked: [320, 160, 200, 200], start: 410 },
+    grub:    { feel: 'slow, heavy breath',           idle: [640, 600, 560, 600], blink: 170, fire: [40, 95, 115, 140],  bonked: [380, 200, 340, 340], start: 900 },
+    bobbin:  { feel: 'fidgety, uneven bounce',       idle: [220, 300, 180, 340], blink: 80,  fire: [30, 70, 120, 120],  bonked: [300, 200, 200, 280], start: 330 },
+    hetty:   { feel: 'brisk, busy',                  idle: [380, 340, 400, 320], blink: 110, fire: [35, 80, 105, 130],  bonked: [350, 190, 250, 270], start: 620 },
+    thumper: { feel: 'old, with a hitch mid breath', idle: [520, 130, 440, 520], blink: 180, fire: [35, 120, 70, 145],  bonked: [360, 200, 380, 160], start: 1150 },
+    nan:     { feel: 'steady as a kettle',           idle: [420, 420, 420, 420], blink: 120, fire: [35, 85, 110, 130],  bonked: [360, 180, 260, 260], start: 760 },
+  };
+  const sum = (a) => a.reduce((x, y) => x + y, 0);
+  for (const [hk, t] of Object.entries(TEMPO)) {
+    if (sum(t.fire) < 320 || sum(t.fire) > 390) throw new Error(`${hk}: fire total ${sum(t.fire)} out of range`);
+    if (t.bonked[0] + t.bonked[1] < 480 || t.bonked[0] + t.bonked[1] > 580) throw new Error(`${hk}: bonked lift time out of range`);
+    if (t.start >= sum(t.idle)) throw new Error(`${hk}: start_offset_ms past the idle loop`);
+  }
   for (const hk of Object.keys(HOB_NAME)) {
-    for (const tk of ['blue', 'orange']) {
+    const T = TEMPO[hk];
+    if (!T) throw new Error('no tempo for Hob ' + hk);
+    const what = {
+      idle: ['breathe in'], aim: ['full power'], fire: ['wind-up', 'release (the shell leaves here)'], hit: ['shake it off, stars drift'],
+      bonked: ['eyes spin', 'Snooze Balloon inflates from the hat'], cheer: ['top of the jump, hat thrown', 'landing, hat caught'],
+      tumble: ['hangs in the air', 'falls, flail 1', 'falls, flail 2', 'falls, flail 3'], land: ['splat', 'pops back'],
+      dig: ['pulls back', 'shoves the dirt out', 'clods fly'], nextdoor: ['glow low', 'glow high'],
+    };
+    for (const tk of spriteTeams) {
       const P = `hob_${hk}_${tk}_`;
-      const who = `${HOB_NAME[hk]}, ${tk} team`;
-      const what = {
-        idle: ['breathe in'], aim: ['full power'], fire: ['wind-up', 'release (the shell leaves here)'], hit: ['shake it off, stars drift'],
-        bonked: ['eyes spin', 'Snooze Balloon inflates from the hat'], cheer: ['top of the jump, hat thrown', 'landing, hat caught'],
-        tumble: ['hangs in the air', 'falls, flail 1', 'falls, flail 2', 'falls, flail 3'], land: ['splat', 'pops back'],
-        dig: ['pulls back', 'shoves the dirt out', 'clods fly'], nextdoor: ['glow low', 'glow high'],
-      };
+      const who = tk === 'neutral' ? `${HOB_NAME[hk]}, neutral base` : tk === 'rival' ? `${HOB_NAME[hk]}, Rival look` : `${HOB_NAME[hk]}, ${tk} team`;
       for (const [pose, frames] of Object.entries(POSES)) {
         if (pose === 'nextdoor' && !NEXT_DOOR[hk]) continue;
         const from = V01_FRAMES[pose] || 0;
@@ -56,19 +85,55 @@ export function buildAnim({ add: addSprite, find, solidBlock, SHELLS, shared, HO
           add(`${P}${pose}_${i}`, 'hobs', 72, vb[3] / 2, vb, posedHob(hk, tk, p), `${who}, ${pose} frame ${i}: ${what[pose][j]}.${extra} Faces right. Anchor is the feet`, { anchor: [30, -vb[1] / 2] });
         });
       }
+    }
+    animTeams.forEach((tk, ti) => {
+      const P = `hob_${hk}_${tk}_`;
       const K = `hob_${hk}_${tk}_`;
-      anim(K + 'idle', [P + 'idle_0', P + 'idle_1', P + 'idle_0', P + 'idle_3'], 400, { loop: true, note: 'Breathe. Play blink on top every 3 to 5 s' });
-      anim(K + 'blink', [P + 'idle_2'], [120], { next: K + 'idle' });
+      // Each team gets its own offset too, so the two crews do not breathe in step.
+      const start = (T.start + ti * 230) % sum(T.idle);
+      anim(K + 'idle', [P + 'idle_0', P + 'idle_1', P + 'idle_0', P + 'idle_3'], T.idle, { loop: true, random_start: true, start_offset_ms: start, note: `Breathe (${T.feel}). Start at a random time in the loop, or at start_offset_ms. Play blink on top every 3 to 5 s` });
+      anim(K + 'blink', [P + 'idle_2'], [T.blink], { next: K + 'idle' });
       anim(K + 'aim', seq(P + 'aim', 3), 100, { pick: 'power', note: 'Not timed. Show frame 0, 1 or 2 for low, mid or full power' });
-      anim(K + 'fire', [P + 'fire_2', P + 'fire_3', P + 'fire_0', P + 'fire_1'], [120, 60, 100, 140], { events: { release: 1 }, next: K + 'idle', note: 'Wind-up, release, recoil, settle' });
+      anim(K + 'fire', [P + 'fire_3', P + 'fire_0', P + 'fire_1', P + 'idle_1'], T.fire, { events: { release: 0 }, next: K + 'idle', note: 'Snappy release at t=0, recoil, follow-through, settle' });
       anim(K + 'hit', seq(P + 'hit', 3), [80, 100, 120], { events: { flash: 0 }, next: K + 'idle' });
       anim(K + 'tumble', seq(P + 'tumble', 4), [150, 90, 90, 90], { loop: true, loop_from: 1, events: { fall: 1 }, note: 'Frame 0 is the hang. Move the Hob down in code from the fall event. Play land when it stops' });
       anim(K + 'land', seq(P + 'land', 2), [90, 110], { events: { thud: 0 }, next: K + 'idle' });
-      anim(K + 'bonked', [P + 'bonked_2', P + 'bonked_3', P + 'bonked_0', P + 'bonked_1'], [360, 180, 260, 260], { loop: true, loop_from: 2, events: { inflate: 1, lift: 2 }, note: 'Eyes spin, balloon inflates, lift off, float. Move the Hob up in code from the lift event' });
+      anim(K + 'bonked', [P + 'bonked_2', P + 'bonked_3', P + 'bonked_0', P + 'bonked_1'], T.bonked, { loop: true, loop_from: 2, events: { inflate: 1, lift: 2 }, note: 'Eyes spin, balloon inflates, lift off, float. Move the Hob up in code from the lift event' });
       anim(K + 'cheer', seq(P + 'cheer', 4), [140, 180, 260, 200], { events: { jump: 1, land: 3 }, next: K + 'idle' });
       anim(K + 'dig', seq(P + 'dig', 3), [140, 100, 180], { events: { clear: 1 }, next: K + 'idle', note: 'Shove Off' });
       if (NEXT_DOOR[hk]) anim(K + 'nextdoor', seq(P + 'nextdoor', 2), 450, { loop: true, note: `${NEXT_DOOR[hk]} is live. Use in place of idle` });
+    });
+  }
+
+  // ================================================================ 1b. Flatteners (enemy faction)
+  for (const [fk, fdef] of Object.entries(FLATTENERS)) {
+    const P = `flattener_${fk}_`;
+    const who = `${fdef.name} (${fdef.unit})`;
+    const what = {
+      idle: ['breathe in'], aim: ['full power'], fire: ['wind-up', 'release (the shell leaves here)'], hit: ['shake it off, stars drift'],
+      bonked: ['eyes spin', 'square Snooze Balloon inflates from the cap'], cheer: ['top of the jump, cap lifted', 'landing, cap caught'],
+      tumble: ['hangs in the air', 'falls, flail 1', 'falls, flail 2', 'falls, flail 3'], land: ['splat', 'pops back'],
+      dig: ['pulls back', 'shoves the dirt out', 'clods fly'],
+    };
+    for (const [pose, frames] of Object.entries(POSES)) {
+      if (pose === 'nextdoor') continue;
+      const from = V01_FRAMES[pose] || 0;
+      frames.slice(from).forEach((p, j) => {
+        const i = from + j, tall = pose === 'bonked';
+        const vb = tall ? [-60, -224, 144, 232] : [-60, -152, 144, 160];
+        add(`${P}${pose}_${i}`, 'flatteners', 72, vb[3] / 2, vb, posedFlattener(fk, p), `${who}, ${pose} frame ${i}: ${what[pose][j]}. Faces right. Anchor is the feet`, { anchor: [30, -vb[1] / 2] });
+      });
     }
+    anim(P + 'idle', [P + 'idle_0', P + 'idle_1', P + 'idle_0', P + 'idle_3'], 400, { loop: true, random_start: true, start_offset_ms: (Object.keys(FLATTENERS).indexOf(fk) * 270) % 1600, note: 'Breathe. Flatteners keep one even beat on purpose (they are the neat ones). Start at a random time in the loop, or at start_offset_ms. Play blink on top every 3 to 5 s' });
+    anim(P + 'blink', [P + 'idle_2'], [120], { next: P + 'idle' });
+    anim(P + 'aim', seq(P + 'aim', 3), 100, { pick: 'power', note: 'Not timed. Show frame 0, 1 or 2 for low, mid or full power' });
+    anim(P + 'fire', [P + 'fire_3', P + 'fire_0', P + 'fire_1', P + 'idle_1'], [35, 85, 110, 130], { events: { release: 0 }, next: P + 'idle', note: 'Snappy release at t=0, recoil, follow-through, settle' });
+    anim(P + 'hit', seq(P + 'hit', 3), [80, 100, 120], { events: { flash: 0 }, next: P + 'idle' });
+    anim(P + 'tumble', seq(P + 'tumble', 4), [150, 90, 90, 90], { loop: true, loop_from: 1, events: { fall: 1 }, note: 'Frame 0 is the hang. Move down in code from the fall event. Play land when it stops' });
+    anim(P + 'land', seq(P + 'land', 2), [90, 110], { events: { thud: 0 }, next: P + 'idle' });
+    anim(P + 'bonked', [P + 'bonked_2', P + 'bonked_3', P + 'bonked_0', P + 'bonked_1'], [360, 180, 260, 260], { loop: true, loop_from: 2, events: { inflate: 1, lift: 2 }, note: 'Eyes spin, square balloon inflates, lift off, float' });
+    anim(P + 'cheer', seq(P + 'cheer', 4), [140, 180, 260, 200], { events: { jump: 1, land: 3 }, next: P + 'idle' });
+    anim(P + 'dig', seq(P + 'dig', 3), [140, 100, 180], { events: { clear: 1 }, next: P + 'idle', note: 'Shove Off' });
   }
 
   // ================================================================ 2. Fort
@@ -442,6 +507,8 @@ export function buildAnim({ add: addSprite, find, solidBlock, SHELLS, shared, HO
       next: 'Animation to start when a play-once animation ends',
       hold: 'Sprite to show when a play-once animation ends',
       pick: 'This is a set of poses, not a timed clip. Choose the frame by the named value',
+      random_start: 'Idle loops only. Start the loop at a random time in [0, sum of ms) so a crew never breathes in step. Each Hob also has its own ms',
+      start_offset_ms: 'Idle loops only. Time into the loop to start at when the app does not randomise. Differs per Hob and per team',
     },
   };
   const keys = Object.keys(A);

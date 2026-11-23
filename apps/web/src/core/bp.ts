@@ -1,4 +1,5 @@
 // Blueprint form conversions (data only): view cells <-> the core's glyph rows (core/API.md).
+import { t } from '../ui/text';
 import type { Blueprint, BlueprintCell, Material } from './types';
 
 export const GLYPHS: Record<string, Material> = { w: 'wicker', t: 'timber', c: 'cobble', F: 'footing' };
@@ -32,4 +33,5 @@ export function rowsToBlueprint(rows: string[], name: string, glyphs: Record<str
 }
 
 /** Marker Blueprint: "use the level's own fort" (the core picks it from the level). */
-export const LEVEL_FORT: Blueprint = { id: 'default', name: 'Level fort', cols: 0, rows: 0, cells: [] };
+/** The level's own fort. Its name is the table's (workshop.level_fort). */
+export const LEVEL_FORT: Blueprint = { id: 'default', name: t('workshop.level_fort'), cols: 0, rows: 0, cells: [] };

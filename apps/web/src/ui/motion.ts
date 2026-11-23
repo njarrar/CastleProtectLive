@@ -105,6 +105,9 @@ export function handoffFlip(card: HTMLElement | null, side: number, reduce: bool
   }
   const crest = card.querySelector('.crest');
   if (!crest) return;
-  const cv = clipCanvas('ui_handoff_flip', 0.9, { reverse: side === 0, still: reduce, cls: 'clip flip', sink: (ev) => { if (ev === 'swap') play('handoff'); } });
+  // ui_handoff_flip frame 0 = P1 blue circle, frame 3 = P2 orange diamond.
+  // Animated: side 1 plays 0->3 (reverse=false), side 0 plays 3->0 (reverse=true).
+  // Still (Reduce Motion): hold the target side's final frame (side 0 -> frame 0, side 1 -> frame 3).
+  const cv = clipCanvas('ui_handoff_flip', 0.9, { reverse: reduce ? side === 1 : side === 0, still: reduce, cls: 'clip flip', sink: (ev) => { if (ev === 'swap') play('handoff'); } });
   if (cv) crest.replaceWith(cv);
 }

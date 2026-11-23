@@ -18,17 +18,17 @@ Every number here is a tuning target unless it says "fixed". Content carries one
 4. Hob growth is **3 Ranks**, each a Quirk pick; costs 300, 700, 1,500. No HP per level, no Knack tiers [R04 B8].
 5. Crew cap is 5, reached at Grand Fort 2 as a free gift. Grid growth that seats the crew is a free gift; start grid 6 x 6 [R04 B3, audit C04].
 6. Seat perks, Scurry, Neighbor Perks, Knack Pouch, Captain's Call, Tinker Plans, Cross Training and Kettle Plating are cut or parked [R04 B6, B7].
-7. Material HP and costs follow `00`: Wicker 30 (5), Timber 50 (15), Cobble 80 (35), Brassbound 110 (70), Moonbrick 140 (150) [R04 B1].
+7. Material HP and costs follow `00`: Wicker 30 (5), Timber 50 (15), Cobble 80 (35), Brassbound 110 (70), Mossbrick 140 (150) [R04 B1].
 8. The economy table now covers the 40-level launch campaign (Downs, Crag, Fen, Flats) plus the 20 levels of U2 and U3, and the no-grind-wall check is redone for all six region starts.
 9. Earn table merged into one, with the audit lines: Grand Fort 500 + 25 per Pennant, Last Level 1,000 + 25 per Pennant, Trial 100, Daily 60 per calendar day, deny refund removed [audit C59 to C63].
 10. Rooms at launch are Nook, Kettle Room and Cushion Loft. Lookout, Decoy Kettle Room, Boiler Loft move to U2, Tool Shed to U3; Snug is parked.
 11. Hob joins follow `05` (Hetty 1-7, Dame Flicka 2-8) and the launch roster of 16 [audit C02, R04 A].
 12. Mastery and Deeds move to U1. Achievements and cosmetics are tagged.
-13. Final verification pass [review 05]: the Kit branch now carries exactly what the weapons doc sources from it (KT-02 Kitchen Drawer with 3 shells, KT-04 Mole Mine and KT-07 Bellows at launch, KT-09 Scarecrow in U2); the Frost and Sparks shell sets and the second launch set are gone, and three new non-shell nodes fill their slots (Snow Shovel, Swap Shop, Ore Cart). Totals, costs and the core set are unchanged. The recruit table, the Trial side paths and the "New this level" column follow 05 and 03 (Petra is U3, Pip joins at 4-8, Old Thumper at 2-3). Quirk counts follow 03. Mastery uses 6 Deeds per Hob.
+13. Final verification pass [review 05]: the Kit branch now carries exactly what the weapons doc sources from it (KT-02 Kitchen Drawer with 3 shells, KT-04 Molehill and KT-07 Bellows at launch, KT-09 Scarecrow in U2); the Frost and Sparks shell sets and the second launch set are gone, and three new non-shell nodes fill their slots (Snow Shovel, Swap Shop, Ore Cart). Totals, costs and the core set are unchanged. The recruit table, the Trial side paths and the "New this level" column follow 05 and 03 (Petra is U3, Pip joins at 4-8, Old Thumper at 2-3). Quirk counts follow 03. Mastery uses 6 Deeds per Hob.
 14. **Review 06 applied** [review 06 A, B]. New free aim data joins 1.7 and is never a node: Lean Lines, the shimmer on hanging blocks, the "Drop!" callout, Loophole Flap marks, "Squall in 3", "No line" marks and the Rival's wish.
 15. **Shove Off** (15 Steam in the Walk step clears a buried Loophole) is a base rule, so Steam now has a third use beside Walk and Steam Shot. CR-13 Dig Out becomes "your first Shove Off each battle costs no Steam" [U3].
-16. **Loose shells in 1-3 and 1-4** (Lid Lifter, Marble Sack) are lent for one level each. They are not unlocks, so the shell count and the start six at 1-8 do not change (4.4, 6.1).
-17. Kit set note: Borelight (KT-02) is now a Light Delver set-up shell [01 §4.3]. The node text does not change.
+16. **Loose shells in 1-3 and 1-4** (Lid Lifter, Bag of Marbles) are lent for one level each. They are not unlocks, so the shell count and the start six at 1-8 do not change (4.4, 6.1).
+17. Kit set note: Miner's Lamp (KT-02) is now a Light Digger set-up shell [01 §4.3]. The node text does not change.
 
 ---
 
@@ -98,7 +98,7 @@ AIM
 
 FORT
            FT-01 C Wider Footing -+-> FT-04 C Brass Forge ---------------+-> FT-08 Pop-Up Wall
-           FT-02 C Stacker -------+                                      +-> FT-11 Frost Mortar (U2), FT-12 C Moonbrick Kiln (U3), FT-13 Ground Wire (U3)
+           FT-02 C Stacker -------+                                      +-> FT-11 Frost Mortar (U2), FT-12 C Mossbrick Kiln (U3), FT-13 Ground Wire (U3)
                           |
                           +--------------------------------------------> FT-06 C Grand Keep ---> FT-14 Pit Props (U3)
            FT-03 C Braces -------> [FT-05a Spring Bricks | FT-05b Rubble Catch] -> FT-07 Counterweight
@@ -113,7 +113,7 @@ CREW
            (U2: CR-09 C Mittens, CR-10 Scout's Honor.  U3: CR-12 C Rubber Boots, CR-13 Dig Out, CR-14 Second Call needs CR-01)
 
 KIT
-           KT-01 C Free Hand ----+-> KT-04 C Mole Mine -----------------+-> KT-07 Bellows
+           KT-01 C Free Hand ----+-> KT-04 C Molehill -----------------+-> KT-07 Bellows
                                  |                                      +-------------------------> KT-09 C Scarecrow (U2), KT-14 Tool Shed (U3)
                                  +-> [KT-05a Spare Pocket | KT-05b Double Up]
            KT-02 C Kitchen Drawer -------------------------------------------------------------------> KT-12 C Swap Shop (U3)
@@ -132,7 +132,7 @@ Theme: read the field, then nail it [00 §1.2 pillar 2]. Aim help grows as new w
 | AM-02 | Long Sight | [Launch] | 1 | 1 | C | none | Preview grows from 30% to 45% of the arc [00 §2.4] | Longer lobs become plannable |
 | AM-03 | Bracket Ring | [Launch] | 1 | 2 | C | none | After a miss, a ring marks the landing and a tick on the power bar shows the power that would have hit dead centre with no wind | Teaches the old artillery craft of bracketing |
 | AM-04 | Eagle Sight | [Launch] | 2 | 3 | C | AM-02 | Preview grows from 45% to 60% | Long lobs over hills become a plan, not a hope |
-| AM-05a | Dead Eye | [Launch] | 2 | 3 | C (fork) | AM-01 or AM-03 | **Fork.** Your preview is 15 points shorter. Point hits (the shell body touches a Hob or the kettle) deal +25% and get Skill Factor +0.5. Per-shot caps still apply | The ace build. High risk, loud payoff, big Siege Scores |
+| AM-05a | Dead Eye | [Launch] | 2 | 3 | C (fork) | AM-01 or AM-03 | **Fork.** Your preview is 15 points shorter. Point hits (the shell body touches a Hob or the kettle) deal +25% and get Skill Factor +0.5. Per-shot caps still apply | The ace build. High risk, loud payoff, big Scores |
 | AM-05b | Spotter's Eye | [Launch] | 2 | 3 | C (fork) | AM-01 or AM-03 | **Fork.** A hit on an enemy Nook wall makes that Nook **Spotted** until the end of your next turn. Your shells that pass within 2 blocks of a Spotted Nook bend 1 block toward it, once per shell | The team build: crack with one Hob, strike with the next [audit C20] |
 | AM-06 | Ricochet | [Launch] | 3 | 4 | C | AM-04 | Your point shots that strike Rock, Footing or Brassbound at under 30 degrees glance off once at half damage. The preview shows the glance | Bank a Hatpin off the Footing into a Loophole |
 | AM-07 | Called Shot | [Launch] | 3 | 5 | | AM-05a or AM-05b | Before you fire, tap a block or Hob to call it. If the shot's first hit is within 1 block of the call, it deals +20% and Skill Factor +0.5 | Say it, then do it. Pure bragging rights with teeth |
@@ -161,8 +161,8 @@ Theme: your castle, your plan [pillar 4]. Size, materials and clever shapes. Gri
 | FT-08 | Pop-Up Wall | [Launch] | 3 | 6 | | FT-04 | Once per battle, during your Walk, raise a Timber wall 1 block wide and 2 tall on the ground within 3 blocks of your front. It is yours: your shots pass it, theirs do not | A wall out of nowhere stops the roller that was about to win |
 | FT-09 | Decoy Kettle | [U2] | 4 | 2 | C | any Fort T3 | Unlocks the **Decoy Kettle Room** (2 x 2). It glows through walls like the real one. The first hit pops it and shows it as fake. The AI sees the same two glows you would [audit C76] | Bluff the Rival, honestly |
 | FT-10 | Ice Footing | [U2] | 4 | 3 | | FT-09 | Rollers and bouncers that touch your Footing slide 1 block back toward the Rival | Bouncers bounce off your doorstep |
-| FT-11 | Frost Mortar | [U2] | 4 | 4 | | FT-04 | Your Cobble cannot be Brittle | Answer the Frost Rivals of the Peaks |
-| FT-12 | Moonbrick Kiln | [U3] | 5 | 2 | C | FT-04 | Unlocks **Moonbrick** blocks | The top material and the late Button goal |
+| FT-11 | Frost Mortar | [U2] | 4 | 4 | | FT-04 | Your Cobble cannot be Brittle | Answer the Frost Rivals of the Heights |
+| FT-12 | Mossbrick Kiln | [U3] | 5 | 2 | C | FT-04 | Unlocks **Mossbrick** blocks | The top material and the late Button goal |
 | FT-13 | Ground Wire | [U3] | 5 | 3 | | FT-04 | Zap that chains through your Brassbound stops after 1 block | Brass forts stop being Zap traps |
 | FT-14 | Pit Props | [U3] | 5 | 4 | | FT-06 | Your castle ignores Thump | Dig-outs and drops lose their sting |
 
@@ -173,7 +173,7 @@ Theme: the Hob is the weapon [00 §2.9]. Bench, tempo and team play. Crew size i
 | ID | Name | Tag | Tier | Cost | Core | Needs | Effect | Why it is fun |
 |---|---|---|---|---|---|---|---|---|
 | CR-01 | Bench Call | [Launch] | 1 | 1 | C | none | Once per battle, as your Action, swap a seated Hob (not Bonked) for one on your bench. The new Hob arrives at full HP with Rest 0 | The bench matters. Answer the Rival you saw in the Muster |
-| CR-02 | Hard Hats | [Launch] | 1 | 1 | C | none | A Dropped or Squashed Hob of yours takes half damage and gets up with Rest 0 | When your fort falls, your crew comes up swinging |
+| CR-02 | Hard Hats | [Launch] | 1 | 1 | C | none | A Hob of yours that Fell a floor or is Squashed takes half damage and gets up with Rest 0 | When your fort falls, your crew comes up swinging |
 | CR-03 | Rally Horn | [Launch] | 1 | 2 | C | none | When one of your Hobs is Bonked, every other Hob of yours drops to Rest 0 | Losing a friend sets up a full counter punch |
 | CR-04 | Buddy Shot | [Launch] | 2 | 3 | C | CR-01 or CR-03 | Once per battle, as your Action, two Hobs fire their Plain Shots on one aim; the second fires at 4 less power. Both rest 1 | Two pots, one turn. Bracket in a single go |
 | CR-05a | Brave Face | [Launch] | 2 | 3 | C (fork) | CR-03 | **Fork.** A Hob under 30% HP deals +25% and its shots have 1 less Rest | Comebacks. A hurt Hob is a scary Hob |
@@ -181,8 +181,8 @@ Theme: the Hob is the weapon [00 §2.9]. Bench, tempo and team play. Crew size i
 | CR-06 | Pep Talk | [Launch] | 3 | 4 | C | CR-04 | Once per battle, at your turn start, clear one Hob's Rest | Your best Hob, twice in a row, when it counts |
 | CR-07 | Hot Streak | [Launch] | 3 | 5 | | CR-05a or CR-05b | When your shot Bonks an enemy Hob, the Hob that fired has Rest 0 and its next shot deals +10% | Momentum you can feel |
 | CR-08 | Last Stand | [Launch] | 3 | 6 | | CR-03 | When you have 1 Hob left, every shot it fires has Rest 0 and deals +25% | The last Hob standing is the most dangerous one |
-| CR-09 | Mittens | [U2] | 4 | 2 | C | any Crew T3 | Your Hobs ignore the extra Rest from Frost | The Peaks cannot slow you down |
-| CR-10 | Scout's Honor | [U2] | 4 | 3 | | any Crew T3 | After your Peeper reveals a Hob, your next shot at that Hob deals +15% | Scout, then strike |
+| CR-09 | Mittens | [U2] | 4 | 2 | C | any Crew T3 | Your Hobs ignore the extra Rest from Frost | The Heights cannot slow you down |
+| CR-10 | Scout's Honor | [U2] | 4 | 3 | | any Crew T3 | After your Lookout reveals a Hob, your next shot at that Hob deals +15% | Scout, then strike |
 | CR-11 | Sled Run | [U2] | 4 | 4 | | CR-02 | A Tumbled Hob of yours takes 10, not 20, and climbs into the free Nook you pick | Tumbles become repositioning |
 | CR-12 | Rubber Boots | [U3] | 5 | 2 | C | any Crew T4 | Your Hobs take half Zap | Brass forts stop being death traps |
 | CR-13 | Dig Out | [U3] | 5 | 3 | | any Crew T4 | Your first Shove Off each battle costs no Steam [00 §2.7] | Cave-ins in the Mines cost you nothing |
@@ -195,9 +195,9 @@ Theme: shells, gadgets and Steam, the toys you bring [00 §2.14, 00 §2.15]. One
 | ID | Name | Tag | Tier | Cost | Core | Needs | Effect | Why it is fun |
 |---|---|---|---|---|---|---|---|---|
 | KT-01 | Free Hand | [Launch] | 1 | 1 | C | none | The first Doodad you use each battle does not cost your Action | Patch and shoot in one turn. Doodads get used, not hoarded |
-| KT-02 | Shell Set: Kitchen Drawer | [Launch] | 1 | 1 | C | none | Adds 3 Trick Shells to your pool: Dinner Gong, Borelight, Grandfather Clod [01 §4] | New toys at once |
+| KT-02 | Shell Set: Kitchen Drawer | [Launch] | 1 | 1 | C | none | Adds 3 Trick Shells to your pool: Dinner Gong, Miner's Lamp, Grandfather Clod [01 §4] | New toys at once |
 | KT-03 | Bigger Boiler | [Launch] | 1 | 2 | C | none | Steam per battle 100 to 130 | One more good Walk per battle |
-| KT-04 | Mole Mine | [Launch] | 2 | 3 | C | KT-01 | Unlocks the **Mole Mine** Doodad (the weapons doc owns its numbers) | Diggers and rollers now fear your front yard |
+| KT-04 | Molehill | [Launch] | 2 | 3 | C | KT-01 | Unlocks the **Molehill** Doodad (the weapons doc owns its numbers) | Diggers and rollers now fear your front yard |
 | KT-05a | Spare Pocket | [Launch] | 2 | 3 | C (fork) | KT-01 or KT-02 | **Fork.** After the Rummage, take 1 of the 2 leftover shells. Hand 4 to 5 | The shell player: one more surprise per battle |
 | KT-05b | Double Up | [Launch] | 2 | 3 | C (fork) | KT-01 or KT-02 | **Fork.** The Doodad in slot 1 has 2 uses | The gadget player: bring your favourite twice |
 | KT-06 | Stomp | [Launch] | 3 | 4 | C | KT-03 | During your Walk, spend 15 Steam to stomp a ditch 2 blocks wide and 1 deep in front of your castle (Loam, Mud, Clay only). Rollers and bouncers stop in it | Terraform as defence. Counters the Flats rollers |
@@ -291,13 +291,13 @@ Fixed rules: Nooks are never fewer than seated Hobs; Hobs per battle is the lowe
 
 | Region | Tag | Levels where a Hob joins | New | Running total | Classes owned |
 |---|---|---|---|---|---|
-| 1 Puddingstone Downs | [Launch] | Marge 1-1, Quill 1-2, Jax 1-4, Grub 1-6, Hetty 1-7, Bobbin 1-8 | 6 | 6 | 6 |
-| 2 Crumblecrag | [Launch] | Ember 2-1, Old Thumper 2-3, Dame Flicka 2-8 (rescued), Nan (Trial 3 path, or 2-10 if skipped) | 4 | 10 | 7 (from 2-1) |
-| 3 Soggybottom Fen | [Launch] | Skip 3-1, Poultice 3-3, Fizz 3-5, Truffle 3-7 (rescued), Brine 3-9 | 5 | 15 | 7 |
+| 1 Puddingstone Downs | [Launch] | Marge 1-1, Miss Quill 1-2, Jax 1-4, Grub 1-6, Hetty 1-7, Bobbin 1-8 | 6 | 6 | 6 |
+| 2 Crag End | [Launch] | Edna 2-1, Old Thumper 2-3, Dame Flicka 2-8 (rescued), Nan (Trial 3 path, or 2-10 if skipped) | 4 | 10 | 7 (from 2-1) |
+| 3 Soggy Bottom Fen | [Launch] | Skip 3-1, Nurse Plumley 3-3, Ginger 3-5, Truffle 3-7 (rescued), Walt 3-9 | 5 | 15 | 7 |
 | 4 The Flats | [Launch] | Pip 4-8 (rescued); the last stretch tests the crew you have | 1 | 16 | 7 |
-| Long Siege | [U1] | Gus and Rivet as first-run wave milestones | 2 | 18 | 7 |
-| 5 Frostwhisker Peaks | [U2] | Frostine 5-1, Winkle 5-3, Dotty 5-5, Echo 5-7, Tansy 5-8, with the Peeper Class | 5 | 23 | 8 |
-| 6 Clankmouth Mines | [U3] | Wick 6-1, Bartleby 6-3, Lady Carom 6-4, Petra 6-6 (rescued), Sprocket 6-9 | 5 | 28 | 8 |
+| Long Siege | [U1] | Gus and Tacks as first-run wave milestones | 2 | 18 | 7 |
+| 5 Nithering Heights | [U2] | Aunty Nip 5-1, Winkle 5-3, Dotty 5-5, Olive 5-7, Tansy 5-8, with the Lookout Class | 5 | 23 | 8 |
+| 6 Wheal Clank | [U3] | Wick 6-1, Bartleby 6-3, Lady Carom 6-4, Petra 6-6 (rescued), Ernest 6-9 | 5 | 28 | 8 |
 
 The split follows the crew doc [03 §3.0, §3.9]. Update join levels are working suggestions until each update is built [05 §6.4]. Rule: no Hob may be missable.
 
@@ -327,7 +327,7 @@ Deeds count in any mode and on any difficulty except the Test Yard. No Deed need
 | **Timber** | [Launch] | Workshop | Level 1-6 | 50 | 15 | 2 |
 | **Cobble** | [Launch] | Workshop gift of 3 blocks | Level 1-6 | 80 | 35 | 1 |
 | **Brassbound** | [Launch] | FT-04 Brass Forge | Tier 2, after Grand Fort 2 | 110 | 70 | 2 |
-| **Moonbrick** | [U3] | FT-12 Moonbrick Kiln | Tier 5, after Grand Fort 5 | 140 | 150 | 1 |
+| **Mossbrick** | [U3] | FT-12 Mossbrick Kiln | Tier 5, after Grand Fort 5 | 140 | 150 | 1 |
 | **Footing** | [Launch] | Always | Fixed | 400 | free | n/a |
 
 HP, cost and quirks are from `00 §2.8`. The Brace shape (FT-03) costs half the block price in any material.
@@ -404,7 +404,7 @@ The single earn table for every doc [audit C63]. Same values as `00 §5.2`.
 
 | Sink | Size | Purpose |
 |---|---|---|
-| Blocks (into Stock) | Par castle 320 (Region 2) to 2,400 (Region 6). Full Moonbrick castle about 6,000 [U3] | Main sink, refundable |
+| Blocks (into Stock) | Par castle 320 (Region 2) to 2,400 (Region 6). Full Mossbrick castle about 6,000 [U3] | Main sink, refundable |
 | Hob Training | 2,500 per Hob to Rank 3. Par: 5 Hobs at Rank 2 by the Last Level = 5,000 | Main sink |
 | Decor | 20 to 500 each: flags, roof caps, paint, Stomper styles, Curio stands | Endless, cosmetic, for spare Buttons [02d §1.4] |
 | Training the full roster | Launch 16 x 2,500 = 40,000. All 28 = 70,000 | Long tail for fans. Never needed |
@@ -414,7 +414,7 @@ No sink takes away anything earned. No sink has a timer.
 ### 4.3 Player models
 
 - **Floor**: wins each level once with 1 Pennant, no losses, no Trials. The worst case.
-- **Typical**: Pennants per first clear 2.6 (Region 1) falling to 2.2 (Region 4), 2.1 (Peaks) and 2.0 (Mines); losses 0.2 to 0.8 per level; Trials taken with 2 of 3 Pennants.
+- **Typical**: Pennants per first clear 2.6 (Region 1) falling to 2.2 (Region 4), 2.1 (Heights) and 2.0 (Mines); losses 0.2 to 0.8 per level; Trials taken with 2 of 3 Pennants.
 - **Max**: 3 Pennants everywhere plus all Trials.
 
 ### 4.4 Level by level table
@@ -426,16 +426,16 @@ Rows 1 to 40 are the launch campaign. The U1 Trials at 1-10 and 4-8 add 200 Butt
 | Lvl | Code | Tag | Kind | Buttons (typ) | Cum Buttons (typ) | Cum Buttons (floor) | Pennants (typ) | Cum Pennants (typ) | Cum at 2 per level | Cum max | Tier open | Core cost open | Hours (typ) | New this level |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | 1-1 | [Launch] | Level | 273 | 273 | 225 | 2.6 | 3 | 2 | 3 | none | 0 | 0.1 | Marge (Lobber) joins. Aim Drag, Fire, Ghost, Pin |
-| 2 | 1-2 | [Launch] | Level | 273 | 546 | 450 | 2.6 | 5 | 4 | 6 | none | 0 | 0.1 | Quill (Zinger) joins. Pick a Hob, Fine Tune |
+| 2 | 1-2 | [Launch] | Level | 273 | 546 | 450 | 2.6 | 5 | 4 | 6 | none | 0 | 0.1 | Miss Quill (Zinger) joins. Pick a Hob, Fine Tune |
 | 3 | 1-3 | [Launch] | Level | 273 | 819 | 675 | 2.6 | 8 | 6 | 9 | none | 0 | 0.2 | Kettle Pop. Loose Lid Lifter lent for the level (not an unlock) |
-| 4 | 1-4 | [Launch] | Level | 273 | 1,092 | 900 | 2.6 | 10 | 8 | 12 | none | 0 | 0.3 | Jax (Scatterjack) joins. Wind and forecast. Loose Marble Sack lent for the level (not an unlock) |
+| 4 | 1-4 | [Launch] | Level | 273 | 1,092 | 900 | 2.6 | 10 | 8 | 12 | none | 0 | 0.3 | Jax (Scatterjack) joins. Wind and forecast. Loose Bag of Marbles lent for the level (not an unlock) |
 | 5 | 1-5 | [Launch] | Level | 273 | 1,365 | 1,125 | 2.6 | 13 | 10 | 15 | none | 0 | 0.3 | First Knack, Rest cog. Skirmish opens |
-| 6 | 1-6 | [Launch] | Level | 273 | 1,638 | 1,350 | 2.6 | 16 | 12 | 18 | none | 0 | 0.4 | Grub (Delver) joins. Workshop: Wicker, Timber, 3 Cobble gift. 2 Blueprints. Test Yard. First Rival habit |
+| 6 | 1-6 | [Launch] | Level | 273 | 1,638 | 1,350 | 2.6 | 16 | 12 | 18 | none | 0 | 0.4 | Grub (Digger) joins. Workshop: Wicker, Timber, 3 Cobble gift. 2 Blueprints. Test Yard. First Rival habit |
 | 7 | 1-7 | [Launch] | Level | 273 | 1,911 | 1,575 | 2.6 | 18 | 14 | 21 | none | 0 | 0.5 | Hetty (Patcher) rescued. Crew of 4, free grid step |
-| 8 | 1-8 | [Launch] | Level +T | 373 | 2,284 | 1,800 | 4.6 | 23 | 16 | 27 | none | 0 | 0.6 | Bobbin (Boinker) joins. Rummage: start six Trick Shells, pool of 4. Trial 1 (+1 Trick Shell) |
+| 8 | 1-8 | [Launch] | Level +T | 373 | 2,284 | 1,800 | 4.6 | 23 | 16 | 27 | none | 0 | 0.6 | Bobbin (Bouncer) joins. Rummage: start six Trick Shells, pool of 4. Trial 1 (+1 Trick Shell) |
 | 9 | 1-9 | [Launch] | Level +T | 373 | 2,657 | 2,025 | 4.6 | 27 | 18 | 33 | none | 0 | 0.6 | Walk and Steam. Tumblestones. +2 Trick Shells. Trial 2 (+1 Trick Shell). Win: Mend Bucket, Doodad slot 1 |
 | 10 | 1-10 | [Launch] | Grand Fort +T [U1] | 673 | 3,330 | 2,550 | 4.6 | 32 | 20 | 39 | T1 | 16 | 0.7 | Grand Fort 1. Tinker Tree, Tier 1 (Kitchen Drawer set: +3 Trick Shells). Daily. +1 Trick Shell. [U1] Trial 7 |
-| 11 | 2-1 | [Launch] | Level | 276 | 3,606 | 2,775 | 2.4 | 34 | 22 | 42 | T1 | 16 | 0.9 | Ember (Sizzler) joins: all 7 Classes. Fire on Timber. Doodad slot 2 and Pot Lid |
+| 11 | 2-1 | [Launch] | Level | 276 | 3,606 | 2,775 | 2.4 | 34 | 22 | 42 | T1 | 16 | 0.9 | Edna (Stoker) joins: all 7 Classes. Fire on Timber. Doodad slot 2 and Pot Lid |
 | 12 | 2-2 | [Launch] | Level | 276 | 3,882 | 3,000 | 2.4 | 37 | 24 | 45 | T1 | 16 | 1.0 | Thump. Training opens (Rank 1). +1 Trick Shell |
 | 13 | 2-3 | [Launch] | Level | 276 | 4,158 | 3,225 | 2.4 | 39 | 26 | 48 | T1 | 16 | 1.1 | Old Thumper (Lobber) joins. First Puzzle |
 | 14 | 2-4 | [Launch] | Level | 276 | 4,434 | 3,450 | 2.4 | 42 | 28 | 51 | T1 | 16 | 1.2 | Dig through Clay. Wind line |
@@ -445,18 +445,18 @@ Rows 1 to 40 are the launch campaign. The U1 Trials at 1-10 and 4-8 add 200 Butt
 | 18 | 2-8 | [Launch] | Level +T | 376 | 5,738 | 4,350 | 4.4 | 55 | 36 | 69 | T1 | 16 | 1.7 | Dame Flicka (Zinger) rescued. Trial 4 (+1 Trick Shell) |
 | 19 | 2-9 | [Launch] | Level | 276 | 6,014 | 4,575 | 2.4 | 58 | 38 | 72 | T1 | 16 | 1.8 | No new rule. A Rival that closes in |
 | 20 | 2-10 | [Launch] | Grand Fort | 576 | 6,590 | 5,100 | 2.4 | 60 | 40 | 75 | T2 | 40 | 2.0 | Grand Fort 2. Tier 2. Crew of 5, free grid step. Cushion Loft. 3 Blueprints. +1 Trick Shell |
-| 21 | 3-1 | [Launch] | Level | 278 | 6,868 | 5,325 | 2.3 | 62 | 42 | 78 | T2 | 40 | 2.1 | Skip (Boinker) joins. Water, Mud, Soaked |
+| 21 | 3-1 | [Launch] | Level | 278 | 6,868 | 5,325 | 2.3 | 62 | 42 | 78 | T2 | 40 | 2.1 | Skip (Bouncer) joins. Water, Mud, Soaked |
 | 22 | 3-2 | [Launch] | Level | 278 | 7,146 | 5,550 | 2.3 | 65 | 44 | 81 | T2 | 40 | 2.2 | Burp Vents. +1 Trick Shell |
-| 23 | 3-3 | [Launch] | Level | 278 | 7,424 | 5,775 | 2.3 | 67 | 46 | 84 | T2 | 40 | 2.3 | Poultice (Patcher) joins. A moving target |
+| 23 | 3-3 | [Launch] | Level | 278 | 7,424 | 5,775 | 2.3 | 67 | 46 | 84 | T2 | 40 | 2.3 | Nurse Plumley (Patcher) joins. A moving target |
 | 24 | 3-4 | [Launch] | Level | 278 | 7,702 | 6,000 | 2.3 | 69 | 48 | 87 | T2 | 40 | 2.5 | Skipping shots (Puzzle) |
-| 25 | 3-5 | [Launch] | Level +T | 378 | 8,080 | 6,225 | 4.3 | 74 | 50 | 93 | T2 | 40 | 2.6 | Fizz (Scatterjack) joins. Tide. +1 Trick Shell. Trial 5 (+1 Trick Shell) |
+| 25 | 3-5 | [Launch] | Level +T | 378 | 8,080 | 6,225 | 4.3 | 74 | 50 | 93 | T2 | 40 | 2.6 | Ginger (Scatterjack) joins. Tide. +1 Trick Shell. Trial 5 (+1 Trick Shell) |
 | 26 | 3-6 | [Launch] | Level | 278 | 8,358 | 6,450 | 2.3 | 76 | 52 | 96 | T2 | 40 | 2.7 | First Brassbound (pumps). Smelling Salts (Doodad) |
-| 27 | 3-7 | [Launch] | Level | 278 | 8,636 | 6,675 | 2.3 | 78 | 54 | 99 | T2 | 40 | 2.9 | Truffle (Delver) rescued. Fog Bank, Marsh Gas |
+| 27 | 3-7 | [Launch] | Level | 278 | 8,636 | 6,675 | 2.3 | 78 | 54 | 99 | T2 | 40 | 2.9 | Truffle (Digger) rescued. Fog Bank, Marsh Gas |
 | 28 | 3-8 | [Launch] | Level | 278 | 8,914 | 6,900 | 2.3 | 80 | 56 | 102 | T2 | 40 | 3.0 | Sink Mud, raising ground. +1 Trick Shell |
-| 29 | 3-9 | [Launch] | Level | 278 | 9,192 | 7,125 | 2.3 | 83 | 58 | 105 | T2 | 40 | 3.1 | Brine (Sizzler) joins: 15 Hobs. No new rule |
+| 29 | 3-9 | [Launch] | Level | 278 | 9,192 | 7,125 | 2.3 | 83 | 58 | 105 | T2 | 40 | 3.1 | Walt (Stoker) joins: 15 Hobs. No new rule |
 | 30 | 3-10 | [Launch] | Grand Fort | 578 | 9,770 | 7,650 | 2.3 | 85 | 60 | 108 | T3 | 56 | 3.3 | Grand Fort 3. Tier 3. 4 Blueprints. +1 Trick Shell. [U1] Long Siege |
 | 31 | 4-1 | [Launch] | Level | 283 | 10,053 | 7,875 | 2.2 | 87 | 62 | 111 | T3 | 56 | 3.4 | Hoisted Hills, mound shells as cover |
-| 32 | 4-2 | [Launch] | Level | 283 | 10,336 | 8,100 | 2.2 | 89 | 64 | 114 | T3 | 56 | 3.6 | Big Smoothie. Rival crews of 5. +1 Trick Shell |
+| 32 | 4-2 | [Launch] | Level | 283 | 10,336 | 8,100 | 2.2 | 89 | 64 | 114 | T3 | 56 | 3.6 | Big Ethel. Rival crews of 5. +1 Trick Shell |
 | 33 | 4-3 | [Launch] | Level | 283 | 10,619 | 8,325 | 2.2 | 92 | 66 | 117 | T3 | 56 | 3.7 | Stampers. Weathercock (Doodad) |
 | 34 | 4-4 | [Launch] | Level +T | 383 | 11,002 | 8,550 | 4.2 | 96 | 68 | 123 | T3 | 56 | 3.9 | Chain of drops (Puzzle). Trial 6 (+1 Trick Shell) |
 | 35 | 4-5 | [Launch] | Level | 283 | 11,285 | 8,775 | 2.2 | 98 | 70 | 126 | T3 | 56 | 4.0 | Bellows Towers. +1 Trick Shell |
@@ -465,26 +465,26 @@ Rows 1 to 40 are the launch campaign. The U1 Trials at 1-10 and 4-8 add 200 Butt
 | 38 | 4-8 | [Launch] | Level +T [U1] | 383 | 12,234 | 9,450 | 4.2 | 107 | 76 | 138 | T3 | 56 | 4.5 | Pip (Lobber) rescued: all 16 launch Hobs. [U1] Trial 8 |
 | 39 | 4-9 | [Launch] | Level | 283 | 12,517 | 9,675 | 2.2 | 109 | 78 | 141 | T3 | 56 | 4.6 | No new rule. Hazards as allies |
 | 40 | 4-10 | [Launch] | Grand Fort | 1,095 | 13,612 | 10,700 | 2.2 | 111 | 80 | 144 | T4 | 64 | 4.8 | The Last Level (2 Stages). Ending. 5 Blueprints. +1 Trick Shell. Tier 4 waits for U2 |
-| 41 | 5-1 | [U2] | Level | 280 | 13,892 | 10,925 | 2.1 | 113 | 82 | 147 | T4 | 64 | 5.0 | Peaks open. Frostine (Sizzler) joins. Tier 4. Frost, Brittle, Ice, hidden crew. Ironclad opens for cleared regions. +1 Trick Shell |
+| 41 | 5-1 | [U2] | Level | 280 | 13,892 | 10,925 | 2.1 | 113 | 82 | 147 | T4 | 64 | 5.0 | Heights open. Aunty Nip (Stoker) joins. Tier 4. Frost, Brittle, Ice, hidden crew. Ironclad opens for cleared regions. +1 Trick Shell |
 | 42 | 5-2 | [U2] | Level | 280 | 14,172 | 11,150 | 2.1 | 115 | 84 | 150 | T4 | 64 | 5.1 | Strong wind. +1 Trick Shell |
-| 43 | 5-3 | [U2] | Level | 280 | 14,452 | 11,375 | 2.1 | 117 | 86 | 153 | T4 | 64 | 5.2 | Winkle (Peeper) joins: Peeper Class. Escort, Long maps. +1 Trick Shell |
+| 43 | 5-3 | [U2] | Level | 280 | 14,452 | 11,375 | 2.1 | 117 | 86 | 153 | T4 | 64 | 5.2 | Winkle (Lookout) joins: Lookout Class. Escort, Long maps. +1 Trick Shell |
 | 44 | 5-4 | [U2] | Level | 280 | 14,732 | 11,600 | 2.1 | 119 | 88 | 156 | T4 | 64 | 5.4 | Icicle Racks (Puzzle) |
 | 45 | 5-5 | [U2] | Level | 280 | 15,012 | 11,825 | 2.1 | 122 | 90 | 159 | T4 | 64 | 5.6 | Dotty (Scatterjack) joins. Thin Ice, Thaw. +1 Trick Shell |
 | 46 | 5-6 | [U2] | Level | 280 | 15,292 | 12,050 | 2.1 | 124 | 92 | 162 | T4 | 64 | 5.7 | Sliding forts. +1 Trick Shell |
-| 47 | 5-7 | [U2] | Level | 280 | 15,572 | 12,275 | 2.1 | 126 | 94 | 165 | T4 | 64 | 5.8 | Echo (Peeper) joins. Chimney Cough (Doodad). +1 Trick Shell |
-| 48 | 5-8 | [U2] | Level +T [U2] | 380 | 15,952 | 12,500 | 4.1 | 130 | 96 | 171 | T4 | 64 | 6.0 | Tansy (Peeper) joins. Avalanche Slopes. +1 Trick Shell. Trial 9 (+1 Trick Shell) |
+| 47 | 5-7 | [U2] | Level | 280 | 15,572 | 12,275 | 2.1 | 126 | 94 | 165 | T4 | 64 | 5.8 | Olive (Lookout) joins. Chimney Cough (Doodad). +1 Trick Shell |
+| 48 | 5-8 | [U2] | Level +T [U2] | 380 | 15,952 | 12,500 | 4.1 | 130 | 96 | 171 | T4 | 64 | 6.0 | Tansy (Lookout) joins. Avalanche Slopes. +1 Trick Shell. Trial 9 (+1 Trick Shell) |
 | 49 | 5-9 | [U2] | Level | 280 | 16,232 | 12,725 | 2.1 | 132 | 98 | 174 | T4 | 64 | 6.1 | Blizzard. +1 Trick Shell |
 | 50 | 5-10 | [U2] | Grand Fort | 580 | 16,812 | 13,250 | 2.1 | 134 | 100 | 177 | T5 | 72 | 6.3 | Grand Fort 5. Tier 5 waits for U3. +1 Trick Shell |
-| 51 | 6-1 | [U3] | Level | 282 | 17,094 | 13,475 | 2.0 | 136 | 102 | 180 | T5 | 72 | 6.4 | Mines open. Wick (Zinger) joins. Tier 5. Zap, Moonbrick, Stalactites. +1 Trick Shell |
+| 51 | 6-1 | [U3] | Level | 282 | 17,094 | 13,475 | 2.0 | 136 | 102 | 180 | T5 | 72 | 6.4 | Mines open. Wick (Zinger) joins. Tier 5. Zap, Mossbrick, Stalactites. +1 Trick Shell |
 | 52 | 6-2 | [U3] | Level | 282 | 17,376 | 13,700 | 2.0 | 138 | 104 | 183 | T5 | 72 | 6.6 | Lodestones. +1 Trick Shell |
 | 53 | 6-3 | [U3] | Level | 282 | 17,658 | 13,925 | 2.0 | 140 | 106 | 186 | T5 | 72 | 6.7 | Bartleby (Lobber) joins. Mine Carts. +1 Trick Shell |
-| 54 | 6-4 | [U3] | Level | 282 | 17,940 | 14,150 | 2.0 | 142 | 108 | 189 | T5 | 72 | 6.9 | Lady Carom (Boinker) joins. Draughts (Puzzle). +1 Trick Shell |
+| 54 | 6-4 | [U3] | Level | 282 | 17,940 | 14,150 | 2.0 | 142 | 108 | 189 | T5 | 72 | 6.9 | Lady Carom (Bouncer) joins. Draughts (Puzzle). +1 Trick Shell |
 | 55 | 6-5 | [U3] | Level +T [U3] | 382 | 18,322 | 14,375 | 4.0 | 146 | 110 | 195 | T5 | 72 | 7.0 | Lava. Trial 10 (+1 Trick Shell) |
-| 56 | 6-6 | [U3] | Level | 282 | 18,604 | 14,600 | 2.0 | 148 | 112 | 198 | T5 | 72 | 7.2 | Petra (Delver) rescued. Gas Pockets. +1 Trick Shell |
+| 56 | 6-6 | [U3] | Level | 282 | 18,604 | 14,600 | 2.0 | 148 | 112 | 198 | T5 | 72 | 7.2 | Petra (Digger) rescued. Gas Pockets. +1 Trick Shell |
 | 57 | 6-7 | [U3] | Level | 282 | 18,886 | 14,825 | 2.0 | 150 | 114 | 201 | T5 | 72 | 7.3 | Zap chains (Puzzle). Lightning Rod (Doodad) |
 | 58 | 6-8 | [U3] | Level | 282 | 19,168 | 15,050 | 2.0 | 152 | 116 | 204 | T5 | 72 | 7.5 | King of the Hill. +1 Trick Shell |
-| 59 | 6-9 | [U3] | Level | 282 | 19,450 | 15,275 | 2.0 | 154 | 118 | 207 | T5 | 72 | 7.6 | Sprocket (Zinger) joins. A roof-hung fort. +1 Trick Shell |
-| 60 | 6-10 | [U3] | Grand Fort | 582 | 20,032 | 15,800 | 2.0 | 156 | 120 | 210 | T5 | 72 | 7.8 | Grand Fort 6. +1 Trick Shell. Baron Rush. Jester's Jingle and Homecoming Hat from its Bronze clear |
+| 59 | 6-9 | [U3] | Level | 282 | 19,450 | 15,275 | 2.0 | 154 | 118 | 207 | T5 | 72 | 7.6 | Ernest (Zinger) joins. A roof-hung fort. +1 Trick Shell |
+| 60 | 6-10 | [U3] | Grand Fort | 582 | 20,032 | 15,800 | 2.0 | 156 | 120 | 210 | T5 | 72 | 7.8 | Grand Fort 6. +1 Trick Shell. Baron Rush. Where Was I? and Homecoming Hat from its Bronze clear |
 
 ### 4.5 Target completion time
 
@@ -508,7 +508,7 @@ Rows 1 to 40 are the launch campaign. The U1 Trials at 1-10 and 4-8 add 200 Butt
 | R2 Crag (2-1) | [Launch] | 16 x 20 = 320 | 0 (Training opens at 2-2) | 320 | 2,550 | 3,330 | +697% |
 | R3 Fen (3-1) | [Launch] | 22 x 25 = 550 | 5 at Rank 1, 2 of them at Rank 2 = 2,900 | 3,450 | 5,100 | 6,590 | +48% |
 | R4 Flats (4-1) | [Launch] | 36 x 45 = 1,620 | 5 at Rank 2 = 5,000 | 6,620 | 7,650 | 9,770 | +16% |
-| R5 Peaks (5-1) | [U2] | 40 x 50 = 2,000 | 4 at Rank 2, 1 at Rank 3 = 6,500 | 8,500 | 10,700 | 13,612 | +26% |
+| R5 Heights (5-1) | [U2] | 40 x 50 = 2,000 | 4 at Rank 2, 1 at Rank 3 = 6,500 | 8,500 | 10,700 | 13,612 | +26% |
 | R6 Mines (6-1) | [U3] | 40 x 60 = 2,400 | 3 at Rank 2, 2 at Rank 3 = 8,000 | 10,400 | 13,250 | 16,812 | +27% |
 
 The tightest gate is The Flats at +16%. It still clears with no replays. A Rank 1 crew with a Cobble fort beats every Flats level on Fair; the par build is a tuning line, not a wall.
@@ -546,7 +546,7 @@ The same bots report the Squall share per level; over 15% opens a tuning ticket 
 3. No daily cap, no decay, no energy. A replay pays the same on the 100th go.
 4. Missing Pennant goals can be earned one at a time on any replay, any difficulty.
 5. Replaying never risks anything: no Pennant, level, block or Hob can be lost.
-6. Farm rate is low on purpose (about 900 Buttons per hour) and never needed (section 4.6). It is a way to buy decor or Moonbrick sooner, not a way through.
+6. Farm rate is low on purpose (about 900 Buttons per hour) and never needed (section 4.6). It is a way to buy decor or Mossbrick sooner, not a way through.
 7. After 3 losses on a level, the result card offers a hint: a suggested Hob, shell, or Studio Plan, after the "what broke you" replay. Never a paid skip, because none exists.
 
 ---
@@ -563,11 +563,11 @@ Rewards are cosmetic. No achievement asks for more than 50 of anything, and none
 | 2 | Kettle Popper | [Launch] | Win by Kettle Pop | Hat: kettle lid |
 | 3 | Clean Sweeper | [Launch] | Win by Clean Sweep | Banner: broom |
 | 4 | Lumpy Again | [Launch] | Clear Puddingstone Downs | Castle skin: Mossy Wicker |
-| 5 | Cliffhanger | [Launch] | Clear Crumblecrag | Castle skin: Chalky Timber |
-| 6 | Wet Feet | [Launch] | Clear Soggybottom Fen | Castle skin: Reedy Cobble |
+| 5 | Cliffhanger | [Launch] | Clear Crag End | Castle skin: Chalky Timber |
+| 6 | Wet Feet | [Launch] | Clear Soggy Bottom Fen | Castle skin: Reedy Cobble |
 | 7 | The Unflattener | [Launch] | Beat Baron Levelwell | Castle skin: Patchwork Hills, banner: Baron's roller |
-| 8 | Frostbitten | [U2] | Clear Frostwhisker Peaks | Castle skin: Frosted Brass |
-| 9 | Deep Delver | [U3] | Clear Clankmouth Mines | Castle skin: Sooty Moonbrick |
+| 8 | Frostbitten | [U2] | Clear Nithering Heights | Castle skin: Frosted Brass |
+| 9 | Deep Digger | [U3] | Clear Wheal Clank | Castle skin: Sooty Mossbrick |
 | 10 | Pennant Pole | [Launch] | Earn 100 Pennants | Tall flag pole |
 | 11 | Full Hoist | [Launch] | Earn every Pennant released so far | Gold flag pole |
 | 12 | Brick by Brick | [Launch] | Own 25 blocks of every material | Hat: hod |
@@ -628,16 +628,16 @@ The Almanac fills as you see things: each Hob, shell, Doodad, Rival and room get
 
 | Region | Tag | Levels | Tinker | Hobs (Classes new) | Castle | Shells and Doodads | Modes | Map feature | Cosmetic |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 Puddingstone Downs | [Launch] | 1-1 to 1-10 | Tree opens at 1-10, Tier 1 (12 nodes) | 6 (Lobber, Zinger, Scatterjack, Delver, Patcher, Boinker) | Workshop at 1-6: Wicker, Timber, Cobble; 2 Blueprints; grid 6 x 6, then 7 x 7 at 1-7 | Rummage at 1-8 with the start six; +2 from levels, +1 at the Grand Fort, +2 from Trials; Kitchen Drawer (+3) once the tree opens; 1 Doodad (Mend Bucket, on the 1-9 win) | Skirmish (1-5), Test Yard (1-6), Trials (1-8), Daily (1-10) | Grass hills, first wind | Mossy Wicker |
-| 2 Crumblecrag | [Launch] | 2-1 to 2-10 | Tier 2 after 2-10 (12 nodes, 4 forks) | 4 (Sizzler new): all 7 launch Classes from 2-1 | Training at 2-2; Cushion Loft, 3 Blueprints, crew of 5 at 2-10 | +4 shells, +2 from Trials; 2 Doodads (Pot Lid, Coal Scuttle) | | Cliffs, Clay, Thump, Burn | Chalky Timber |
-| 3 Soggybottom Fen | [Launch] | 3-1 to 3-10 | Tier 3 after 3-10 (12 nodes) | 5: 15 Hobs by 3-9 | Brassbound (Tier 2); 4 Blueprints | +4 shells, +1 from a Trial; 1 Doodad (Smelling Salts) | Long Siege [U1] after 3-10 | Mud, water, Soaked, patches | Reedy Cobble |
+| 1 Puddingstone Downs | [Launch] | 1-1 to 1-10 | Tree opens at 1-10, Tier 1 (12 nodes) | 6 (Lobber, Zinger, Scatterjack, Digger, Patcher, Bouncer) | Workshop at 1-6: Wicker, Timber, Cobble; 2 Blueprints; grid 6 x 6, then 7 x 7 at 1-7 | Rummage at 1-8 with the start six; +2 from levels, +1 at the Grand Fort, +2 from Trials; Kitchen Drawer (+3) once the tree opens; 1 Doodad (Mend Bucket, on the 1-9 win) | Skirmish (1-5), Test Yard (1-6), Trials (1-8), Daily (1-10) | Grass hills, first wind | Mossy Wicker |
+| 2 Crag End | [Launch] | 2-1 to 2-10 | Tier 2 after 2-10 (12 nodes, 4 forks) | 4 (Stoker new): all 7 launch Classes from 2-1 | Training at 2-2; Cushion Loft, 3 Blueprints, crew of 5 at 2-10 | +4 shells, +2 from Trials; 2 Doodads (Pot Lid, Coal Scuttle) | | Cliffs, Clay, Thump, Burn | Chalky Timber |
+| 3 Soggy Bottom Fen | [Launch] | 3-1 to 3-10 | Tier 3 after 3-10 (12 nodes) | 5: 15 Hobs by 3-9 | Brassbound (Tier 2); 4 Blueprints | +4 shells, +1 from a Trial; 1 Doodad (Smelling Salts) | Long Siege [U1] after 3-10 | Mud, water, Soaked, patches | Reedy Cobble |
 | 4 The Flats | [Launch] | 4-1 to 4-10 | Tier 3 in use; grid to 8 x 10 | 1 (Pip, rescued at 4-8): all 16 | 5 Blueprints after 4-10 | +4 shells, +1 from a Trial; 1 Doodad (Weathercock) | | Raise-ground levels; the Baron's rollers; the Last Level in 2 Stages | Patchwork Hills |
-| 5 Frostwhisker Peaks | [U2] | 5-1 to 5-10 | Tier 4 (12 nodes) after 4-10 | 5 (Peeper new) | Lookout, Decoy Kettle, Boiler Loft | +10 shells (Frost); 2 Doodads (Chimney Cough, Scarecrow) | Ironclad | Ice, strong wind, Frost, hidden crew | Frosted Brass |
-| 6 Clankmouth Mines | [U3] | 6-1 to 6-10 | Tier 5 (12 nodes) after 5-10 | 5 | Moonbrick, Tool Shed | +10 shells (Zap; one from Baron Rush); 2 Doodads (Lightning Rod, Jester's Jingle) | Baron Rush | Caves, tunnels, Zap | Sooty Moonbrick |
+| 5 Nithering Heights | [U2] | 5-1 to 5-10 | Tier 4 (12 nodes) after 4-10 | 5 (Lookout new) | Lookout, Decoy Kettle, Boiler Loft | +10 shells (Frost); 2 Doodads (Chimney Cough, Scarecrow) | Ironclad | Ice, strong wind, Frost, hidden crew | Frosted Brass |
+| 6 Wheal Clank | [U3] | 6-1 to 6-10 | Tier 5 (12 nodes) after 5-10 | 5 | Mossbrick, Tool Shed | +10 shells (Zap; one from Baron Rush); 2 Doodads (Lightning Rod, Where Was I?) | Baron Rush | Caves, tunnels, Zap | Sooty Mossbrick |
 
-**Trick Shell count at launch: 30** (the loose shells lent in 1-3 and 1-4 are start-six shells, not extra unlocks) = 6 when the Rummage opens at 1-8, 11 from levels, 1 per Grand Fort (4), 6 from Trials and 3 from the Kitchen Drawer set (KT-02). U1 adds 8 (6 from Long Siege waves, 2 from Trials); U2 adds 10 (9 from Peaks levels and its Grand Fort, 1 from a Trial); U3 adds 10 (8 from Mines levels and its Grand Fort, 1 from a Trial, 1 from Baron Rush). The weapons doc owns the list [01 §4].
+**Trick Shell count at launch: 30** (the loose shells lent in 1-3 and 1-4 are start-six shells, not extra unlocks) = 6 when the Rummage opens at 1-8, 11 from levels, 1 per Grand Fort (4), 6 from Trials and 3 from the Kitchen Drawer set (KT-02). U1 adds 8 (6 from Long Siege waves, 2 from Trials); U2 adds 10 (9 from Heights levels and its Grand Fort, 1 from a Trial); U3 adds 10 (8 from Mines levels and its Grand Fort, 1 from a Trial, 1 from Baron Rush). The weapons doc owns the list [01 §4].
 
-**Doodads at launch: 8** = 5 from campaign levels (Mend Bucket on the 1-9 win, Pot Lid at 2-1, Coal Scuttle at 2-7, Smelling Salts at 3-6, Weathercock at 4-3), Mole Mine (KT-04) and Bellows (KT-07) from the Kit branch, and Musical Chairs for beating 5 different Rivals in Skirmish. U1 adds Jack Screws and Spare Spring (Long Siege), U2 Chimney Cough and Scarecrow (KT-09), U3 Lightning Rod and Jester's Jingle (Baron Rush) [01 §5].
+**Doodads at launch: 8** = 5 from campaign levels (Mend Bucket on the 1-9 win, Pot Lid at 2-1, Coal Scuttle at 2-7, Smelling Salts at 3-6, Weathercock at 4-3), Molehill (KT-04) and Bellows (KT-07) from the Kit branch, and Musical Chairs for beating 5 different Rivals in Skirmish. U1 adds Jack Screws and Spare Spring (Long Siege), U2 Chimney Cough and Scarecrow (KT-09), U3 Lightning Rod and Where Was I? (Baron Rush) [01 §5].
 
 ### 6.2 Every session shows something new
 
@@ -704,7 +704,7 @@ Each point is a cross-doc dependency, not a change to `00`.
 
 1. **Crew doc (03):** Ranks 0 to 3; Ranks 1 and 2 a Class pair, Rank 3 a Class Quirk or the Knack Quirk; late-recruit rule (section 2.1); launch roster of 16 per section 2.3; old Knack tier ideas become Quirk options.
 2. **Campaign doc (05):** Tier opening on Grand Fort clears; no level leans on any node. Crew of 5 from 3-1; Rival crews of 5 from 4-2. Trials at the side paths in section 4.1. "New this level" here is regenerated from 05.
-3. **Weapons doc (01):** one launch Shell Set of 3 (KT-02 Kitchen Drawer: Dinner Gong, Borelight, Grandfather Clod); Mole Mine (KT-04) and Bellows (KT-07) at launch, Scarecrow (KT-09) in U2; Doodad sources in section 6.1.
+3. **Weapons doc (01):** one launch Shell Set of 3 (KT-02 Kitchen Drawer: Dinner Gong, Miner's Lamp, Grandfather Clod); Molehill (KT-04) and Bellows (KT-07) at launch, Scarecrow (KT-09) in U2; Doodad sources in section 6.1.
 4. **Enemies doc (04):** a short Rival perks table and which archetypes carry which rooms [audit C56]; Rival crews never exceed the player's crew cap at that point.
 5. **UX doc (07):** the bough rail has four tabs (Aim, Fort, Crew, Kit); the fork shows as a split node; free readouts in section 1.7 move to the battle HUD; "Untinker" on every owned node.
 6. **Art (06, art 19):** the tree mockup is redrawn with four branches and these node names [audit C55].

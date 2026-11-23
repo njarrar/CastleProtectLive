@@ -15,31 +15,27 @@ the snapshots the core sends back (see `core/API.md`).
 | `CastleProtect/App` | App entry, `AppModel` (screens, save, the battle in play), orientation lock |
 | `CastleProtect/Core` | The core boundary: `CoreProtocol.swift` (setup, commands, replies and snapshot exactly as in `core/API.md` and `core/schema/`), `CoreBridge` (the C ABI as a protocol), `FFICoreBridge` (the real core), `FakeCoreBridge` (a thin player of `core/fixtures`), `CoreGame` (the frame loop, AI think pose, save and resume by replay), `FrameAssembler` (snapshot to view model, y flipped up), `ContentCatalog` (level names and goal text from `content/`) |
 | `CastleProtect/Battle` | `BattleSession` (clock, Aim Drag, Fine Tune, Fire guard), `BattleLayout` (Wide layout and Tall stacked lenses, pure functions), `BattleSpriteView` (SpriteKit scene, one crop node per lens), `SpriteAtlas` (atlas pages and HUD sprites from `assets/`) |
-| `CastleProtect/UI` | Title (First Run), Region 1 map, pre-battle sheet with the Rummage, battle HUD, Pause card, Couch Duel setup and hand-off card, Results and Duel results, Skirmish setup, Settings |
-| `CastleProtect/Save` | `SaveData` (Codable, lenient decode) and `SaveStore` (Application Support, temp file then replace, backup copy, utility queue) |
-| `CastleProtect/Feedback` | Core Haptics (UX 6.5 table, Off, Light, Full) and AVAudioEngine sound cues |
+| `CastleProtect/UI` | Title (First Run), Region 1 map (with Daily Dust-up and Test Yard), pre-battle sheet with the Rummage, battle HUD (with contextual shot dials, block targeting, Pot Lid room picker and native Rival peek), Pause card, Couch Duel setup and hand-off card, Results and Duel results, Skirmish setup, Workshop fort builder, Settings |
+| `CastleProtect/Save` | `SaveData` (Codable, lenient decode) and `SaveStore` (Application Support, temp file then replace, backup copy, serialized utility queue) |
+| `CastleProtect/Feedback` | Core Haptics (UX 6.5 table, Off, Light, Full, cached UIKit fallbacks) and AVAudioEngine sound cues (stereo panning, 3-layer bar-synced music, 30 ms/400 ms smooth ducking, world bus voice ducking, slow-mo rate shift) |
 | `CastleProtect/Resources` | Asset catalog (app icon, launch logo and colour), privacy manifest (no data collected) |
-| `Tests/CastleProtectTests` | XCTest: wire types against the core fixtures, command JSON, setup keys, the frame assembler, the battle runner (stand-in and, when linked, the real core with save and replay), save store, Aim Drag maths, layout |
+| `Tests/CastleProtectTests` | XCTest: wire types against the core fixtures, command JSON, setup keys, the frame assembler, the battle runner (stand-in and, when linked, the real core with save and replay), save store, Aim Drag maths, layout, Workshop validation, rules v3/v4 and QA playtest regressions |
 | `Tests/CastleProtectUITests` | Launches with an empty save, taps Play, checks the battle opens; opens and closes the Pause card |
-| `scripts/core-module.sh` | Build phase: writes the `CastleCoreFFI` module map from the XCFramework header and copies `libcastle_ffi.a` |
+| `scripts/core-module.sh` | Build phase: writes the `CastleCoreFFI` module map from the XCFramework header and copies `libcastle_ffi.a` (non-Debug builds fail if missing) |
 | `scripts/sync-assets.sh` | Copies the app icon and launch logo from `assets/sprites` into the asset catalog |
 
-The build copies these folders from the repo into the app bundle: `assets/atlas`,
-`assets/sprites`, `assets/manifest.json`, `assets/sounds` (when it exists, by a script phase), `content/`
-and `core/fixtures/`. Change the art in `assets/` and the next build picks it up.
+The build copies only what iOS actually loads into the app bundle via targeted script phases in `project.yml`: `@2x` atlas sheets (`assets/atlas/castle@2x*`), UI-only `@2x` sprites (`portrait_*@2x.png`, `icon_*@2x.png`, `ui_*@2x.png`, `app_icon-512.png`), `assets/manifest.json`, `assets/animations.json`, AAC audio (`assets/audio/**/*.m4a` plus `audio.json` and `barks.json`), and `content/`. `core/fixtures/` is copied into `CastleProtectTests` and Debug app builds only (excluded from Release). Change the art in `assets/` and the next build picks it up.
 
 ## How CI builds it
 
-`.github/workflows/ios.yml` runs on a GitHub macOS runner on pushes that touch
+`.github/workflows/ios.yml` runs on a pinned `macos-15` GitHub runner on pushes and pull requests that touch
 `apps/ios`, `core`, `content` or `assets`:
 
-1. Installs Rust and runs `scripts/build-xcframework.sh`, which builds `castle-ffi` for
-   `aarch64-apple-ios` and `aarch64-apple-ios-sim` and writes
-   `apps/ios/Frameworks/CastleCore.xcframework` (header `castle_core.h` included).
+1. Installs Rust (`aarch64-apple-ios`, `aarch64-apple-ios-sim`, `x86_64-apple-ios`) and runs `scripts/build-xcframework.sh`, which builds `castle-ffi` for iOS device plus a fat `arm64 + x86_64` simulator slice and writes `apps/ios/Frameworks/CastleCore.xcframework` (header `castle_core.h` included).
 2. `brew install xcodegen`, then `xcodegen generate` in `apps/ios`.
-3. `xcodebuild build` and `xcodebuild test` for the newest iPhone simulator, scheme
-   `CastleProtect`, Debug, `CODE_SIGNING_ALLOWED=NO`.
-4. Uploads the simulator `.app` as an artifact, and the test results when a step fails.
+3. `xcodebuild build` and `xcodebuild test` for the newest iPhone simulator (and layout/Workshop/real-core suites on an iPad simulator), scheme `CastleProtect`, Debug, `CODE_SIGNING_ALLOWED=NO`.
+4. Builds an unsigned Release device bundle, verifies the privacy manifest against both undefined C symbols and ObjC selector references (requiring non-empty reason codes), checks that Release contains no `fixtures/` or `@1x` atlases, and runs all real-core test classes against a `--dev` core to exercise the core thread-affinity check.
+5. Uploads the simulator `.app` as an artifact, and the test results when a step fails.
 
 How the core gets in: the `Core module map` build phase finds the simulator or device
 slice of the XCFramework, copies `castle_core.h` and the static library into
@@ -116,41 +112,20 @@ linked; `-uiTesting` also starts from an empty save in a temp folder (UI tests u
   app state shown at each turn start with Side by side seats, and Ready ignores taps for
   its first 400 ms.
 
-## Core rules 3 and QA playtest 1
+## Core rules 4, QA playtest 2 and current features
 
-The app speaks core rules 3 (`core/API.md`, "Changes for QA playtest 1"). Tests are in
-`Tests/CastleProtectTests/QAPlaytestOneTests.swift`; the real-core ones are required by CI.
+The app speaks core rules 4 (`core/API.md`). Tests live under `Tests/CastleProtectTests/` (including `QAPlaytestOneTests.swift`, `QAPlaytestTwoTests.swift`, `CoreV02Tests.swift`, `ReviewFixTests.swift` and `ReviewTwoTests.swift`); all real-core classes are required by CI.
 
-- Fire is lit from `hud.fire`. Unready shot chips stay tappable and show the core's `why`
-  (a short word) and `text` (VoiceOver and the banner). A `shot_switch` event shows the
-  chip's words after the turn banner. A refused Fire shows the core's `detail` and moves the
-  pick to its `ready_shot`.
-- Fatigue: the round label reads "Fatigue in 3", "2", "1", then "Fatigue"; a "Fatigue next
-  round" banner shows at the start of round 9; the round 10 collapse (`why: "fatigue"`)
-  plays like any collapse.
-- Results show "Your best shot" from `stats[0].best_shot` (and the winner's
-  `result.best_shot` after a loss); the Couch Duel results show each player's.
-- Retry keeps the seed and sends the next `attempt`; the Daily Dust-up never sends one.
-- Test Yard: side 1 is the Dummy side and passes itself; the app treats only side 0 as a
-  person and the round label reads "Test Yard".
-- A save from rules 2 is refused with a plain message and cleared; progress is kept.
-- Layout: the landscape plan frame holds both forts while blocks draw at 8 pt or more,
-  else your fort and the arc with a "Rival fort" marker on the edge. Fine Tune sits on the
-  side away from your fort and hides while a finger aims or pans. A pull into the screen
-  edge keeps its angle and only power follows; full power comes before the edge (never
-  under 64 pt). A press away from your fort pans the camera. The Couch Duel setup and the
-  hand-off card are compact on a short screen. There is no Workshop screen on iOS yet, so
-  the 24 pt cell rule has nothing to apply to.
+- Fire is lit from `hud.fire`. Unready shot chips stay tappable and show the core's `why` (a short word) and `text` (VoiceOver and the banner). Match Class shells display a gold star badge (`match_class`, including `"all"`). Contextual action controls expose `dial` (`Rebuild` / `Puff Up` on Barn Raising, `2 Hops` / `3 Hops` on Bobbin's Plain Shot), own-fort block targeting (`mendglob` and `mend_bucket`), and Pot Lid room selection (`Kettle` or `Nook 1..N`).
+- Pass is separated from `FIRE` into the utility strip and requires a brief 350 ms hold (or tap confirmation in Tap-only / VoiceOver mode) to prevent accidental turn forfeits.
+- Fatigue: the round label reads "Fatigue in 3", "2", "1", then "Fatigue"; a "Fatigue next round" banner shows at the start of round 9; the round 10 collapse (`why: "fatigue"`) holds the camera on your own fort until it settles.
+- Results show "Your best shot" from `stats[0].best_shot` (and the winner's `result.best_shot` after a loss), "What broke you" (`result.broke`), Siege Score, Buttons, and Double Pop tie-break copy matching `total_hp` (kettle, Hobs and standing blocks).
+- Workshop: build and validate a custom fort live against the Rust core (`WorkshopChecker` on a dedicated core thread), save it to `SaveData.fort` (automatically used in Campaign, Skirmish, Daily Dust-up, Test Yard and selectable as "My Fort" in Couch Duel when Nook seats suffice), or jump straight into the Test Yard to test-fire it.
+- Daily Dust-up and Test Yard: directly launchable from the Map dock and Skirmish setup. Daily Dust-up seeds deterministically via `cp_daily_seed` and passes `progress.daily_paid` for once-per-day rewards.
+- Layout & Accessibility: phone landscape frames both forts down to 6 pt blocks (8 pt on iPad), with a native SwiftUI safe-area-inset "View Rival fort" / "Back to my fort" button when the rival is off-screen. Fine Tune stays away from your fort and supports VoiceOver adjustable actions plus iPad hardware keyboard shortcuts. Reduce Motion keeps Tall lenses split during flight and halts continuous animations.
 
-## Known gaps in v0.1
+## Remaining scope notes
 
-- The core has no handicap, give up, Volley Points or Buttons economy yet, so Help and
-  Volley Points are saved in the setup but not sent, Give up is not offered, and
-  Results shows Pennants only.
-- Ground is drawn from a height per 8-cell column, so carved overhangs show as dips.
-- No pinch zoom or two-finger pan, no long-press Shell cards, no Table mode, no Workshop
-  screen yet.
-- The AI runs on the main actor inside `ai_turn`, so a slow think can cause a short
-  hitch; it can move to its own thread with a replica handle later.
-- Sounds fall back to small generated blips until `assets/sounds` exists (mono,
-  44.1 kHz).
+- Terrain is rendered from real cell-grid chunk textures (`TerrainGrid`) in main lenses and lightweight contour fill in the 32 pt Field Strip.
+- Pinch zoom, two-finger pan, long-press Shell info cards and Table mode (facing seats) are planned for a later milestone.
+- The Rust core runs on its own dedicated `CoreThread` (`CoreHost`), so AI thinking and battle replays never block the main actor.

@@ -49,7 +49,7 @@ test('N3: zoomed in, the Rival fort marker is a one-tap peek at both forts, and 
   await page.waitForTimeout(1500);
   const mark = page.getByTestId('fort-mark');
   await expect(mark).toBeVisible();
-  await expect(mark).toContainText('View Rival fort');
+  await expect(mark).toContainText("Look at the Rival's fort");
   await mark.click();
   await page.waitForTimeout(1500);
   const [, rival] = await castle<Box[]>(page, 'return c.fortBoxes();');
@@ -58,7 +58,7 @@ test('N3: zoomed in, the Rival fort marker is a one-tap peek at both forts, and 
   await expect(mark).toHaveText('Back to my fort');
   await mark.click();
   await page.waitForTimeout(1500);
-  await expect(mark).toContainText('View Rival fort');
+  await expect(mark).toContainText("Look at the Rival's fort");
 });
 
 test('Owner rule: a ring on the picked Hob each Plan step until three aims, a nudge once for a sky drag', async ({ page }) => {
@@ -80,7 +80,7 @@ test('Owner rule: a ring on the picked Hob each Plan step until three aims, a nu
   await page.mouse.move(sx, sy); await page.mouse.down();
   for (let i = 1; i <= 10; i++) await page.mouse.move(sx - i * 8, sy + i);
   await page.mouse.up();
-  await expect(page.locator('.prompt')).toHaveText('Drag from your fort to aim');
+  await expect(page.locator('.prompt')).toHaveText('Drag back to aim');
   expect(await castle<number>(page, 'return c.toScreen(0, 0, "aim")[0];')).not.toBe(cam0);
   expect((await snap(page)).hud.aim?.power ?? 0).toBe(power0); // no aim from the sky
   // Three aims started from the fort: the ring is gone for good.
@@ -99,7 +99,7 @@ test('N1, N2: Fatigue gets its banners, the camera stays home, and a crushed Hob
   });
   await page.setViewportSize(LANDSCAPE);
   await openLevel(page, '1-8', { rivalFast: true, difficulty: 'cozy' });
-  let k = 0, sawSquashed = false, wrongBonk = '', homeAtFatigue: boolean | null = null;
+  let k = 0, sawSquashed = false, sawSquashedPip = false, wrongBonk = '', homeAtFatigue: boolean | null = null;
   for (let guard = 0; guard < 3000; guard++) {
     const st = await page.evaluate((k) => {
       const c = (window as unknown as { __castle: any }).__castle; const a = (window as unknown as { castleApp: any }).castleApp;
@@ -108,9 +108,10 @@ test('N1, N2: Fatigue gets its banners, the camera stays home, and a crushed Hob
         a.core.command({ cmd: 'aim', angle: 450 + (k % 4) * 25, power: 22 + (k % 3) * 3 });
         if (!a.core.command({ cmd: 'fire' }).ok) a.core.command({ cmd: 'pass' });
       } else if (s.hud.fire === 'fast') a.core.command({ cmd: 'fast', on: true });
-      return { round: s.round, phase: s.phase, fat: !!(s.fatigue?.[0] || s.fatigue?.[1]), hobs: s.hobs.map((h: any) => [h.state, h.hp]), mine: c.fortBoxes()[0] };
+      return { round: s.round, phase: s.phase, fat: !!(s.fatigue?.[0] || s.fatigue?.[1]), hobs: s.hobs.map((h: any) => [h.state, h.hp]), squashedPip: document.querySelectorAll('.pip.squashed').length > 0, mine: c.fortBoxes()[0] };
     }, k++);
     for (const [state, hp] of st.hobs) { if (state === 'squashed') sawSquashed = true; if (state === 'bonked' && hp > 0) wrongBonk = `bonked at ${hp} HP`; }
+    if (st.squashedPip) sawSquashedPip = true;
     if (st.fat && homeAtFatigue === null) {
       await page.waitForTimeout(700);
       const mine = await castle<Box>(page, 'return c.fortBoxes()[0];');
@@ -120,18 +121,19 @@ test('N1, N2: Fatigue gets its banners, the camera stays home, and a crushed Hob
     await page.waitForTimeout(150);
   }
   const banners = await page.evaluate(() => (window as unknown as { __banners: string[] }).__banners);
-  expect(banners.some((b) => /Fatigue next round/.test(b))).toBe(true);
-  expect(banners.some((b) => /^Fatigue!/.test(b))).toBe(true);
+  // The Creaks (core id fatigue): warned a round ahead, then named when they start (content/text.json banners.creaks).
+  expect(banners.some((b) => /^The Creaks start next round/.test(b))).toBe(true);
+  expect(banners.some((b) => /^The fort creaks/.test(b))).toBe(true);
   expect(homeAtFatigue).toBe(true);
   expect(wrongBonk).toBe('');
-  // A Fatigue crush on this fight's crew shows as Squashed (when the collapse lands on a Hob at all).
-  if (sawSquashed) await expect(page.locator('.pip.squashed, .pip:not(.squashed)').first()).toBeAttached();
+  // A Fatigue crush on this fight's crew must render a `.pip.squashed` indicator (Web-L9).
+  if (sawSquashed) expect(sawSquashedPip).toBe(true);
 });
 
 test('n2: the Workshop grid shows only rows that can be built, and its status is plain words', async ({ page }) => {
   await ready(page, './?debug=1#workshop');
   await expect(page.locator('.grid .gridrow')).toHaveCount(9);
-  await expect(page.locator('.workshop .status')).toContainText('Ready');
+  await expect(page.locator('.workshop .status')).toContainText('Good to go');
   // The top row takes a block and stays legal.
   await page.locator('.grid .cell[data-r="8"][data-c="3"]').click();
   await expect(page.locator('.workshop .status')).not.toContainText(/outside|grid \d/);

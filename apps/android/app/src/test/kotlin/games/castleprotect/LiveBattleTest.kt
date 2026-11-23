@@ -55,7 +55,7 @@ class LiveBattleTest {
         val b = LiveBattle.open(fac, """{"level":"1-1"}""", 7)
         assertTrue(Reply.parse(b.command(Cmd.pickHob(0))).ok)
         assertTrue(Reply.parse(b.command(Cmd.aim(450, 60))).ok)
-        val r = Reply.parse(b.command(Cmd.FIRE))
+        val r = Reply.parse(b.command(Cmd.fire()))
         assertFalse(r.ok)
         assertEquals("panic", r.reason)
         assertEquals(2, fac.made.size)
@@ -96,7 +96,7 @@ class LiveBattleTest {
         assumeTrue(System.getProperty("castle.hostJni") != null && NativeCore.available())
         val f = NativeCore.factory()!!
         val a = LiveBattle.open(f, """{"level":"1-1"}""", 11)
-        a.command(Cmd.aim(430, 72)); a.command(Cmd.FIRE); a.step(2400)
+        a.command(Cmd.aim(430, 72)); a.command(Cmd.fire()); a.step(2400)
         a.command(Cmd.AI_TURN); a.step(2400)
         val hash = JSONObject(a.command(Cmd.HASH)).getString("hash")
         val log = a.freshLog()

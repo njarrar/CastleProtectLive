@@ -277,10 +277,12 @@ test('m1: "Best shot" on the results names only the winner\'s shots', async ({ p
   await page.getByRole('button', { name: 'Pause' }).click({ force: true });
   await page.getByTestId('give-up').click();
   await expect(page.locator('.screen.results')).toBeVisible({ timeout: 15_000 });
+  // The best shot sits under the winner's name and names the winner's own Hob (results.best_shot).
   const best = page.locator('.screen.results p', { hasText: 'Best shot' });
   if (await best.count()) {
-    await expect(best).toContainText(names[1]);
-    if (names[0] !== names[1]) await expect(best).not.toContainText(names[0]);
+    await expect(best).toHaveCount(1);
+    await expect(page.locator('.screen.results .statcol.side1 p', { hasText: 'Best shot' })).toHaveCount(1);
+    await expect(page.locator('.screen.results .statcol.side1 h3')).toContainText(names[1]);
   }
 });
 
@@ -305,7 +307,7 @@ test('m2: Back from Settings returns to the Pause card, not straight into the fi
   const t = (await snap(page)).tick;
   await page.waitForTimeout(500);
   expect((await snap(page)).tick).toBe(t); // paused for real
-  await page.getByRole('button', { name: 'Resume' }).click();
+  await page.getByRole('button', { name: 'Keep fighting' }).click();
   await expect(page.locator('.pause-card')).toHaveCount(0);
 });
 
@@ -373,7 +375,7 @@ test('m14: a waiting update shows "Update ready" within 2 s of load', async ({ p
 test('M6 (web side): Retry from Pause is the next try, sent to the core as attempt', async ({ page }) => {
   await startLevel1(page);
   await page.getByRole('button', { name: 'Pause' }).click({ force: true });
-  await page.getByRole('button', { name: 'Retry' }).click();
+  await page.getByRole('button', { name: 'Start again' }).click();
   await expect.poll(async () => (await snap(page)).phase).toBe('plan');
   const attempt = await page.evaluate(() => (window as unknown as { castleApp: { lastSetup: { attempt?: number } } }).castleApp.lastSetup.attempt);
   expect(attempt).toBe(1);

@@ -56,6 +56,21 @@ enum CoreFactory {
         #endif
     }
 
+    /// Daily Dust-up seed for a local `yyyy-MM-dd` date from the linked core (`cp_daily_seed`),
+    /// or a deterministic fallback hash when running on the Debug stand-in.
+    static func dailySeed(date: String) -> UInt64 {
+        #if canImport(CastleCoreFFI)
+        let seed = FFICoreBridge.dailySeed(date)
+        if seed != 0 { return seed }
+        #endif
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in date.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 1_099_511_628_211
+        }
+        return max(1, hash)
+    }
+
     static var realCoreLinked: Bool {
         #if canImport(CastleCoreFFI)
         return true

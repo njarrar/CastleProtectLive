@@ -12,6 +12,8 @@ This doc sets every screen, control, prompt, feedback rule and sound in Castle P
 
 **Phase tags.** `[Launch]`, `[U1]`, `[U2]`, `[U3]` follow the phased plan in `docs/review/04-rulings.md`, section A. `[rulings B15]` cites that file. Items marked **OWNER** are recommendations until the owner approves.
 
+**Words on screen (naming pass).** Every line a player reads now comes from `content/text.json`, one string table shared by web, Android and iOS, and every display name comes from the content JSON. Where this doc quotes a line and the string table says something else, the string table wins. The voice rules are in `docs/review/naming-and-voice-review-fable.md` section 2, as fixed by `docs/review/naming-decisions.md`. In short: British spelling; sentence case; "Fight", never "battle", on screen (this doc still says battle in its own prose); "kettle" on screen; "!" only on Bonk!, Thump!, Drop!, Snip! and Kettle Pop!; errors are plain and say what is safe. The title line is **Keep Brickabrac lumpy.** Fatigue is now **the Creaks**, a Battered block is **Cracked**, a buried Loophole is **Dug in**, the Squall win is **Blown Out**, Siege Score is **Score**. On a loss Hetty gives a one-line verdict. On a campaign win the Rival signs off. The level card opens as a **Notice of Flattening**.
+
 ## Changes in revision 3 (owner decisions)
 
 The owner has decided four things. They are binding, and this revision applies them.
@@ -25,7 +27,7 @@ The owner has decided four things. They are binding, and this revision applies t
 
 ## Changes in revision 2
 
-1. **One pre-battle screen, one tap to fight.** The level card, crew, Blueprint, the draft and Doodads are one screen. The Rummage is a draft strip on it. Last picks are kept, and "Same again" is the default on replays (4.1) [rulings B15].
+1. **One pre-battle screen, one tap to fight.** The level card, crew, Blueprint, the draft and Doodads are one screen. The Rummage is a draft strip on it. Last picks are kept, and "Same as last time" is the default on replays (4.1) [rulings B15].
 2. **Onboarding slowed to 12 prompts at most in the first 10 minutes.** Levels 1-1 to 1-5 teach only aim, Hob pick, the kettle, wind and one Knack. The Workshop opens at level 6, the Rummage at level 8, Walk at level 9 and the Tinker Tree at level 10 (section 5) [rulings B14].
 3. **Tinker Tree screen has four branches:** Aim, Fort, Crew, Kit. 36 nodes at launch, one real fork per branch. Forecast, Rival ghost lines, the shot log and the drift readout are free and are no longer nodes (4.4) [rulings B13].
 4. **Sudden Squall HUD** replaces Last Bell, Final Volley and the tiebreak card (2.9) [rulings B5].
@@ -35,7 +37,7 @@ The owner has decided four things. They are binding, and this revision applies t
 8. **Launch SFX are 75 events and launch barks are 100 clips.** The full lists stay, tagged by phase: 115 SFX events and 200 barks by U3 (9.3, 9.4).
 9. ~~Landscape only at launch.~~ Replaced in revision 3: both orientations ship (2.6).
 10. **Any Hob may fire any Trick Shell.** Grey cards, lock states, deny refunds and per-Class tags are gone from the tray, the cards and the draft. The matching Class shows a small "best with" badge (2.4, 4.1, 4.2) [rulings B6].
-11. **Enemy crew is shown.** Rival Class icons stay on after the Muster. Hidden `?` pips return with the Peeper in U2 [rulings B10].
+11. **Enemy crew is shown.** Rival Class icons stay on after the Muster. Hidden `?` pips return with the Lookout in U2 [rulings B10].
 12. **No lost turns in the HUD.** A Tumbled Hob can still fire. A buried Loophole greys the Fire button with a "dug in" icon and never bursts a shot [rulings B9].
 13. **One "needs a rest" cog** for every cause; one "patch" icon with a turn count for every ground effect [rulings B16].
 14. **Pins fade after one reuse** (3.4) [rulings B11].
@@ -87,14 +89,14 @@ Two more, from the rulings: the game never takes a turn away from the player [ru
 | S14 | Collections (**Almanac**, **Curio Shelf**, **Brag Clips**, stats) | Full | Map dock |
 | S15 | Modes. Launch: Couch Duel, Skirmish, Trials, Daily Dust-up, Test Yard. Later: Long Siege `[U1]`, Ironclad `[U2]`, Baron Rush `[U3]` | Full | Map dock |
 | S16 | Skirmish setup (one card) | Sheet | S15 |
-| S17 | Settings (Sound, Controls, Assists, Access, Save, About) | Full, also inside S8 | Gear on every screen |
+| S17 | Settings (Sound, Controls, Help, Comfort, Save, About) | Full, also inside S8 | Gear on every screen |
 | S18 | Resume card ("Carry on?") | Overlay | S0 when a battle save exists |
 | S19 | Retired. Everything is free, so there is no unlock card | | |
 | S20 | Patch notes | Sheet | First launch after an update, About |
 | S21 | Shell card (weapon card) | Popover | Long-press any shell chip, Almanac |
 | S22 | Retired. Both orientations work, so there is no Rotate card (2.6) | | |
 | S23 | **Couch Duel** setup (two player cards, rules row) | Full | **2 Players** pill on the map, Modes |
-| S24 | Hand-off card ("Pass the device to ...") | Overlay on S7 | End of each turn in a Couch Duel |
+| S24 | Hand-off card ("Hand it to ...") | Overlay on S7 | End of each turn in a Couch Duel |
 | S25 | Duel results | Full | Couch Duel end |
 
 Every screen in this table works in the Wide layout and the Tall layout. Section 4.10 lists the tall arrangement of each.
@@ -112,15 +114,15 @@ flowchart TD
     S18 -->|Leave it| S3
 
     S3 -->|tap node| S4[S4 Pre-battle screen]
-    S4 -->|Fight or Same again| S6[S6 Muster fly-by]
+    S4 -->|Fight or Same as last time| S6[S6 Muster fly-by]
     S6 --> S7
     S7 <-->|pause / app leave| S8[S8 Pause card]
-    S8 -->|Retry| S6
+    S8 -->|Again| S6
     S8 -->|Map| S3
     S8 --> S17[S17 Settings]
     S7 -->|Clean Sweep or Kettle Pop| S9[S9 Results]
     S9 -->|Next| S4
-    S9 -->|Retry| S6
+    S9 -->|Again| S6
     S9 -->|Map| S3
     S9 -->|new Pennants| S12[S12 Tinker Tree]
 
@@ -169,7 +171,7 @@ Rules that protect the budget:
 - The Cold Open loads under 2 MB: one map, one Hob, one Rival prop, the core SFX sprite (about 1.2 MB with one music base stem) and the code [audit C81].
 - If the player waits more than 6 s on S1, the Play button bounces once. Nothing else moves.
 
-**Later launches.** S0 goes straight to S3 with the next level glowing [00 §4.3]. Target: icon tap to the map in 3 s, to a first shot of a replay or Skirmish rematch in 5 s more [00 §2.12]. The Results screen and S16 both offer **Rematch**, and the pre-battle screen offers **Same again**; both reuse the last setup.
+**Later launches.** S0 goes straight to S3 with the next level glowing [00 §4.3]. Target: icon tap to the map in 3 s, to a first shot of a replay or Skirmish rematch in 5 s more [00 §2.12]. The Results screen and S16 both offer **Rematch**, and the pre-battle screen offers **Same as last time**; both reuse the last setup.
 
 ---
 
@@ -243,7 +245,7 @@ Safe areas: 47 pt left and right for the notch, 21 pt at the bottom for the home
  Hob col  Walk pad                 Shot tray                         readout   76 pt
 ```
 
-Key: `[II]` pause. `[K 100%]` Heartkettle HP. `(o)` your Hob pips, `(#)` Rival crew pips. At launch every Rival pip shows its Class icon all battle [rulings B10]; read each `(?)` in these drawings as a Class icon. Hidden `(?)` pips return with the Peeper in U2. `~> 4` wind arrow and number. `.>6` forecast for the next Weather Front. `(L)(Z)(S)(P)` Hob portraits with Class letters. `*` selected. `@` rest cog. `S 64` Steam left.
+Key: `[II]` pause. `[K 100%]` Heartkettle HP. `(o)` your Hob pips, `(#)` Rival crew pips. At launch every Rival pip shows its Class icon all battle [rulings B10]; read each `(?)` in these drawings as a Class icon. Hidden `(?)` pips return with the Lookout in U2. `~> 4` wind arrow and number. `.>6` forecast for the next Weather Front. `(L)(Z)(S)(P)` Hob portraits with Class letters. `*` selected. `@` rest cog. `S 64` Steam left.
 
 **Wireframe, during Aim Drag.** Tray, Hob column and Walk pad fade to 25% and stop taking taps. The readout grows and moves next to the Loophole so the numbers sit where the eyes are.
 
@@ -287,7 +289,7 @@ Sizes are tap sizes. A control may draw smaller than it taps.
 | Wind arrow | 64 x 36 | 80 x 44 | 80 x 40 | calm (dot, `0`), left, right; arrow length in 3 steps (1 to 3, 4 to 6, 7 to 10) | Number always shown. Leaves drift on the field at wind speed |
 | Forecast icon | 40 x 36 | 48 x 44 | 48 x 40 | shown on every level, free; pulses in the last round of a front | Smaller arrow with a dotted tail. Never a Tinker node [rulings B13] |
 | Turn banner | 260 x 44, centre, 1.2 s | 320 x 56 | 320 x 56 | **Your turn**, **[Rival] aims**, **Squall in 3**, **Sudden Squall**. Couch Duel: **[Name]'s turn** | Slides in, never blocks taps |
-| Hob portrait | 48 x 48, 4 pt gap | 64 x 64 | 52 x 52, key Tab | ready, selected (ring plus notch), needs a rest (one cog and a number, at most 1 extra turn), Tumbled (dizzy stars; can still fire), dug in (dirt icon; Loophole buried), Bonked (grey, balloon) | Tap picks the Hob. Long-press: Hob card. HP ring around the face. Five portraits at most |
+| Hob portrait | 48 x 48, 4 pt gap | 64 x 64 | 52 x 52, key Tab | ready, selected (ring plus notch), needs a rest (one cog and a number, at most 1 extra turn), Tumbled (dizzy stars; can still fire), dug in (dirt icon; Dug in), Bonked (grey, balloon) | Tap picks the Hob. Long-press: Hob card. HP ring around the face. Five portraits at most |
 | Walk left, Walk right | 48 x 48 each | 56 x 56 | 44 x 44, keys A and D | ready, held, out of Steam, turn cap hit (40), blocked (cliff or water), spent (after firing) | Hold to walk. A ghost outline shows where the castle would stop [00 §2.14] |
 | Steam gauge | 108 x 12 bar plus number | 130 x 14 | 120 x 12 | full, this-turn span marked, empty | The part you can still spend this turn is brighter |
 | Shot chip (Plain, Knack, Trick Shell) | 52 x 52, 4 pt gap | 64 x 64 | 56 x 56, keys 1 to 9 | ready, selected, out of uses, blocked by first-turn Heavy rule, Hob needs a rest | Shows icon, uses left, Weight cogs (0, 1 or 2) and a small "best with" badge when the picked Hob's Class matches (no rest, small bonus). Any Hob may fire any shell, so there is no lock state [rulings B6]. Long-press or right-click: Shell card |
@@ -645,7 +647,7 @@ After the level's round cap (15 by default) a storm starts. The wind grows at ea
 | Forecast icon | Shows the next front | Shows the next Squall wind, so the player can still plan one round ahead |
 | Squall tick | | At each Squall round end, on both forts at once: sky tint, one grit shiver on all blocks, one `-n` on each kettle gauge and one summed `-n` for each side's blocks, a low rumble (`wx_squall_loop`). Under 0.8 s. No slow-mo. On a double pop, the result card shows both sides' total HP |
 | Kettle gauges | Normal states at 50% and 25% | Same. The storm adds no new state |
-| Pre-battle screen and Pause card | Show "Round cap 15, then the Squall" under Rules | Same |
+| Pre-battle screen and Pause card | Show "15 rounds, then the Squall" under Rules | Same |
 | Preview arc | Uses the current wind | Uses the current wind. The storm never hides or shortens the preview |
 
 Rules:
@@ -676,7 +678,7 @@ Rules:
 
 **Slow Drag.** A drag that starts on the readout strip uses 1/5 gain: 5 pt per power point, 5 pt per 0.5 degree across. Up and down change power, left and right change angle.
 
-**Quick Fire** (off by default) [00 §2.3]: finger up fires. When it is on, the band turns red past the 12 pt cancel ring so the player sees the shot is armed.
+**Quick Fire** (off by default) [00 §2.3]: let go to shoot. When it is on, the band turns red past the 12 pt cancel ring so the player sees the shot is armed.
 
 ### 3.2 Fine Tune
 
@@ -694,7 +696,7 @@ Rules:
 - A 150 ms guard after an Aim Drag ends stops a stray lift from landing on Fire.
 - No confirm box, even for Heavy shots. The Fire button shows the shot's Weight cogs so the rest cost is plain before the tap.
 - On fire: camera snaps back to auto-frame, clusters slide off, the launch sound plays within 50 ms.
-- **Take Back** (part of the Cozy preset, [00 §8.1]): after the Resolve step a rewind chip sits by the round label for 5 s. One tap undoes the shot.
+- **Take Back** (part of the Cosy preset, [00 §8.1]): after the Resolve step a rewind chip sits by the round label for 5 s. One tap undoes the shot.
 
 ### 3.4 Ghost, Pins and Recall
 
@@ -871,7 +873,7 @@ Target: one tap and under 3 s to the Muster on a replay; 20 to 40 s on a first v
 +------------------------------------------------------------------------------------+
 | 1-8  Rummage Sale                 Siege           Round cap 15            [x]      |
 +----------------------------+-------------------------------------------------------+
-| [map thumb, both forts]    | (#) Sgt Posy Rakewell (AI)   Aim 2 of 5               |
+| [map thumb, both forts]    | (#) Sgt Posy Rake (AI)   Aim 2 of 5               |
 |                            | <> "Grabs the biggest shell in the Rummage."          |
 | Goals: [flag] Win          | Their crew:  <L> <Z> <S> <B>                          |
 |  [shell] Bonk with a shell | Wind 0 to 2                                           |
@@ -881,7 +883,7 @@ Target: one tap and under 3 s to the Muster on a replay; 20 to 40 s on a first v
 | [sh][sh][sh][sh]   yours: [S1][  ]   theirs: [S1][  ]         [Quick Pick]         |
 |  "Splits in three at the top."   Best with (S)                                     |
 +------------------------------------------------------------------------------------+
-|                                        [ Same again ]            [   FIGHT   ]     |
+|                                        [ Same as last time ]     [   Fight   ]     |
 +------------------------------------------------------------------------------------+
 ```
 
@@ -905,7 +907,7 @@ Target: one tap and under 3 s to the Muster on a replay; 20 to 40 s on a first v
 - **Pick flow:** tap a chip to focus it. The line under the strip shows a five-word hint and the Class that fires it best. Tap the chip again, or tap the empty slot in **yours**, to take it. A taken shell flies to your hand.
 - **Any Hob can fire any shell** [rulings B6]. So no chip is ever grey and there is nothing to deny. The "best with" badge is a small Class icon: that Class, the shell's Match, fires it with Rest 0 and +10% [00 §2.15].
 - **Rival picks** take 0.4 s each: the chip flips to the Rival's colour and flies to **theirs**.
-- **The Rival's wish** [review 06 G9]. While you pick, the Rival's portrait glances at the one shell it wants most: its eyes turn that way and a small diamond eye tag sits on that chip's corner. The wish is real; the AI takes that chip next if it is still there. So the draft is a read on the opponent: take it, or leave it and take your own. One wish shows at a time, and a new one shows after each Rival pick. Screen reader: "Rakewell wants Marble Sack." Reduce motion: the tag alone.
+- **The Rival's wish** [review 06 G9]. While you pick, the Rival's portrait glances at the one shell it wants most: its eyes turn that way and a small diamond eye tag sits on that chip's corner. The wish is real; the AI takes that chip next if it is still there. So the draft is a read on the opponent: take it, or leave it and take your own. One wish shows at a time, and a new one shows after each Rival pick. Screen reader: "Rake wants Bag of Marbles." Reduce motion: the tag alone.
 - **Long-press** a chip: its Shell card with the looping clip (4.2).
 - **Dud:** every Dud says **Dud** on its chip and card, for both sides, always. No stamp and no hidden Dud [01 §1.9]. Quick Pick never takes one for the player.
 - **Quick Pick** fills both hands at once with a 1 s shuffle [04 §6.15].
@@ -915,10 +917,10 @@ Target: one tap and under 3 s to the Muster on a replay; 20 to 40 s on a first v
 **Bottom: one tap to fight.**
 
 - **Fight** (gold, 160 x 56 pt, default focus) starts the Muster. If the draft is not done, Fight runs Quick Pick for the picks that are left. So one tap always works.
-- **Same again** shows only on a replay or a retry. It reuses the last crew, Blueprint, Doodads and drafted hand for this level, and is then the default focus. The pool is the same on a replay of a campaign level, so the same hand is always legal.
+- **Same as last time** shows only on a replay or a retry. It reuses the last crew, Blueprint, Doodads and drafted hand for this level, and is then the default focus. The pool is the same on a replay of a campaign level, so the same hand is always legal.
 - **Last picks are kept.** On a new level the crew, Blueprint and Doodads default to what the player used last. The draft is new, since the pool is new.
 - Nothing on this screen needs a confirm. Every choice can be changed until Fight.
-- **Keyboard:** arrows move, Enter takes or fights, I opens the card, Q is Quick Pick, S is Same again.
+- **Keyboard:** arrows move, Enter takes or fights, I opens the card, Q is Quick Pick, S is Same as last time.
 
 The count against the old flow: level card, seat check, Rummage screen, Doodad pick and Muster took five steps and 60 to 90 s per level. Now it is one screen and one tap, then the Muster.
 
@@ -977,7 +979,7 @@ Three tabs at the top: **Build**, **Crew**, **Decor**. Blueprint slots (5) sit a
 
 - **First visit.** The player has 3 free Cobble blocks and two spots glow: over the top Nook and over the Kettle Room. Either is a good answer to the next Rival, who "aims at roofs" [05 §3.3]. One prompt: **Drag a block**. This is a real choice, not one block in one gap.
 - **Counter.** The header shows the Block Budget as `x / 72`; the grid cap is 80 cells with Footing [audit C65].
-- **Materials.** Wicker, Timber, Cobble and Brassbound at launch. Moonbrick joins the palette in U3.
+- **Materials.** Wicker, Timber, Cobble and Brassbound at launch. Mossbrick joins the palette in U3.
 - **Grid.** Shows the current size cap; cells beyond the cap show a lock with what opens them. Grid growth that seats the crew is a free campaign gift and never shows a price [rulings B3]. Default fit draws cells at 30 pt on a phone. Pinch zooms the grid up to 56 pt cells. Grid cells are not buttons; precision comes from the loupe, snapping and undo.
 - **Drag a block.** Press a palette tile (56 x 56 pt), drag onto the grid. The block floats 40 pt above the finger so the finger does not hide the cell. A loupe shows the target cell at 2x. The block snaps to the cell under it. Green outline: legal. Hatched outline with a small icon: not legal, and the icon says why (no support, over budget, out of Buttons, kettle too near an edge).
 - **Tap to place.** Tap a palette tile to arm it, then tap cells. Good for single blocks.
@@ -1071,7 +1073,7 @@ The tech tree doc owns the nodes, prices and tiers [02]. This section owns the s
 +------------------------------------------------------------------------------------+
 ```
 
-- **One long painted strip** of four regions at launch, left to right: Downs, Crag, Fen, Flats. Drag to pan; the view snaps softly to a region. Pinch out for a whole-world view with the region plates. After the Baron falls, two signposted roads lead off the strip to the Peaks `[U2]` and the Mines `[U3]`; each update adds its region as a spur [05 §8].
+- **One long painted strip** of four regions at launch, left to right: Downs, Crag, Fen, Flats. Drag to pan; the view snaps softly to a region. Pinch out for a whole-world view with the region plates. After the Baron falls, two signposted roads lead off the strip to the Heights `[U2]` and the Mines `[U3]`; each update adds its region as a spur [05 §8].
 - **Nodes** are 56 pt to the tap. A level node shows its number and three Pennant slots under it (`***`). A Trial node is a small tower `(T)` on a side path. A Grand Fort is a large fort icon.
 - **Node states:** done (flag up, hills risen around it), next (glows and bobs, the camera opens on it), open but not done, locked (fogged, flat ground, a tiny roller parked on it). No node is ever locked behind a purchase.
 - **Un-flattening.** When a level is won, the land round its node pops up into hills. When a region is won, the whole region rises in a 3 s scene (skippable), and stays lumpy. Regions not yet won look ironed flat.
@@ -1093,10 +1095,10 @@ The tech tree doc owns the nodes, prices and tiers [02]. This section owns the s
 |            [P]              [P]               [ ]                                  |
 |            Win           By Round 8       Kettle > 50%  (yours: 41%)               |
 |                                                                                    |
-|   Siege Score 2,340      Buttons +250            Also works: Kettle Pop [icon]     |
+|   Score 2,340      Buttons +250            Also works: Kettle Pop [icon]     |
 |   Best shot: Zinger, 62.5 / 74, 118 dmg  [Play] [Save clip]                        |
 |                                                                                    |
-|   [New in Tinker Tree]                 [Map]   [Retry]   [ Next ]                  |
+|   [New in Tinker Tree]                 [Map]   [Again]   [ Next ]                  |
 +------------------------------------------------------------------------------------+
 ```
 
@@ -1108,13 +1110,13 @@ Timeline (skippable with one tap at any point):
 | 0.4 s | Pennant 1 stamps in with a thud and a horn note |
 | 0.9 s | Pennant 2 stamps in, a note higher. A missed goal shows an empty slot and how close you came |
 | 1.4 s | Pennant 3. Three out of three adds a short fanfare and confetti |
-| 1.9 s | Siege Score and Buttons count up for 0.8 s |
+| 1.9 s | Score and Buttons count up for 0.8 s |
 | 2.7 s | Buttons live. **Next** is the default focus |
 
 - **Missed goals** always show your number against the target, so a retry has a clear aim.
 - **Also works** names the win path you did not use, through level 10 only [00 §8.3].
 - **Best shot** replays the top-damage shot in a small window. **Save clip** adds it to Brag Clips.
-- **Loss screen:** title **Flattened**, a line of Hob-speak comfort with a subtitle, **+40 Buttons**, and the "what broke you" replay. Buttons: **Retry** (default), **Fix it** (Workshop), **Map**. No shame, no red.
+- **Loss screen:** title by cause (**Kettle popped**, **Swept**, **Blown over**; **Flattened** if none fits), one line from Hetty about the fort, **+40 Buttons**, and the "what broke you" replay. Buttons: **Again** (default), **Fix it** (Workshop), **Map**. No red, and no comfort line.
 
 **"What broke you" replay** [rulings B17]. After every loss the game shows the player why, in under 6 seconds, so the Workshop has a voice.
 
@@ -1124,11 +1126,11 @@ Timeline (skippable with one tap at any point):
 |  +-----------------------------------------------+                                 |
 |  |  your Blueprint, 60% grey                     |   "Your loft had one leg."      |
 |  |     [1]                                       |                                 |
-|  |    #[2]#   . . . <>   <- Rakewell, Round 6    |   <> Habit: "Aims at roofs."    |
+|  |    #[2]#   . . . <>   <- Rake, Round 6    |   <> Habit: "Aims at roofs."    |
 |  |    #N N#[3]                                   |                                 |
 |  |    ==K K==                                    |   [Play again]  [Skip]          |
 |  +-----------------------------------------------+                                 |
-|                              [ Retry ]     [ Fix it ]     [ Map ]                  |
+|                              [ Again ]     [ Fix it ]     [ Map ]                  |
 +------------------------------------------------------------------------------------+
 ```
 
@@ -1136,11 +1138,11 @@ Timeline (skippable with one tap at any point):
 - **What is marked.** The first three blocks to break get a gold outline and an order tag, `1 2 3`. The shell's path is a dotted line that ends in the Rival's diamond Pin, with the Rival's name and the round.
 - **One line of plain words,** eight words at most, picked from about 20 causes: "Your loft had one leg." "The kettle sat one block in." "All your crew shared one wall." "Wood on the fire side." "He walked; you did not." The line names a thing the player can change.
 - **The habit tag** shows again beside it when the Rival has one, so the player links the loss to the build.
-- **Fix it** opens the Workshop with those three blocks tinted. **Retry** goes to the pre-battle screen with **Same again** in focus.
+- **Fix it** opens the Workshop with those three blocks tinted. **Again** goes to the pre-battle screen with **Same as last time** in focus.
 - The replay starts by itself 0.8 s after the title. One tap skips it. **Play again** repeats it. It never plays after a win; wins keep **Best shot**.
 - Reduce motion: three still frames (before, hit, after) in place of the slow motion.
 - In a loss with no clear cause (a slow trade of shots), the line reads "A close one. Nothing broke first." and no blocks are marked. The game never invents a cause.
-- **Retry** costs nothing and goes straight to the Muster with the same hand (it is **Same again**). Hold the button to open the pre-battle screen and change things.
+- **Again** costs nothing and goes straight to the Muster with the same hand (it is **Same as last time**). Hold the button to open the pre-battle screen and change things.
 - First clear of a region plays the un-flattening scene, then lands on the map.
 
 ### 4.7 Other screens in brief
@@ -1149,8 +1151,8 @@ Timeline (skippable with one tap at any point):
 - **Collections (S14).** Four tabs. **Almanac:** grid of shells, Hobs and Rivals; unseen entries show as outlines with a hint of where to find them. **Curio Shelf:** a real shelf; tap a keepsake to hear its story bark. **Brag Clips:** last 20 replays, play, save, share as a file. **Stats:** local only.
 - **Modes (S15).** One row per mode with its unlock rule in plain sight [00 §6]. Locked modes say how to open them in five words or less. Launch rows: Couch Duel, Skirmish, Trials, Daily Dust-up, Test Yard. Long Siege, Ironclad and Baron Rush add rows when their updates are installed; they are not shown as locked teasers before that.
 - **Daily Dust-up** is a seeded Skirmish: its card is the pre-battle screen with a date stamp, the day's modifier and a loan crew, and no draft choice beyond the day's pool [05 §5.4].
-- **Skirmish setup (S16).** One card: map, Rival, difficulty, round cap, wind range, shell rules, **Win by**, **Start** [02 §5.24]. Remembers the last setup. **Win by** has two choices: **Knockout** (default: Clean Sweep or Kettle Pop) and **Volley Points** (a fixed number of shots each; the highest Siege Score wins) [review 06 G11]. In Volley Points the round label reads `Shot 4 of 10`, each side's Siege Score sits beside its kettle gauge, and there is no Squall.
-- **Pause card (S8).** **Resume** (default), **Retry**, **Settings**, **Map**. Shows the level goals and both win paths. Leaving to the map keeps the battle save, so **Carry on?** greets the player next time.
+- **Skirmish setup (S16).** One card: map, Rival, difficulty, round cap, wind range, shell rules, **Win by**, **Start** [02 §5.24]. Remembers the last setup. **Win by** has two choices: **Knockout** (default: Clean Sweep or Kettle Pop) and **Volley Points** (a fixed number of shots each; the highest Score wins) [review 06 G11]. In Volley Points the round label reads `Shot 4 of 10`, each side's Score sits beside its kettle gauge, and there is no Squall.
+- **Pause card (S8).** **Keep fighting** (default), **Again**, **Settings**, **Map**. Shows the level goals and both win paths. Leaving to the map keeps the battle save, so **Carry on?** greets the player next time.
 - **No store, ever.** The game has no price, no purchase, no ad and no unlock card. Nothing in any menu sells anything. Buttons and Pennants are earned by play only and cannot be bought.
 
 ### 4.8 Settings (S17)
@@ -1161,10 +1163,10 @@ Six tabs. Every change applies at once; there is no Apply button.
 |---|---|
 | **Sound** | Music, Sound, Voices sliders (0 to 100). Mute all. Subtitles on or off. Play in background mix (lets the player's own music carry on). Mono audio |
 | **Controls** | Rotation: Follow device, Stay wide, Stay tall. Portrait view on tablets and desktop: Two lenses or One lens (2.6.5). Drag mode: Pull-back or Point. Quick Fire. Rival turns at 2x. Left-hand layout. Move Fire and clusters (drag them in a preview of the HUD). One-hand mode. Hold-to-repeat or tap-only. Mouse: Drag or Point mode. Show key caps. Remap keys. Remap pad |
-| **Assists** | Difficulty preset (Cozy, Fair, Stubborn). Training Arc. Aim snap. Slow-mo on impact. Extra Steam. Wind off. Take Back is part of Cozy; there is no Brisk timer toggle |
-| **Access** | Colour set (3). Text size (3). UI scale (2). Reduce shake (100, 50, 0). Reduce flashes. Reduce motion. High-contrast HUD. Haptics (Off, Light, Full). Screen reader hints. Battery mode (30 fps) |
+| **Help** | Difficulty preset (Cosy, Fair, Stubborn). Training Arc. Aim snap. Slow-mo on impact. Extra Steam. Wind off. Take Back is part of Cosy; there is no Brisk timer toggle |
+| **Comfort** | Colour set (3). Text size (3). UI scale (2). Reduce shake (100, 50, 0). Reduce flashes. Reduce motion. High-contrast HUD. Haptics (Off, Light, Full). Screen reader hints. Battery mode (30 fps) |
 | **Save** | Export save (code or file). Import save. Download all regions (web). Reset progress (type the word to confirm) |
-| **About** | Language. Patch notes. Credits. Privacy: "Data Not Collected". One line: **Free forever. No ads. Nothing to buy.** Version and save counter |
+| **About** | Language. Patch notes. Credits. Privacy: "We collect nothing." One line: **Free forever. No ads. Nothing to buy.** One small version line, "Version 0.1 (rules 0.2.0)". No save counter |
 
 In battle the Pause card opens the same Settings; changes apply to the live battle.
 
@@ -1188,7 +1190,7 @@ Wide layout:
 
 ```
 +------------------------------------------------------------------------------------+
-| [<] Couch Duel            2 players, 1 device. Free forever, no ads.     [Swap sides]|
+| [<] Couch Duel            Two players, one device.                       [Swap sides]|
 +-----------------------------------------+------------------------------------------+
 | (o) PLAYER 1   [ Mabel          ] [dice]| <> PLAYER 2   [ Otis           ] [dice]  |
 | Fort:  [Box 1] [Box 2]* [Box 3] [mine >]| Fort:  [Box 1]* [Box 2] [Box 3] [mine >] |
@@ -1198,7 +1200,7 @@ Wide layout:
 | Map [Two Tumps >]  Win by [Knockout]  Rounds [15]  Wind [Light]  Shells [Draft]         |
 | Seats [Side by side]   Kind Clock [Off]                                                 |
 +------------------------------------------------------------------------------------+
-|                                   [ Quick start ]                 [   FIGHT   ]    |
+|                                   [ Quick start ]                 [   Fight   ]    |
 +------------------------------------------------------------------------------------+
 ```
 
@@ -1223,7 +1225,7 @@ Tall layout: the two player cards stack, Player 1 on top; the rules row wraps to
 | Shells [Draft]  Kind Clock [Off]    |
 | Seats [Side by side]                |
 +-------------------------------------+
-| [ Quick start ]      [   FIGHT   ]  |
+| [ Quick start ]      [   Fight   ]  |
 +-------------------------------------+
 ```
 
@@ -1233,7 +1235,7 @@ Tall layout: the two player cards stack, Player 1 on top; the rules row wraps to
 - **Crew.** Up to 5 Hobs from the duel pool [00 §6]. **swap** opens the same small picker as the pre-battle screen. Both players may pick the same Hob; each side gets its own copy in its own scarf.
 - **Help** is the handicap, per player (below).
 - **Rules row**, for both players: map, **Win by**, round cap, wind (Off, Light, Full), shells (Draft, Quick Pick, Plain only), seats and the Kind Clock.
-- **Win by:** **Knockout** (default) or **Volley Points**: a fixed number of shots each (5, 10 or 15), and the highest Siege Score wins [review 06 G11]. In Volley Points the round label reads `Shot 4 of 10`, each player's Siege Score sits beside their kettle gauge, the hand-off card shows both scores, and there is no Squall.
+- **Win by:** **Knockout** (default) or **Volley Points**: a fixed number of shots each (5, 10 or 15), and the highest Score wins [review 06 G11]. In Volley Points the round label reads `Shot 4 of 10`, each player's Score sits beside their kettle gauge, the hand-off card shows both scores, and there is no Squall.
 - **Kind Clock** (Off by default; 45 s or 90 s) [review 06 G2]. It nudges a slow player and nothing more. When it runs down, the turn banner slides in again (**Otis, your go**), Fire bobs and a soft chime plays; it repeats every 20 s. It never fires, never skips a turn and never picks for anyone. It shows as a thin ring round the active player's crest, with no numbers and no red.
 - **No line** marks (4.1) show on both crews.
 - **Quick start** fills everything left with fair picks and goes. **Fight** (gold, default focus) goes with what is set. Neither needs a confirm.
@@ -1272,7 +1274,7 @@ It shows after each turn has resolved and saved, over the settled field, dimmed 
 |        Mabel hit: 2 blocks, 31 damage        |    last shot, one line
 |                                              |
 |                  <>  <>  <>                  |
-|             Pass the device to               |
+|             Hand it to                       |
 |                   OTIS                       |    name in the side's colour,
 |                Help: Some +                  |    with its shape on both sides
 |                                              |
@@ -1290,7 +1292,7 @@ It shows after each turn has resolved and saved, over the settled field, dimmed 
 - The card never shows after the last shot of a battle. The results follow at once.
 - The card's first line is the last shot: who fired, what it hit and the damage. A small **Replay** key beside it plays that shot again at 2x.
 - If the app is left on a hand-off card, the battle save holds it. **Carry on?** (S18) then reads **Round 6, Otis's turn**.
-- Screen reader: "Pass the device to Otis. Ready, button."
+- Screen reader: "Hand it to Otis. Ready, button."
 
 #### Table mode (portrait)
 
@@ -1339,8 +1341,8 @@ For a device lying flat between two players who sit at its two short ends [revie
 +------------------------------------------------------------------------------------+
 ```
 
-- Title: **[Name] wins!** with the winner's shape and colour, and the win path: Clean Sweep, Kettle Pop, Sudden Squall or Volley Points (with both Siege Scores). A double pop in the Squall shows both totals, as in 2.9.
-- Both players' numbers sit side by side (stacked in the Tall layout, winner on top). No Pennants, no Siege Score, no "what broke you" replay; **Best shot** plays for whoever made it.
+- Title: **[Name] wins!** with the winner's shape and colour, and the win path: Clean Sweep, Kettle Pop, Sudden Squall or Volley Points (with both Scores). A double pop in the Squall shows both totals, as in 2.9.
+- Both players' numbers sit side by side (stacked in the Tall layout, winner on top). No Pennants, no Score, no "what broke you" replay; **Best shot** plays for whoever made it.
 - **Tonight** is the running score since the players opened Couch Duel. It clears when they leave to the map. Nothing about a duel is kept in the campaign save except Brag Clips the players choose to save.
 - **Rematch** (gold, default focus) reuses the whole setup; the loser fires first. **Swap sides** trades seats and starts. **Change setup** returns to S23 with everything filled in.
 - The loser's side gets the same warm line of Hob-speak as a campaign loss. No red, no shame.
@@ -1408,7 +1410,7 @@ Each screen in the screen map (1.1) was checked at 390 x 844 pt and 820 x 1180 p
 | 1-8  Rummage Sale      Siege   [x]  |
 | Round cap 15           Wind 0 to 2  |
 +-------------------------------------+
-| (#) Sgt Posy Rakewell (AI)  Aim 2/5 |
+| (#) Sgt Posy Rake (AI)  Aim 2/5 |
 | <> "Grabs the biggest shell."       |
 | Their crew: <L> <Z> <S> <B>         |
 +-------------------------------------+
@@ -1424,7 +1426,7 @@ Each screen in the screen map (1.1) was checked at 390 x 844 pt and 820 x 1180 p
 | yours [S1][ ]      theirs [S1][ ]   |
 | "Splits in three."  Best with (S)   |
 +-------------------------------------+
-| [ Same again ]       [   FIGHT   ]  |  pinned, thumb zone
+| [ Same as last time ]  [  Fight  ] |  pinned, thumb zone
 +-------------------------------------+
 ```
 
@@ -1567,13 +1569,13 @@ No level adds more than two.
 | First battle in the Tall layout, after the first miss lands outside the Top lens | **Tap the strip** (pointer on the Field Strip) | Launch |
 | First shimmer on the Rival's fort, from level 1-3 | **Hold a block** (ghost hand holds the shimmering block; Lean Lines show) | Launch |
 | First hidden enemy crew | **Scout them** | U2 |
-| First Peeper reveal | **Now you see** | U2 |
+| First Lookout reveal | **Now you see** | U2 |
 
 **Fail-safes.**
 
 - Five misses in a row in levels 1-1 to 1-5: the preview grows by 10% for that battle and the Pin bobs with **Try the pin** [00 §8.3].
 - No input for 12 s on the player's turn in levels 1-1 to 1-3: the last prompt returns.
-- Two losses on one level in Region 1: the Loss screen adds a quiet chip, **Make it Cozy?** One tap sets the Cozy preset. It never shows again if declined.
+- Two losses on one level in Region 1: the Loss screen adds a quiet chip, **Make it Cosy?** One tap sets the Cosy preset. It never shows again if declined.
 - A player who skips the Cold Open by winning in one shot loses nothing; the Ghost and Pin prompts wait for the first miss in level 1-1.
 - If a new player reaches Round 8 of 1-1, Sir Pudge dozes off and the level ends as a win [05 §3.3]. No first match ends in a storm.
 
@@ -1672,7 +1674,7 @@ Slow-mo scales view time only. The sim stays fixed-step, so replays and saves do
 | Impact of a shot with under 1 s of flight [00 §9.1] | 0.4x | 0.3 s, plus a bright trail |
 | Near miss on a kettle at under 25% HP | 0.5x | 0.3 s |
 | Your own last Hob Bonked | 0.5x | 0.6 s |
-| Threaded! (a point shot enters a Loophole) [01 §8.1] | 0.4x | 0.4 s, with a small push-in on the Loophole |
+| Threaded (a point shot enters a Loophole) [01 §8.1] | 0.4x | 0.4 s, with a small push-in on the Loophole |
 | A Dud lands (once per battle) [01 §8.1] | 0.5x | 0.4 s, played as a mock drumroll |
 
 Rules:
@@ -1700,7 +1702,7 @@ One table of events; each platform plays what it can. Settings: Off, Light (wins
 | Bonk (either side) | notification success (theirs) or warning (yours) | 10, 40, 10, 40, 30 ms | 10, 40, 30 ms | 200 ms pulse |
 | Kettle Pop | three rising heavy hits over 400 ms | 30, 50, 40, 50, 80 ms | 30, 50, 80 ms | 500 ms, 100% fading |
 | Thump | impact heavy | 50 ms, strong | 50 ms | 200 ms, low motor |
-| Threaded! [01 §8.1] | two light ticks 60 ms apart | 8 ms, pause 60, 8 ms | 8, 60, 8 ms | 60 ms twice |
+| Threaded [01 §8.1] | two light ticks 60 ms apart | 8 ms, pause 60, 8 ms | 8, 60, 8 ms | 60 ms twice |
 | Pennant stamp | impact medium each | 15 ms each | 15 ms | 60 ms each |
 | Illegal action (dim key, locked Fire) | notification error, soft | 8 ms twice | none | none |
 
@@ -1748,7 +1750,7 @@ Three colour sets [00 §8.2]:
 
 Other rules:
 
-- Materials differ by texture and outline, not just hue: Wicker weave, Timber grain, Cobble lumps, Brassbound rivets, Moonbrick glow dots (U3).
+- Materials differ by texture and outline, not just hue: Wicker weave, Timber grain, Cobble lumps, Brassbound rivets, Mossbrick glow dots (U3).
 - Hazards carry an icon: flame, drop, flake, bolt.
 - Legal and illegal placement in the Workshop: solid outline against hatched outline plus an icon.
 - HP is never red-to-green. It is a fill level plus a number on demand.
@@ -1811,7 +1813,7 @@ All three read the system "reduce motion" flag on first launch.
 
 ### 7.5 Aim assist options
 
-All sit in Settings, Assists. Any can be on with any preset [00 §8.1]. None changes Pennants.
+All sit in Settings, Help. Any can be on with any preset [00 §8.1]. None changes Pennants.
 
 | Assist | What it does |
 |---|---|
@@ -1823,7 +1825,7 @@ All sit in Settings, Assists. Any can be on with any preset [00 §8.1]. None cha
 | Steady keys | Fine Tune keys are 64 pt and never fold away |
 | Tap-only | No holds, no long-presses anywhere. Long-press actions get a small `i` key instead |
 | Auto-pick Hob | At turn start the game picks a Hob with a legal shot and no Rest |
-| Take Back | One undo per battle. Part of the Cozy preset |
+| Take Back | One undo per battle. Part of the Cosy preset |
 | Wind off, Extra Steam | As in `[00 §8.1]` |
 
 ### 7.6 Subtitles for barks and sound cues
@@ -1893,7 +1895,7 @@ All sit in Settings, Assists. Any can be on with any preset [00 §8.1]. None cha
 1. The app gets the `pause` or `visibilitychange` event [04 §11].
 2. Within 100 ms: stop the sim, stop all audio, release the audio session (so a call or the player's music sounds right), write the battle save.
 3. Any Aim Drag in progress cancels; the old aim returns.
-4. On return: the Pause card is up. Audio resumes only after **Resume**. The battle is exactly where it was.
+4. On return: the Pause card is up. Audio resumes only after **Keep fighting**. The battle is exactly where it was.
 5. If the system killed the app while it was away, the next launch follows 8.4.
 
 Headphones pulled out: the game pauses and mutes, so the phone does not blare.
@@ -1963,11 +1965,11 @@ All region themes share one four-bar tune, the **Lump Tune**, bent to each place
 | Brickabrac Map, menus | Warm, open, a little proud | 92 bpm, lilting 6/8, G major | Tin whistle, concertina, plucked bass | Soft hand drum, distant kettle hiss |
 | Workshop, Tinker Tree | Busy, cosy, tinkering | 100 bpm, straight, C major | Music box, clarinet, pizzicato | Ticking clockwork as the beat; hammer taps on the off-beats |
 | 1. Puddingstone Downs | Jaunty, sunny, safe | 108 bpm, bouncy 2/4, G major | Banjolele, tin whistle, tuba | Washboard, claps, cowbell |
-| 2. Crumblecrag | Bold, craggy, echoing | 96 bpm, stomping 4/4, D dorian | Hammered dulcimer, alpine horn, fiddle | Stomp-and-clap, rock knocks with long echo |
-| 3. Soggybottom Fen | Sneaky, damp, sly | 84 bpm, swung, F minor | Bass clarinet, jaw harp, marimba | Frog guiro, water-drop plucks, muted trumpet with a plunger |
+| 2. Crag End | Bold, craggy, echoing | 96 bpm, stomping 4/4, D dorian | Hammered dulcimer, alpine horn, fiddle | Stomp-and-clap, rock knocks with long echo |
+| 3. Soggy Bottom Fen | Sneaky, damp, sly | 84 bpm, swung, F minor | Bass clarinet, jaw harp, marimba | Frog guiro, water-drop plucks, muted trumpet with a plunger |
 | 4. The Flats | Stiff, too neat, uneasy | 100 bpm, dead straight, C major gone sour | Snare, piccolo, harmonium | A metronome tick; no swing at all |
-| 5. Frostwhisker Peaks `[U2]` | Thin, bright, on edge | 116 bpm, 6/8, A minor | Celesta, bowed saw, pizzicato strings | Sleigh bells, breathy flute gusts, long quiet gaps |
-| 6. Clankmouth Mines `[U3]` | Work song, heavy, driving | 120 bpm, 4/4, E minor | Bass accordion, tuned pipes, low brass | Anvil hits, steam-hiss hats, chain rattles, a hummed Hob choir |
+| 5. Nithering Heights `[U2]` | Thin, bright, on edge | 116 bpm, 6/8, A minor | Celesta, bowed saw, pizzicato strings | Sleigh bells, breathy flute gusts, long quiet gaps |
+| 6. Wheal Clank `[U3]` | Work song, heavy, driving | 120 bpm, 4/4, E minor | Bass accordion, tuned pipes, low brass | Anvil hits, steam-hiss hats, chain rattles, a hummed Hob choir |
 | Grand Fort (boss) | The region's theme, puffed up | Same tempo as the region | Adds low brass playing the Tidy March | Adds big bass drum and a steam organ |
 | Baron Levelwell (final) | Pompous, then cracking | 100 bpm rising to 112 | Steam organ, full Tidy March | The Lump Tune breaks through in the last phase |
 
@@ -2072,7 +2074,7 @@ The last revision listed 124 events for launch. This list keeps every job those 
 | `launch_beam` | Rising whine, 0.4 s, then a bright line | Launch |
 | `launch_heavy` | Deep kettle-drum boom | Launch |
 | `launch_dud` | Sad parp | U1 |
-| `launch_marker` | Light chalk puff (Peeper) | U2 |
+| `launch_marker` | Light chalk puff (Lookout) | U2 |
 
 **Flight** (6 at launch, 8 in all)
 
@@ -2124,9 +2126,9 @@ The last revision listed 124 events for launch. This list keeps every job those 
 | `col_chunk_fall` | Chunk in the air, wind rush | Launch |
 | `col_chunk_land` | Chunk lands, scaled by block count | Launch |
 | `col_dust_settle` | Rubble settles, pebbles tick | U2 |
-| `mat_moon_hit` | Moonbrick chimes | U3 |
-| `mat_moon_break` | Moonbrick shatters like glass bells | U3 |
-| `mat_moon_heal` | Moonbrick mends, soft shimmer | U3 |
+| `mat_moon_hit` | Mossbrick chimes | U3 |
+| `mat_moon_break` | Mossbrick shatters like glass bells | U3 |
+| `mat_moon_heal` | Mossbrick mends, soft shimmer | U3 |
 
 **Ground and weather** (5 at launch, 9 in all)
 
@@ -2214,11 +2216,11 @@ The last revision listed 124 events for launch. This list keeps every job those 
 | Lobber | Low, round, slow |
 | Zinger | High, clipped, quick |
 | Scatterjack | Fast and chattery, stutters |
-| Delver | Gravelly mumble |
-| Boinker | Sing-song, rising |
-| Sizzler | Hissy, breathy |
+| Digger | Gravelly mumble |
+| Bouncer | Sing-song, rising |
+| Stoker | Hissy, breathy |
 | Patcher | Warm, humming |
-| Peeper `[U2]` | Whispery, with little gasps |
+| Lookout `[U2]` | Whispery, with little gasps |
 
 - **Flatteners** speak the same tongue but stiff and nasal, with hard stops. **Baron Levelwell** is a deep, fussy bass who rolls his sounds.
 - **Per Hob.** Named Hobs share their Class voice set, shifted in pitch by up to 3 semitones each way. No new recordings per Hob.
@@ -2249,7 +2251,7 @@ The last revision listed 124 events for launch. This list keeps every job those 
 | Dud lands | Whoever got hit | "...Was that it?" | Crew set | U1 |
 | Squall starts | Your crew | "Hats on!" | Crew set | U1 |
 | New Hob joins | The new Hob | "Room for one more?" | Crew set | U1 |
-| All six Class events above | Peeper | Whispered | Peeper Class | U2 |
+| All six Class events above | Lookout | Whispered | Lookout Class | U2 |
 | Fires a Knack (own line) | Your Hob | "Here comes the big one!" | Class | U2 |
 | Rival extras: wall falls, kettle low, wins, takes a shell, phase change | Rival | "Mind the paintwork!" | Flattener set | U2 |
 | Countess Glaze: score call, boss start | Glaze | "Four point five." | Glaze | U2 |
@@ -2262,7 +2264,7 @@ The last revision listed 124 events for launch. This list keeps every job those 
 |---|---|---|
 | Launch | 100 | 7 Classes x 6 events x 2 takes = 84. Flattener set 5 events x 2 = 10. Baron 3 lines x 2 = 6 |
 | U1 | +20 | One shared crew set, 10 events x 2 takes, pitched per Hob at play time |
-| U2 | +40 | Peeper 6 x 2 = 12. Knack lines 7 x 2 = 14. Flattener extras 5 x 2 = 10. Glaze 2 x 2 = 4 |
+| U2 | +40 | Lookout 6 x 2 = 12. Knack lines 7 x 2 = 14. Flattener extras 5 x 2 = 10. Glaze 2 x 2 = 4 |
 | U3 | +40 | 8 Classes x 2 events x 2 = 32. Bolt 2 x 2 = 4. Baron 2 x 2 = 4 |
 | **Total** | **200** | The last revision asked for about 260 at launch |
 
@@ -2438,7 +2440,7 @@ No analytics by default [00 §5.4]. These are playtest and bot checks.
 | Five or six tree boughs | Four branches [rulings B13] |
 | Shake, hit stop and slow-mo numbers against the weapons doc | This doc's values stand; the weapons doc keeps its Threaded slow-mo and double tick, and the Dud slow-mo once per battle [audit C83] |
 | Type colours | This doc's table stands, with Fire in ember red [audit C82] |
-| Hidden crew at launch | Shown; hidden crew and the Peeper come in U2 [rulings B10] |
+| Hidden crew at launch | Shown; hidden crew and the Lookout come in U2 [rulings B10] |
 
 **Owner decisions (from rulings section D). Items 1, 3 and 9 are now decided; the rest are recommendations.**
 
@@ -2467,7 +2469,7 @@ No analytics by default [00 §5.4]. These are playtest and bot checks.
 | Anchor-based drag feels odd to players used to dragging from the unit | Aim feel | Playtest both in the week 4 prototype; anchor mode keeps fingers off the castle, which matters more on phones |
 | New players still drown, now in minutes 10 to 25 | Players leave before the game opens up | The 2-prompts-a-level cap; controls not drawn until taught; test the slice with casual players, not genre fans [02 review §5.4] |
 | The draft strip is cramped on the small phone with a pool of 10 | Slow or wrong picks | Five chips to a view with snap scrolling; Quick Pick and Fight always work; test at 667 x 375 |
-| "Same again" hides the draft from players who would enjoy it | Less variety | It shows only on replays; first visits always show the strip |
+| "Same as last time" hides the draft from players who would enjoy it | Less variety | It shows only on replays; first visits always show the strip |
 | Sudden Squall reads as a punishment | Sour endings | Three-round warning, weather look, no red, both sides hit the same; test that players can say why the match ended |
 | The mirror layer for screen readers drifts from the canvas | Broken access | One shared menu model drives both; CI compares them |
 | Too many clusters on the small phone | Cramped HUD returns | Crew cap 5; controls appear as taught; tray scrolls; One-hand mode and movable clusters |
@@ -2491,7 +2493,7 @@ Cut by the rulings or by this revision. None of it is in a phase plan.
 |---|---|
 | The Rummage as its own full screen (S5), with the two-step Take confirm | The draft is a strip on the pre-battle screen [rulings B15] |
 | Grey cards, "Deny it: +10 Buttons", "wrong Class" chip state, family tags and "Fires:" lines on cards | Any Hob fires any shell; no deny refund [rulings B6] |
-| Dud `?` stamp shown only with a Peeper or a node | Every Dud says so on its chip |
+| Dud `?` stamp shown only with a Lookout or a node | Every Dud says so on its chip |
 | 31 prompts in the first 10 minutes, with the Workshop, Rummage, Walk, Steam, Reload and Tinker Tree prompts inside them | 12 at most; those systems open at levels 6 to 10 [rulings B14] |
 | Workshop Seat tab perks: Neighbor perk links, Auto-seat by perk | The seat layer is cut [rulings B7] |
 | Hob portrait states Chilled, Perched, Crowded | Five Hob states; one rest cog [rulings B7, B16] |
