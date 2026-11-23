@@ -5,6 +5,7 @@ import type { BlockView, HobView, KettleView, PinView, PropView, RoomView, Side,
 import type { Feel } from './feel';
 import type { TerrainLayer } from './terrain';
 import { anims, frameAt } from './anim';
+import { ctx2d } from './ctx2d';
 import { flattenerSpriteName, isCrewHob, sprites } from './sprites';
 import { list } from '../ui/text';
 import { type Cam, type Rect, stage, sx, sy, toScreen, toWorld } from './view';
@@ -72,7 +73,7 @@ export interface DrawOpts {
  */
 class ScaledCopy {
   canvas = document.createElement('canvas');
-  private c = this.canvas.getContext('2d')!;
+  private c = ctx2d(this.canvas);
   private src: CanvasImageSource | null = null;
   private rev = -1; private w = 0; private h = 0;
   private pw = 0; private ph = 0; private prev = -1; private psrc: CanvasImageSource | null = null; private n = 0;
@@ -132,7 +133,7 @@ export class LensCache {
   hills = [new ScaledCopy(), new ScaledCopy()];
   terr = new ScaledCopy();
   canvas = document.createElement('canvas');
-  private ctx = this.canvas.getContext('2d')!;
+  private ctx = ctx2d(this.canvas);
   private k = new Float64Array(10);
   private stillFrames = 0;
   valid = false;

@@ -3,6 +3,7 @@
 // (ui_button_coin_spin) and the Fire press (ui_fire_press timing and its fire event).
 // Sprite clips play on small canvases from one shared ticker that runs only while one is live.
 import { AnimPlayer, anims, trackKeyframes, type EventSink } from '../render/anim';
+import { ctx2d } from '../render/ctx2d';
 import { sprites } from '../render/sprites';
 import { play } from '../audio/sfx';
 
@@ -26,7 +27,7 @@ function tick(now: number): void {
 }
 
 function paint(l: Live): void {
-  const ctx = l.el.getContext('2d');
+  const ctx = ctx2d(l.el);
   const c = l.p.clip;
   const name = l.p.frame();
   if (!ctx || !c || !name) return;

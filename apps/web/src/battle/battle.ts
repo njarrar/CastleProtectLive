@@ -7,6 +7,7 @@ import { SaveError, TICK_HZ } from '../core/types';
 import { clearBattle, dropBattleSave, loadBattleSave, saveBattle } from '../save/db';
 import { DEBUG } from '../ui/fatal';
 import { CLASS_COLOR, CLASS_ICON, CLASS_INK, btn, h, repeatKey } from '../ui/dom';
+import { ctx2d } from '../render/ctx2d';
 import { type DrawOpts, LensCache, drawLens, drawStrip } from '../render/draw';
 import { type Cam, type Rect, toScreen, toWorld } from '../render/view';
 import { Feel } from '../render/feel';
@@ -87,7 +88,7 @@ export function battleScreen(app: App, route: Route): Screen {
   const shellBuf = new Float64Array(3 * 16);
   let nShell = 0;
   const canvas = h('canvas', { class: 'field', 'aria-label': t('a11y.field') });
-  const ctx = canvas.getContext('2d')!;
+  const ctx = ctx2d(canvas);
   const root = h('div', { class: 'battle' }, canvas);
   let crashed = false;
   const hud = h('div', { class: 'hud' });

@@ -470,7 +470,7 @@ final class AppModel: ObservableObject {
         s.onAimBand = { gain, pitch in sound.setLoop("aim_band_stretch", gain: gain, pitch: pitch) }
         s.onSlowMo = { scale in sound.setSlowMotion(scale) }
         s.onHobPicked = { [weak s] def, side in
-            let who = s.map { Self.barkContext($0.snapshot, side: side) } ?? ([], nil)
+            let who = s.map { Self.barkContext($0.snapshot, side: side) } ?? (mates: [], rival: nil)
             sound.bark(hob: def, event: "picked", side: side, mates: who.mates, rival: who.rival)
         }
         s.fx.onSound = { id, pitch, gain in sound.play(id, pitch: pitch, gain: gain) }
@@ -484,7 +484,7 @@ final class AppModel: ObservableObject {
             sound.play(id, pitch: pitch, gain: gain, pan: pan)
         }
         s.fx.onBark = { [weak s] def, event, side in
-            let who = s.map { Self.barkContext($0.snapshot, side: side) } ?? ([], nil)
+            let who = s.map { Self.barkContext($0.snapshot, side: side) } ?? (mates: [], rival: nil)
             sound.bark(hob: def, event: event, side: side, mates: who.mates, rival: who.rival)
         }
         pendingSting = nil

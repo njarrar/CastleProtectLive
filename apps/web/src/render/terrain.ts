@@ -4,6 +4,7 @@
 // cool faceted slate Rock, espresso-basalt Bedrock, marsh Mud, sparkling Water) using
 // 100% deterministic zero-allocation hash math.
 import type { TerrainView } from '../core/types';
+import { ctx2d } from './ctx2d';
 
 // Dark espresso storybook contour (#2C221E)
 const INK_R = 44, INK_G = 34, INK_B = 30;
@@ -49,7 +50,7 @@ export class TerrainLayer {
 
   constructor() {
     this.canvas = document.createElement('canvas');
-    this.ctx = this.canvas.getContext('2d', { willReadFrequently: false })!;
+    this.ctx = ctx2d(this.canvas);
   }
 
   apply(t: TerrainView): void {

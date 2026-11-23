@@ -10,6 +10,8 @@
 // Backward-compatible with both legacy untrimmed atlases and v2 trimmed/deduplicated atlases.
 // When the art is missing, every draw returns false and the renderer uses its plain shapes.
 
+import { ctx2d, SKIA_WEBKIT } from './ctx2d';
+
 /** Decoded pixels: an ImageBitmap where the browser has one, so pages are not decoded again each frame. */
 export type Pix = (ImageBitmap | HTMLImageElement) & { width: number; height: number };
 interface OverlayEntry { sprite: string; dx: number; dy: number; rot?: number; scale?: number }
@@ -251,13 +253,13 @@ class SpriteBank {
     if (!f.trim && (!ovs || !ovs.length)) {
       c.width = f.w;
       c.height = f.h;
-      c.getContext('2d')!.drawImage(f.img, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+      ctx2d(c).drawImage(f.img, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
     } else {
       const cw = f.sourceSize?.[0] ?? (m ? Math.round(m.w * f.scale) : f.w);
       const ch = f.sourceSize?.[1] ?? (m ? Math.round(m.h * f.scale) : f.h);
       c.width = Math.max(1, cw);
       c.height = Math.max(1, ch);
-      const g = c.getContext('2d')!;
+      const g = ctx2d(c);
       if (f.trim) g.drawImage(f.img, f.x, f.y, f.w, f.h, f.trim[0], f.trim[1], f.trim[2], f.trim[3]);
       else g.drawImage(f.img, f.x, f.y, f.w, f.h, 0, 0, cw, ch);
       if (ovs && ovs.length > 0) {
@@ -300,7 +302,9 @@ async function loadTex(base: string): Promise<HTMLImageElement | undefined> {
 }
 
 async function pix(i: HTMLImageElement): Promise<Pix> {
-  if (typeof createImageBitmap !== 'function') return i;
+  // On WebKit/Linux the canvases are CPU-backed (ctx2d.ts) and an ImageBitmap there is a GPU
+  // texture, so the decoded image is drawn as it is.
+  if (typeof createImageBitmap !== 'function' || SKIA_WEBKIT) return i;
   try { return await createImageBitmap(i); } catch { return i; }
 }
 
