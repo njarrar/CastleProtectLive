@@ -62,8 +62,12 @@ export function battleScreen(app: App, route: Route): Screen {
   // auto-finish draft, and so does Shells: Quick Pick. Skirmish and Couch Duel with Shells: The
   // Rummage open the in-battle Draft modal (Web-H10).
   if (snap.phase === 'draft' && (setup.mode === 'campaign' || setup.shells !== 'draft')) {
+    // The first snapshot holds the whole map; the next one only what changed since, so keep the
+    // ground from the first or a level with a Rummage starts with no ground drawn.
+    const ground = snap.terrain.chunks;
     core.command({ cmd: 'end_draft' });
     snap = core.snapshot();
+    snap.terrain.chunks = [...ground, ...snap.terrain.chunks];
   }
 
   const terr = new TerrainLayer();
@@ -2245,7 +2249,7 @@ export function battleScreen(app: App, route: Route): Screen {
   else if (r.paused && snap.phase !== 'over') openPause();
 
   // For tests and debugging only (dev, or ?debug in the URL): a read-only view of the latest snapshot.
-  if (DEBUG) (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, layout: () => layout, core: core.name, cam: () => ({ ...camWide }), dpr: () => dpr, joined: () => joined, fx: feel.fx, wordBoxes: () => feel.fx.lastWords, feel: () => ({ terr: terr.rev, fx: feel.fx.live, collapse: feel.col.busy || feel.col.started > 0, slow: feel.juice.slowing, trauma: feel.juice.trauma }),
+  if (DEBUG) (window as unknown as { __castle?: unknown }).__castle = { snap: () => snap, groundCols: () => terr.tops.reduce((n, y) => n + (y > 0 ? 1 : 0), 0), layout: () => layout, core: core.name, cam: () => ({ ...camWide }), dpr: () => dpr, joined: () => joined, fx: feel.fx, wordBoxes: () => feel.fx.lastWords, feel: () => ({ terr: terr.rev, fx: feel.fx.live, collapse: feel.col.busy || feel.col.started > 0, slow: feel.juice.slowing, trauma: feel.juice.trauma }),
     // World point to screen px in the lens that aims ('aim': wide or bottom) or shows the target ('target': wide or top).
     toScreen: (x: number, y: number, which: 'aim' | 'target' = 'aim') => {
       const l = lensRects().find((q) => q.id === 'wide' || q.id === (which === 'aim' ? 'bottom' : 'top')) ?? lensRects()[0];
