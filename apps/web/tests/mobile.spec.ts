@@ -44,7 +44,7 @@ test('landscape: aim previews do not pile up on the field (the lens is cleared u
   const box = (await page.locator('canvas.field').boundingBox())!;
   const tall = (await page.locator('.hud.tall').count()) > 0;
   const area = tall ? (await page.locator('.lens-bottom').boundingBox())! : box;
-  // White pixels (preview dots are white with an ink ring) on the whole field.
+  // White pixels (the aim beam has a white shine) on the whole field.
   const white = () => page.evaluate(() => {
     const c = document.querySelector('canvas.field') as HTMLCanvasElement;
     const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;

@@ -398,8 +398,11 @@ final class FrameAssembler {
         v.preview = flat
         v.pins = s.ghosts.compactMap { g in
             guard let pin = g.pin, pin.count >= 2 else { return nil }
+            var path: [Double] = []
+            path.reserveCapacity(g.points.count * 2)
+            for p in g.points where p.count >= 2 { path.append(Double(p[0])); path.append(H - Double(p[1])) }
             return PinView(x: Double(pin[0]), y: H - Double(pin[1]), side: g.side, round: g.round,
-                           spent: g.recalled, hob: String(g.hob))
+                           spent: g.recalled, hob: String(g.hob), angle: g.angle, power: g.power, path: path)
         }
         v.ghostCount = [s.ghosts.filter { $0.side == 0 }.count, s.ghosts.filter { $0.side == 1 }.count]
         v.shells = s.shells.map { ShellView(id: $0.id, x: Double($0.x), y: H - Double($0.y), kind: $0.shot, rot: $0.rot) }

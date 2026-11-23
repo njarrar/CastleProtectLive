@@ -142,41 +142,148 @@ struct DragBandLayer: View {
     }
 }
 
-/// The stretchy band from the anchor to the finger during an Aim Drag, with a big readout.
+/// Aim colour by power: blue at 0, orange near 89, red only from 90. Shape and numbers carry power too.
+func aimHeat(_ power: Int) -> Color {
+    let p = Double(min(100, max(0, power)))
+    let hue = p >= 90 ? 4.0 : 205 - 175 * p / 89
+    return Color(hue: hue / 360, saturation: 0.78, brightness: 0.92)
+}
+
+/// The Aim Drag: a 10 step power scale from the anchor that fills as you pull, the last shot's
+/// notch and the change from it, the cancel spot at the anchor, and power and angle badges.
 struct DragBandView: View {
     let drag: DragOverlay?
     let side: Int
     let colours: ColourSet
 
+    /// The direction from the anchor toward the finger for an aim angle in tenths (screen, y down).
+    private func along(_ angle: Int, _ d: DragOverlay) -> CGVector {
+        let r = Double(angle) / 10 * .pi / 180
+        let s: CGFloat = d.pullBack ? 1 : -1
+        return CGVector(dx: -CGFloat(cos(r)) * s, dy: CGFloat(sin(r)) * s)
+    }
+
+    private func quad(_ a: CGPoint, _ u: CGVector, _ b0: CGFloat, _ b1: CGFloat, _ hw: CGFloat) -> Path {
+        let n = CGVector(dx: -u.dy, dy: u.dx)
+        var p = Path()
+        p.move(to: CGPoint(x: a.x + u.dx * b0 + n.dx * hw, y: a.y + u.dy * b0 + n.dy * hw))
+        p.addLine(to: CGPoint(x: a.x + u.dx * b1 + n.dx * hw, y: a.y + u.dy * b1 + n.dy * hw))
+        p.addLine(to: CGPoint(x: a.x + u.dx * b1 - n.dx * hw, y: a.y + u.dy * b1 - n.dy * hw))
+        p.addLine(to: CGPoint(x: a.x + u.dx * b0 - n.dx * hw, y: a.y + u.dy * b0 - n.dy * hw))
+        p.closeSubpath()
+        return p
+    }
+
+    private static func signed(_ v: Double, digits: Int) -> String {
+        let s = v > 0 ? "+" : v < 0 ? "\u{2212}" : "\u{00B1}"
+        return s + String(format: "%.\(digits)f", abs(v))
+    }
+
     var body: some View {
         if let drag {
-            ZStack(alignment: .topLeading) {
-                Path { p in
-                    p.move(to: drag.anchor)
-                    p.addLine(to: drag.end)
-                }
-                .stroke(drag.armed ? Color(hex: 0xE5484D) : Theme.side(side, colours),
-                        style: StrokeStyle(lineWidth: 6, lineCap: .round, dash: [10, 6]))
-                Circle()
-                    .stroke(Theme.ink, lineWidth: 2)
-                    .frame(width: 24, height: 24)
-                    .position(drag.anchor)
-                Circle()
-                    .fill(Theme.paper)
-                    .overlay(Circle().stroke(Theme.ink, lineWidth: 3))
+            GeometryReader { geo in
+                ZStack(alignment: .topLeading) {
+                    if drag.cancel {
+                        Path { p in p.move(to: drag.anchor); p.addLine(to: drag.finger) }
+                            .stroke(Theme.ink.opacity(0.45), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    } else {
+                        let u = along(drag.angle, drag)
+                        let seg = drag.span / 10
+                        let pull = CGFloat(drag.power) / 100 * drag.span
+                        ForEach(0..<10, id: \.self) { k in
+                            let b0 = CGFloat(k) * seg + 1.5, b1 = CGFloat(k + 1) * seg - 1.5
+                            quad(drag.anchor, u, b0, b1, 5)
+                                .fill(Theme.paper.opacity(0.55))
+                                .overlay(quad(drag.anchor, u, b0, b1, 5)
+                                    .stroke(drag.armed ? Color(hex: 0xE5484D) : Theme.ink.opacity(0.6), lineWidth: drag.armed ? 2 : 1))
+                            if pull > b0 {
+                                quad(drag.anchor, u, b0, min(b1, pull), 5).fill(aimHeat((k + 1) * 10))
+                            }
+                        }
+                        if let la = drag.lastAngle, let lp = drag.lastPower {
+                            let v = along(la, drag)
+                            let d = CGFloat(lp) / 100 * drag.span
+                            let m = CGPoint(x: drag.anchor.x + v.dx * d, y: drag.anchor.y + v.dy * d)
+                            Rectangle()
+                                .fill(Theme.paper)
+                                .overlay(Rectangle().stroke(Theme.ink, lineWidth: 1.5))
+                                .frame(width: 5, height: 22)
+                                .rotationEffect(.radians(Double(atan2(v.dy, v.dx))))
+                                .position(m)
+                            Text(Self.signed(Double(drag.power - lp), digits: 0) + " | " + Self.signed(Double(drag.angle - la) / 10, digits: 1) + "\u{00B0}")
+                                .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                                .foregroundStyle(Theme.ink)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(RoundedRectangle(cornerRadius: 6).fill(Theme.paper.opacity(0.94)))
+                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.ink, lineWidth: 1.5))
+                                .position(x: m.x - v.dy * 24, y: m.y + v.dx * 24)
+                        }
+                    }
+                    // The cancel spot: drag back onto it and let go to keep the old aim.
+                    ZStack {
+                        Circle().fill(drag.cancel ? Color(hex: 0xE5484D) : Theme.paper)
+                        Circle().stroke(Theme.ink, lineWidth: 2)
+                        Image(systemName: "xmark").font(.system(size: 12, weight: .heavy))
+                            .foregroundStyle(drag.cancel ? Theme.paper : Theme.ink)
+                    }
                     .frame(width: 30, height: 30)
-                    .position(drag.end)
-                Text(String(format: "%.1f\u{00B0} | %d", Double(drag.angle) / 10, drag.power))
-                    .font(Theme.number(26))
-                    .foregroundStyle(Theme.ink)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-                    .panel(corner: 14)
-                    .position(x: drag.anchor.x, y: max(40, drag.anchor.y - 70))
+                    .position(drag.anchor)
+                    if drag.cancel {
+                        Text(GameText.shared.t("hud.cancel_aim"))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color(hex: 0xE5484D))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Theme.paper.opacity(0.94)))
+                            .position(x: drag.anchor.x, y: max(20, drag.anchor.y - 32))
+                    }
+                    // Power and angle badges at the top, where the eyes are free.
+                    HStack(spacing: 10) {
+                        AimBadge(bolt: true, title: GameText.shared.t("hud.power").uppercased(), value: "\(drag.power)%", power: drag.power, degrees: 0)
+                        AimBadge(bolt: false, title: GameText.shared.t("hud.angle").uppercased(),
+                                 value: String(format: "%.1f\u{00B0}", Double(drag.angle) / 10), power: drag.power, degrees: Double(drag.angle) / 10)
+                    }
+                    .position(x: geo.size.width / 2, y: 76)
+                }
             }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
+    }
+}
+
+/// One aim badge: an icon in a light circle, a small title and the value.
+struct AimBadge: View {
+    let bolt: Bool
+    let title: String
+    let value: String
+    let power: Int
+    let degrees: Double
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Circle().fill(Theme.paper)
+                if bolt {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(aimHeat(power))
+                } else {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.ink)
+                        .rotationEffect(.degrees(-degrees))
+                }
+            }
+            .frame(width: 28, height: 28)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.paper)
+                Text(value).font(.system(size: 15, weight: .bold).monospacedDigit()).foregroundStyle(Theme.paper)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 4)
+        .frame(width: 124, height: 36)
+        .background(Capsule().fill(Theme.ink.opacity(0.88)))
     }
 }
 

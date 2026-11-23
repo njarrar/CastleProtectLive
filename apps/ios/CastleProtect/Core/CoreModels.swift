@@ -433,6 +433,10 @@ struct PinView: Equatable, Sendable {
     var round: Int
     var spent = false
     var hob = ""
+    /// The aim this shot was fired with (tenths of a degree, 0 to 100) and its flight, as x, y pairs.
+    var angle = 0
+    var power = 0
+    var path: [Double] = []
 }
 
 struct ShellView: Equatable, Sendable {

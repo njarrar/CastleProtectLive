@@ -17,10 +17,12 @@ import games.castleprotect.game.GameSession
 import games.castleprotect.game.OwnerRule
 import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /** One window onto the world: a screen rect, a world centre and a scale in px per cell. y grows down, as in the core. */
 class Lens(val rect: RectF = RectF(), @Volatile var cx: Float = 0f, @Volatile var cy: Float = 0f, @Volatile var scale: Float = 1f, @Volatile var live: Boolean = false) {
@@ -277,6 +279,20 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         session.collapseShowing = fieldFx.collapseShowing
         // Suppress shake only while aiming calmly; allow Round 10 Fatigue and post-settle collapse shakes (Android-M2).
         session.juice.shake(dt * 1000f, aiming = draggingFlag || (f.phase == Phase.PLAN && !session.fatigueShaking && !fieldFx.collapseShowing), shakeOut)
+        // Edge help: a finger held on the screen edge under power 100 slides the anchor away, about
+        // 2.5 s from 0 to 100. Done on the UI thread, where the aim and its sounds live.
+        if (draggingFlag && heldAngle >= 0 && sentPower in 0..99 && Aim.onEdge(fingerX, fingerY, w, h, dp)) {
+            val step = Aim.fullPull(0f, 0f, 0f, 0f, w, h, dp) * dt / 2.5f
+            post {
+                if (draggingFlag && heldAngle >= 0) {
+                    val s = Aim.slideAnchor(anchorX, anchorY, heldAngle, session.settings.pointMode, step)
+                    anchorX = s[0]; anchorY = s[1]
+                    updateAim()
+                }
+            }
+        }
+        renderer.aimFull = Aim.fullPull(0f, 0f, 0f, 0f, w, h, dp)
+        renderer.pointMode = session.settings.pointMode
         val dragNow = if (draggingFlag) drag.also { it[0] = anchorX; it[1] = anchorY; it[2] = fingerX; it[3] = fingerY } else null
         val hob = f.selectedHob
         if (dragNow != null && hob != null && (hob.angle != readoutA || hob.power != readoutP)) {
@@ -702,20 +718,23 @@ object Aim {
     }
 
     /**
-     * The pull for power 100 (QA playtest 1, m3): 40% of the screen's short side, or the room from
-     * the anchor to the screen edge in the pull's direction when that is less, never under 64 dp.
-     * So full power comes before the finger meets the edge.
+     * The pull for power 100: always 40% of the screen's short side, wherever the drag starts, so
+     * the same pull gives the same power. A finger that meets the edge first slides the anchor
+     * away instead ([slideAnchor], 07 section 3.1 step 7).
      */
-    fun fullPull(ax: Float, ay: Float, dirX: Float, dirY: Float, w: Float, h: Float, dp: Float): Float {
-        val base = 0.4f * min(w, h)
-        val len = hypot(dirX, dirY)
-        var room = Float.POSITIVE_INFINITY
-        if (len >= 1f) {
-            val ux = dirX / len; val uy = dirY / len
-            if (ux > 1e-4f) room = min(room, (w - ax) / ux) else if (ux < -1e-4f) room = min(room, -ax / ux)
-            if (uy > 1e-4f) room = min(room, (h - ay) / uy) else if (uy < -1e-4f) room = min(room, -ay / uy)
-        }
-        return max(64f * dp, min(base, room))
+    @Suppress("UNUSED_PARAMETER")
+    fun fullPull(ax: Float, ay: Float, dirX: Float, dirY: Float, w: Float, h: Float, dp: Float): Float = 0.4f * min(w, h)
+
+    /**
+     * Edge help: the anchor moved [px] px along the shot's direction for [angle] (tenths), so a
+     * finger held on the screen edge keeps the pull growing. Pull-back moves the anchor toward
+     * the shot, point mode away from it.
+     */
+    fun slideAnchor(ax: Float, ay: Float, angle: Int, pointMode: Boolean, px: Float): FloatArray {
+        val r = Math.toRadians(angle / 10.0)
+        var ux = cos(r).toFloat(); var uy = -sin(r).toFloat()
+        if (pointMode) { ux = -ux; uy = -uy }
+        return floatArrayOf(ax + ux * px, ay + uy * px)
     }
 
     /** The finger is on the screen edge (within 2 dp). */

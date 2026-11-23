@@ -163,11 +163,16 @@ for (const vp of [PORTRAIT, LANDSCAPE]) {
   });
 }
 
-test('m3: a pull that runs into the screen edge keeps its angle (asked 45, got 45) at full power', async ({ page }) => {
+test('m3: a pull that runs into the screen edge keeps its angle (asked 45, got 45), and the anchor slides until full power', async ({ page }) => {
   await startLevel1(page);
   await page.waitForTimeout(800);
   const vp = page.viewportSize()!;
-  await pull(page, 45, Math.max(vp.width, vp.height));
+  await pull(page, 45, Math.max(vp.width, vp.height), true);
+  // Full power is always the same pull, so a finger held on the edge slides the anchor away
+  // (07 §3.1 step 7) until power reaches 100. It takes about 2.5 s from 0.
+  await page.waitForTimeout(3000);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
   const aim = (await snap(page)).hud.aim!;
   expect(Math.abs(aim.angle - 450)).toBeLessThanOrEqual(10);
   expect(aim.power).toBe(100);

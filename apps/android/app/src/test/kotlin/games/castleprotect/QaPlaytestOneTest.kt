@@ -269,6 +269,21 @@ class QaPlaytestOneTest {
         assertTrue(edge[1] in 0..100)
     }
 
+    @Test fun theSamePullGivesTheSamePowerFromAnyStartAndTheEdgeSlidesTheAnchor() {
+        val dp = 2.75f; val w = 844f * dp; val h = 390f * dp
+        // Near the bottom edge or in the open, power 100 is the same pull: 40% of the short side.
+        assertEquals(0.4f * h, Aim.fullPull(150f * dp, 370f * dp, -1f, 1f, w, h, dp), 0.01f)
+        assertEquals(0.4f * h, Aim.fullPull(400f * dp, 100f * dp, -1f, 1f, w, h, dp), 0.01f)
+        val a = Aim.pull(150f * dp, 300f * dp, 100f * dp, 350f * dp, w, h, false, dp, -1)
+        val b = Aim.pull(400f * dp, 100f * dp, 350f * dp, 150f * dp, w, h, false, dp, -1)
+        assertEquals(a[1], b[1])
+        // Pull-back at 45 degrees: the anchor slides up and right (toward the shot), so the pull grows.
+        val s = Aim.slideAnchor(100f, 100f, 450, false, 10f)
+        assertTrue(s[0] > 100f && s[1] < 100f)
+        val pm = Aim.slideAnchor(100f, 100f, 450, true, 10f)
+        assertTrue(pm[0] < 100f && pm[1] > 100f)
+    }
+
     // ---- Against the real core ----------------------------------------------------------------
 
     private fun ready(): Boolean = System.getProperty("castle.hostJni") != null && NativeCore.available()

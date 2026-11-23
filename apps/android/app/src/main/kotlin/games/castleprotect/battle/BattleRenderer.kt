@@ -315,11 +315,19 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         fillVisiblePins(f.ghosts)
         line.strokeWidth = 1.5f * dp
         line.pathEffect = ghostDash
+        // The picked Hob's newest shot draws as dots in its side's colour, like the aim (Tank Stars).
+        val lastSel = f.selectedHob?.let { if (f.phase == Phase.PLAN) lastGhostOf(f, it) else null }
         for (gi in f.ghosts.indices) {
             val g = f.ghosts[gi]
             if (g.hasPin && !isVisiblePinIndex(gi)) continue
             val p = g.points
             if (p.size < 4) continue
+            if (g === lastSel) {
+                fill.color = if (g.side == 0) blue else orange; fill.alpha = 180
+                val st = max(2, p.size / 2 / 14) * 2; var k = st; while (k + 1 < p.size) { c.drawCircle(l.sx(p[k].toFloat()), l.sy(p[k + 1].toFloat()), 3.2f * dp, fill); k += st }
+                fill.alpha = 255
+                continue
+            }
             path.rewind(); path.moveTo(l.sx(p[0].toFloat()), l.sy(p[1].toFloat()))
             var i = 2; while (i + 1 < p.size) { path.lineTo(l.sx(p[i].toFloat()), l.sy(p[i + 1].toFloat())); i += 2 }
             line.color = ink; line.alpha = if (g.side == f.side) 110 else 50
@@ -339,19 +347,12 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
             } else drawPin(c, l.sx(g.pinX.toFloat()), l.sy(g.pinY.toFloat()), g.side, g.round, g.recalled)
         }
 
-        // Preview dots for the side in Plan.
-        val dot = if (f.side == 0) dotP1 else dotP2
-        var i = 0
-        val pv = f.preview
-        while (i + 1 < pv.size) {
-            val px = l.sx(pv[i].toFloat()); val py = l.sy(pv[i + 1].toFloat())
-            val pt = ((time * 1000f - i / 2 * 60f) % 420f + 420f) % 420f
-            val pulse = if (reduceMotion) null else dotPulse[(if (f.side == 0) 0 else 3) + if (pt < 140f) 0 else if (pt < 260f) 1 else 2]
-            if (pulse != null) spriteAt(c, pulse, px, py, 8f * dp)
-            else if (dot != null) spriteAt(c, dot, px, py, 8f * dp)
-            else { fill.color = Color.WHITE; c.drawCircle(px, py, 3.2f * dp, fill); line.color = ink; line.strokeWidth = 1.2f * dp; c.drawCircle(px, py, 3.2f * dp, line) }
-            i += 2
-        }
+        // The preview for the side in Plan: a beam, thick and bright at the Loophole and thinner
+        // along the path, then three beads. Same length as the dots it replaced (00 section 2.4).
+        val selHob = f.selectedHob
+        if (f.preview.size >= 4) drawAimBeam(c, l, f.preview, selHob?.power ?: 0)
+        // How far the newest shot of the picked Hob missed the other fort, by its Pin.
+        if (selHob != null && f.phase == Phase.PLAN && f.hud.human(f.side)) drawMissTag(c, l, f, selHob)
 
         // Props: crocks, turnips, 1-7 rescue cage & captive Hetty, 1-10 Big Smoothie Jr. roller and Topiary Shears.
         val props = f.props
@@ -385,38 +386,168 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         fx.draw(c, l, f)
         if (f.hud.squallRound > 0) fx.drawSquall(c, l)
 
-        // Aim Drag: stretchy band from anchor to finger.
-        if (drag != null && f.phase == Phase.PLAN) {
-            line.color = if (f.side == 0) blue else orange; line.strokeWidth = 4 * dp; line.alpha = 200
-            c.drawLine(drag[0], drag[1], drag[2], drag[3], line); line.alpha = 255
-            fill.color = Color.WHITE; c.drawCircle(drag[0], drag[1], 5 * dp, fill); line.strokeWidth = 1.5f * dp; line.color = ink; c.drawCircle(drag[0], drag[1], 5 * dp, line)
-            line.alpha = 60; c.drawCircle(drag[0], drag[1], 12 * dp, line); line.alpha = 255
-            fill.color = if (f.side == 0) blue else orange; c.drawCircle(drag[2], drag[3], 9 * dp, fill)
-        }
-        // Aim arrow from the selected Hob's Loophole, and the big readout while dragging.
+        // Aim Drag: the power scale band, the last shot's notch, the cancel spot and the badges.
         val hob = f.selectedHob
-        if (hob != null && f.phase == Phase.PLAN && f.hud.human(f.side)) {
-            val castle = f.castles.firstOrNull { it.side == f.side }
-            val room = castle?.rooms?.firstOrNull { it.kind == "nook" && it.id == hob.nook }
-            val lh = room?.loophole
-            val ax: Float; val ay: Float
-            if (lh != null && lh.size >= 4) { ax = (lh[0] + lh[2]) / 2f; ay = (lh[1] + lh[3]) / 2f } else { ax = hob.x.toFloat(); ay = hob.y - 14f }
-            val a = Math.toRadians(hob.angle / 10.0); val len = (14f + hob.power * 0.3f) * dp
-            val hx = l.sx(ax); val hy = l.sy(ay)
-            val ex = hx + (cos(a) * len).toFloat(); val ey = hy - (sin(a) * len).toFloat()
-            line.color = ink; line.strokeWidth = 3 * dp; c.drawLine(hx, hy, ex, ey, line)
-            fill.color = brassMid; c.drawCircle(ex, ey, 4 * dp, fill); line.strokeWidth = 1.5f * dp; c.drawCircle(ex, ey, 4 * dp, line)
-            if (readout != null) {
-                text.textSize = 18 * dp
-                val tw = text.measureText(readout) / 2 + 10 * dp
-                val ty = (hy - 64 * dp).coerceAtLeast(rc.top + 24 * dp)
-                val tx = hx.coerceIn(rc.left + tw + 4 * dp, max(rc.left + tw + 4 * dp, rc.right - tw - 4 * dp))
-                r.set(tx - tw, ty - 16 * dp, tx + tw, ty + 16 * dp)
-                fill.color = 0xFFFFF4DE.toInt(); c.drawRoundRect(r, 10 * dp, 10 * dp, fill); line.strokeWidth = 2 * dp; c.drawRoundRect(r, 10 * dp, 10 * dp, line)
-                c.drawText(readout, tx, ty + 6 * dp, text)
+        if (drag != null && f.phase == Phase.PLAN && hob != null) drawAimBand(c, l, f, hob, drag)
+        c.restore()
+    }
+
+    /** Aim colour by power: blue at 0, orange near 89, red only from 90. */
+    private fun aimHeat(power: Int): Int {
+        val p = power.coerceIn(0, 100)
+        val hue = if (p >= 90) 4f else 205f - 175f * p / 89f
+        return Color.HSVToColor(floatArrayOf(hue, 0.78f, 0.92f))
+    }
+
+    private fun drawAimBeam(c: Canvas, l: Lens, pv: IntArray, power: Int) {
+        val n = pv.size / 2
+        val k0 = (l.scale * 1.4f).coerceIn(0.7f, 1.2f) * dp
+        val col = aimHeat(power)
+        line.pathEffect = null
+        for (pass in 0..1) {
+            var i = 1
+            while (i < n) {
+                val f = i.toFloat() / n
+                val w = (10f * (1f - f) + 2f) * k0
+                val j = max(0, i - 2)
+                line.color = if (pass == 1) col else ink
+                line.alpha = (255 * (if (pass == 1) 0.95f else 0.4f) * (1f - f * 0.6f)).toInt()
+                line.strokeWidth = if (pass == 1) w else w + 3f * dp
+                c.drawLine(l.sx(pv[j * 2].toFloat()), l.sy(pv[j * 2 + 1].toFloat()), l.sx(pv[i * 2].toFloat()), l.sy(pv[i * 2 + 1].toFloat()), line)
+                i += 2
             }
         }
-        c.restore()
+        line.alpha = 255
+        if (n >= 6) {
+            val lx = pv[(n - 1) * 2].toFloat(); val ly = pv[(n - 1) * 2 + 1].toFloat()
+            val vx = lx - pv[(n - 6) * 2]; val vy = ly - pv[(n - 6) * 2 + 1]
+            val vl = max(1f, kotlin.math.hypot(vx, vy))
+            for (b in 1..3) {
+                val x = l.sx(lx + vx / vl * b * 28f); val y = l.sy(ly + vy / vl * b * 28f - b * b * 3f)
+                val rad = (3.4f - b * 0.6f) * k0
+                fill.color = col; fill.alpha = ((0.85f - b * 0.2f) * 255).toInt(); c.drawCircle(x, y, rad, fill)
+                line.color = ink; line.strokeWidth = 1f * dp; line.alpha = fill.alpha; c.drawCircle(x, y, rad, line)
+            }
+            fill.alpha = 255; line.alpha = 255
+        }
+    }
+
+    /** The newest Ghost with a Pin of [hob], or null. */
+    private fun lastGhostOf(f: Frame, hob: Hob): Ghost? {
+        var best: Ghost? = null
+        for (g in f.ghosts) if (g.side == hob.side && g.hob == hob.id && g.hasPin && (best == null || g.round >= best.round)) best = g
+        return best
+    }
+
+    private fun drawMissTag(c: Canvas, l: Lens, f: Frame, hob: Hob) {
+        val g = lastGhostOf(f, hob) ?: return
+        val mine = f.castles.firstOrNull { it.side == hob.side } ?: return
+        val rival = f.castles.firstOrNull { it.side != hob.side } ?: return
+        val rx0 = rival.x.toFloat(); val rx1 = rx0 + rival.cols * rival.block
+        val px = g.pinX.toFloat()
+        if (px in rx0..rx1) return
+        val toward = if ((rx0 + rx1) / 2f > mine.x + mine.cols * mine.block / 2f) 1 else -1
+        val edge = if (px < rx0) rx0 else rx1
+        val n = max(1, kotlin.math.round(kotlin.math.abs(px - edge) / 16f).toInt())
+        val short = (px - edge) * toward < 0
+        val key = if (short) (if (n == 1) "hud.miss_short_one" else "hud.miss_short") else (if (n == 1) "hud.miss_long_one" else "hud.miss_long")
+        tag(c, l.rect, Text.t(key, "n" to n), l.sx(px), l.sy(g.pinY.toFloat()) - 44f * dp, ink)
+    }
+
+    private fun tag(c: Canvas, rc: RectF, s: String, x: Float, y: Float, color: Int) {
+        text.textSize = 13 * dp
+        val w = text.measureText(s) + 12 * dp
+        val bx = (x - w / 2).coerceIn(rc.left + 4 * dp, max(rc.left + 4 * dp, rc.right - w - 4 * dp))
+        val by = (y - 10 * dp).coerceIn(rc.top + 4 * dp, max(rc.top + 4 * dp, rc.bottom - 24 * dp))
+        r.set(bx, by, bx + w, by + 20 * dp)
+        fill.color = 0xF0FFF4DE.toInt(); c.drawRoundRect(r, 6 * dp, 6 * dp, fill)
+        line.color = color; line.strokeWidth = 1.5f * dp; c.drawRoundRect(r, 6 * dp, 6 * dp, line)
+        text.color = color; c.drawText(s, bx + w / 2, by + 14.5f * dp, text); text.color = ink
+    }
+
+    private val quad = Path()
+
+    private fun drawAimBand(c: Canvas, l: Lens, f: Frame, hob: Hob, drag: FloatArray) {
+        val ax = drag[0]; val ay = drag[1]; val fx = drag[2]; val fy = drag[3]
+        val full = if (aimFull > 0f) aimFull else 0.4f * min(l.rect.width(), l.rect.height())
+        val inCancel = kotlin.math.hypot(fx - ax, fy - ay) < 12f * dp
+        val sgn = if (pointMode) -1f else 1f
+        // Direction from the anchor toward the finger for an aim angle in tenths.
+        fun along(angle: Int): FloatArray { val a = Math.toRadians(angle / 10.0); return floatArrayOf((-cos(a)).toFloat() * sgn, sin(a).toFloat() * sgn) }
+        line.pathEffect = null
+        if (!inCancel) {
+            val u = along(hob.angle); val ux = u[0]; val uy = u[1]
+            val nx = -uy; val ny = ux; val hw = 5f * dp
+            val seg = full / 10f; val pull = hob.power / 100f * full
+            fun quadTo(b0: Float, b1: Float) {
+                quad.rewind()
+                quad.moveTo(ax + ux * b0 + nx * hw, ay + uy * b0 + ny * hw); quad.lineTo(ax + ux * b1 + nx * hw, ay + uy * b1 + ny * hw)
+                quad.lineTo(ax + ux * b1 - nx * hw, ay + uy * b1 - ny * hw); quad.lineTo(ax + ux * b0 - nx * hw, ay + uy * b0 - ny * hw); quad.close()
+            }
+            for (k in 0 until 10) {
+                val b0 = k * seg + 1.5f * dp; val b1 = (k + 1) * seg - 1.5f * dp
+                quadTo(b0, b1)
+                fill.color = 0x8CFFF4DE.toInt(); c.drawPath(quad, fill)
+                line.color = ink; line.alpha = 150; line.strokeWidth = 1f * dp; c.drawPath(quad, line); line.alpha = 255
+                if (pull > b0) { quadTo(b0, min(b1, pull)); fill.color = aimHeat((k + 1) * 10); c.drawPath(quad, fill) }
+            }
+            val last = lastGhostOf(f, hob)
+            if (last != null) {
+                val v = along(last.angle); val d = last.power / 100f * full
+                val mx = ax + v[0] * d; val my = ay + v[1] * d
+                c.save(); c.rotate(Math.toDegrees(kotlin.math.atan2(v[1], v[0]).toDouble()).toFloat(), mx, my)
+                r.set(mx - 2.5f * dp, my - 11f * dp, mx + 2.5f * dp, my + 11f * dp)
+                fill.color = 0xFFFFF4DE.toInt(); c.drawRect(r, fill); line.color = ink; line.strokeWidth = 1.5f * dp; c.drawRect(r, line)
+                c.restore()
+                val dpw = hob.power - last.power; val da = (hob.angle - last.angle) / 10f
+                fun sign(v: Float) = if (v > 0f) "+" else if (v < 0f) "\u2212" else "\u00B1"
+                val s = sign(dpw.toFloat()) + kotlin.math.abs(dpw) + " | " + sign(da) + String.format(java.util.Locale.ROOT, "%.1f", kotlin.math.abs(da)) + "\u00B0"
+                tag(c, l.rect, s, mx + nx * 22f * dp, my + ny * 22f * dp, ink)
+            }
+        } else {
+            line.color = ink; line.alpha = 115; line.strokeWidth = 4f * dp; c.drawLine(ax, ay, fx, fy, line); line.alpha = 255
+        }
+        // The cancel spot.
+        val red = 0xFFE5484D.toInt(); val paper = 0xFFFFF4DE.toInt()
+        fill.color = if (inCancel) red else paper; c.drawCircle(ax, ay, 15f * dp, fill)
+        line.color = ink; line.strokeWidth = 2f * dp; c.drawCircle(ax, ay, 15f * dp, line)
+        line.color = if (inCancel) paper else ink; line.strokeWidth = 3f * dp
+        val q = 5.5f * dp
+        c.drawLine(ax - q, ay - q, ax + q, ay + q, line); c.drawLine(ax + q, ay - q, ax - q, ay + q, line)
+        if (inCancel) tag(c, l.rect, Text.t("hud.cancel_aim"), ax, ay - 30f * dp, red)
+        // Power and angle badges at the top of the lens.
+        val bw = 124f * dp; val top = l.rect.top + 64f * dp; val x0 = l.rect.centerX() - bw - 5f * dp
+        badge(c, x0, top, bw, true, Text.t("hud.power").uppercase(), "${hob.power}%", hob.power, 0f)
+        badge(c, x0 + bw + 10f * dp, top, bw, false, Text.t("hud.angle").uppercase(), String.format(java.util.Locale.ROOT, "%.1f\u00B0", hob.angle / 10f), hob.power, hob.angle / 10f)
+    }
+
+    private fun badge(c: Canvas, x: Float, y: Float, w: Float, bolt: Boolean, title: String, value: String, power: Int, deg: Float) {
+        val h = 36f * dp
+        r.set(x, y, x + w, y + h)
+        fill.color = 0xE02B1E2E.toInt(); c.drawRoundRect(r, h / 2, h / 2, fill)
+        val cx = x + 18f * dp; val cy = y + 18f * dp
+        fill.color = 0xFFFFF4DE.toInt(); c.drawCircle(cx, cy, 14f * dp, fill)
+        if (bolt) {
+            quad.rewind()
+            quad.moveTo(cx + 2 * dp, cy - 9 * dp); quad.lineTo(cx - 5 * dp, cy + 1 * dp); quad.lineTo(cx, cy + 1 * dp)
+            quad.lineTo(cx - 2 * dp, cy + 9 * dp); quad.lineTo(cx + 5 * dp, cy - 1 * dp); quad.lineTo(cx, cy - 1 * dp); quad.close()
+            c.save(); c.clipPath(quad)
+            fill.color = aimHeat(power); val fr = power / 100f
+            c.drawRect(cx - 8 * dp, cy + 9 * dp - 18 * dp * fr, cx + 8 * dp, cy + 9 * dp, fill)
+            c.restore()
+            line.color = ink; line.strokeWidth = 1.2f * dp; c.drawPath(quad, line)
+        } else {
+            c.save(); c.rotate(-deg, cx, cy)
+            line.color = ink; line.strokeWidth = 2.2f * dp; c.drawLine(cx - 7 * dp, cy, cx + 5 * dp, cy, line)
+            quad.rewind(); quad.moveTo(cx + 9 * dp, cy); quad.lineTo(cx + 2 * dp, cy - 5 * dp); quad.lineTo(cx + 2 * dp, cy + 5 * dp); quad.close()
+            fill.color = ink; c.drawPath(quad, fill)
+            c.restore()
+        }
+        val al = text.textAlign
+        text.textAlign = Paint.Align.LEFT; text.color = 0xFFFFF4DE.toInt()
+        text.textSize = 10f * dp; c.drawText(title, x + 38f * dp, y + 14f * dp, text)
+        text.textSize = 15f * dp; c.drawText(value, x + 38f * dp, y + 30f * dp, text)
+        text.textAlign = al; text.color = ink
     }
 
     @Volatile var reduceMotion = false
@@ -425,6 +556,9 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
     /** Highlighted own-fort block [c, r] when targeting Mendglob (Android-H5). */
     @Volatile var mendTarget: Pair<Int, Int>? = null
     @Volatile var mendSide: Int = -1
+    /** The pull in px for power 100 (40% of the short side) and the drag mode, from the view. */
+    @Volatile var aimFull = 0f
+    @Volatile var pointMode = false
 
     private fun hasProp(props: List<games.castleprotect.core.Prop>, id: Int): Boolean { for (i in props.indices) if (props[i].id == id) return true; return false }
 
