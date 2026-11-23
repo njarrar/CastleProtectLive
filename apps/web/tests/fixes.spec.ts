@@ -171,3 +171,26 @@ test('sound: a hidden tab suspends audio, a visible one resumes it; loops stop a
   expect((await audio()).loops).toBe(0);
   expect((await audio()).decoded.some((d) => d.startsWith('bark_'))).toBe(false);
 });
+
+test('Walk: on 1-9 the ground is drawn and holding Walk right moves the fort', async ({ page }) => {
+  const errors = watchErrors(page);
+  await ready(page, './?debug=1#map');
+  await page.evaluate(() => {
+    const a = (window as unknown as { castleApp: { go: (r: unknown) => void; campaignSetup: (id: string) => unknown } }).castleApp;
+    a.go({ to: 'battle', setup: a.campaignSetup('1-9') });
+  });
+  await expect.poll(async () => { const s = await snap(page); return s.phase === 'plan' && s.hud.active === 0; }, { timeout: 60_000 }).toBe(true);
+  // 1-9 starts with a Rummage that the battle ends at once: the ground from the first snapshot must stay.
+  const cols = await page.evaluate(() => (window as unknown as { __castle: { groundCols: () => number } }).__castle.groundCols());
+  expect(cols).toBeGreaterThan(1000);
+  const fortX = async () => (await page.evaluate(() => (window as unknown as { __castle: { snap: () => { forts: { x: number }[] } } }).__castle.snap().forts[0].x));
+  const x0 = await fortX();
+  const right = page.getByRole('button', { name: 'Walk right' });
+  await expect(right).toBeVisible();
+  const box = (await right.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await expect.poll(fortX).toBeGreaterThan(x0);
+  await page.mouse.up();
+  expect(errors).toEqual([]);
+});
