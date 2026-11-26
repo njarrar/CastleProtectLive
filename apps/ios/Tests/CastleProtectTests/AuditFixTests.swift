@@ -294,7 +294,7 @@ final class AuditFixTests: XCTestCase {
         XCTAssertTrue(fireClip.frames.first?.hasPrefix("flattener_clerk_fire") ?? false)
         var snap = BattleSnapshot()
         snap.phase = .plan
-        snap.isDuel = false
+        snap.mode = "campaign"
         snap.forts = [
             FortView(side: 0, x: 100, kettleX: 100, kettleY: 200, kettleHp: 100, kettleMax: 100, blocks: [], hobs: []),
             FortView(side: 1, x: 540, kettleX: 540, kettleY: 200, kettleHp: 100, kettleMax: 100, blocks: [],
