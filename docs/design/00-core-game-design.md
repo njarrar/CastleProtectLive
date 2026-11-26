@@ -39,7 +39,7 @@ This doc sets the rules, names and numbers that every other design doc builds on
 21. Pacing maths redone with the new numbers (section 9.6).
 22. Audit rulings applied: Cover wording (C09, C10), shot caps (C27, C28), Point blast band (C40), foreign blocks (C15), Burn downwind (C23), Brittle rules (C24, C25), grid and Block Budget (C04, C65), level caps (C70, C71), economy lines (C59 to C64).
 23. Final verification pass [review 05]: the Sudden Squall now hits both sides at once at round end, and a double pop goes to the side with more total HP. The full-HP clamp is now "no single shot Bonks a Hob from full HP" (clamped to its HP minus 1). The per-shot Thwack cap is 110, as the weapons doc sets it. A Beam through a block deals half to the kettle. Duds are always labeled. If every Hob is dug in, the newest burial clears. Level 1-1 has a cap of 8 and no Squall. Onboarding order follows the campaign and UX docs (wind at 1-4, the Knack at 1-5). Launch maps (59) and enemy unit types (14) added to the scope table.
-24. **Owner decisions applied** [R04 D]. The game is free with no monetization: no price, no trial, no unlock, no in-app purchases, no ads. Couch Duel (two players on one device) ships at launch (section 6.1). Portrait and landscape both ship at launch; the UX and art docs own the layouts. Final art is by human artists. A Sudden Squall double pop goes to more total HP. Gentle wind from 1-4 with a Wind off assist. The first Doodad (Mend Bucket) comes at 1-7, and Pot Lid joins at 1-9.
+24. **Owner decisions applied** [R04 D]. The game is free with no monetization: no price, no trial, no unlock, no in-app purchases, no ads. Couch Duel (two players on one device) ships at launch (section 6.1). Portrait and landscape both ship at launch; the UX and art docs own the layouts. Final art is by human artists. A Sudden Squall double pop goes to more total HP. Gentle wind from 1-4 with a Wind off assist. The first Doodad comes at 1-9.
 25. **Lessons from the reference games applied** [review 06, sections A and B]. Items 26 to 36 list them.
 26. **Couch Duel house rules** (G2, section 6.1): everything is open, Molehill included; player-only rules such as Puff Up apply to both sides; a **Hand-off card** between turns shows the last shot and a Ready button; an optional **Kind Clock**, off by default, nudges but never fires; a **Starter Box** of even loaner forts plays from first launch; handicaps show openly; **Table mode** in portrait. The Couch Duel Rummage rule is now one rule, the same as `01 §1.9`.
 27. **Pacing redone at real speed** (G3, sections 2.12 and 9.6). A round is about 32 s (two shots), not 16 to 20. The vertical slice gates on median seconds per round. Round cap 12 is the fallback if fights run long.
@@ -1005,7 +1005,7 @@ A new player reaches about the end of 1-3 in the first 10 minutes [review 02 §1
 
 **Loose Trick Shells** [review 06 G8]. Levels 1-3 and 1-4 each lend one fixed Trick Shell for that level only: one use, no draft, no unlock. Lid Lifter (1-3) points at the kettle lesson; Bag of Marbles (1-4) fits Jax, its Match. The first four levels would otherwise be Plain Shots only. Neither adds a prompt, so the count stays at 11 (12 for a fast player). Both join the pool with the start six when the Rummage opens at 1-8.
 
-Level 1-7 introduces the first Doodad (Mend Bucket), and 1-9 adds the second slot with Pot Lid, so both are live for the 1-10 Grand Fort [PLAN decision 14]. Fire on Timber (2-1) and Training and Thump (2-2) come in Region 2. The campaign doc owns the level list.
+Winning 1-9 gives the first Doodad, Mend Bucket, and one Doodad slot, so the 1-10 boss has a gadget turn without 1-9 teaching two things [PLAN decision 14]. The second slot, Pot Lid and Fire on Timber (2-1), Training and Thump (2-2) come in Region 2. The campaign doc owns the level list.
 
 Fail-safe: if the player misses 5 times in a row in levels 1-1 to 1-5, the preview grows by 10% for that battle and a hint suggests the ghost pin.
 
@@ -1188,7 +1188,7 @@ The default cap stays 15 until the slice data says otherwise. Round cap 12 is th
 11. **Age rating target.** 9+ / Everyone 10+ assumed.
 12. **Sudden Squall double pop. Decided:** more total HP left wins (2.11).
 13. **Wind. Decided:** gentle wind from 1-4, with a Wind off assist (8.1).
-14. **First Doodad. Decided:** Mend Bucket from 1-7, and Pot Lid in the second slot from 1-9.
+14. **First Doodad. Decided:** Mend Bucket and one slot on the 1-9 win.
 
 ### 10.2 Questions research could not close
 
