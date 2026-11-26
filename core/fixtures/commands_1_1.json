@@ -1,5 +1,5 @@
 {
-  "after_hash": "7b3d781714777f20",
+  "after_hash": "820ed28c6aaa8120",
   "commands": [
     {
       "cmd": "pick_hob",
@@ -22,7 +22,7 @@
     }
   ],
   "first_snapshot_terrain_chunks": 300,
-  "plan_hash": "2c0b4615b06cae7f",
+  "plan_hash": "d74570ef87ff19ef",
   "seed": 42,
   "then": [
     {

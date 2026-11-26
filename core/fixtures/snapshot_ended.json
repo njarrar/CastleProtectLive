@@ -1582,6 +1582,7 @@
       "angle": 440,
       "hob": 0,
       "index": 0,
+      "miss_blocks": -1,
       "pin": [
         1887,
         354
@@ -1876,7 +1877,7 @@
       "side": 0
     }
   ],
-  "hash": "7f89200a7bc5efbd",
+  "hash": "74c77141974c960d",
   "hobs": [
     {
       "aim": null,

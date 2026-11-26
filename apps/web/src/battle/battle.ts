@@ -2,13 +2,14 @@
 // It never decides an outcome. It sends commands to the core and draws its snapshots.
 import type { App, Route, Screen } from '../app';
 import { bark, crewLine, cue, loop, musicLayers, play, preloadBarks, releaseBarks, setCaptionSink, setMusic, setPaused, slowmoAudio, stopLoops, unlockAudio } from '../audio/sfx';
+import { whyLine } from '../core/real';
 import type { BattleSetup, Command, DraftChip, PinView, ShotChip, Side, Snapshot } from '../core/types';
 import { SaveError, TICK_HZ } from '../core/types';
 import { clearBattle, dropBattleSave, loadBattleSave, saveBattle } from '../save/db';
 import { DEBUG } from '../ui/fatal';
 import { CLASS_COLOR, CLASS_ICON, CLASS_INK, btn, h, repeatKey } from '../ui/dom';
 import { ctx2d } from '../render/ctx2d';
-import { type DrawOpts, LensCache, aimHeat, drawLens, drawStrip, roundRect } from '../render/draw';
+import { type DrawOpts, LensCache, aimHeat, drawLens, drawStrip, missTextOf, roundRect } from '../render/draw';
 import { type Cam, type Rect, toScreen, toWorld } from '../render/view';
 import { Feel } from '../render/feel';
 import { firePress, handoffFlip, turnBanner } from '../ui/motion';
@@ -19,6 +20,15 @@ import { fatigueFlameUrl, kettleDialUrl, windPennantUrl } from '../ui/svgIcons';
 import { byId, className, has, hobContentId, plural, rivalLine, rivalShort, t } from '../ui/text';
 
 type LensId = 'wide' | 'top' | 'bottom' | 'joined' | 'strip';
+
+const CANCEL_R = 20;
+const HALO_SHOW_R = 28;
+
+/** Intuitive 0..90 deg elevation readout for both sides (Side 1 shoots left, so 148.5 -> 31.5 deg). */
+function displayDeg(angleTenths: number, side: Side): number {
+  const raw = angleTenths / 10;
+  return side === 1 ? Math.abs(180 - raw) : raw;
+}
 
 interface Gesture {
   id: number;
@@ -35,6 +45,14 @@ interface Gesture {
   lockDir?: [number, number];
   /** Pull in px for power 100 on this drag. */
   full?: number;
+  /** Virtual pull distance accrued while edge-assist holds on a screen bezel (keeps Cancel Halo on-screen). */
+  edgeBonusPx?: number;
+  /** Continuous ms spent against a screen edge before edge-assist engages (220 ms grace). */
+  edgeDwellMs?: number;
+  /** Last 5% power bucket sounded via brass ratchet tick. */
+  lastStep5?: number;
+  /** True once the 100% power clink has played on this drag. */
+  hitMax?: boolean;
   t0: number;
 }
 
@@ -64,12 +82,14 @@ export function battleScreen(app: App, route: Route): Screen {
   // auto-finish draft, and so does Shells: Quick Pick. Skirmish and Couch Duel with Shells: The
   // Rummage open the in-battle Draft modal (Web-H10).
   if (snap.phase === 'draft' && (setup.mode === 'campaign' || setup.shells !== 'draft')) {
-    // The first snapshot holds the whole map; the next one only what changed since, so keep the
-    // ground from the first or a level with a Rummage starts with no ground drawn.
+    // The first snapshot holds the whole map and opening events; the next only what changed since,
+    // so preserve both terrain chunks and events across auto end_draft (M-W07).
     const ground = snap.terrain.chunks;
+    const prevEvents = snap.events;
     core.command({ cmd: 'end_draft' });
     snap = core.snapshot();
     snap.terrain.chunks = [...ground, ...snap.terrain.chunks];
+    snap.events = [...prevEvents, ...snap.events];
   }
 
   const terr = new TerrainLayer();
@@ -78,10 +98,10 @@ export function battleScreen(app: App, route: Route): Screen {
   const feel = new Feel();
   feel.terr = terr;
   feel.sound = cue;
-  // A bark shows its subtitle as a speech tag over the Hob, with or without sound (07 §7.6).
+  // A bark shows its subtitle as a speech tag over the Hob when Speech subtitles are on (M-W03).
   feel.bark = (nm, ev, side, step, id) => {
     const line = bark(nm, ev, side, step);
-    if (!line) return;
+    if (!line || !app.settings.subtitles) return;
     const hb = snap.hobs.find((q) => q.id === id);
     if (hb) feel.fx.word(`"${line}"`, hb.x, hb.y + 70, 13, side === 0 ? '#CFE0FF' : '#FFD9B8', false, Math.max(2000, 1500 + 60 * line.length));
   };
@@ -277,7 +297,7 @@ export function battleScreen(app: App, route: Route): Screen {
   // Layout is read once after it changes (relayout, a new crew or tray), never every frame.
   let rectsDirty = true;
   const z = (): Rect => ({ x: 0, y: 0, w: 0, h: 0 });
-  const rc: Record<'top' | 'bottom' | 'strip' | 'clear' | 'fire' | 'tray', Rect> = { top: z(), bottom: z(), strip: z(), clear: z(), fire: z(), tray: z() };
+  const rc: Record<'top' | 'bottom' | 'strip' | 'clear' | 'fire' | 'tray' | 'pad', Rect> = { top: z(), bottom: z(), strip: z(), clear: z(), fire: z(), tray: z(), pad: z() };
   function readRects(): void {
     if (!rectsDirty) return;
     rectsDirty = false;
@@ -285,10 +305,13 @@ export function battleScreen(app: App, route: Route): Screen {
     const t = top.getBoundingClientRect().bottom;
     const tr = trayEl.getBoundingClientRect(), fr = fire.getBoundingClientRect();
     const bottom = Math.min(tr.height ? tr.top : H, fr.height ? fr.top : H) - 4;
-    const left = hobsEl.getBoundingClientRect().right + 4;
-    rc.clear = { x: left, y: t, w: Math.max(100, W - left - 8), h: Math.max(80, bottom - t) };
+    const hr = hobsEl.getBoundingClientRect();
+    const left = app.settings.leftHand ? 8 : hr.right + 4;
+    const right = app.settings.leftHand && hr.width ? hr.left - 4 : W - 8;
+    rc.clear = { x: left, y: t, w: Math.max(100, right - left), h: Math.max(80, bottom - t) };
     rc.fire = { x: fr.left, y: fr.top, w: fr.width, h: fr.height };
     rc.tray = { x: tr.left, y: tr.top, w: tr.width, h: tr.height };
+    rc.pad = !pad.hidden ? readRect(pad) : z();
   }
   const rectOf = (el: HTMLElement): Rect => (el === lensTop ? rc.top : el === lensBottom ? rc.bottom : el === strip ? rc.strip : el === fire ? rc.fire : readRect(el));
   function clearRect(): Rect { return rc.clear; }
@@ -298,6 +321,8 @@ export function battleScreen(app: App, route: Route): Screen {
   const camTop: Cam = { cx: 1800, cy: 300, s: 0.75 };
   const camBottom: Cam = { cx: 600, cy: 300, s: 1 };
   const camJoin: Cam = { cx: 1200, cy: 300, s: 0.5 };
+  let baseWideS = 0.5;
+  let baseTopS = 0.75;
   let manual = false;
   let topManual = false;
   /** Tall: the bottom lens was panned by a drag that did not start on the fort. */
@@ -366,7 +391,9 @@ export function battleScreen(app: App, route: Route): Screen {
   function planFrame(cr: Rect, side: Side, out: Cam): Cam {
     const f = snap.forts;
     const fa = f[side], fo = f[other(side)];
-    const x0 = Math.min(fa.x, fo.x) - 32, x1 = Math.max(fa.x + fa.w, fo.x + fo.w) + 32;
+    // Give Boss 1-10's Grand Fort extra right-hand clearance so the Peacock tail never clips the bezel.
+    const bossPad = snap.hud.boss ? 80 : 0;
+    const x0 = Math.min(fa.x, fo.x) - 32, x1 = Math.max(fa.x + fa.w, fo.x + fo.w) + 32 + bossPad;
     const y0 = Math.min(fa.y, fo.y) - 30, y1 = Math.max(fa.y + fa.h, fo.y + fo.h) + 150;
     const both = Math.min(cr.w / (x1 - x0), cr.h / (y1 - y0));
     const dir = fo.x > fa.x ? 1 : -1;
@@ -383,6 +410,7 @@ export function battleScreen(app: App, route: Route): Screen {
       const half = cr.w / 2 / out.s;
       out.cx = dir > 0 ? fa.x - 40 + half : fa.x + fa.w + 40 - half;
     }
+    if (side === snap.hud.active) baseWideS = Math.max(0.25, out.s);
     groundY(cr, Math.min(fa.y, fo.y), out);
     return out;
   }
@@ -489,6 +517,7 @@ export function battleScreen(app: App, route: Route): Screen {
     const vw = rb.w;
     const bs = clamp((16 * vw) / 390, 12, 24) / 16;
     const ts = clamp((12 * vw) / 390, 10, 20) / 16;
+    baseTopS = ts;
     const me = youSide();
     const fm = f[me], ft = f[other(me)];
     const sideX = (side: Side, rc: Rect, s: number, fo: typeof fm) =>
@@ -542,9 +571,11 @@ export function battleScreen(app: App, route: Route): Screen {
   }
 
   // ---------- commands ----------
+  let snapDirty = false;
   function send(c: Command): boolean {
     const res = core.command(c);
     lastRefusal = res.ok ? '' : res.error ?? '';
+    if (res.ok) snapDirty = true;
     return res.ok;
   }
   let lastRefusal = '';
@@ -611,7 +642,7 @@ export function battleScreen(app: App, route: Route): Screen {
     if (!line) return;
     lastTauntTurn = turnCount;
     const f = snap.forts[1];
-    feel.fx.word(`"${line}"`, f.x + f.w / 2, f.y + f.h + 70, 13, '#FFD9B8', false, Math.max(2200, 1500 + 60 * line.length));
+    if (app.settings.subtitles) feel.fx.word(`"${line}"`, f.x + f.w / 2, f.y + f.h + 70, 13, '#FFD9B8', false, Math.max(2200, 1500 + 60 * line.length));
     say(`${rivalName()}: ${line}`);
   }
   /** At a turn start: the Rival's line on the shot that just landed (or did not). */
@@ -650,6 +681,7 @@ export function battleScreen(app: App, route: Route): Screen {
     const calm = snap.phase === 'plan' || drag?.mode === 'aim';
     const lw = lensRects()[0];
     feel.reduceMotion = app.settings.reduceMotion;
+    feel.reduceFlashes = app.settings.reduceFlashes;
     feel.juice.shakeScale = app.settings.reduceShake / 100;
     feel.juice.fast = fast;
     feel.you = youSide();
@@ -661,7 +693,7 @@ export function battleScreen(app: App, route: Route): Screen {
       const waitCollapse = snap.phase === 'resolve' && !snap.shells.length && feel.col.busy && !fast && !app.settings.reduceMotion && collapseHoldMs < 2200;
       if (waitCollapse) {
         collapseHoldMs += dt * 1000;
-        snap = merge(snap, core.snapshot());
+        if (snapDirty) { snapDirty = false; snap = merge(snap, core.snapshot()); }
       } else {
         if (!feel.col.busy) collapseHoldMs = 0;
         // "Rival turns at 2x" speeds up the whole Rival turn: think pose and flight.
@@ -674,10 +706,16 @@ export function battleScreen(app: App, route: Route): Screen {
           for (const sh of snap.shells) prevShell.set(sh.id, [sh.x, sh.y]);
           lastN = n;
           core.step(n);
+          snapDirty = false;
+          snap = merge(snap, core.snapshot());
+        } else if (snapDirty) {
+          snapDirty = false;
           snap = merge(snap, core.snapshot());
         }
       }
-    } else {
+    } else if (snapDirty) {
+      // Avoid 60 Hz JSON snapshot polling while paused/modal unless a command actually fired (M-W15).
+      snapDirty = false;
       snap = merge(snap, core.snapshot());
     }
     terr.apply(snap.terrain);
@@ -772,88 +810,295 @@ export function battleScreen(app: App, route: Route): Screen {
     const human = isHuman(snap.hud.active);
     const plan = snap.phase === 'plan' && human;
     const lenses = lensRects();
+    const aimingNow = drag?.mode === 'aim' && dist(drag) >= CANCEL_R;
+    const aimVal = pendingAim ?? snap.hud.aim;
+    let threatened: Side | -1 = -1;
+    if (plan && aimingNow && aimVal && aimVal.power >= 25 && snap.hud.preview.length >= 2) {
+      const foe = other(me);
+      const fo = snap.forts[foe];
+      const p0 = snap.hud.preview[0], pN = snap.hud.preview[snap.hud.preview.length - 1];
+      if ((fo.x + fo.w / 2 - p0[0]) * (pN[0] - p0[0]) > 0) threatened = foe;
+    }
     opts.you = me; opts.seeThrough = plan ? snap.hud.active : -1; opts.pickedHob = plan ? snap.hud.hob : undefined;
-    opts.showPreview = plan; opts.time = (now - startT) / 1000; opts.reduceMotion = app.settings.reduceMotion; opts.lean = lean ?? undefined;
+    opts.showPreview = plan; opts.time = (now - startT) / 1000; opts.reduceMotion = app.settings.reduceMotion; opts.reduceFlashes = app.settings.reduceFlashes;
+    opts.lean = lean ?? undefined;
     opts.mendTarget = plan && mendTarget ? mendTarget : undefined;
+    opts.threatenedSide = threatened;
+    opts.aiming = aimingNow;
+    opts.aimPower = aimVal?.power ?? 0;
+    opts.missDrawn = false;
     opts.nShells = nShell;
     opts.dpr = dpr;
     opts.cssSky = layout === 'wide' && skyCss();
     for (const l of lenses) {
       if (l.id === 'strip') continue;
+      // Portrait Bottom Lens omits the duplicate sky sun (M-W04).
+      opts.skipSun = layout === 'tall' && !joined && l.id === 'bottom';
       drawLens(ctx, l.rect, l.cam, snap, terr, feel, opts, caches[l.id]);
     }
+    opts.skipSun = false;
     if (layout === 'tall') {
       if (joined) { stripRect.x = rc.strip.x; stripRect.w = rc.strip.w; stripRect.h = rc.strip.h; stripRect.y = rc.bottom.y + rc.bottom.h - 34; stripLenses[0].rect = lenses[0].rect; stripLenses[0].cam = camJoin; }
       else { stripLenses[0].rect = rc.top; stripLenses[0].cam = camTop; stripLenses[1].rect = rc.bottom; }
       drawStrip(ctx, joined ? stripRect : rc.strip, snap, terr, stripLenses, joined ? 1 : 2, me);
+      // Portrait Valley fallback: if the active Hob's latest miss fell in the valley outside both lenses,
+      // float its miss pill cleanly above the Field Strip at the pin's strip X (M-W01 / Live QA M4).
+      if (!joined && plan && !opts.missDrawn && terr.w > 0) {
+        const pl = lastPinOf(me);
+        const mt = pl ? missTextOf(snap, pl) : null;
+        if (pl && mt) drawStripMissTag(mt, pl.x);
+      }
     }
     if (drag && drag.mode === 'aim') drawAimBand(drag, me);
   }
 
-  /** The Aim Drag band: a 10 step power scale that fills as you pull, the last shot's notch, the
-   *  cancel spot at the anchor, and the power and angle badges at the top of the lens. */
-  function drawAimBand(g: Gesture, me: Side): void {
-    const full = g.full ?? 0.4 * Math.min(W, H);
-    const a = pendingAim ?? snap.hud.aim;
-    const inCancel = dist(g) < 12;
-    const sgn = app.settings.dragMode === 'point' ? -1 : 1;
-    const armed = app.settings.quickFire && !inCancel;
+  function drawStripMissTag(text: string, worldX: number): void {
+    const sr = rc.strip;
+    if (sr.w <= 0 || terr.w <= 0) return;
+    const sxp = sr.x + clamp(worldX / terr.w, 0.05, 0.95) * sr.w;
     ctx.save();
+    ctx.font = '700 12px Nunito, system-ui, sans-serif';
+    const w = ctx.measureText(text).width + 14;
+    const hgt = 22;
+    const bx = clamp(sxp - w / 2, sr.x + 8, sr.x + sr.w - w - 8);
+    const by = Math.max(rc.top.y + 6, sr.y - hgt - 6);
+    const cx = clamp(sxp, bx + 9, bx + w - 9);
+    ctx.fillStyle = 'rgba(250,243,227,0.96)';
+    roundRect(ctx, bx, by, w, hgt, 8);
+    ctx.fill();
+    ctx.strokeStyle = '#C88A2E'; ctx.lineWidth = 2.4; ctx.stroke();
+    ctx.strokeStyle = '#2C221E'; ctx.lineWidth = 1.2; ctx.stroke();
+    // Small downward caret pointing straight at the Field Strip pin
+    ctx.fillStyle = 'rgba(250,243,227,0.96)';
+    ctx.beginPath(); ctx.moveTo(cx - 5, by + hgt - 1); ctx.lineTo(cx, by + hgt + 5); ctx.lineTo(cx + 5, by + hgt - 1); ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#2C221E'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(cx - 5, by + hgt); ctx.lineTo(cx, by + hgt + 5); ctx.lineTo(cx + 5, by + hgt); ctx.stroke();
+    ctx.fillStyle = '#2C221E'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    ctx.fillText(text, bx + 7, by + hgt / 2 + 0.5);
+    ctx.restore();
+  }
+
+  /**
+   * Award-Winning Curved Radial Brass Tension Arc (Award Aim Pillar 1 & 2, H-W02..H-W05):
+   * Hammered-brass rear-quadrant tension arc with 10 brass ticks, Last-Shot Notch, diegetic
+   * slingshot elastic bands, soft Home-Return Cancel Halo (never an X over the Hob), and one
+   * crisp clamped parchment pill showing intuitive 0..90 deg elevation + power + delta.
+   */
+  function drawAimBand(g: Gesture, me: Side): void {
+    const lr: Rect = layout === 'wide'
+      ? { x: 0, y: rc.clear.y, w: W, h: Math.max(80, H - rc.clear.y) }
+      : rc.bottom;
+    if (lr.w <= 0 || lr.h <= 0) return;
+    const d0 = dist(g);
+    const inCancel = d0 < CANCEL_R;
+    const a = inCancel ? (g.prevAim ?? snap.hud.aim) : (pendingAim ?? snap.hud.aim);
+    const armed = app.settings.quickFire && !inCancel && snap.hud.fire === 'ready';
+    const [hx, hy] = pickedHobScreen();
+    const maxR = Math.max(44, Math.min((lr.h - 52) * 0.44, (lr.w - 32) * 0.44));
+    const R = Math.min(maxR, clamp(Math.min(lr.w, lr.h) * 0.22, 68, 94));
+    const minCx = me === 0 ? lr.x + R + 16 : lr.x + 28;
+    const maxCx = me === 0 ? lr.x + lr.w - 28 : lr.x + lr.w - R - 16;
+    const acx = minCx <= maxCx ? clamp(hx, minCx, maxCx) : lr.x + lr.w / 2;
+    const minCy = lr.y + R + 44;
+    const maxCy = lr.y + lr.h - R - 16;
+    const acy = minCy <= maxCy ? clamp(hy - 10, minCy, maxCy) : lr.y + lr.h * 0.55;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(lr.x, lr.y, lr.w, lr.h);
+    ctx.clip();
     ctx.lineCap = 'round';
-    // The direction from the anchor toward the finger for an aim angle (tenths of a degree).
-    const along = (angle: number): [number, number] => { const r = (angle / 10) * Math.PI / 180; return [-Math.cos(r) * sgn, Math.sin(r) * sgn]; };
-    if (a && !inCancel) {
-      const [ux, uy] = along(a.angle);
-      const nx = -uy, ny = ux, w = 10;
-      const seg = full / 10;
-      const pull = (a.power / 100) * full;
-      const quad = (b0: number, b1: number) => {
-        ctx.beginPath();
-        ctx.moveTo(g.x0 + ux * b0 + nx * w / 2, g.y0 + uy * b0 + ny * w / 2);
-        ctx.lineTo(g.x0 + ux * b1 + nx * w / 2, g.y0 + uy * b1 + ny * w / 2);
-        ctx.lineTo(g.x0 + ux * b1 - nx * w / 2, g.y0 + uy * b1 - ny * w / 2);
-        ctx.lineTo(g.x0 + ux * b0 - nx * w / 2, g.y0 + uy * b0 - ny * w / 2);
-        ctx.closePath();
-      };
-      for (let k = 0; k < 10; k++) {
-        const b0 = k * seg + 1.5, b1 = (k + 1) * seg - 1.5;
-        quad(b0, b1);
-        ctx.fillStyle = 'rgba(255,244,222,0.55)'; ctx.fill();
-        ctx.strokeStyle = armed ? '#E5484D' : 'rgba(43,30,46,0.6)'; ctx.lineWidth = armed ? 2 : 1; ctx.stroke();
-        if (pull > b0) { quad(b0, Math.min(b1, pull)); ctx.fillStyle = aimHeat((k + 1) * 10); ctx.fill(); }
-      }
-      // The last shot of this Hob: a notch where its pull would end, and the change from it.
-      const last = lastPinOf(me);
-      if (last) {
-        const [lx, ly] = along(last.angle);
-        const d = (last.power / 100) * full;
-        const mx = g.x0 + lx * d, my = g.y0 + ly * d;
-        ctx.save();
-        ctx.translate(mx, my); ctx.rotate(Math.atan2(ly, lx));
-        ctx.fillStyle = '#FFF4DE'; ctx.strokeStyle = '#2B1E2E'; ctx.lineWidth = 1.5;
-        ctx.fillRect(-2.5, -11, 5, 22); ctx.strokeRect(-2.5, -11, 5, 22);
-        ctx.restore();
-        const dp = a.power - last.power, da = (a.angle - last.angle) / 10;
-        const sign = (v: number) => (v > 0 ? '+' : v < 0 ? '\u2212' : '\u00B1');
-        const txt = `${sign(dp)}${Math.abs(dp)} | ${sign(da)}${Math.abs(da).toFixed(1)}\u00B0`;
-        bandTag(txt, mx + nx * 22, my + ny * 22, '#2B1E2E');
-      }
-    } else if (inCancel) {
-      ctx.strokeStyle = 'rgba(43,30,46,0.45)'; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.moveTo(g.x0, g.y0); ctx.lineTo(g.x, g.y); ctx.stroke();
+
+    // 1. Diegetic braided-leather slingshot elastic bands stretching behind the Hob's Loophole.
+    if (a && !inCancel && a.power > 0) {
+      const lx = clamp(hx + (me === 0 ? 12 : -12), lr.x + 12, lr.x + lr.w - 12);
+      const ly = clamp(hy - 12, lr.y + 12, lr.y + lr.h - 12);
+      const rad = (a.angle / 10) * Math.PI / 180;
+      const pullLen = clamp((a.power / 100) * Math.min(R * 1.05, 92), 14, 92);
+      const px = clamp(lx - Math.cos(rad) * pullLen, lr.x + 10, lr.x + lr.w - 10);
+      const py = clamp(ly + Math.sin(rad) * pullLen, lr.y + 10, lr.y + lr.h - 10);
+      const bandW = 3.2 - (a.power / 100) * 1.3;
+      const bandTone = a.power >= 85 ? aimHeat(a.power, 0.92) : '#B8843A';
+      // Ink outline behind elastic cords
+      ctx.strokeStyle = 'rgba(44,34,30,0.78)';
+      ctx.lineWidth = bandW + 2.2;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly - 5); ctx.lineTo(px, py);
+      ctx.moveTo(lx, ly + 5); ctx.lineTo(px, py);
+      ctx.stroke();
+      // Warm taut cord core
+      ctx.strokeStyle = bandTone;
+      ctx.lineWidth = bandW;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly - 5); ctx.lineTo(px, py);
+      ctx.moveTo(lx, ly + 5); ctx.lineTo(px, py);
+      ctx.stroke();
+      // Brass-riveted leather pull pouch
+      ctx.fillStyle = '#5C4332'; ctx.strokeStyle = '#2C221E'; ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.arc(px, py, 5.2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#FFE08A';
+      ctx.beginPath(); ctx.arc(px - 1, py - 1, 1.8, 0, Math.PI * 2); ctx.fill();
     }
-    // The cancel spot: drag back onto it and let go to keep the old aim.
-    ctx.fillStyle = inCancel ? '#E5484D' : '#FFF4DE'; ctx.strokeStyle = '#2B1E2E'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(g.x0, g.y0, 15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = inCancel ? '#FFF4DE' : '#2B1E2E'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(g.x0 - 5.5, g.y0 - 5.5); ctx.lineTo(g.x0 + 5.5, g.y0 + 5.5); ctx.moveTo(g.x0 + 5.5, g.y0 - 5.5); ctx.lineTo(g.x0 - 5.5, g.y0 + 5.5); ctx.stroke();
-    if (inCancel) bandTag(t('hud.cancel_aim'), g.x0, g.y0 - 30, '#E5484D');
-    // Power and angle badges at the top of the lens that aims.
-    if (a) {
-      const lr = lensRects().find((l) => l.id === g.lens)?.rect ?? { x: 0, y: 0, w: W, h: H };
-      const bw = 124, top = (layout === 'wide' ? Math.max(lr.y, rc.clear.y) : lr.y) + 8, x0 = lr.x + lr.w / 2 - bw - 5;
-      badge(x0, top, bw, 'bolt', t('hud.power').toUpperCase(), `${a.power}%`, a.power, 0);
-      badge(x0 + bw + 10, top, bw, 'arrow', t('hud.angle').toUpperCase(), `${(a.angle / 10).toFixed(1)}\u00B0`, a.power, a.angle / 10);
+
+    // 2. Semicircular hammered-brass radial tension arc sweeping the rear quadrant behind the fort.
+    const startA = me === 0 ? 0.62 * Math.PI : 0.38 * Math.PI;
+    const endA = me === 0 ? 1.38 * Math.PI : -0.38 * Math.PI;
+    const ccw = me === 1;
+    const arcAng = (pct: number) => startA + ((endA - startA) * clamp(pct, 0, 100)) / 100;
+
+    if (armed) {
+      const pulse = 0.42 + 0.16 * Math.sin(opts.time * 9);
+      ctx.strokeStyle = `rgba(214,63,46,${pulse.toFixed(2)})`;
+      ctx.lineWidth = 19;
+      ctx.beginPath(); ctx.arc(acx, acy, R, startA, endA, ccw); ctx.stroke();
+    }
+    // Espresso-ink track backing, warm hammered-brass bevel, and translucent parchment recess
+    ctx.strokeStyle = 'rgba(44,34,30,0.78)';
+    ctx.lineWidth = 13;
+    ctx.beginPath(); ctx.arc(acx, acy, R, startA, endA, ccw); ctx.stroke();
+    ctx.strokeStyle = armed ? '#D63F2E' : '#C88A2E';
+    ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.arc(acx, acy, R, startA, endA, ccw); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,244,222,0.30)';
+    ctx.lineWidth = 7.2;
+    ctx.beginPath(); ctx.arc(acx, acy, R, startA, endA, ccw); ctx.stroke();
+
+    // Smooth filled tension arc in storybook Cobalt -> Gold -> Amber -> Forged Crimson (zero green!)
+    if (a && !inCancel && a.power > 0) {
+      const steps = Math.max(1, Math.ceil(a.power / 5));
+      for (let i = 0; i < steps; i++) {
+        const p0 = (i / steps) * a.power;
+        const p1 = ((i + 1) / steps) * a.power;
+        ctx.strokeStyle = aimHeat((p0 + p1) * 0.5);
+        ctx.lineWidth = 7.5;
+        ctx.beginPath();
+        ctx.arc(acx, acy, R, arcAng(p0), arcAng(p1), ccw);
+        ctx.stroke();
+      }
+      // Subtle top brass sheen along the filled tension arc
+      ctx.strokeStyle = 'rgba(255,250,235,0.45)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(acx, acy, R - 1.6, arcAng(0), arcAng(a.power), ccw);
+      ctx.stroke();
+    }
+
+    // 10 subtle hammered-brass tick notches (10%..100%)
+    ctx.lineCap = 'butt';
+    for (let k = 1; k <= 10; k++) {
+      const ang = arcAng(k * 10);
+      const major = k === 5 || k === 10;
+      const r0 = R - (major ? 6.5 : 4.8);
+      const r1 = R + (major ? 6.5 : 4.8);
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      ctx.strokeStyle = major ? '#FFE08A' : 'rgba(255,244,222,0.72)';
+      ctx.lineWidth = major ? 2.2 : 1.3;
+      ctx.beginPath(); ctx.moveTo(acx + ca * r0, acy + sa * r0); ctx.lineTo(acx + ca * r1, acy + sa * r1); ctx.stroke();
+    }
+
+    // Crisp ivory-and-brass Last-Shot Notch directly on the arc
+    const last = lastPinOf(me);
+    if (last) {
+      const la = arcAng(last.power);
+      const ca = Math.cos(la), sa = Math.sin(la);
+      const nx = acx + ca * R, ny = acy + sa * R;
+      ctx.save();
+      ctx.translate(nx, ny);
+      ctx.rotate(la);
+      ctx.fillStyle = '#FFF4DE';
+      ctx.strokeStyle = '#2C221E';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(-9, 0); ctx.lineTo(0, -4.2); ctx.lineTo(9, 0); ctx.lineTo(0, 4.2); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#C88A2E';
+      ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+
+    // Live power medallion bead riding the arc
+    if (a && !inCancel) {
+      const pa = arcAng(a.power);
+      const bx = acx + Math.cos(pa) * R, by = acy + Math.sin(pa) * R;
+      ctx.fillStyle = aimHeat(a.power);
+      ctx.strokeStyle = '#2C221E';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(bx, by, armed ? 6.8 : 5.8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(bx - 1.6, by - 1.6, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // 3. Soft Home-Return Cancel Halo: ONLY blooms within <= 28 px of anchor (zero harsh X over Hob!).
+    if (d0 <= HALO_SHOW_R) {
+      const fade = clamp((HALO_SHOW_R - d0) / Math.max(1, HALO_SHOW_R - CANCEL_R), 0.25, 1);
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = inCancel ? 'rgba(214,63,46,0.22)' : 'rgba(255,224,138,0.22)';
+      ctx.beginPath(); ctx.arc(g.x0, g.y0, CANCEL_R, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = inCancel ? '#D63F2E' : '#C88A2E';
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.arc(g.x0, g.y0, CANCEL_R, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = inCancel ? '#D63F2E' : '#FFE08A';
+      ctx.strokeStyle = '#2C221E';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(g.x0, g.y0, 3.6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      if (inCancel) {
+        const cancelTxt = has('hud.release_to_cancel') ? t('hud.release_to_cancel') : t('hud.cancel_aim');
+        bandTag(cancelTxt, g.x0, g.y0 - CANCEL_R - 14, '#A61C24', lr);
+      }
+    }
+
+    // 4. Single clean parchment readout pill above the arc (clamped inside lr, zero HUD collisions).
+    if (a && !inCancel) {
+      const mainTxt = `${displayDeg(a.angle, me).toFixed(1)}\u00B0 \u00B7 ${a.power}%`;
+      let deltaTxt = '';
+      if (last) {
+        const dDeg = displayDeg(a.angle, me) - displayDeg(last.angle, me);
+        const dPow = a.power - last.power;
+        const sD = (v: number) => (v > 0.04 ? '+' : v < -0.04 ? '\u2212' : '\u00B1');
+        const sP = (v: number) => (v > 0 ? '+' : v < 0 ? '\u2212' : '\u00B1');
+        deltaTxt = `${sD(dDeg)}${Math.abs(dDeg).toFixed(1)}\u00B0 \u00B7 ${sP(dPow)}${Math.abs(dPow)}%`;
+      }
+      ctx.font = '700 14px Fredoka, Nunito, system-ui, sans-serif';
+      const mainW = ctx.measureText(mainTxt).width;
+      ctx.font = '700 11px Nunito, system-ui, sans-serif';
+      const deltaW = deltaTxt ? ctx.measureText(deltaTxt).width : 0;
+      const pillW = Math.ceil(Math.max(mainW + 30, deltaW + 20));
+      const pillH = deltaTxt ? 38 : 26;
+      const anchorX = acx + (me === 0 ? -R * 0.25 : R * 0.25);
+      const px0 = clamp(anchorX - pillW / 2, lr.x + 8, lr.x + lr.w - pillW - 8);
+      const py0 = clamp(acy - R - pillH - 10, lr.y + 8, lr.y + lr.h - pillH - 8);
+      ctx.fillStyle = 'rgba(250,243,227,0.96)';
+      roundRect(ctx, px0, py0, pillW, pillH, 10);
+      ctx.fill();
+      ctx.strokeStyle = armed ? '#D63F2E' : '#C88A2E';
+      ctx.lineWidth = 2.6;
+      ctx.stroke();
+      ctx.strokeStyle = '#2C221E';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      // Live tension dot beside main elevation & power text
+      const mainY = deltaTxt ? py0 + 13 : py0 + pillH / 2;
+      const textStart = px0 + (pillW - (mainW + 14)) / 2;
+      ctx.fillStyle = aimHeat(a.power);
+      ctx.strokeStyle = '#2C221E';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(textStart + 4, mainY, 4.2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#2C221E';
+      ctx.font = '700 14px Fredoka, Nunito, system-ui, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillText(mainTxt, textStart + 13, mainY + 0.5);
+      if (deltaTxt) {
+        ctx.fillStyle = '#5C4A3E';
+        ctx.font = '700 11px Nunito, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(deltaTxt, px0 + pillW / 2, py0 + 29);
+      }
     }
     ctx.restore();
   }
@@ -861,35 +1106,16 @@ export function battleScreen(app: App, route: Route): Screen {
     for (let i = snap.pins.length - 1; i >= 0; i--) { const p = snap.pins[i]; if (p.side === me && p.hob === snap.hud.hob) return p; }
     return undefined;
   }
-  function bandTag(text: string, x: number, y: number, color: string): void {
+  function bandTag(text: string, x: number, y: number, color: string, bounds?: Rect): void {
+    const b = bounds ?? { x: 0, y: 0, w: W, h: H };
     ctx.save();
-    ctx.font = '600 13px system-ui, sans-serif';
-    const w = ctx.measureText(text).width + 12;
-    const bx = clamp(x - w / 2, 4, W - w - 4), by = clamp(y - 10, 4, H - 24);
-    ctx.fillStyle = 'rgba(255,244,222,0.94)'; roundRect(ctx, bx, by, w, 20, 6); ctx.fill();
-    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.fillStyle = color; ctx.textBaseline = 'middle'; ctx.fillText(text, bx + 6, by + 10.5);
-    ctx.restore();
-  }
-  function badge(x: number, y: number, w: number, icon: 'bolt' | 'arrow', title: string, val: string, power: number, deg: number): void {
-    ctx.save();
-    ctx.fillStyle = 'rgba(43,30,46,0.88)'; roundRect(ctx, x, y, w, 36, 18); ctx.fill();
-    ctx.fillStyle = '#FFF4DE'; ctx.beginPath(); ctx.arc(x + 18, y + 18, 14, 0, Math.PI * 2); ctx.fill();
-    ctx.translate(x + 18, y + 18);
-    ctx.fillStyle = '#2B1E2E'; ctx.strokeStyle = '#2B1E2E';
-    if (icon === 'bolt') {
-      ctx.beginPath(); ctx.moveTo(2, -9); ctx.lineTo(-5, 1); ctx.lineTo(0, 1); ctx.lineTo(-2, 9); ctx.lineTo(5, -1); ctx.lineTo(0, -1); ctx.closePath();
-      ctx.save(); ctx.clip(); ctx.fillStyle = aimHeat(power); const f = power / 100; ctx.fillRect(-8, 9 - 18 * f, 16, 18 * f); ctx.restore();
-      ctx.lineWidth = 1.2; ctx.stroke();
-    } else {
-      ctx.rotate(-deg * Math.PI / 180); ctx.lineWidth = 2.2;
-      ctx.beginPath(); ctx.moveTo(-7, 0); ctx.lineTo(5, 0); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(2, -5); ctx.lineTo(2, 5); ctx.closePath(); ctx.fill();
-    }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#FFF4DE'; ctx.textBaseline = 'middle';
-    ctx.font = '600 10px system-ui, sans-serif'; ctx.fillText(title, x + 38, y + 11);
-    ctx.font = '700 15px system-ui, sans-serif'; ctx.fillText(val, x + 38, y + 25);
+    ctx.font = '700 12.5px Nunito, system-ui, sans-serif';
+    const w = ctx.measureText(text).width + 14;
+    const bx = clamp(x - w / 2, b.x + 6, b.x + b.w - w - 6);
+    const by = clamp(y - 11, b.y + 6, b.y + b.h - 28);
+    ctx.fillStyle = 'rgba(250,243,227,0.96)'; roundRect(ctx, bx, by, w, 22, 8); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = color; ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillText(text, bx + 7, by + 11.5);
     ctx.restore();
   }
 
@@ -994,7 +1220,7 @@ export function battleScreen(app: App, route: Route): Screen {
     if (setup.mode === 'yard') return;
     try {
       await saveBattle({
-        setup, core: core.saveBattle(), coreName: core.name,
+        setup, core: core.saveBattle(), coreName: core.name, rules: core.rules,
         label: saveLabel(side, round),
         savedAt: Date.now(), handoff: setup.mode === 'duel',
       });
@@ -1018,7 +1244,7 @@ export function battleScreen(app: App, route: Route): Screen {
       else say(t('results.duel.draw'));
       // The whole winning crew says the crew line once, after the Hob win lines.
       const line = crewWinLine();
-      if (line && (res.winner === 0 || res.winner === 1)) {
+      if (line && app.settings.subtitles && (res.winner === 0 || res.winner === 1)) {
         const f = snap.forts[res.winner];
         setTimeout(() => { if (alive) feel.fx.word(`"${line}"`, f.x + f.w / 2, f.y + f.h + 90, 15, res.winner === 0 ? '#CFE0FF' : '#FFD9B8', false, 2200); }, 700);
       }
@@ -1054,7 +1280,7 @@ export function battleScreen(app: App, route: Route): Screen {
   // ---------- HUD update ----------
   let padOpen = false;
   let padT = 0;
-  const padAlways = () => Math.min(W, H) >= 700;
+  const padAlways = () => Math.min(W, H) >= 700 || app.settings.tapsOnly;
   function padNudge(): void {
     padOpen = true;
     clearTimeout(padT);
@@ -1081,14 +1307,17 @@ export function battleScreen(app: App, route: Route): Screen {
     pan_parade: 'icon_lid_lifter',
   };
   const shotIconUrl = (c: ShotChip): string | undefined => resolveShotIconUrl(c.icon, ICON_FALLBACK);
-  sprites.whenLoaded(() => {
+  const refreshHudIcons = () => {
+    if (!alive) return;
     windFlagImg.src = windPennantUrl();
     fatigueImg.src = fatigueFlameUrl();
     for (const side of [0, 1] as Side[]) {
       const st = (kettleEl[side].dataset.state as 'full' | 'hurt' | 'critical') || 'full';
       kettleDialImg[side].src = kettleDialUrl(st);
     }
-  });
+  };
+  sprites.whenLoaded(refreshHudIcons);
+  const offUpgrade = sprites.onUpgrade(refreshHudIcons);
 
   let hudKey = '';
   let lastPipsKey = '';
@@ -1229,7 +1458,11 @@ export function battleScreen(app: App, route: Route): Screen {
       rectsDirty = true;
       const shotBtns = hd.shots.map((c, i) => {
         const ic = shotIconUrl(c);
-        const b = btn(h('span', { class: 'nm' }, ic ? h('img', { src: ic, alt: '', class: 'ico' }) : '', h('span', { class: 'shot-label' }, c.name)), () => send({ cmd: 'pick_shot', id: c.id }), `chip shot ${c.id === hd.shot ? 'on' : ''} ${c.ready ? '' : 'off'}`, {
+        const b = btn(h('span', { class: 'nm' }, ic ? h('img', { src: ic, alt: '', class: 'ico' }) : '', h('span', { class: 'shot-label' }, c.name)), () => {
+          // Taps only: tapping an already-picked shot opens its card without needing a long press (M-W03).
+          if (app.settings.tapsOnly && c.id === snap.hud.shot) { shellCard(c); return; }
+          send({ cmd: 'pick_shot', id: c.id });
+        }, `chip shot ${c.id === hd.shot ? 'on' : ''} ${c.ready ? '' : 'off'}`, {
           'aria-label': !c.ready && c.why ? t('hud.shot_chip_locked', { shot: c.name, why: c.why }) : c.uses >= 0 ? t('hud.shot_chip_left', { shot: c.name, weight: weightWord(c.weight), n: c.uses }) : t('hud.shot_chip', { shot: c.name, weight: weightWord(c.weight) }),
           'data-key': String(i + 1), disabled: !plan,
         });
@@ -1295,11 +1528,16 @@ export function battleScreen(app: App, route: Route): Screen {
     setStyle(steamBar.children[0] as HTMLElement, 'width', `${pct.toFixed(1)}%`);
     setText(steamBar.children[1] as HTMLElement, t('hud.steam', { n: hd.steam }));
     if (changed(steamBar, 'aria', `${hd.steam}:${hd.steamTurn}`)) steamBar.setAttribute('aria-label', t('hud.steam_long', { n: hd.steam, max: hd.steamMax, left: hd.steamTurn }));
-    // readout & Recall availability state
+    // readout & Recall availability state (intuitive 0..90 deg elevation for both sides!)
     const a = hd.aim;
-    setText(readout, a && a.power > 0 ? `${(a.angle / 10).toFixed(1)}° | ${a.power}` : '--');
-    if (changed(readout, 'aria', `${a?.angle}:${a?.power}`)) readout.setAttribute('aria-label', `${a && a.power > 0 ? t('hud.aim_readout', { angle: (a.angle / 10).toFixed(1), power: a.power }) : t('hud.no_aim')}. ${t('hud.fine_tune')}`);
-    setHidden(pad, !(plan && (padOpen || padAlways())));
+    const degTxt = a ? displayDeg(a.angle, me).toFixed(1) : '';
+    setText(readout, a && a.power > 0 ? `${degTxt}° | ${a.power}` : '--');
+    if (changed(readout, 'aria', `${a?.angle}:${a?.power}:${me}`)) readout.setAttribute('aria-label', `${a && a.power > 0 ? t('hud.aim_readout', { angle: degTxt, power: a.power }) : t('hud.no_aim')}. ${t('hud.fine_tune')}`);
+    const wantPadHidden = !(plan && (padOpen || padAlways()));
+    if (changed(pad, 'h', String(wantPadHidden))) {
+      pad.hidden = wantPadHidden;
+      rc.pad = !wantPadHidden ? readRect(pad) : z();
+    }
     const hasPins = s.pins.some((p) => p.hob === hd.hob && !p.spent) || recallIdx > 0;
     setClass(recallBtn, 'off', !hasPins);
     // fire: FIRE, SHOVE OFF on a buried Loophole, PASS when nothing else is legal, 2x / 1x in Resolve
@@ -1322,13 +1560,15 @@ export function battleScreen(app: App, route: Route): Screen {
     if (why) {
       const fr = rc.fire, tr = rc.tray;
       if (layout === 'wide') {
+        // Stay cleanly clear of .dialbar when shot options are visible (M-W11).
         setStyle(fireWhyEl, 'left', `${Math.round(clamp(tr.x + tr.w / 2, 110, W - 110))}px`);
-        setStyle(fireWhyEl, 'top', `${Math.round(tr.y - 8)}px`);
+        setStyle(fireWhyEl, 'top', `${Math.round(Math.max(rc.clear.y + 28, tr.y - (showDial ? 58 : 10)))}px`);
         setStyle(fireWhyEl, 'transform', 'translate(-50%, -100%)');
       } else {
-        setStyle(fireWhyEl, 'left', `${Math.round(Math.max(8, fr.x - 10 - 190))}px`);
-        setStyle(fireWhyEl, 'top', `${Math.round(fr.y + fr.h / 2)}px`);
-        setStyle(fireWhyEl, 'transform', 'translateY(-50%)');
+        // Portrait: dock cleanly right above the greyed-out FIRE button instead of over Hob buttons (M-W11).
+        setStyle(fireWhyEl, 'left', `${Math.round(clamp(fr.x + fr.w / 2, 102, W - 102))}px`);
+        setStyle(fireWhyEl, 'top', `${Math.round(Math.max(12, fr.y - 10))}px`);
+        setStyle(fireWhyEl, 'transform', 'translate(-50%, -100%)');
       }
     }
     if (plan) autoPickReady();
@@ -1376,9 +1616,9 @@ export function battleScreen(app: App, route: Route): Screen {
       }
     }
     setHidden(fortMark, !fortOff);
-    // The arc: the first preview point past the screen edge (the top strip counts as the edge).
+    // The arc: the first preview point past the screen edge (hidden while actively aim-dragging to prevent pill overlap).
     let exit: [number, number, number] | null = null;
-    const pv = on ? snap.hud.preview : [];
+    const pv = on && drag?.mode !== 'aim' ? snap.hud.preview : [];
     const top = cr.y;
     let px = 0, py = 0;
     for (let i = 0; i < pv.length; i++) {
@@ -1391,12 +1631,12 @@ export function battleScreen(app: App, route: Route): Screen {
       px = x; py = y;
     }
     setHidden(arcMark, !exit);
-    if (exit && !pad.hidden) {
-      // Never on the Fine Tune pad (n9): step clear of it, below or above.
-      const pb = pad.getBoundingClientRect();
-      if (exit[0] > pb.left - 18 && exit[0] < pb.right + 18 && exit[1] > pb.top - 18 && exit[1] < pb.bottom + 18) {
-        exit[1] = pb.bottom + 22 < H - 18 ? pb.bottom + 22 : Math.max(top + 18, pb.top - 22);
-        if (exit[1] > pb.top - 18 && exit[1] < pb.bottom + 18) exit[0] = pb.left - 24;
+    if (exit && !pad.hidden && rc.pad.w > 0) {
+      // Never on the Fine Tune pad (n9): step clear of it using cached rc.pad (zero 60 Hz layout thrash, M-W15).
+      const pb = rc.pad;
+      if (exit[0] > pb.x - 18 && exit[0] < pb.x + pb.w + 18 && exit[1] > pb.y - 18 && exit[1] < pb.y + pb.h + 18) {
+        exit[1] = pb.y + pb.h + 22 < H - 18 ? pb.y + pb.h + 22 : Math.max(top + 18, pb.y - 22);
+        if (exit[1] > pb.y - 18 && exit[1] < pb.y + pb.h + 18) exit[0] = pb.x - 24;
       }
     }
     if (exit) {
@@ -1443,10 +1683,13 @@ export function battleScreen(app: App, route: Route): Screen {
   }
   /** The ring on the picked Hob (your fort's grip) every Plan step until 3 aims were started from it. */
   function ownerRing(plan: boolean): void {
-    const on = plan && !paused && !handoffOpen && drag?.mode !== 'aim' && aimStarts() < AIM_TEACH && !(layout === 'tall' && joined);
-    setHidden(ownRing, !on);
-    if (!on) return;
+    const baseOn = plan && !paused && !handoffOpen && drag?.mode !== 'aim' && aimStarts() < AIM_TEACH && !(layout === 'tall' && joined);
+    if (!baseOn) { setHidden(ownRing, true); return; }
     const [x, y] = pickedHobScreen();
+    const lr = layout === 'tall' ? rc.bottom : rc.clear;
+    const inside = x >= lr.x + 10 && x <= lr.x + lr.w - 10 && y - 14 >= lr.y + 10 && y - 14 <= lr.y + lr.h - 10;
+    setHidden(ownRing, !inside);
+    if (!inside) return;
     setStyle(ownRing, 'left', `${Math.round(x)}px`);
     setStyle(ownRing, 'top', `${Math.round(y - 14)}px`);
   }
@@ -1543,7 +1786,7 @@ export function battleScreen(app: App, route: Route): Screen {
     play('tap');
   }
   const pointers = new Map<number, { x: number; y: number }>();
-  let pinch: { d0: number; z0: number; lens: LensId } | null = null;
+  let pinch: { d0: number; s0: number; lens: LensId; mx: number; my: number } | null = null;
   let lastDragEnd = 0;
   const dist = (g: Gesture) => Math.hypot(g.x - g.x0, g.y - g.y0);
 
@@ -1577,8 +1820,11 @@ export function battleScreen(app: App, route: Route): Screen {
     if (pointers.size === 2) {
       if (drag?.mode === 'aim' || drag?.mode === 'lean') endDrag(true);
       const [p1, p2] = [...pointers.values()];
-      const l = lensAt(p1.x, p1.y);
-      pinch = { d0: Math.hypot(p1.x - p2.x, p1.y - p2.y), z0: l?.id === 'top' ? zoomTop : zoomWide, lens: l?.id ?? 'wide' };
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      const l = lensAt(mx, my) ?? lensAt(p1.x, p1.y);
+      const id: LensId = l?.id === 'top' ? 'top' : 'wide';
+      const cam = id === 'top' ? camTop : camWide;
+      pinch = { d0: Math.max(1, Math.hypot(p1.x - p2.x, p1.y - p2.y)), s0: cam.s, lens: id, mx, my };
       drag = null;
       return;
     }
@@ -1587,8 +1833,13 @@ export function battleScreen(app: App, route: Route): Screen {
     const base: Gesture = { id: e.pointerId, lens: l.id, mode: 'maybe-pan', x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: performance.now() };
     if (e.button === 1 || e.button === 2) { drag = { ...base, mode: 'pan' }; return; }
     if (l.id === 'strip') { drag = { ...base, mode: 'strip' }; return; }
-    if ((l.id === 'wide' || l.id === 'bottom') && canAim() && onOwnFort(l, e.clientX, e.clientY)) drag = { ...base, mode: 'maybe-aim', prevAim: snap.hud.aim ? { ...snap.hud.aim } : undefined };
-    else drag = { ...base, skyAim: (l.id === 'wide' || l.id === 'bottom') && canAim() };
+    if ((l.id === 'wide' || l.id === 'bottom') && canAim() && onOwnFort(l, e.clientX, e.clientY)) {
+      // Keep aim origin strictly inside active lens so the Home-Return Cancel Halo is ALWAYS reachable (Rule 4 / H-W03).
+      const lr = l.id === 'bottom' ? rc.bottom : { x: 0, y: rc.clear.y, w: W, h: Math.max(80, H - rc.clear.y) };
+      const x0 = clamp(e.clientX, lr.x + 24, lr.x + Math.max(24, lr.w - 24));
+      const y0 = clamp(e.clientY, lr.y + 24, lr.y + Math.max(24, lr.h - 24));
+      drag = { ...base, x0, y0, mode: 'maybe-aim', prevAim: snap.hud.aim ? { ...snap.hud.aim } : undefined };
+    } else drag = { ...base, skyAim: (l.id === 'wide' || l.id === 'bottom') && canAim() };
     const g = drag;
     clearTimeout(leanT);
     leanT = window.setTimeout(() => tryLean(g), 450);
@@ -1599,12 +1850,23 @@ export function battleScreen(app: App, route: Route): Screen {
     const prev = pointers.get(e.pointerId)!;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pinch && pointers.size === 2) {
+      // Anchored pinch zoom + simultaneous two-finger pan directly updating cam.s (H-W01).
       const [p1, p2] = [...pointers.values()];
-      const z = clamp((pinch.z0 * Math.hypot(p1.x - p2.x, p1.y - p2.y)) / Math.max(1, pinch.d0), 0.6, 2.2);
-      if (pinch.lens === 'top') { zoomTop = clamp(z, 0.8, 1.5); topManual = true; } else { zoomWide = z; manual = true; }
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      const ratio = Math.hypot(p1.x - p2.x, p1.y - p2.y) / pinch.d0;
       const cam = pinch.lens === 'top' ? camTop : camWide;
-      cam.cx -= (e.clientX - prev.x) / cam.s / 2;
-      cam.cy += (e.clientY - prev.y) / cam.s / 2;
+      const lr = pinch.lens === 'top' ? rc.top : LW[0].rect;
+      const [wx, wy] = toWorld(lr, cam, pinch.mx, pinch.my);
+      const minS = pinch.lens === 'top' ? baseTopS * 0.8 : baseWideS * 0.6;
+      const maxS = pinch.lens === 'top' ? baseTopS * 1.5 : baseWideS * 2.2;
+      cam.s = clamp(pinch.s0 * ratio, minS, maxS);
+      const [nx, ny] = toWorld(lr, cam, mx, my);
+      cam.cx += wx - nx;
+      cam.cy += wy - ny;
+      if (pinch.lens === 'top') { zoomTop = clamp(cam.s / Math.max(0.1, baseTopS), 0.8, 1.5); topManual = true; wideLook = false; }
+      else { zoomWide = clamp(cam.s / Math.max(0.1, baseWideS), 0.6, 2.2); manual = true; }
+      pinch.mx = mx;
+      pinch.my = my;
       return;
     }
     if (!drag || drag.id !== e.pointerId) return;
@@ -1640,42 +1902,75 @@ export function battleScreen(app: App, route: Route): Screen {
     let dx = g.x0 - g.x, dy = g.y - g.y0; // pull-back: shot goes opposite the pull, world y up
     if (app.settings.dragMode === 'point') { dx = -dx; dy = -dy; }
     const len = Math.hypot(dx, dy);
-    if (len < 1) return;
+    if (len < CANCEL_R) {
+      // Inside Home-Return Cancel Halo: zero edge assist and preview prior aim cleanly (no noisy power:2 jitter, H-W04).
+      g.edgeBonusPx = 0;
+      g.edgeDwellMs = 0;
+      pendingAim = g.prevAim ? { angle: g.prevAim.angle, power: g.prevAim.power } : null;
+      return;
+    }
     // A finger pinned on the screen edge can only slide along it, which would bend the angle
-    // (asked 45, got 40). Once the pull meets the edge, the angle keeps the direction it had
-    // and only the power follows the finger (QA playtest 1, m3).
+    // (asked 45, got 40). Clamp direction into legal [0, 180] BEFORE storing lockDir so even
+    // edge-start drags lock cleanly along a valid vector (QA playtest 1 m3 / H-W03).
     const m = 6;
     const atEdge = g.x <= m || g.x >= W - m || g.y <= m || g.y >= H - m;
     let ux = dx / len, uy = dy / len;
-    if (atEdge && g.lockDir) { ux = g.lockDir[0]; uy = g.lockDir[1]; }
-    else if (!atEdge) g.lockDir = [ux, uy];
+    if (atEdge && g.lockDir) {
+      ux = g.lockDir[0];
+      uy = g.lockDir[1];
+    } else {
+      let cDeg = (Math.atan2(uy, ux) * 180) / Math.PI;
+      if (cDeg < 0) cDeg = cDeg < -90 ? 180 : 0;
+      const cRad = (cDeg * Math.PI) / 180;
+      ux = Math.cos(cRad);
+      uy = Math.sin(cRad);
+      if (!atEdge || !g.lockDir) g.lockDir = [ux, uy];
+    }
     let deg = (Math.atan2(uy, ux) * 180) / Math.PI;
     if (deg < 0) deg = deg < -90 ? 180 : 0;
     const angle = Math.round(deg * 2) * 5;
     // The pull for 100 is always 40% of the short side, wherever the drag starts, so the same
-    // pull gives the same power. A finger that meets the edge first slides the anchor away
-    // (edgeSlide, 07 §3.1 step 7). Slow Drag (Fine Tune cell 6) makes the span 1.75 times longer.
+    // pull gives the same power. Slow Drag (Fine Tune cell 6) makes the span 1.75 times longer.
     const baseFull = 0.4 * Math.min(W, H);
     const full = slowDrag ? baseFull * 1.75 : baseFull;
     g.full = full;
-    const along = Math.max(0, dx * ux + dy * uy);
+    const along = Math.max(0, dx * ux + dy * uy) + (g.edgeBonusPx ?? 0);
     const power = clamp(Math.round((along / full) * 100), 0, 100);
+    // Tactile Aim Micro-Feedback: crisp 5%-step brass ratchet tick + 100% power limit clink.
+    const step5 = Math.floor(power / 5);
+    if (g.lastStep5 !== undefined && step5 !== g.lastStep5 && power > 0) {
+      if (power >= 100 && !g.hitMax) { play('aim_limit'); g.hitMax = true; }
+      else play('aim_ratchet_tick', 0, clamp((step5 - 10) * 0.45, -5, 6));
+    }
+    if (power < 100) g.hitMax = false;
+    g.lastStep5 = step5;
     pendingAim = { angle, power }; // sent once per frame by flushAim
   }
 
-  /** Edge help (07 §3.1 step 7): while the finger sits on the screen edge under power 100, the
-   *  anchor slides away from it, so the pull keeps growing and the angle keeps its direction. */
+  /** Safe On-Screen Edge-Assist (H-W03): after 220 ms resting on a bezel, smoothly grows virtual
+   *  pull distance at full/2.5 s (matching Android/iOS) without EVER moving (x0, y0) off screen! */
   function edgeSlide(dt: number): void {
     const g = drag;
-    if (!g || g.mode !== 'aim' || !g.lockDir) return;
+    if (!g || g.mode !== 'aim') return;
     const m = 6;
-    if (!(g.x <= m || g.x >= W - m || g.y <= m || g.y >= H - m)) return;
+    const atEdge = g.x <= m || g.x >= W - m || g.y <= m || g.y >= H - m;
+    const full = g.full ?? (slowDrag ? 0.4 * Math.min(W, H) * 1.75 : 0.4 * Math.min(W, H));
+    if (!atEdge) {
+      g.edgeDwellMs = 0;
+      if (g.edgeBonusPx && g.edgeBonusPx > 0) {
+        g.edgeBonusPx = Math.max(0, g.edgeBonusPx - (full / 1.2) * dt);
+        aimFromDrag(g);
+      }
+      return;
+    }
+    if (dist(g) < CANCEL_R) { g.edgeDwellMs = 0; return; }
+    if (!g.lockDir) aimFromDrag(g);
+    if (!g.lockDir) return;
     const a = pendingAim ?? snap.hud.aim;
     if (!a || a.power >= 100) return;
-    const sgn = app.settings.dragMode === 'point' ? -1 : 1;
-    const sp = 0.4 * Math.min(W, H) * dt; // about 2.5 s from 0 to 100
-    g.x0 += g.lockDir[0] * sp * sgn;
-    g.y0 -= g.lockDir[1] * sp * sgn;
+    g.edgeDwellMs = (g.edgeDwellMs ?? 0) + dt * 1000;
+    if (g.edgeDwellMs < 220) return;
+    g.edgeBonusPx = Math.min(full, (g.edgeBonusPx ?? 0) + (full / 2.5) * dt);
     aimFromDrag(g);
   }
 
@@ -1688,15 +1983,17 @@ export function battleScreen(app: App, route: Route): Screen {
     if (g.mode === 'lean') { lean = null; return; }
     if (g.mode === 'aim') {
       lastDragEnd = performance.now();
-      if (cancel === true || dist(g) < 12) {
+      if (cancel === true || dist(g) < CANCEL_R) {
         pendingAim = null;
         if (g.prevAim) send({ cmd: 'aim', angle: g.prevAim.angle, power: g.prevAim.power });
+        play('aim_cancel_whoosh');
         return;
       }
       flushAim();
       padNudge();
       play('aim_set');
-      if (app.settings.quickFire && cancel === false) doFire(true);
+      // Rule 4 & H-W05: Quick Fire only fires a ready shot, never triggers Shove Off or Pass!
+      if (app.settings.quickFire && cancel === false && snap.hud.fire === 'ready') doFire(true);
     }
   }
 
@@ -1740,13 +2037,22 @@ export function battleScreen(app: App, route: Route): Screen {
     e.preventDefault();
     const l = lensAt(e.clientX, e.clientY);
     const f = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-    if (l?.id === 'top') { zoomTop = clamp(zoomTop * f, 0.8, 1.5); topManual = true; }
-    else if (l?.id === 'wide') {
+    if (l?.id === 'top') {
+      // Portrait Top Lens wheel zoom clamped cleanly around baseTopS (H-W01).
+      const [wx, wy] = toWorld(l.rect, camTop, e.clientX, e.clientY);
+      camTop.s = clamp(camTop.s * f, baseTopS * 0.8, baseTopS * 1.5);
+      const [nx, ny] = toWorld(l.rect, camTop, e.clientX, e.clientY);
+      camTop.cx += wx - nx; camTop.cy += wy - ny;
+      zoomTop = clamp(camTop.s / Math.max(0.1, baseTopS), 0.8, 1.5);
+      topManual = true;
+      wideLook = false;
+    } else if (l?.id === 'wide') {
+      // Wide wheel zoom strictly clamped to [0.6, 2.2] relative to baseWideS (H-W01).
       const [wx, wy] = toWorld(l.rect, camWide, e.clientX, e.clientY);
-      zoomWide = clamp(zoomWide * f, 0.6, 2.2);
-      camWide.s *= f;
+      camWide.s = clamp(camWide.s * f, baseWideS * 0.6, baseWideS * 2.2);
       const [nx, ny] = toWorld(l.rect, camWide, e.clientX, e.clientY);
       camWide.cx += wx - nx; camWide.cy += wy - ny;
+      zoomWide = clamp(camWide.s / Math.max(0.1, baseWideS), 0.6, 2.2);
       manual = true;
     }
   }, { passive: false });
@@ -1755,10 +2061,14 @@ export function battleScreen(app: App, route: Route): Screen {
   function tapAt(x: number, y: number): void {
     const l = lensAt(x, y);
     if (!l || l.id === 'strip') return;
-    // pins first (44 pt tap), then Hobs, then own-fort block targeting (Mendglob, Web-H1)
+    // Pins first (44 pt tap): hit-test ONLY the newest 2 rendered pins per side so invisible pins never intercept taps (M-W10).
     let bestPin: PinView | undefined;
     let bd = 26;
-    for (const p of snap.pins) {
+    let p0 = 0, p1 = 0;
+    for (let i = snap.pins.length - 1; i >= 0; i--) {
+      const p = snap.pins[i];
+      if (p.side === 0) { if (p0 >= 2) continue; p0++; }
+      else { if (p1 >= 2) continue; p1++; }
       const [px, py] = toScreen(l.rect, l.cam, p.x, p.y - 0);
       const d = Math.hypot(px - x, py - 18 - y);
       if (d < bd) { bd = d; bestPin = p; }
@@ -1875,10 +2185,16 @@ export function battleScreen(app: App, route: Route): Screen {
     const cmd: Command = { cmd: 'fire', ...(dial ? { dial } : {}), ...(hasMend ? { target: mendTarget } : {}) };
     const res = core.command(cmd);
     lastRefusal = res.ok ? '' : res.error ?? '';
-    if (res.ok) { doneHint('drag'); doneHint('fire'); afterAction(); firePress(fire); play('fire_press'); return; }
-    // Never a silent tap: say why, and move to the shot that can go when the core names one.
+    if (res.ok) {
+      snapDirty = true;
+      doneHint('drag'); doneHint('fire'); afterAction(); firePress(fire);
+      play('fire_press');
+      play('aim_release_twang', 0, clamp(((snap.hud.aim?.power ?? 50) - 50) * 0.08, -3, 4));
+      return;
+    }
+    // Never a silent tap: say why (exact core IDs first via whyLine), and move to the shot that can go when the core names one.
     const pk = snap.hud.shots.find((c) => c.id === snap.hud.shot);
-    const why = byId('hud.why', WHY_ALIAS[res.error ?? ''] ?? res.error, { hob: snap.hobs.find((q) => q.id === snap.hud.hob)?.name ?? '', shot: pk?.name ?? '' });
+    const why = whyLine(res.error, { hob: snap.hobs.find((q) => q.id === snap.hud.hob)?.name ?? '', shot: pk?.name ?? '' });
     showBanner(why, 'paper'); say(why); play('denied');
     if (res.readyShot) send({ cmd: 'pick_shot', id: res.readyShot });
   }
@@ -1904,10 +2220,11 @@ export function battleScreen(app: App, route: Route): Screen {
   let walkStopT = 0;
   let walkKeyT = 0;
   function startWalk(d: -1 | 1): void {
-    if (!canAim()) return;
+    // Gate keyboard/button walking on canWalk and play sound only if the core accepted the command (M-W12).
+    if (!canAim() || !snap.hud.canWalk) return;
     clearTimeout(walkStopT);
+    if (!send({ cmd: 'walk', dir: d })) return;
     walkHeld = d; walkMinT = performance.now();
-    send({ cmd: 'walk', dir: d });
     play('walk');
   }
   function stopWalk(): void {
@@ -2011,8 +2328,20 @@ export function battleScreen(app: App, route: Route): Screen {
     else if (k === 'f' || k === 'F') resetView();
     else if ((k === 'a' || k === 'A') && !e.repeat) startWalk(-1);
     else if ((k === 'd' || k === 'D') && !e.repeat) startWalk(1);
-    else if (k === '+' || k === '=') { zoomWide = clamp(zoomWide * 1.1, 0.6, 2.2); }
-    else if (k === '-') { zoomWide = clamp(zoomWide / 1.1, 0.6, 2.2); }
+    else if (k === '+' || k === '=' || k === '-') {
+      const f = k === '-' ? 1 / 1.1 : 1.1;
+      if (layout === 'tall') {
+        if (topManual) {
+          camTop.s = clamp(camTop.s * f, baseTopS * 0.8, baseTopS * 1.5);
+          zoomTop = clamp(camTop.s / Math.max(0.1, baseTopS), 0.8, 1.5);
+        } else zoomTop = clamp(zoomTop * f, 0.8, 1.5);
+      } else if (manual) {
+        camWide.s = clamp(camWide.s * f, baseWideS * 0.6, baseWideS * 2.2);
+        zoomWide = clamp(camWide.s / Math.max(0.1, baseWideS), 0.6, 2.2);
+      } else {
+        zoomWide = clamp(zoomWide * f, 0.6, 2.2);
+      }
+    }
     else if (k === 'm' || k === 'M') void app.setSettings({ mute: !app.settings.mute });
   }
   function onKeyUp(e: KeyboardEvent): void {
@@ -2091,7 +2420,7 @@ export function battleScreen(app: App, route: Route): Screen {
       setup.mode !== 'yard' ? h('p', { class: 'small' }, t('pause.saved_note')) : '',
     );
   }
-  function closePause(): void { paused = false; setPaused(false); closeCards(); last = performance.now(); }
+  function closePause(): void { paused = false; snapDirty = true; setPaused(false); closeCards(); last = performance.now(); }
 
   function openHandoff(side: Side, round: number): void {
     handoffOpen = true;
@@ -2185,8 +2514,6 @@ export function battleScreen(app: App, route: Route): Screen {
     sc.addEventListener('click', (e) => { if (e.target === sc) { play('back'); closeCards(); } });
   }
 
-  /** Core refusal ids that the table words under another key. */
-  const WHY_ALIAS: Record<string, string> = { not_enough_steam: 'no_steam', battle_over: 'over', not_your_turn: 'not_planning' };
   /** Doodad refusals by the core's reason id. */
   const DOODAD_WHY: Record<string, string> = {
     nothing_to_mend: 'hud.mend.none',
@@ -2382,6 +2709,7 @@ export function battleScreen(app: App, route: Route): Screen {
     },
     destroy: () => {
       alive = false;
+      offUpgrade();
       clearTimeout(leanT);
       clearTimeout(liveT);
       clearTimeout(walkStopT);

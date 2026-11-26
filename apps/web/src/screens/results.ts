@@ -1,7 +1,9 @@
 // S9 results with Pennants, and S25 duel results.
 import type { App, Route, Screen } from '../app';
 import { play } from '../audio/sfx';
+import { RULES } from '../core/rules';
 import type { ResultView, Side } from '../core/types';
+import { sprites } from '../render/sprites';
 import { btn, h } from '../ui/dom';
 import { clipCanvas } from '../ui/motion';
 import { retrySetup } from '../battle/battle';
@@ -40,9 +42,12 @@ export function resultsScreen(app: App, route: Route): Screen {
     // Hetty gives the verdict once she is on the crew; before 1-7 the line has no name on it.
     if (verdict) lines.push(h('p', { class: 'verdict' }, app.roster().includes('hetty') ? h('b', {}, `${t('results.loss.verdict_by')}: `) : '', verdict));
   }
+  const emptyPenUrl = sprites.url('ui_pennant_ribbon_empty') ?? sprites.url('ui_pennant_empty');
   const pens = h('div', { class: 'pennants' }, ...(lvl?.goals ?? []).map((g, i) => h('div', {
     class: `pennant ${res.pennants[i] ? 'got' : ''}`, 'data-i': i, 'aria-label': t(res.pennants[i] ? 'pennants.got' : 'pennants.not_got', { goal: g }),
-  }, h('i', { 'aria-hidden': 'true' }, '⚑'), h('span', { 'aria-hidden': 'true' }, g))));
+  }, h('span', { class: 'pen-slot', 'aria-hidden': 'true' },
+    emptyPenUrl ? h('img', { src: emptyPenUrl, alt: '', class: 'pen-img' }) : h('i', {}, '⚑'),
+  ), h('span', { 'aria-hidden': 'true' }, g))));
   const next = app.levels()[app.levels().findIndex((l) => l.id === setup.level) + 1];
   const nextBtn = win && next ? btn(t('results.next'), () => app.go({ to: 'prebattle', level: next.id }), 'primary big', { 'data-autofocus': true }) : '';
   const retry = btn(t('results.again'), () => app.go({ to: 'battle', setup: retrySetup(setup) }), win ? 'secondary' : 'primary big', { 'data-autofocus': !win || !next });
@@ -61,7 +66,7 @@ export function resultsScreen(app: App, route: Route): Screen {
       h('div', { class: 'row-btns' },
         btn(t('results.map'), () => app.go({ to: 'map', focus: setup.level }), 'secondary'),
         retry,
-        !win && app.levelDone('1-5') ? btn(t('results.loss.fix_it'), () => app.go({ to: 'workshop' }), 'secondary') : '',
+        !win && app.levelDone(RULES.campaign.walk_from) ? btn(t('results.loss.fix_it'), () => app.go({ to: 'workshop' }), 'secondary') : '',
         nextBtn,
       ),
     ),
@@ -70,16 +75,20 @@ export function resultsScreen(app: App, route: Route): Screen {
   const stamps = [...pens.children] as HTMLElement[];
   const timers: number[] = [];
   const instant = app.settings.reduceMotion;
-  // An earned Pennant plays ui_pennant_earn (its ding is the stamp sound), then holds ui_pennant.
+  // An earned Pennant plays ui_pennant_earn inside a uniform 44px .pen-slot so earned & unearned rows align cleanly.
   const stamp = (s: HTMLElement, i: number, quick: boolean) => {
     s.classList.add('in');
-    const icon = s.querySelector('i');
-    if (!icon || s.dataset.stamped) return;
+    const slot = s.querySelector('.pen-slot');
+    if (!slot || s.dataset.stamped) return;
     s.dataset.stamped = '1';
     if (!res.pennants[i]) return;
-    const cv = clipCanvas('ui_pennant_earn', 2, { still: quick, reverse: quick, sink: (ev) => { if (ev === 'ding') play('pennant'); }, cls: 'clip pen' });
-    if (cv) icon.replaceWith(cv);
-    else if (!quick) play('pennant');
+    const cv = clipCanvas('ui_pennant_earn', 1.6, { still: quick, reverse: quick, sink: (ev) => { if (ev === 'ding') play('pennant'); }, cls: 'clip pen' });
+    if (cv) slot.replaceChildren(cv);
+    else {
+      const goldUrl = sprites.url('ui_pennant_ribbon_gold') ?? sprites.url('ui_pennant');
+      if (goldUrl) slot.replaceChildren(h('img', { src: goldUrl, alt: '', class: 'pen-img' }));
+      if (!quick) play('pennant');
+    }
   };
   stamps.forEach((s, i) => {
     if (instant) { stamp(s, i, true); return; }

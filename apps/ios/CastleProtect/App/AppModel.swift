@@ -467,6 +467,7 @@ final class AppModel: ObservableObject {
         s.onPausedChanged = { [weak self] paused in self?.sound.setHeld(paused) }
         let sound = self.sound
         s.onAudioCue = { id in sound.play(id) }
+        s.onPitchedCue = { id, pitch, gain in sound.play(id, pitch: pitch, gain: gain) }
         s.onAimBand = { gain, pitch in sound.setLoop("aim_band_stretch", gain: gain, pitch: pitch) }
         s.onSlowMo = { scale in sound.setSlowMotion(scale) }
         s.onHobPicked = { [weak s] def, side in

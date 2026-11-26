@@ -52,7 +52,7 @@ export function skirmishScreen(app: App): Screen {
       mode: 'skirmish', map: st.map, seed, difficulty: st.difficulty, windOff: st.wind === 'off',
       roundCap: Number(st.cap), wind: st.wind, shells: st.shells, volley: st.winBy === 'ko' ? undefined : Number(st.winBy),
       sides: [
-        { name: t('common.you'), human: true, crew, blueprint: mine },
+        { name: t('common.you'), human: true, crew, blueprint: mine, help: app.settings.moreSteam ? 'some' : undefined },
         // No name: the core names the Rival from the map's roster by the seed (core/API.md).
         { name: '', human: false, crew: app.core.hobs().slice(0, 4).map((x) => x.id), blueprint: app.core.starterForts()[1] },
       ],
@@ -178,13 +178,13 @@ export function duelScreen(app: App): Screen {
     app.progress.duelNames = [players[0].name, players[1].name];
     void app.saveProgress();
     const forts2: [Blueprint | undefined, Blueprint | undefined] = [fortFit(0), fortFit(1)];
-    const previewFor = (help: Help): number | undefined => (help === 'lots' ? 100 : help === 'some' ? 60 : undefined);
+    // Rule 1 (H-W13b): pass only `help` so Rust core applies Steam & preview share from content/app.json.
     const setup: BattleSetup = {
       mode: 'duel', map: rules.map, seed: hashSeed(rules.map) ^ (Date.now() & 0xffff), difficulty: 'fair',
       windOff: rules.wind === 'off', roundCap: Number(rules.cap), wind: rules.wind, shells: rules.shells, volley: rules.winBy === 'ko' ? undefined : Number(rules.winBy),
       sides: [
-        { name: players[0].name, human: true, crew: players[0].crew, blueprint: forts2[0], help: players[0].help, previewPct: previewFor(players[0].help) },
-        { name: players[1].name, human: true, crew: players[1].crew, blueprint: forts2[1], help: players[1].help, previewPct: previewFor(players[1].help) },
+        { name: players[0].name, human: true, crew: players[0].crew, blueprint: forts2[0], help: players[0].help },
+        { name: players[1].name, human: true, crew: players[1].crew, blueprint: forts2[1], help: players[1].help },
       ],
     };
     setup.seats = rules.seats;

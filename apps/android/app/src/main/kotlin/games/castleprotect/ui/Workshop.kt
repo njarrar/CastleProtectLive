@@ -93,7 +93,7 @@ fun WorkshopScreen(session: GameSession) {
         val reqGen = gen
         val rows = grid.toRows()
         if (rows.isEmpty()) check = FortCheck(false, Text.t("workshop.empty"), kind = "too_small")
-        else session.checkFort(rows, grid.seats()) { res -> if (reqGen == gen) check = res }
+        else session.checkFort(rows, grid.seats().coerceAtLeast(1)) { res -> if (reqGen == gen) check = res }
     }
     fun edit(c: Int, r: Int) {
         val next = grid.copy()
@@ -232,13 +232,11 @@ fun WorkshopScreen(session: GameSession) {
                         { session.saveFort(rows); savedRows = rows; session.audio.play("ui_confirm") },
                         color = C.Gold, enabled = ok && rows != savedRows, size = 14,
                     )
-                    // Test Yard is disabled whenever the fort is invalid so broken forts never enter or clobber saved forts (Plate 4).
+                    // Test Yard tries the in-memory fort without touching the saved campaign fort (H-A06, workshop.test_yard_hint).
                     CastleButton(
                         Text.t("workshop.test_yard"),
                         {
                             if (ok) {
-                                session.saveFort(rows)
-                                savedRows = rows
                                 session.startTestYard(rows)
                             }
                         },
@@ -315,9 +313,12 @@ private fun DraftingBoard(
                 }
             }
             Spacer(Modifier.width(6.dp))
+            val frontLabel = Text.t("workshop.front")
+            val frontHint = Text.t("workshop.front_hint")
             Label(
-                "FRONT →",
+                "$frontLabel →",
                 Modifier.clip(RoundedCornerShape(8.dp)).background(C.BrassHi).border(1.5.dp, C.Ink, RoundedCornerShape(8.dp))
+                    .semantics { contentDescription = "$frontLabel. $frontHint" }
                     .padding(horizontal = 7.dp, vertical = 2.dp),
                 size = 12, bold = true, color = C.Ink,
             )

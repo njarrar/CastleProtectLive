@@ -3,6 +3,7 @@
 
     python3 tools/audio-gen/build.py            # build all, write manifests, run checks
     python3 tools/audio-gen/build.py --only sfx # sfx, music or barks
+    python3 tools/audio-gen/build.py --boss-theme  # also build optional mus_r1_boss (1-10 march)
     python3 tools/audio-gen/build.py --no-qa
     python3 tools/audio-gen/build.py --no-barks-json   # leave assets/audio/barks.json alone
 
@@ -109,7 +110,7 @@ def decode(path, ch):
     return x
 
 
-def finish(x, target, loop, ceiling=-3.0, shelf_db=-6.0):
+def finish(x, target, loop, ceiling=-3.0, shelf_db=-6.0, align_loop=False):
     """Clean up one sound: remove rumble, ease the deep end, trim, set loudness, guard the peak."""
     if x.ndim == 1:
         x = x[None, :]
@@ -118,11 +119,15 @@ def finish(x, target, loop, ceiling=-3.0, shelf_db=-6.0):
         x = dsp.trim(x, -52, 0.012)
         n = x.shape[1]
         x = x * dsp.ar(n, 0.0008, min(0.02, n / SR / 4))
-    return dsp.normalise(x, target, ceiling, circular=loop)
+    y = dsp.normalise(x, target, ceiling, circular=loop)
+    if loop and align_loop:
+        y = dsp.align_loop_seam(y, sr=SR)
+    return y
 
 
-def build_sound(items, tmp, kind, sub, sid, x, target, loop, meta):
-    x = finish(x, target, loop, shelf_db=-3.0 if kind in ('music', 'sting') else -7.0)
+def build_sound(items, tmp, kind, sub, sid, x, target, loop, meta, shelf_db=None):
+    eff_shelf = shelf_db if shelf_db is not None else (-3.0 if kind in ('music', 'sting') else -7.0)
+    x = finish(x, target, loop, shelf_db=eff_shelf, align_loop=(loop and kind == 'sfx'))
     wav = os.path.join(tmp, sid + '.wav')
     os.makedirs(os.path.join(OUT, sub), exist_ok=True)
     base = os.path.join(OUT, sub, sid)
@@ -178,6 +183,7 @@ def shot_launch_map():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--only', choices=['sfx', 'music', 'barks'])
+    ap.add_argument('--boss-theme', action='store_true', help='also build optional mus_r1_boss (Boss 1-10 march)')
     ap.add_argument('--no-qa', action='store_true')
     ap.add_argument('--no-barks-json', action='store_true', help='do not write assets/audio/barks.json')
     a = ap.parse_args()
@@ -202,7 +208,8 @@ def main():
                     meta['note'] = s['note']
                 if s['gap']:
                     meta['repeat_gap_s'] = s['gap']
-                pcm[sid] = build_sound(items, tmp, 'sfx', 'sfx', sid, s['fn'](dsp.rng(sid)), s['lufs'], s['loop'], meta)
+                pcm[sid] = build_sound(items, tmp, 'sfx', 'sfx', sid, s['fn'](dsp.rng(sid)), s['lufs'], s['loop'], meta,
+                                       shelf_db=s.get('shelf_db'))
             pcm['hob_cheer'] = build_sound(items, tmp, 'sfx', 'sfx', 'hob_cheer', barks.cheer(dsp.rng('hob_cheer')), -17, False, dict(
                 bus='hob', pitch_var_semitones=1.0,
                 trigger=dict(game='Core event win: the winning crew. Also a Bonk on the Rival side, 1 time in 3', anim='hob_<id>_<side>_cheer:jump')))
@@ -221,6 +228,12 @@ def main():
             pcm['mus_r1_peril'] = build_sound(items, tmp, 'music', 'music', 'mus_r1_peril', x, -25, True, dict(
                 m, layer='peril', sync=sync, trigger=dict(
                     game='Fade in on a bar line when a side is on its last Hob, a Heartkettle is at 25% or less, or the Squall has started (core event squall_round)', anim=None)))
+            if a.boss_theme:
+                boss_sync = dict(group='mus_r1_boss', bpm=music.BPM1, meter='2/4', key='E minor',
+                                 bars=music.BOSS_BARS, bar_s=round(music.BAR * music.U1, 6))
+                pcm['mus_r1_boss'] = build_sound(items, tmp, 'music', 'music', 'mus_r1_boss', music.r1_boss(), -21, True, dict(
+                    m, sync=boss_sync, trigger=dict(
+                        game='Optional Region 1 Boss 1-10 (The Topiary Keep) march theme; swap in cleanly on Boss stage start', anim=None)))
             pcm['mus_map'] = build_sound(items, tmp, 'music', 'music', 'mus_map', music.map_theme(), -21, True, dict(
                 m, sync=dict(group='mus_map', bpm=music.BPMM, meter='6/8', key='G major', bars=music.M_BARS, bar_s=round(music.MBAR * music.UM, 6)),
                 trigger=dict(game='Map, menus, pre-battle screen. Plays quietly after a loss', anim=None)))

@@ -3,7 +3,8 @@
 //   node tools/art-gen/render-sprites.mjs                all steps (untrimmed legacy atlas schema)
 //   node tools/art-gen/render-sprites.mjs --trim         tight alpha-bbox atlas trimming (4 -> 2 pages)
 //   node tools/art-gen/render-sprites.mjs --dedup-hobs   neutral Hob + 16x16 scarf overlay dedup + aliases/overlays
-//   node tools/art-gen/render-sprites.mjs --v2           enables --trim --dedup-hobs together (4 -> 1 @2x page, ~16 MB VRAM)
+//   node tools/art-gen/render-sprites.mjs --v2           enables --trim --dedup-hobs with TRUE @2x Retina characters (2 @2x pages, ~32 MB VRAM)
+//   node tools/art-gen/render-sprites.mjs --v2 --char-scale=1   optional compact 1-page @2x fallback (half-res characters)
 //   node tools/art-gen/render-sprites.mjs sheet          only the contact sheets and the previews
 //   node tools/art-gen/render-sprites.mjs anim           only the animation sheet and the previews
 //
@@ -30,7 +31,9 @@ const V2 = args.includes('--v2');
 const TRIM = V2 || args.includes('--trim');
 const DEDUP_HOBS = V2 || args.includes('--dedup-hobs');
 const charScaleArg = args.find(a => a.startsWith('--char-scale='));
-const CHAR_SCALE_2X = charScaleArg ? Number(charScaleArg.split('=')[1]) : (DEDUP_HOBS ? 1 : 2);
+// Default to true @2x Retina resolution for ALL Hob and Flattener frames (fixing the 729 un-doubled
+// @1x character frames in castle@2x). Hat+scarf overlay dedup packs the full @2x cast into 2 pages (~32 MiB VRAM).
+const CHAR_SCALE_2X = charScaleArg ? Number(charScaleArg.split('=')[1]) : 2;
 if (CHAR_SCALE_2X !== 1 && CHAR_SCALE_2X !== 2) throw new Error('--char-scale must be 1 or 2');
 const assetsIdx = args.indexOf('--assets-dir');
 const ASSETS = assetsIdx >= 0 && args[assetsIdx + 1] ? path.resolve(args[assetsIdx + 1]) : path.join(ROOT, 'assets');
@@ -122,10 +125,10 @@ if (only === 'all') {
   for (const [tag, k] of [['1x', 1], ['2x', 2]]) {
     let rawPx = 0, packedPx = 0;
     const items = atlasSprites.map(s => {
-      // Character sprites (hobs/flatteners) are drawn at HOB_SCALE=0.4 (72x80 @1x is already 2.5x display size).
-      // In --dedup-hobs / --v2 @2x mode, packing oversampled characters at CHAR_SCALE_2X (default 1) keeps all UI/props/blocks
-      // at crisp @2x while fitting the entire cast + Part 2 props on 1 single 2048x2048 @2x page (~16 MB VRAM).
-      const isOversampledChar = k === 2 && DEDUP_HOBS && (s.group === 'hobs' || s.group === 'flatteners') && !/^hob_(scarf|patch)_/.test(s.name);
+      // Pack ALL Hob and Flattener frames at true @2x Retina resolution (CHAR_SCALE_2X defaults to 2).
+      // Hat+scarf overlay dedup keeps all 2048x2048 pages cleanly within a 2-page @2x budget (~32 MiB VRAM).
+      // Explicit --char-scale=1 remains available for single-page compact builds.
+      const isOversampledChar = k === 2 && DEDUP_HOBS && (s.group === 'hobs' || s.group === 'flatteners') && !/^hob_(scarf|patch|hat)_/.test(s.name);
       const frameScale = isOversampledChar ? CHAR_SCALE_2X : k;
       const srcTag = frameScale === 1 ? '1x' : tag;
       const origW = s.w * frameScale, origH = s.h * frameScale;

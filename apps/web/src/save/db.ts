@@ -5,6 +5,8 @@
 import { list, t } from '../ui/text';
 import type { BattleSetup, Blueprint, BlueprintCell, Difficulty } from '../core/types';
 
+export type ColourSet = 'blue_orange' | 'navy_gold' | 'white_black';
+
 export interface Settings {
   version: number;
   sound: number; // 0 to 100
@@ -12,16 +14,23 @@ export interface Settings {
   voices: number; // 0 to 100
   mute: boolean;
   mono: boolean;
+  subtitles: boolean;
   captions: boolean;
   difficulty: Difficulty;
+  moreSteam: boolean;
   windOff: boolean;
   reduceMotion: boolean;
+  reduceFlashes: boolean;
   /** Screen shake strength, percent: 100, 50 or 0 (07 §6.2). */
   reduceShake: 100 | 50 | 0;
+  largeText: boolean;
+  colourSet: ColourSet;
   quickFire: boolean;
   dragMode: 'pull' | 'point';
   rotation: 'follow' | 'wide' | 'tall';
   rivalFast: boolean;
+  leftHand: boolean;
+  tapsOnly: boolean;
   seenFirstRun: boolean;
 }
 
@@ -42,6 +51,7 @@ export interface BattleSave {
   setup: BattleSetup;
   core: string; // opaque core save
   coreName: string;
+  rules?: number;
   label: string; // "Round 6, Otis's turn"
   savedAt: number;
   handoff?: boolean;
@@ -57,15 +67,22 @@ export const DEFAULT_SETTINGS: Settings = {
   voices: 85,
   mute: false,
   mono: false,
+  subtitles: true,
   captions: false,
   difficulty: 'fair',
+  moreSteam: false,
   windOff: false,
   reduceMotion: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches,
+  reduceFlashes: false,
   reduceShake: 100,
+  largeText: false,
+  colourSet: 'blue_orange',
   quickFire: false,
   dragMode: 'pull',
   rotation: 'follow',
   rivalFast: false,
+  leftHand: false,
+  tapsOnly: false,
   seenFirstRun: false,
 };
 
@@ -146,7 +163,9 @@ export function checkBlueprint(v: unknown): Blueprint | undefined {
   const cells: BlueprintCell[] = [];
   for (const c of v.cells) {
     if (!isObj(c) || !Number.isInteger(c.col) || !Number.isInteger(c.row) || !KINDS.includes(String(c.kind))) return undefined;
-    cells.push({ col: c.col as number, row: c.row as number, kind: c.kind as BlueprintCell['kind'], ...(Number.isInteger(c.room) ? { room: c.room as number } : {}) });
+    const col = c.col as number, row = c.row as number;
+    if (col < 0 || col > 31 || row < 0 || row > 31) return undefined;
+    cells.push({ col, row, kind: c.kind as BlueprintCell['kind'], ...(Number.isInteger(c.room) ? { room: c.room as number } : {}) });
   }
   const bp: Blueprint = { name: typeof v.name === 'string' ? v.name.slice(0, 40) : t('workshop.my_fort'), cols: num(v.cols, 1, 1, 32), rows: num(v.rows, 1, 1, 32), cells };
   if (typeof v.id === 'string') bp.id = v.id;
@@ -201,15 +220,22 @@ export function migrateSettings(raw: unknown): Settings {
     voices: num(raw.voices, d.voices, 0, 100),
     mute: bool(raw.mute, d.mute),
     mono: bool(raw.mono, d.mono),
+    subtitles: bool(raw.subtitles, d.subtitles),
     captions: bool(raw.captions, d.captions),
     difficulty: oneOf(raw.difficulty, ['cozy', 'fair', 'stubborn'] as const, d.difficulty),
+    moreSteam: bool(raw.moreSteam, d.moreSteam),
     windOff: bool(raw.windOff, d.windOff),
     reduceMotion: bool(raw.reduceMotion, d.reduceMotion),
+    reduceFlashes: bool(raw.reduceFlashes, d.reduceFlashes),
     reduceShake: raw.reduceShake === 50 ? 50 : raw.reduceShake === 0 ? 0 : 100,
+    largeText: bool(raw.largeText, d.largeText),
+    colourSet: oneOf(raw.colourSet, ['blue_orange', 'navy_gold', 'white_black'] as const, d.colourSet),
     quickFire: bool(raw.quickFire, d.quickFire),
     dragMode: oneOf(raw.dragMode, ['pull', 'point'] as const, d.dragMode),
     rotation: oneOf(raw.rotation, ['follow', 'wide', 'tall'] as const, d.rotation),
     rivalFast: bool(raw.rivalFast, d.rivalFast),
+    leftHand: bool(raw.leftHand, d.leftHand),
+    tapsOnly: bool(raw.tapsOnly, d.tapsOnly),
     seenFirstRun: bool(raw.seenFirstRun, d.seenFirstRun),
   };
 }
@@ -220,6 +246,7 @@ export function checkBattleSave(v: unknown): BattleSave | undefined {
   if (!['campaign', 'skirmish', 'duel', 'yard'].includes(String(s.mode)) || !Array.isArray(s.sides) || s.sides.length !== 2) return undefined;
   return {
     setup: s as unknown as BattleSetup, core: v.core, coreName: v.coreName,
+    ...(typeof v.rules === 'number' && Number.isFinite(v.rules) ? { rules: v.rules } : {}),
     label: typeof v.label === 'string' ? v.label.slice(0, 80) : t('settings.save.fight_in_progress'),
     savedAt: num(v.savedAt, 0), handoff: v.handoff === true,
   };

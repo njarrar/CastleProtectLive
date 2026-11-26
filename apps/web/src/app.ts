@@ -2,6 +2,7 @@ import { t } from './ui/text';
 import type { BattleSetup, CoreApi, LevelInfo, ResultView } from './core/types';
 import { SaveError } from './core/types';
 import { setMusic, setVolume } from './audio/sfx';
+import { setTeamPalette } from './render/draw';
 import {
   askPersist, loadBattleSave, loadProgress, loadSettings, saveProgress, saveSettings, type Progress, type Settings,
 } from './save/db';
@@ -93,7 +94,14 @@ export class App {
   }
 
   applyMotion(): void {
-    document.documentElement.classList.toggle('reduce-motion', this.settings.reduceMotion);
+    const cl = document.documentElement.classList;
+    cl.toggle('reduce-motion', this.settings.reduceMotion);
+    cl.toggle('reduce-flashes', this.settings.reduceFlashes);
+    cl.toggle('large-text', this.settings.largeText);
+    cl.toggle('left-hand', this.settings.leftHand);
+    cl.toggle('taps-only', this.settings.tapsOnly);
+    document.documentElement.dataset.colours = this.settings.colourSet;
+    setTeamPalette(this.settings.colourSet);
   }
 
   go(r: Route, opt: { history?: boolean } = {}): void {
@@ -239,7 +247,7 @@ export class App {
       windOff: this.settings.windOff,
       progress: { cleared: (this.progress.levels[levelId]?.wins ?? 0) > 0, pennants: [...(this.progress.levels[levelId]?.pennants ?? [false, false, false])] },
       sides: [
-        { name: t('common.you'), human: true, crew: seats, blueprint, doodads: levelAtLeast(levelId, RULES.campaign.doodads_from) ? lvl.doodads : undefined },
+        { name: t('common.you'), human: true, crew: seats, blueprint, help: this.settings.moreSteam ? 'some' : undefined, doodads: levelAtLeast(levelId, RULES.campaign.doodads_from) ? lvl.doodads : undefined },
         { name: lvl.rival, human: false, crew: [] },
       ],
       fortNote,

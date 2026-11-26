@@ -281,6 +281,127 @@ final class AuditFixTests: XCTestCase {
         XCTAssertEqual(ColourSet.dusk.sideName(1), "Gold")
         XCTAssertEqual(ColourSet.ink.sideName(0), "White")
     }
+
+    // MARK: Round 2 Audit Fixes (H-I01..H-I05, M-I02, L-I04, Workshop & Award-Winning Aim)
+
+    @MainActor
+    func testFlattenerActionClipsAndSoundsFireOnSide1() throws {
+        let fx = FieldFX()
+        var sounds: [String] = []
+        fx.onSound = { id, _, _ in sounds.append(id) }
+        fx.noteHob(side: 1, id: "0", def: "clerk", cls: "lobber")
+        let fireClip = try XCTUnwrap(fx.hobClip(key: "1:0", suffix: "fire"), "H-I01: flattener_clerk_fire clip must resolve")
+        XCTAssertTrue(fireClip.frames.first?.hasPrefix("flattener_clerk_fire") ?? false)
+        var snap = BattleSnapshot()
+        snap.phase = .plan
+        snap.mode = "campaign"
+        snap.forts = [
+            FortView(side: 0, x: 100, kettleX: 100, kettleY: 200, kettleHp: 100, kettleMax: 100, blocks: [], hobs: []),
+            FortView(side: 1, x: 540, kettleX: 540, kettleY: 200, kettleHp: 100, kettleMax: 100, blocks: [],
+                     hobs: [HobView(id: "0", def: "clerk", name: "Clerk", cls: "lobber", hp: 100, hpMax: 100, x: 540, y: 180)]),
+        ]
+        let rawEvents = try JSONDecoder().decode([CoreEvent].self, from: Data(#"[{"t":"hit","tick":2,"side":1,"target":"hob","hob":0,"dmg":18}]"#.utf8))
+        let events = rawEvents.compactMap { FrameAssembler.event($0, mapHeight: 720) }
+        fx.ingest(events, old: snap, new: snap, nowNanos: 1)
+        _ = fx.advance(realMs: 40, nowNanos: 40_000_000)
+        XCTAssertTrue(sounds.contains("hob_hit_boing"), "Flattener hit clip flash event must trigger hobEvent audio")
+    }
+
+    func testSafeOnScreenEdgeAssistAndBadgeTopYAndZeroGreenHeat() {
+        // H-I03: anchor never leaves safe screen bounds; virtual edgeBonusPts finishes power 100.
+        let bounds = CGRect(x: 0, y: 0, width: 390, height: 844)
+        var g = AimGesture(anchor: CGPoint(x: 40, y: 80), powerSpan: 156, mode: .pullBack, bounds: bounds, topInset: 47)
+        _ = g.move(to: CGPoint(x: 20, y: 100))
+        _ = g.move(to: CGPoint(x: 4, y: 116))
+        XCTAssertNotNil(g.edgeAngle, "8 pt edge margin locks angle cleanly")
+        for _ in 0..<200 { _ = g.slide(points: 3) }
+        XCTAssertEqual(g.power, 100, "virtual edgeBonusPts reaches full power")
+        XCTAssertGreaterThanOrEqual(g.anchor.x, 24, "Cancel Halo anchor stays safely on screen")
+        XCTAssertGreaterThanOrEqual(g.anchor.y, 47 + 24, "Cancel Halo anchor stays below top inset")
+
+        // H-I02: badgeTopY respects layout in both Tall and Wide modes.
+        let tall = BattleLayout.compute(size: CGSize(width: 390, height: 844),
+                                        insets: Insets(top: 59, left: 0, bottom: 34, right: 0),
+                                        mode: .tall, inFlight: false, isPad: false)
+        XCTAssertEqual(DragBandView.badgeTopY(layout: tall, size: tall.size), tall.aimRegion.minY + 26)
+        let wide = BattleLayout.compute(size: CGSize(width: 1180, height: 820),
+                                        insets: Insets(top: 24, left: 0, bottom: 20, right: 0),
+                                        mode: .wide, inFlight: false, isPad: true)
+        XCTAssertGreaterThanOrEqual(DragBandView.badgeTopY(layout: wide, size: wide.size), wide.insets.top + 48)
+
+        // Zero neon green across 0..100 power in aimHeatRGB, and Side 1 intuitive elevation.
+        for p in stride(from: 0, through: 100, by: 5) {
+            let c = LensLayer.aimHeatRGB(p)
+            XCTAssertFalse(c.g > c.r && c.g > c.b, "aimHeat(\(p)) must never sweep through green")
+        }
+        XCTAssertEqual(HudState.displayAngleTenths(1485, side: 1), 315, "Side 1 raw 148.5° displays as 31.5° elevation")
+        XCTAssertEqual(HudState.displayAngleTenths(450, side: 0), 450)
+    }
+
+    @MainActor
+    func testPotLidFiltersDestroyedRoomsAndMissTextUsesExactFortBounds() throws {
+        // H-I04: FortView.kettleIntact & RoomView.intact model destroyed rooms accurately.
+        var snap = BattleSnapshot()
+        snap.phase = .plan
+        snap.activeSide = 0
+        snap.humans = [true, false]
+        let own = FortView(side: 0, x: 100, kettleX: 100, kettleY: 200, kettleHp: 100, kettleMax: 100,
+                           blocks: [], hobs: [], originX: 60, baseY: 160, block: 16, cols: 5,
+                           rooms: [
+                            RoomView(id: 0, box: CGRectLike(x0: 60, y0: 176, x1: 92, y1: 208), loophole: nil, intact: false, flap: false, lid: false),
+                            RoomView(id: 1, box: CGRectLike(x0: 92, y0: 176, x1: 124, y1: 208), loophole: nil, intact: true, flap: false, lid: true),
+                            RoomView(id: 2, box: CGRectLike(x0: 124, y0: 176, x1: 156, y1: 208), loophole: nil, intact: true, flap: false, lid: false),
+                           ],
+                           kettleRoom: CGRectLike(x0: 76, y0: 192, x1: 108, y1: 224),
+                           kettleIntact: false, kettleLid: false)
+        let foe = FortView(side: 1, x: 540, kettleX: 540, kettleY: 200, kettleHp: 100, kettleMax: 100,
+                           blocks: [], hobs: [], originX: 500, baseY: 160, block: 16, cols: 5)
+        snap.forts = [own, foe]
+        XCTAssertFalse(own.kettleIntact)
+
+        // M-I02: core missBlocks preferred; fallback uses exact fort bounds [500, 580] and ignores selfHit.
+        let coreMiss = PinView(x: 400, y: 160, side: 0, round: 1, hob: "0", angle: 450, power: 50, missBlocks: -4)
+        XCTAssertEqual(LensLayer.missText(coreMiss, snap: snap), GameText.shared.t("hud.miss_short", ["n": 4]))
+        let coreHit = PinView(x: 520, y: 160, side: 0, round: 1, hob: "0", angle: 450, power: 60, missBlocks: 0)
+        XCTAssertNil(LensLayer.missText(coreHit, snap: snap))
+        let selfHit = PinView(x: 100, y: 160, side: 0, round: 1, hob: "0", angle: 850, power: 10, selfHit: true)
+        XCTAssertNil(LensLayer.missText(selfHit, snap: snap))
+        let exactFallback = PinView(x: 495, y: 160, side: 0, round: 1, hob: "0", angle: 450, power: 55)
+        XCTAssertEqual(LensLayer.missText(exactFallback, snap: snap), GameText.shared.t("hud.miss_short_one"))
+    }
+
+    func testWorkshopProblemIdCompactsNooksAndEraseAllResetsNewerFile() throws {
+        XCTAssertEqual(WorkshopGrid.plainWords(problem: "no_kettle_room", detail: "arbitrary detail"),
+                       GameText.shared.t("workshop.problems.no_kettle_room"))
+        XCTAssertEqual(WorkshopGrid.plainWords(problem: "unsupported", detail: "arbitrary detail"),
+                       GameText.shared.t("workshop.problems.nothing_under"))
+
+        var grid = WorkshopGrid()
+        _ = grid.apply(.nook, c: 1, r: 2)
+        _ = grid.apply(.nook, c: 4, r: 2)
+        XCTAssertEqual(grid.cell(1, 2), .nook(1))
+        XCTAssertEqual(grid.cell(4, 2), .nook(2))
+        _ = grid.apply(.erase, c: 1, r: 2)
+        XCTAssertEqual(grid.cell(1, 2), .empty)
+        XCTAssertEqual(grid.cell(4, 2), .nook(1), "remaining Nook compacts down to 1")
+
+        // L-I04: SaveStore.eraseAll resets newerFile lock so future writes succeed.
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AuditEraseNewer-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let newer = #"{"schema":99,"counter":7,"firstRunDone":true}"#
+        try Data(newer.utf8).write(to: dir.appendingPathComponent("save.json"))
+        let store = SaveStore(directory: dir)
+        _ = store.load()
+        XCTAssertTrue(store.isNewerSchema)
+        store.eraseAll()
+        XCTAssertFalse(store.isNewerSchema)
+        var fresh = SaveData()
+        fresh.counter = 42
+        try store.writeNow(fresh)
+        XCTAssertEqual(store.load().counter, 42)
+    }
 }
 
 private final class AuditRecordingBridge: CoreBridge, @unchecked Sendable {

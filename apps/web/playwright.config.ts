@@ -12,7 +12,7 @@ import { defineConfig, devices } from '@playwright/test';
 // PW_PROJECTS narrows the run.
 const base = process.env.VITE_BASE ?? '/';
 const port = 4173;
-const phoneSpecs = /(fixes|mobile|qa1|qa2)\.spec\.ts/;
+const phoneSpecs = /(aim|fixes|mobile|qa1|qa2)\.spec\.ts/;
 
 export default defineConfig({
   testDir: './tests',

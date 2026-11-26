@@ -155,6 +155,30 @@ final class BattleSKView: SKView {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         let active = event?.allTouches?.filter { $0.phase != .ended && $0.phase != .cancelled } ?? touches
+        // M-I07: Apple Pencil palm rejection: ignore resting `.direct` palm touches during a Pencil drag.
+        if let current = aimTouch, current.type == .pencil {
+            let otherNonDirect = active.filter { $0 !== current && $0.type != .direct }
+            if !otherNonDirect.isEmpty {
+                session.touchCancelled()
+                aimTouch = nil
+            }
+            return
+        }
+        // Prefer an arriving Apple Pencil touch over a resting palm touch.
+        if let pencil = touches.first(where: { $0.type == .pencil }) {
+            let p = pencil.location(in: self)
+            guard bounds.inset(by: safeAreaInsets).contains(p) else { return }
+            if aimTouch != nil {
+                session.touchCancelled()
+                aimTouch = nil
+            }
+            if session.wantsBlockTap, session.handleBlockTap(at: p) {
+                return
+            }
+            aimTouch = pencil
+            session.touchBegan(at: p)
+            return
+        }
         if active.count >= 2 {
             // A second finger cancels the drag; lifting back to one does not start a new one.
             if aimTouch != nil {
@@ -328,10 +352,19 @@ final class LensLayer {
     /// The gold ring on the picked Hob while the owner rule is being taught (QA playtest 2).
     private let ownerRing = SKShapeNode()
     private var lastOwnerRadius: CGFloat = -1
-    /// The aim beam in bands (ink edge, colour, white shine), and the miss tag.
-    private var beamNodes: [SKShapeNode] = []
+    /// Pooled painterly pearl trajectory beads (M-I09: cached textures, zero per-tick SKShapeNode tessellation).
+    private var beamSprites: [SKSpriteNode] = []
+    private struct BeamCacheKey: Equatable {
+        var show: Bool
+        var preview: [Double]
+        var powerTier: Int
+        var cppBucket: Int
+    }
+    private var lastBeamKey: BeamCacheKey?
     private let missBox = SKShapeNode()
     private let missLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+    private var lastMissKey: (text: String, cppBucket: Int)?
+    private var lastMissBoxSize: CGSize = .zero
 
     /// World cells per @1x pixel for Hob frames (72 x 80 px at @1x), so a Hob
     /// stands about two blocks tall in its Nook. Blocks are 1 cell a pixel.
@@ -385,15 +418,13 @@ final class LensLayer {
         ownerRing.fillColor = .clear
         ownerRing.isHidden = true
         world.addChild(ownerRing)
-        for band in 0..<Self.beamBands * 3 {
-            let n = SKShapeNode()
-            n.zPosition = 5 + CGFloat(band % 3) * 0.01
-            n.fillColor = .clear
-            n.lineCap = .round
-            n.lineJoin = .round
+        for _ in 0..<Self.pearlBeadCount {
+            let n = SKSpriteNode(color: .clear, size: CGSize(width: 1, height: 1))
+            n.zPosition = 5.05
+            n.anchorPoint = CGPoint(x: 0.5, y: 0.5)
             n.isHidden = true
             world.addChild(n)
-            beamNodes.append(n)
+            beamSprites.append(n)
         }
         missBox.zPosition = 9
         missBox.fillColor = Palette.hex(0xFFF4DE).withAlphaComponent(0.94)
@@ -406,55 +437,130 @@ final class LensLayer {
         world.addChild(missBox)
     }
 
-    static let beamBands = 12
+    static let pearlBeadCount = 14
 
-    /// Aim colour by power: blue at 0, orange near 89, red only from 90.
-    nonisolated static func aimHeat(_ power: Int) -> UIColor {
+    /// Aim colour by power: Brickabrac blue -> dusk slate -> warm gold -> rich amber -> ember -> crimson (zero neon green).
+    nonisolated static func aimHeatRGB(_ power: Int) -> (r: Double, g: Double, b: Double) {
         let p = Double(min(100, max(0, power)))
-        let hue = p >= 90 ? 4.0 : 205 - 175 * p / 89
-        return UIColor(hue: CGFloat(hue / 360), saturation: 0.78, brightness: 0.92, alpha: 1)
+        let stops: [(p: Double, r: Double, g: Double, b: Double)] = [
+            (0,   0.22, 0.45, 0.85),
+            (30,  0.62, 0.56, 0.72),
+            (55,  0.92, 0.74, 0.30),
+            (80,  0.94, 0.54, 0.16),
+            (92,  0.89, 0.32, 0.19),
+            (100, 0.81, 0.19, 0.24)
+        ]
+        for i in 0..<(stops.count - 1) {
+            let a = stops[i], b = stops[i + 1]
+            if p <= b.p {
+                let t = (p - a.p) / max(1, b.p - a.p)
+                return (a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t)
+            }
+        }
+        let last = stops[stops.count - 1]
+        return (last.r, last.g, last.b)
+    }
+
+    /// Aim colour by power as `UIColor` (zero green).
+    nonisolated static func aimHeat(_ power: Int) -> UIColor {
+        let c = aimHeatRGB(power)
+        return UIColor(red: CGFloat(c.r), green: CGFloat(c.g), blue: CGFloat(c.b), alpha: 1)
     }
 
     /// "3 blocks short" or "1 block long" for a shot that missed the rival fort (nil on a hit).
-    /// Short and long are seen from the shooter: short falls before the fort, long goes past it.
+    /// Prefers core `pin.missBlocks` when present; otherwise uses exact `snap.fort(1 - pin.side)` bounds (M-I02).
     static func missText(_ pin: PinView, snap: BattleSnapshot) -> String? {
-        let own = Camera.fortRect(pin.side, snap: snap)
-        let foe = Camera.fortRect(1 - pin.side, snap: snap)
-        if pin.x >= foe.minX && pin.x <= foe.maxX { return nil }
-        let toward: Double = foe.midX >= own.midX ? 1 : -1
-        let edge = pin.x < foe.minX ? foe.minX : foe.maxX
-        let n = Int((abs(pin.x - edge) / 16).rounded())
-        guard n > 0 else { return nil }
+        if let mb = pin.missBlocks {
+            guard mb != 0 else { return nil }
+            let n = abs(mb)
+            let key = mb < 0 ? "hud.miss_short" : "hud.miss_long"
+            return n == 1 ? GameText.shared.t(key + "_one") : GameText.shared.t(key).replacingOccurrences(of: "{n}", with: String(n))
+        }
+        if pin.selfHit { return nil }
+        guard let foeFort = snap.fort(1 - pin.side) else { return nil }
+        let block = max(1.0, foeFort.block)
+        let foeMinX: Double
+        let foeMaxX: Double
+        if foeFort.cols > 0 {
+            foeMinX = foeFort.originX
+            foeMaxX = foeFort.originX + Double(foeFort.cols) * block
+        } else {
+            let r = Camera.fortRect(1 - pin.side, snap: snap)
+            foeMinX = Double(r.minX)
+            foeMaxX = Double(r.maxX)
+        }
+        if pin.x >= foeMinX && pin.x <= foeMaxX { return nil }
+        let ownMidX: Double
+        if let ownFort = snap.fort(pin.side), ownFort.cols > 0 {
+            ownMidX = ownFort.originX + Double(ownFort.cols) * max(1.0, ownFort.block) / 2
+        } else {
+            ownMidX = Double(Camera.fortRect(pin.side, snap: snap).midX)
+        }
+        let foeMidX = (foeMinX + foeMaxX) / 2
+        let toward: Double = foeMidX >= ownMidX ? 1 : -1
+        let edge = pin.x < foeMinX ? foeMinX : foeMaxX
+        let n = max(1, Int((abs(pin.x - edge) / block).rounded()))
         let short = (pin.x - edge) * toward < 0
         let key = short ? "hud.miss_short" : "hud.miss_long"
         return n == 1 ? GameText.shared.t(key + "_one") : GameText.shared.t(key).replacingOccurrences(of: "{n}", with: String(n))
     }
 
+    /// Renders core's `snap.preview` ONLY as tapering glowing cream-to-gold-to-ember pearl beads (Rule 1, M-I09).
+    /// Cached by `(show, preview, powerTier, cppBucket)` so idle 5 Hz/15 Hz ticks do zero work.
     private func updateBeam(show: Bool, snap: BattleSnapshot, cellsPerPoint: Double) {
+        let powerTier = snap.aim.power > 94 ? 2 : (snap.aim.power > 80 ? 1 : 0)
+        let cppBucket = Int((cellsPerPoint * 100).rounded())
+        let key = BeamCacheKey(show: show, preview: show ? snap.preview : [], powerTier: powerTier, cppBucket: cppBucket)
+        if key == lastBeamKey { return }
+        lastBeamKey = key
+
         let n = snap.preview.count / 2
         guard show, n >= 2 else {
-            for b in beamNodes { b.isHidden = true }
+            for b in beamSprites { b.isHidden = true }
             return
         }
-        let col = Self.aimHeat(snap.aim.power)
-        let ink = Palette.hex(0x2C221E)
-        let k = CGFloat(max(0.7, min(1.2, 1.4 / max(0.0001, cellsPerPoint)))) * CGFloat(cellsPerPoint)
-        let per = max(1, Int((Double(n) / Double(Self.beamBands)).rounded(.up)))
-        for band in 0..<Self.beamBands {
-            let a = band * per, b = min(n - 1, (band + 1) * per)
-            let edge = beamNodes[band * 3], fill = beamNodes[band * 3 + 1], shine = beamNodes[band * 3 + 2]
-            guard a < b else { edge.isHidden = true; fill.isHidden = true; shine.isHidden = true; continue }
-            let path = CGMutablePath()
-            path.move(to: CGPoint(x: snap.preview[a * 2], y: snap.preview[a * 2 + 1]))
-            for i in (a + 1)...b { path.addLine(to: CGPoint(x: snap.preview[i * 2], y: snap.preview[i * 2 + 1])) }
-            let f = CGFloat(a + b) / 2 / CGFloat(n)
-            let w = (10 * (1 - f) + 2) * k
-            edge.path = path; edge.strokeColor = ink; edge.lineWidth = w + 3 * CGFloat(cellsPerPoint)
-            edge.alpha = 0.4 * (1 - f * 0.6); edge.isHidden = false
-            fill.path = path; fill.strokeColor = col; fill.lineWidth = w
-            fill.alpha = 0.95 * (1 - f * 0.6); fill.isHidden = false
-            shine.path = path; shine.strokeColor = .white; shine.lineWidth = max(1.5 * CGFloat(cellsPerPoint), w * 0.22)
-            shine.isHidden = f > 0.5
+        var cumLen: [Double] = [0]
+        cumLen.reserveCapacity(n)
+        var totalLen = 0.0
+        for i in 1..<n {
+            let dx = snap.preview[i * 2] - snap.preview[(i - 1) * 2]
+            let dy = snap.preview[i * 2 + 1] - snap.preview[(i - 1) * 2 + 1]
+            totalLen += hypot(dx, dy)
+            cumLen.append(totalLen)
+        }
+        guard totalLen > 0.01 else {
+            for b in beamSprites { b.isHidden = true }
+            return
+        }
+        let spacing = max(6.0, 10.5 * cellsPerPoint)
+        let beadCount = min(Self.pearlBeadCount, max(2, Int((totalLen / spacing).rounded()) + 1))
+        let tex = BattleArtCache.pearlBeadTexture(tier: powerTier)
+        let k = CGFloat(max(0.75, min(1.35, cellsPerPoint)))
+        var seg = 0
+        for idx in 0..<Self.pearlBeadCount {
+            let node = beamSprites[idx]
+            guard idx < beadCount else {
+                node.isHidden = true
+                continue
+            }
+            let f = beadCount > 1 ? Double(idx) / Double(beadCount - 1) : 0
+            let targetDist = f * totalLen
+            while seg + 1 < n - 1 && cumLen[seg + 1] < targetDist {
+                seg += 1
+            }
+            let segStart = cumLen[seg]
+            let segLen = max(0.0001, cumLen[seg + 1] - segStart)
+            let t = min(1.0, max(0.0, (targetDist - segStart) / segLen))
+            let x = snap.preview[seg * 2] + (snap.preview[(seg + 1) * 2] - snap.preview[seg * 2]) * t
+            let y = snap.preview[seg * 2 + 1] + (snap.preview[(seg + 1) * 2 + 1] - snap.preview[seg * 2 + 1]) * t
+            let diameter = (7.4 * (1 - CGFloat(f)) + 2.8) * k
+            node.texture = tex
+            node.color = .white
+            node.colorBlendFactor = 0
+            node.size = CGSize(width: diameter * 1.45, height: diameter * 1.45)
+            node.position = CGPoint(x: x, y: y)
+            node.alpha = CGFloat(0.96 * (1 - f * 0.40))
+            node.isHidden = false
         }
     }
 
@@ -685,6 +791,14 @@ final class LensLayer {
                     placeTexture(node, BattleArtCache.shearsTexture, at: CGPoint(x: p.x, y: p.y),
                                  size: CGSize(width: 38, height: 28), anchor: CGPoint(x: 0.5, y: 0.4))
                 }
+            case "crock_prop":
+                let frame = useArt ? (sheet.frame("prop_crock") ?? sheet.frame("shell_tick_tock_crock")) : nil
+                place(node, frame: frame, at: CGPoint(x: p.x, y: p.y), scale: 1.0, flip: false,
+                      fallback: palette.kettle, fallbackSize: CGSize(width: 18, height: 18))
+            case "turnip_prop":
+                let frame = useArt ? (sheet.frame("prop_turnip") ?? sheet.frame("shell_old_turnip")) : nil
+                place(node, frame: frame, at: CGPoint(x: p.x, y: p.y), scale: 1.0, flip: false,
+                      fallback: palette.dirt, fallbackSize: CGSize(width: 18, height: 18))
             default:
                 let name = p.shot.isEmpty ? "shell_clodpot" : "shell_\(p.shot)"
                 let frame = useArt ? (sheet.frame(name) ?? sheet.frame("shell_clodpot")) : nil
@@ -704,35 +818,48 @@ final class LensLayer {
             cutLine.isHidden = true
         }
 
-        // The aim beam: thick near the fort, thin at the far end, coloured by power.
+        // Painterly pearl trajectory beads from core's preview (Rule 1, M-I09).
         updateBeam(show: !small, snap: snap, cellsPerPoint: cellsPerPoint)
 
-        // The picked Hob's last shot: its flight as dots, and how far it missed in blocks.
+        // The picked Hob's last shot: circular stroked dots (M-I09), and clamped miss tag (M-I02).
         var missShown = false
         if !small, snap.phase == .plan, snap.humans.indices.contains(snap.activeSide), snap.humans[snap.activeSide],
            let id = snap.selectedHob,
            let last = snap.pins.last(where: { $0.side == snap.activeSide && $0.hob == id }) {
             let k = CGFloat(max(0.5, cellsPerPoint))
+            let dotTex = BattleArtCache.lastShotDotTexture(side: last.side, color: palette.side(last.side))
             let step = max(2, last.path.count / 2 / 14) * 2
             var i = 0
             while i + 1 < last.path.count {
                 let node = take("lastdot", parent: world, z: 4.5)
-                place(node, frame: nil, at: CGPoint(x: last.path[i], y: last.path[i + 1]), scale: 1, flip: false,
-                      fallback: palette.side(last.side), fallbackSize: CGSize(width: 5 * k, height: 5 * k))
-                node.alpha = 0.8
+                placeTexture(node, dotTex, at: CGPoint(x: last.path[i], y: last.path[i + 1]),
+                             size: CGSize(width: 6 * k, height: 6 * k), anchor: CGPoint(x: 0.5, y: 0.5))
+                node.alpha = 0.78
                 i += step
             }
             if !snap.preview.isEmpty, let text = Self.missText(last, snap: snap) {
                 missShown = true
-                missLabel.text = text
-                missLabel.fontSize = CGFloat(13 * cellsPerPoint)
-                let size = missLabel.frame.size
-                let pad = CGFloat(6 * cellsPerPoint)
-                let box = CGRect(x: -size.width / 2 - pad, y: -size.height / 2 - pad / 2,
-                                 width: size.width + pad * 2, height: size.height + pad)
-                missBox.path = CGPath(roundedRect: box, cornerWidth: pad, cornerHeight: pad, transform: nil)
-                missBox.lineWidth = CGFloat(1.5 * cellsPerPoint)
-                missBox.position = CGPoint(x: last.x, y: last.y + 34 * cellsPerPoint)
+                let cppBucket = Int((cellsPerPoint * 100).rounded())
+                if lastMissKey?.text != text || lastMissKey?.cppBucket != cppBucket {
+                    lastMissKey = (text, cppBucket)
+                    missLabel.text = text
+                    missLabel.fontSize = CGFloat(13 * cellsPerPoint)
+                    let size = missLabel.frame.size
+                    let pad = CGFloat(6 * cellsPerPoint)
+                    let box = CGRect(x: -size.width / 2 - pad, y: -size.height / 2 - pad / 2,
+                                     width: size.width + pad * 2, height: size.height + pad)
+                    missBox.path = CGPath(roundedRect: box, cornerWidth: pad, cornerHeight: pad, transform: nil)
+                    missBox.lineWidth = CGFloat(1.5 * cellsPerPoint)
+                    lastMissBoxSize = box.size
+                }
+                let halfW = lastMissBoxSize.width / 2 + CGFloat(8 * cellsPerPoint)
+                let halfH = lastMissBoxSize.height / 2 + CGFloat(8 * cellsPerPoint)
+                let minX = min(worldRect.midX, worldRect.minX + halfW)
+                let maxX = max(worldRect.midX, worldRect.maxX - halfW)
+                let minY = min(worldRect.midY, worldRect.minY + halfH)
+                let maxY = max(worldRect.midY, worldRect.maxY - halfH)
+                missBox.position = CGPoint(x: min(maxX, max(minX, CGFloat(last.x))),
+                                           y: min(maxY, max(minY, CGFloat(last.y + 34 * cellsPerPoint))))
             }
         }
         missBox.isHidden = !missShown
@@ -856,11 +983,12 @@ final class LensLayer {
         }
 
         // 3 planted Stomper legs ALWAYS visible beneath the Footing (planted at rest, marching during walks!).
+        // M-I03: scale clip to footing height (`fort.block / clip.h`) so feet plant cleanly on `fort.baseY`.
         if !small {
             let stomperClip = useArt ? fx.library.clip("stomper_\(team)_walk") : nil
             for (i, frac) in [0.18, 0.50, 0.82].enumerated() {
                 let node = take("stomper", parent: body, z: 0.9)
-                let legPos = local(fort.originX + fortWidth * frac, fort.baseY + 3)
+                let legX = fort.originX + fortWidth * frac
                 if let clip = stomperClip {
                     let frameName: String
                     if let walking, !reduceMotion {
@@ -869,11 +997,14 @@ final class LensLayer {
                     } else {
                         frameName = clip.frames.first ?? ""
                     }
-                    placeClip(node, frameName, clip, at: legPos, cellsPerPx: 0.95, flip: fort.side == 1)
+                    let cellsPerPx = CGFloat(fort.block) / max(1, CGFloat(clip.h))
+                    let legY = fort.baseY + Double((CGFloat(clip.h) - clip.anchor.y) * cellsPerPx)
+                    placeClip(node, frameName, clip, at: local(legX, legY), cellsPerPx: cellsPerPx, flip: fort.side == 1)
                 } else {
                     var stepPhase = 0.0
                     if let walking, !reduceMotion { stepPhase = sin(walking.t / 95.0 + Double(i) * 2.1) }
                     let tex = BattleArtCache.stomperTexture(side: fort.side, isFlattener: isFlattenerSide)
+                    let legPos = local(legX, fort.baseY + 3)
                     placeTexture(node, tex, at: CGPoint(x: legPos.x, y: legPos.y + CGFloat(stepPhase * 3.5)),
                                  size: CGSize(width: 18, height: 22), anchor: CGPoint(x: 0.5, y: 0.88))
                     node.xScale = fort.side == 1 ? -1 : 1
@@ -896,9 +1027,9 @@ final class LensLayer {
             }
         }
 
-        // Opaque cutaway interior backing (`#3B2D24`) + warm amber lantern glow (`#FFCE70`) for every Nook & Kettle Room.
+        // Opaque cutaway interior backing (`#3B2D24`) + warm amber lantern glow (`#FFCE70`) for intact Nooks & Kettle Room (H-I04).
         if !small {
-            for room in fort.rooms {
+            for room in fort.rooms where room.intact {
                 let back = take("room_back", parent: body, z: 0.86)
                 placeTexture(back, BattleArtCache.nookRoomTexture, at: local(room.box.midX, room.box.midY),
                              size: CGSize(width: room.box.width + 2, height: room.box.height + 2),
@@ -927,7 +1058,7 @@ final class LensLayer {
                     glaze.alpha = 0.18
                 }
             }
-            if let kr = fort.kettleRoom {
+            if let kr = fort.kettleRoom, fort.kettleIntact {
                 let back = take("room_back", parent: body, z: 0.86)
                 placeTexture(back, BattleArtCache.nookRoomTexture, at: local(kr.midX, kr.midY),
                              size: CGSize(width: kr.width + 2, height: kr.height + 2),
@@ -1033,8 +1164,8 @@ final class LensLayer {
             flag.xScale = fort.side == 1 ? -1 : 1
         }
 
-        // Rooms: recessed dark arched Loopholes, Loophole Flaps and Pot Lids.
-        for room in fort.rooms {
+        // Rooms: recessed dark arched Loopholes, Loophole Flaps and Pot Lids (H-I04 intact check, L-I03 useArt check).
+        for room in fort.rooms where room.intact {
             let key = "\(fort.side):\(room.id)"
             if let hole = room.loophole, !small {
                 // Dark arched Loophole embrasure along the enemy-facing wall.
@@ -1063,9 +1194,11 @@ final class LensLayer {
                     }
                 }
             }
-            drawLid(key: key, on: room.lid, at: local(room.box.midX, room.box.y1), fx: fx, body: body)
+            if useArt {
+                drawLid(key: key, on: room.lid, at: local(room.box.midX, room.box.y1), fx: fx, body: body)
+            }
         }
-        if let kr = fort.kettleRoom, useArt {
+        if let kr = fort.kettleRoom, fort.kettleIntact, useArt {
             drawLid(key: "\(fort.side):kettle", on: fort.kettleLid, at: local(kr.midX, kr.y1), fx: fx, body: body)
         }
 
@@ -1112,11 +1245,12 @@ final class LensLayer {
             // A Rival's own Hob (a content Hob such as Marge) wears the Rival look; Neat Brigade
             // units stay Flatteners (assets bundle, play and look pass).
             let rivalHob = SpriteImages.hobArtName(id: h.def, name: "") != nil
+            let bodyYScale: CGFloat = h.isCrushed ? Self.crushedScale : 1.0
             if isFlattenerSide && !rivalHob && !small {
                 if useArt, let fPick = fx.flattenerSprite(side: fort.side, hob: h, selected: selected,
                                                           aiming: aiming, power: snap.aim.power, sheet: sheet) {
                     placeClip(node, fPick.0, fPick.1, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: true)
-                    drawOverlays(for: fPick.0, parent: body, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: true, z: 3.04)
+                    drawOverlays(for: fPick.0, parent: body, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: true, z: 3.04, yScale: bodyYScale)
                 } else {
                     let fk = SpriteImages.flattenerArtName(def: h.def, cls: h.cls)
                     let poseInfo = fx.flattenerPose(side: fort.side, hob: h, selected: selected, aiming: aiming, power: snap.aim.power)
@@ -1128,7 +1262,7 @@ final class LensLayer {
                 }
             } else if useArt, let pick = fx.hobSprite(side: fort.side, hob: h, selected: selected, aiming: aiming, power: snap.aim.power) {
                 placeClip(node, pick.0, pick.1, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: fort.side == 1)
-                drawOverlays(for: pick.0, parent: body, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: fort.side == 1, z: 3.04)
+                drawOverlays(for: pick.0, parent: body, at: at, cellsPerPx: Self.hobCellsPerPixel, flip: fort.side == 1, z: 3.04, yScale: bodyYScale)
             } else {
                 let bonked = h.isOut
                 if !small {
@@ -1399,8 +1533,9 @@ final class LensLayer {
     }
 
     /// Composites `--v2` team scarf / snooze-balloon overlays on top of a deduplicated Hob frame.
+    /// M-I04: scales both vertical offset and overlay height by `yScale` when the Hob is squashed.
     private func drawOverlays(for frameName: String, parent: SKNode, at point: CGPoint,
-                              cellsPerPx: CGFloat, flip: Bool, z: CGFloat) {
+                              cellsPerPx: CGFloat, flip: Bool, z: CGFloat, yScale: CGFloat = 1) {
         let list = sheet.overlays(for: frameName)
         guard !list.isEmpty else { return }
         let dir: CGFloat = flip ? -1 : 1
@@ -1410,8 +1545,9 @@ final class LensLayer {
             let ovScale = CGFloat(ov.scale ?? 1) * cellsPerPx
             // Overlay dx/dy in castle@2x.json are @1x px relative to feet anchor in y-down space.
             let pos = CGPoint(x: point.x + dir * CGFloat(ov.dx) * cellsPerPx,
-                              y: point.y - CGFloat(ov.dy) * cellsPerPx)
+                              y: point.y - CGFloat(ov.dy) * cellsPerPx * yScale)
             place(ovNode, frame: ovFrame, at: pos, scale: ovScale, flip: flip, fallback: .clear, fallbackSize: .zero)
+            ovNode.yScale = yScale
             if let rot = ov.rot, rot != 0 {
                 ovNode.zRotation = CGFloat(-rot * .pi / 180) * dir
             }
@@ -1433,6 +1569,72 @@ private enum BattleArtCache {
     private static var stomperCache: [String: SKTexture] = [:]
     private static var pennantCache: [String: SKTexture] = [:]
     private static var calloutCache: [String: SKTexture] = [:]
+    private static var pearlCache: [Int: SKTexture] = [:]
+    private static var lastShotDotCache: [String: SKTexture] = [:]
+
+    /// Cached circular painterly pearl trajectory bead texture (tier 0 cream, 1 gold, 2 ember) with espresso ink stroke.
+    static func pearlBeadTexture(tier: Int) -> SKTexture {
+        if let hit = pearlCache[tier] { return hit }
+        let sz = CGSize(width: 32, height: 32)
+        let img = UIGraphicsImageRenderer(size: sz).image { ctx in
+            let cg = ctx.cgContext
+            let center = CGPoint(x: 16, y: 16)
+            let haloColor: UIColor
+            let fillColor: UIColor
+            switch tier {
+            case 2:
+                haloColor = Palette.hex(0xF26430)
+                fillColor = Palette.hex(0xFF914D)
+            case 1:
+                haloColor = Palette.hex(0xFFD66B)
+                fillColor = Palette.hex(0xFFE58F)
+            default:
+                haloColor = Palette.hex(0xFFF3CF)
+                fillColor = Palette.hex(0xFFF8E7)
+            }
+            let haloColors = [haloColor.withAlphaComponent(0.50).cgColor,
+                              haloColor.withAlphaComponent(0.0).cgColor] as CFArray
+            if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: haloColors, locations: [0.35, 1.0]) {
+                cg.drawRadialGradient(grad, startCenter: center, startRadius: 6,
+                                      endCenter: center, endRadius: 15.5, options: [])
+            }
+            let bead = UIBezierPath(ovalIn: CGRect(x: 6.5, y: 6.5, width: 19, height: 19))
+            fillColor.setFill()
+            bead.fill()
+            Palette.hex(0x2C221E).setStroke()
+            bead.lineWidth = 2.6
+            bead.stroke()
+            let glint = UIBezierPath(ovalIn: CGRect(x: 10.5, y: 9.5, width: 5.5, height: 4.0))
+            UIColor.white.withAlphaComponent(0.82).setFill()
+            glint.fill()
+        }
+        let tex = SKTexture(image: img)
+        tex.filteringMode = .linear
+        pearlCache[tier] = tex
+        return tex
+    }
+
+    /// Cached circular stroked dot for the picked Hob's last-shot arc (replaces unstroked squares).
+    static func lastShotDotTexture(side: Int, color: UIColor) -> SKTexture {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let key = "\(side):\(Int(r * 255)):\(Int(g * 255)):\(Int(b * 255))"
+        if let hit = lastShotDotCache[key] { return hit }
+        let sz = CGSize(width: 20, height: 20)
+        let img = UIGraphicsImageRenderer(size: sz).image { _ in
+            let dot = UIBezierPath(ovalIn: CGRect(x: 3.5, y: 3.5, width: 13, height: 13))
+            color.setFill()
+            dot.fill()
+            Palette.hex(0x2C221E).setStroke()
+            dot.lineWidth = 2.2
+            dot.stroke()
+        }
+        let tex = SKTexture(image: img)
+        tex.filteringMode = .linear
+        if lastShotDotCache.count > 16 { lastShotDotCache.removeAll() }
+        lastShotDotCache[key] = tex
+        return tex
+    }
 
     static let skyTexture: SKTexture = {
         let sz = CGSize(width: 16, height: 256)

@@ -113,11 +113,15 @@ final class SaveStore: @unchecked Sendable {
         }
     }
 
-    /// Removes every save file. Used by Reset progress and by UI tests.
+    /// Removes every save file and clears the newer-schema write lock. Used by Reset progress and by UI tests.
     func eraseAll() {
         queue.sync {
+            lock.lock()
+            newerFile = false
+            lock.unlock()
             try? FileManager.default.removeItem(at: fileURL)
             try? FileManager.default.removeItem(at: backupURL)
+            try? FileManager.default.removeItem(at: damagedURL)
         }
     }
 

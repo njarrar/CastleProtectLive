@@ -57,6 +57,7 @@ pub struct Castle {
     pub nooks: Vec<Room>,
     pub kettle: Room,
     pub kettle_hp: i32,
+    pub kettle_max: i32,
     pub steam: i32,
     pub steam_turn: i32,
     /// Fatigue (from round 10): battered blocks reach one less to the side.
@@ -73,23 +74,48 @@ fn glyph_mat(content: &Content, g: char) -> Option<usize> {
         .position(|m| m.glyph.starts_with(g))
 }
 
+fn parse_room(
+    cells: &[(i32, i32)],
+    what: &str,
+    problem: &'static str,
+) -> Result<(i32, i32), (&'static str, String)> {
+    if cells.len() != 4 {
+        return Err((problem, format!("{what} must be 2 x 2")));
+    }
+    let c = cells.iter().map(|p| p.0).min().unwrap_or(0);
+    let r = cells.iter().map(|p| p.1).min().unwrap_or(0);
+    for (dc, dr) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+        if !cells.contains(&(c + dc, r + dr)) {
+            return Err((problem, format!("{what} must be 2 x 2")));
+        }
+    }
+    Ok((c, r))
+}
+
 /// Parse a blueprint into slots (row 0 = bottom). Front faces right.
-fn parse(
+/// Returns a structured `(problem_id, detail)` error on failure.
+fn parse_problem(
     content: &Content,
     bp: &Blueprint,
-) -> Result<(i32, i32, Vec<Slot>, Vec<(i32, i32)>, (i32, i32)), String> {
+) -> Result<(i32, i32, Vec<Slot>, Vec<(i32, i32)>, (i32, i32)), (&'static str, String)> {
     let rows = bp.rows.len() as i32;
     if rows == 0 {
-        return Err("no rows".into());
+        return Err(("too_small", "no rows".into()));
     }
     let cols = bp.rows[0].chars().count() as i32;
     if bp.rows.iter().any(|r| r.chars().count() as i32 != cols) {
-        return Err("rows differ in width".into());
+        return Err(("check_failed", "rows differ in width".into()));
     }
-    if cols > MAX_W || rows > MAX_H || cols < 3 || rows < 3 {
-        return Err(format!(
-            "grid {}x{} outside 3x3 to {}x{}",
-            cols, rows, MAX_W, MAX_H
+    if cols < 3 || rows < 3 {
+        return Err((
+            "too_small",
+            format!("grid {}x{} outside 3x3 to {}x{}", cols, rows, MAX_W, MAX_H),
+        ));
+    }
+    if cols > MAX_W || rows > MAX_H {
+        return Err((
+            "too_big",
+            format!("grid {}x{} outside 3x3 to {}x{}", cols, rows, MAX_W, MAX_H),
         ));
     }
     let mut slots = vec![Slot::Empty; (cols * rows) as usize];
@@ -112,7 +138,8 @@ fn parse(
                     Slot::Nook(n as u8)
                 }
                 'r' => {
-                    let m = glyph_mat(content, 't').ok_or("no timber")?;
+                    let m =
+                        glyph_mat(content, 't').ok_or(("check_failed", "no timber".to_string()))?;
                     let hp = content.materials.blocks[m].hp;
                     Slot::Block(Block {
                         mat: m as u8,
@@ -123,7 +150,8 @@ fn parse(
                     })
                 }
                 _ => {
-                    let m = glyph_mat(content, g).ok_or(format!("unknown glyph {g}"))?;
+                    let m = glyph_mat(content, g)
+                        .ok_or(("check_failed", format!("unknown glyph {g}")))?;
                     let hp = content.materials.blocks[m].hp;
                     Slot::Block(Block {
                         mat: m as u8,
@@ -136,31 +164,32 @@ fn parse(
             };
         }
     }
-    let room = |cells: &Vec<(i32, i32)>, what: &str| -> Result<(i32, i32), String> {
-        if cells.len() != 4 {
-            return Err(format!("{what} must be 2 x 2"));
-        }
-        let c = cells.iter().map(|p| p.0).min().unwrap_or(0);
-        let r = cells.iter().map(|p| p.1).min().unwrap_or(0);
-        for (dc, dr) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
-            if !cells.contains(&(c + dc, r + dr)) {
-                return Err(format!("{what} must be 2 x 2"));
-            }
-        }
-        Ok((c, r))
-    };
-    let k = room(&kettle_cells, "Kettle Room")?;
+    if kettle_cells.is_empty() {
+        return Err(("no_kettle_room", "no Kettle Room".into()));
+    }
+    let k = parse_room(&kettle_cells, "Kettle Room", "kettle_room_size")?;
     let mut nooks = vec![];
     for (i, cells) in nook_cells.iter().enumerate() {
         if cells.is_empty() {
             continue;
         }
         if nooks.len() != i {
-            return Err("Nook numbers must start at 1 with no gaps".into());
+            return Err((
+                "no_nook",
+                "Nook numbers must start at 1 with no gaps".into(),
+            ));
         }
-        nooks.push(room(cells, "Nook")?);
+        nooks.push(parse_room(cells, "Nook", "no_nook")?);
     }
     Ok((cols, rows, slots, nooks, k))
+}
+
+/// Parse a blueprint into slots (row 0 = bottom). Front faces right.
+fn parse(
+    content: &Content,
+    bp: &Blueprint,
+) -> Result<(i32, i32, Vec<Slot>, Vec<(i32, i32)>, (i32, i32)), String> {
+    parse_problem(content, bp).map_err(|(_, msg)| msg)
 }
 
 fn is_block(slots: &[Slot], cols: i32, rows: i32, c: i32, r: i32) -> bool {
@@ -183,28 +212,42 @@ pub fn validate_blueprint_with(
     seats: i32,
     allow_root: bool,
 ) -> Result<(), String> {
-    let (cols, rows, slots, nooks, k) = parse(content, bp)?;
+    validate_blueprint_problem(content, bp, seats, allow_root).map_err(|(_, msg)| msg)
+}
+
+/// Blueprint validator returning a structured `(problem_id, detail)` error so
+/// Workshop UIs map every rule cleanly without parsing English text.
+pub fn validate_blueprint_problem(
+    content: &Content,
+    bp: &Blueprint,
+    seats: i32,
+    allow_root: bool,
+) -> Result<(), (&'static str, String)> {
+    let (cols, rows, slots, nooks, k) = parse_problem(content, bp)?;
     if !allow_root && slots.iter().any(|s| matches!(s, Slot::Block(b) if b.root)) {
-        return Err("root blocks are only for boss forts".into());
+        return Err(("check_failed", "root blocks are only for boss forts".into()));
     }
     let footing = content.materials.blocks.iter().position(|m| m.never_falls);
     for c in 0..cols {
         match &slots[c as usize] {
             Slot::Block(b) if Some(b.mat as usize) == footing => {}
-            _ => return Err("row 0 must be full Footing".into()),
+            _ => return Err(("footing_row", "row 0 must be full Footing".into())),
         }
     }
     for r in 1..rows {
         for c in 0..cols {
             if let Slot::Block(b) = &slots[(r * cols + c) as usize] {
                 if Some(b.mat as usize) == footing {
-                    return Err("Footing only in row 0".into());
+                    return Err(("footing_row", "Footing only in row 0".into()));
                 }
             }
         }
     }
     if k.0 < 1 || k.0 + 2 > cols - 1 || k.1 < 1 || k.1 + 2 > rows - 1 {
-        return Err("Kettle Room must sit one block in from every outer face".into());
+        return Err((
+            "kettle_room_edge",
+            "Kettle Room must sit one block in from every outer face".into(),
+        ));
     }
     let walled = |c: i32, r: i32| -> bool {
         let mut ok = true;
@@ -217,39 +260,51 @@ pub fn validate_blueprint_with(
         ok
     };
     if !walled(k.0, k.1) {
-        return Err("Kettle Room must be walled".into());
+        return Err(("kettle_room_walls", "Kettle Room must be walled".into()));
     }
     for (i, n) in nooks.iter().enumerate() {
         if !walled(n.0, n.1) {
-            return Err(format!("Nook {} must be walled on all four sides", i + 1));
+            return Err((
+                "nook_walls",
+                format!("Nook {} must be walled on all four sides", i + 1),
+            ));
         }
     }
     if (nooks.len() as i32) < seats {
-        return Err(format!("{} Nooks for {} Hobs", nooks.len(), seats));
+        return Err((
+            "nooks_for_hobs",
+            format!("{} Nooks for {} Hobs", nooks.len(), seats),
+        ));
     }
     if nooks.len() > 5 {
-        return Err("at most 5 Nooks".into());
+        return Err(("nooks_max", "at most 5 Nooks".into()));
     }
     let used = slots[cols as usize..]
         .iter()
         .filter(|s| !matches!(s, Slot::Empty))
         .count() as i32;
     if used > BUDGET {
-        return Err(format!("Block Budget {} over {}", used, BUDGET));
+        return Err((
+            "over_budget",
+            format!("Block Budget {} over {}", used, BUDGET),
+        ));
     }
     // every block must stand: run the support solver on the new fort
-    let cs = Castle::from_blueprint(content, bp, 0, 0)?;
+    let cs = Castle::from_blueprint(content, bp, 0, 0).map_err(|e| ("check_failed", e))?;
     let hanging: Vec<(i32, i32)> = cs
         .falling_chunks(content, &[])
         .into_iter()
         .flatten()
         .collect();
     if let Some(&(c, r)) = hanging.first() {
-        return Err(format!(
-            "{} block(s) have no support, first at column {} row {}",
-            hanging.len(),
-            c + 1,
-            r
+        return Err((
+            "no_support",
+            format!(
+                "{} block(s) have no support, first at column {} row {}",
+                hanging.len(),
+                c + 1,
+                r
+            ),
         ));
     }
     Ok(())
@@ -339,6 +394,7 @@ impl Castle {
             nooks: nooks.into_iter().map(room).collect(),
             kettle: room(k),
             kettle_hp: KETTLE_HP,
+            kettle_max: KETTLE_HP,
             steam,
             steam_turn: 0,
             fatigue: false,
@@ -498,7 +554,7 @@ impl Castle {
 
     /// True once the Heartkettle has cracked at or below half HP.
     pub fn kettle_cracked(&self) -> bool {
-        self.kettle_hp <= KETTLE_HP / 2
+        self.kettle_hp <= self.kettle_max / 2
     }
 
     /// True when `(c, r)` is one of the blocks enclosing the Kettle Room.

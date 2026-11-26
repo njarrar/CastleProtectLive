@@ -681,3 +681,346 @@ fn terrain_carve_and_settle() {
         }
     }
 }
+
+#[test]
+fn c01_sod_sack_buries_intact_fort_and_shove_off_clears_cleanly() {
+    // Use kit_oak on side 0 so Grub sits in row-1 Nook 3 on the outer front face.
+    let mut b = battle(
+        r#"{"level":"1-1","first_turn":1,"sides":[{"kit":"kit_oak"},{"control":"human"}]}"#,
+        7,
+    );
+    b.hands[1].push("sod_sack".into());
+    let h1 = b.hobs.iter().find(|h| h.side == 1).unwrap().id;
+    let h0 = b
+        .hobs
+        .iter()
+        .find(|h| h.side == 0 && h.def == "grub")
+        .unwrap()
+        .id;
+    let n0 = b.hobs[h0 as usize].nook.unwrap();
+    let (x0, y0, x1, y1) = b.castles[0].loophole_rect(&b.castles[0].nooks[n0 as usize]);
+    let tx = x1 + 2;
+    let ty = (y0 + y1) / 2;
+    let sod_ix = b.shot_index("sod_sack").unwrap();
+    let mut best = (i64::MAX, 1350, 62);
+    for a in (1100..=1550).step_by(10) {
+        for p in 35..=95 {
+            let mut u = 0;
+            let pr = b.aim_probe(1, h1, sod_ix, a, p);
+            let (_, end, _) = b.probe_path(pr, 900, false, &mut u);
+            let dx = (end.0 - tx) as i64;
+            let dy = (end.1 - ty) as i64;
+            let d2 = dx * dx + dy * dy;
+            if d2 < best.0 {
+                best = (d2, a, p);
+            }
+        }
+    }
+    assert!(
+        best.0 <= 24 * 24,
+        "probe should reach Grub's front face: {best:?}"
+    );
+    assert_eq!(
+        cmd(&mut b, json!({"cmd": "pick_hob", "hob": h1}))["ok"],
+        true
+    );
+    assert_eq!(
+        cmd(&mut b, json!({"cmd": "pick_shot", "shot": "sod_sack"}))["ok"],
+        true
+    );
+    assert_eq!(
+        cmd(
+            &mut b,
+            json!({"cmd": "aim", "angle": best.1, "power": best.2})
+        )["ok"],
+        true
+    );
+    assert_eq!(cmd(&mut b, json!({"cmd": "fire"}))["ok"], true);
+    b.run_until_plan(10_000);
+    assert_eq!(b.side, 0);
+    assert!(
+        b.castles[0].room_intact(&b.castles[0].nooks[n0 as usize], false),
+        "sod_sack does not break the intact front wall"
+    );
+    assert!(
+        b.hobs[h0 as usize].buried,
+        "exterior sod_sack mound buries intact Loophole"
+    );
+    assert_eq!(b.shot_ready(0, h0, "plain"), Err("buried"));
+    let r = cmd(&mut b, json!({"cmd": "shove_off", "hob": h0}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!b.hobs[h0 as usize].buried, "shove_off unburies Hob");
+    // No floating loam remains in the cleared chute.
+    for x in x0.max(0)..=(x1 + 36).min(b.terrain.w - 1) {
+        for y in 0..b.terrain.h - 1 {
+            if b.terrain.get(x, y) == 1 {
+                let held = b.terrain.solid(x, y + 1)
+                    || b.castles[0]
+                        .slot_at(x, y + 1)
+                        .is_some_and(|(c, r)| b.castles[0].has_block(c, r));
+                assert!(held, "floating loam at ({x}, {y}) after shove_off");
+            }
+        }
+    }
+    assert_eq!(
+        cmd(&mut b, json!({"cmd": "pick_hob", "hob": h0}))["ok"],
+        true
+    );
+    assert_eq!(
+        cmd(&mut b, json!({"cmd": "pick_shot", "shot": "plain"}))["ok"],
+        true
+    );
+    assert_eq!(
+        cmd(&mut b, json!({"cmd": "aim", "angle": 450, "power": 62}))["ok"],
+        true
+    );
+    assert_eq!(cmd(&mut b, json!({"cmd": "fire"}))["ok"], true);
+    b.run_until_plan(10_000);
+    let g = b.ghosts.last().unwrap();
+    assert!(!g.self_hit, "next shot clears the fort without self_hit");
+    assert!(g.pin.is_some_and(|p| p.0 > x1 + 100));
+}
+
+#[test]
+fn c02_rescue_captive_blame_and_captive_safe_pennant() {
+    // Rival (side 1) bonking the captive awards side 0 the win.
+    let mut b = battle(r#"{"level":"1-7","sides":[{},{"control":"human"}]}"#, 3);
+    cmd(&mut b, json!({"cmd": "pass"}));
+    b.run_until_plan(1000);
+    assert_eq!(b.side, 1);
+    let cap = b.props.iter().position(|p| p.kind == "captive").unwrap();
+    b.props[cap].hp = 0;
+    assert!(b.check_win());
+    let res = b.result.as_ref().unwrap();
+    assert_eq!((res.winner, res.how.as_str()), (0, "captive_bonked"));
+
+    // Rival grazing the captive does not steal the player's captive_safe Pennant.
+    let mut b = battle(r#"{"level":"1-7","sides":[{},{"control":"human"}]}"#, 3);
+    let cap = b.props.iter().position(|p| p.kind == "captive").unwrap();
+    let (cx, cy) = (b.props[cap].x, b.props[cap].y);
+    let ix = b.shot_index("clodpot").unwrap();
+    let effs = b.content.shots[ix].triggers[0].effects.clone();
+    let a1 = b.probe_actor_at(1, ix, cx, cy);
+    b.run_effects(&effs, &a1, cx, cy, Some(Hit::Prop(cap)), false);
+    b.finish_ctx();
+    assert!(b.props[cap].hp < b.props[cap].max && b.props[cap].hp > 0);
+    assert!(!b.captive_hit_by_player);
+    let mut broken = 0;
+    for p in &mut b.props {
+        if p.tag == "cage" && broken < 2 {
+            p.hp = 0;
+            broken += 1;
+        }
+    }
+    assert!(b.check_win());
+    let res = b.result.as_ref().unwrap();
+    assert_eq!(res.winner, 0);
+    assert!(res.pennants[1], "Rival graze preserves captive_safe");
+
+    // Player grazing the captive loses captive_safe.
+    let mut b = battle(r#"{"level":"1-7","sides":[{},{"control":"human"}]}"#, 3);
+    let cap = b.props.iter().position(|p| p.kind == "captive").unwrap();
+    let (cx, cy) = (b.props[cap].x, b.props[cap].y);
+    let a0 = b.probe_actor_at(0, ix, cx, cy);
+    b.run_effects(&effs, &a0, cx, cy, Some(Hit::Prop(cap)), false);
+    b.finish_ctx();
+    assert!(b.captive_hit_by_player);
+    let mut broken = 0;
+    for p in &mut b.props {
+        if p.tag == "cage" && broken < 2 {
+            p.hp = 0;
+            broken += 1;
+        }
+    }
+    assert!(b.check_win());
+    assert!(!b.result.as_ref().unwrap().pennants[1]);
+}
+
+#[test]
+fn c03_self_target_shot_ready_refusal_and_pot_lid_guards() {
+    let mut b = battle(
+        r#"{"level":"d1","mode":"couch","first_turn":0,"rummage":{"pool":0,"picks":0},"sides":[{"kit":"kit_stone"},{"kit":"kit_oak"}]}"#,
+        5,
+    );
+    let hetty = b.hobs.iter().find(|h| h.def == "hetty").unwrap().id;
+    assert_eq!(b.shot_ready(0, hetty, "knack"), Err("nothing_to_mend"));
+    cmd(&mut b, json!({"cmd": "pick_hob", "hob": hetty}));
+    cmd(&mut b, json!({"cmd": "pick_shot", "shot": "knack"}));
+    let snap = b.snapshot();
+    assert_eq!(snap["hud"]["fire"]["ready"], false);
+    assert_eq!(snap["hud"]["fire"]["why"], "nothing_to_mend");
+    let r = cmd(&mut b, json!({"cmd": "fire"}));
+    assert_eq!(r["ok"], false);
+    assert_eq!(r["reason"], "nothing_to_mend");
+    assert!(r["detail"].as_str().is_some_and(|s| !s.is_empty()));
+    assert_eq!(r["ready_shot"], "plain");
+
+    // Pot Lid rejects already_lidded and broken rooms before spending the Doodad.
+    let r = cmd(
+        &mut b,
+        json!({"cmd": "doodad", "doodad": "pot_lid", "room": "kettle"}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    b.acted = false;
+    b.phase = Phase::Plan;
+    b.doodads[0].push("pot_lid".into());
+    let r = cmd(
+        &mut b,
+        json!({"cmd": "doodad", "doodad": "pot_lid", "room": "kettle"}),
+    );
+    assert_eq!(r["reason"], "already_lidded");
+    b.castles[0].kettle.lid = false;
+    let kw = b.castles[0].room_walls(&b.castles[0].kettle)[3][0];
+    let idx = b.castles[0].idx(kw.0, kw.1);
+    b.castles[0].slots[idx] = Slot::Empty;
+    let r = cmd(
+        &mut b,
+        json!({"cmd": "doodad", "doodad": "pot_lid", "room": "kettle"}),
+    );
+    assert_eq!(r["reason"], "bad_target");
+    assert!(b.doodads[0].contains(&"pot_lid".to_string()));
+}
+
+#[test]
+fn c06_mend_multi_burial_and_full_hp_peephole() {
+    let mut b = battle(
+        r#"{"level":"d1","mode":"couch","first_turn":0,"rummage":{"pool":0,"picks":0},"sides":[{"kit":"kit_stone"},{"kit":"kit_oak"}]}"#,
+        7,
+    );
+    // Nooks 0 and 1 in bp_kit_stone share wall (3, 7).
+    for h in [0u8, 1u8] {
+        let nk = b.hobs[h as usize].nook.unwrap();
+        let (_, y0, x1, y1) = b.castles[0].loophole_rect(&b.castles[0].nooks[nk as usize]);
+        for y in y0..=y1 {
+            for x in (x1 + 1)..=(x1 + 6) {
+                b.terrain.set(x, y, 1);
+            }
+        }
+    }
+    b.update_buried();
+    assert!(b.hobs[0].buried && b.hobs[1].buried);
+    let hetty = b.hobs.iter().find(|h| h.def == "hetty").unwrap().id;
+    cmd(&mut b, json!({"cmd": "pick_hob", "hob": hetty}));
+    cmd(&mut b, json!({"cmd": "pick_shot", "shot": "plain"}));
+    // Unrelated intact wall is refused even while allies are buried elsewhere.
+    let bad = cmd(&mut b, json!({"cmd": "fire", "target": [0, 1]}));
+    assert_eq!(bad["reason"], "nothing_to_mend");
+    // Shared wall (3, 7) digs out both buried Hobs.
+    let ok_r = cmd(&mut b, json!({"cmd": "fire", "target": [3, 7]}));
+    assert_eq!(ok_r["ok"], true, "{ok_r}");
+    assert!(!b.hobs[0].buried && !b.hobs[1].buried);
+
+    // Full-HP block with a peephole can be mended by Dollop and by Mend Bucket.
+    let mut b = battle(
+        r#"{"level":"d1","mode":"couch","first_turn":0,"rummage":{"pool":0,"picks":0},"sides":[{"kit":"kit_stone"},{"kit":"kit_oak"}]}"#,
+        7,
+    );
+    b.castles[0].block_mut(0, 1).unwrap().peephole = true;
+    let hetty = b.hobs.iter().find(|h| h.def == "hetty").unwrap().id;
+    cmd(&mut b, json!({"cmd": "pick_hob", "hob": hetty}));
+    cmd(&mut b, json!({"cmd": "pick_shot", "shot": "plain"}));
+    let r = cmd(&mut b, json!({"cmd": "fire", "target": [0, 1]}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!b.castles[0].block(0, 1).unwrap().peephole);
+
+    let mut b = battle(
+        r#"{"level":"d1","mode":"couch","first_turn":0,"rummage":{"pool":0,"picks":0},"sides":[{"kit":"kit_stone"},{"kit":"kit_oak"}]}"#,
+        7,
+    );
+    b.castles[0].block_mut(0, 1).unwrap().peephole = true;
+    let r = cmd(
+        &mut b,
+        json!({"cmd": "doodad", "doodad": "mend_bucket", "targets": [[0, 1]]}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!b.castles[0].block(0, 1).unwrap().peephole);
+}
+
+#[test]
+fn c08_cozy_campaign_balance_keeps_fair_unchanged() {
+    let mut cozy = battle(
+        r#"{"level":"1-3","mode":"campaign","sides":[{},{"preset":"cozy"}],"progress":{"cleared":true}}"#,
+        5,
+    );
+    assert_eq!(cozy.castles[1].kettle_max, 150);
+    assert_eq!(cozy.castles[1].kettle_hp, 150);
+    let snap = cozy.snapshot();
+    assert_eq!(snap["castles"][1]["kettle"]["max"], 150);
+    assert_eq!(snap["hud"]["kettle_pct"][1], 100);
+    cozy.end_battle(0, "kettle_pop");
+    // Replay base 125 on Cozy (80 on Fair), plus 10 for each of the 3 new Pennants.
+    assert_eq!(cozy.result.as_ref().unwrap().buttons, 125 + 30);
+
+    let mut fair = battle(
+        r#"{"level":"1-3","mode":"campaign","sides":[{},{"preset":"fair"}],"progress":{"cleared":true}}"#,
+        5,
+    );
+    assert_eq!(fair.castles[1].kettle_max, 200);
+    assert_eq!(fair.castles[1].kettle_hp, 200);
+    fair.end_battle(0, "kettle_pop");
+    assert_eq!(fair.result.as_ref().unwrap().buttons, 80 + 30);
+}
+
+#[test]
+fn c09_c11_c11b_c12_c14_guards_and_miss_blocks() {
+    // C-09: nested resume inside replay_log is rejected with bad_log.
+    let mut b = battle(r#"{"level":"1-1"}"#, 1);
+    let err_r = castle_core::replay::replay_log(&mut b, &[json!({"cmd": "resume", "log": []})]);
+    assert!(err_r.is_err());
+    assert_eq!(err_r.unwrap_err().1["reason"], "bad_log");
+
+    // C-11: validate_blueprint reports structured problem id no_kettle_room.
+    let r = cmd(
+        &mut b,
+        json!({"cmd": "validate_blueprint", "rows": ["ttt", "t1t", "FFF"], "seats": 1}),
+    );
+    assert_eq!(r["ok"], false);
+    assert_eq!(r["reason"], "invalid_blueprint");
+    assert_eq!(r["problem"], "no_kettle_room");
+
+    // C-11b: Round 1 give_up with 0 shots fired pays 0 Buttons.
+    let mut g = battle(r#"{"level":"1-1","mode":"campaign"}"#, 1);
+    assert_eq!(cmd(&mut g, json!({"cmd": "give_up"}))["ok"], true);
+    assert_eq!(g.result.as_ref().unwrap().buttons, 0);
+
+    // C-14: Campaign walk is refused before walk_from (1-5) and allowed from 1-5.
+    let mut early = battle(r#"{"level":"1-1","mode":"campaign"}"#, 1);
+    assert_eq!(
+        cmd(&mut early, json!({"cmd": "walk", "dx": 4}))["reason"],
+        "cannot_walk_now"
+    );
+    let mut later = battle(r#"{"level":"1-5","mode":"campaign"}"#, 1);
+    assert_eq!(cmd(&mut later, json!({"cmd": "walk", "dx": 4}))["ok"], true);
+
+    // C-12: Boss 1-10 shears hinge re-anchors when side 1 drops into a crater.
+    let mut boss = battle(
+        r#"{"level":"1-10","first_turn":0,"rummage":{"pool":0,"picks":0},"sides":[{},{"control":"human"}]}"#,
+        4,
+    );
+    boss.castles[1].kettle_hp = 50;
+    cmd(&mut boss, json!({"cmd": "pass"}));
+    boss.run_until_plan(1000);
+    let hid = boss.boss.hinge.expect("phase 3 spawns hinge");
+    let base0 = boss.castles[1].base_y;
+    let cx = boss.castles[1].x;
+    let cw = boss.castles[1].width_cells();
+    boss.terrain.clear_rect(cx, base0, cx + cw - 1, base0 + 20);
+    let ix = boss.shot_index("clodpot").unwrap();
+    let effs = boss.content.shots[ix].triggers[0].effects.clone();
+    let a = boss.probe_actor_at(0, ix, cx + cw / 2, base0 + 18);
+    boss.run_effects(&effs, &a, cx + cw / 2, base0 + 18, None, false);
+    boss.finish_ctx();
+    assert!(boss.castles[1].base_y > base0, "boss fort dropped");
+    let hp = boss.props.iter().find(|p| p.id == hid).unwrap();
+    assert_eq!(hp.y, boss.castles[1].top_y() - 1);
+
+    // C-14: ghosts carry signed miss_blocks (negative short, null on fort).
+    let mut sh = battle(r#"{"level":"1-1"}"#, 42);
+    cmd(&mut sh, json!({"cmd": "aim", "angle": 450, "power": 30}));
+    cmd(&mut sh, json!({"cmd": "fire"}));
+    sh.run_until_plan(5000);
+    let snap = sh.snapshot();
+    assert!(snap["ghosts"][0]["miss_blocks"]
+        .as_i64()
+        .is_some_and(|n| n < 0));
+}

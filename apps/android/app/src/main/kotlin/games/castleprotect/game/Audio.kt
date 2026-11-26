@@ -83,6 +83,7 @@ class Audio(private val ctx: Context, private val settings: Settings) {
     private var barkThrottleAt = -10_000L
     private val barkTurn = IntArray(2) { -1 }
     private var lastSub = HashMap<String, Int>()
+    private var pendingCrewLine: Runnable? = null
     /** Called on the main thread when headphones are pulled out. */
     var onNoisy: (() -> Unit)? = null
 
@@ -150,6 +151,9 @@ class Audio(private val ctx: Context, private val settings: Settings) {
         if (settings.muteAll) return 0f
         return when (manifest.busSlider[bus] ?: "Sound") { "Music" -> settings.music; "Voices" -> settings.voices; else -> settings.sound } / 100f
     }
+
+    /** True when [id] is present in the loaded audio manifest (safe check for optional cues). */
+    fun hasSound(id: String): Boolean = manifest[id] != null
 
     /**
      * Plays a sound once. [pan] -1 left to 1 right, [semis] a pitch shift on top of the
@@ -304,7 +308,22 @@ class Audio(private val ctx: Context, private val settings: Settings) {
                 lastSub[id] = i
                 say(lines[i])
             }
-            if (crewLine != null) h.postDelayed({ say(crewLine) }, if (lines.isEmpty()) 0L else 1800L)
+            pendingCrewLine?.let { h.removeCallbacks(it) }
+            pendingCrewLine = null
+            if (crewLine != null) {
+                val r = Runnable { pendingCrewLine = null; say(crewLine) }
+                pendingCrewLine = r
+                h.postDelayed(r, if (lines.isEmpty()) 0L else 700L)
+            }
+        }
+    }
+
+    /** Cancels any delayed victory/crew subtitle callback so it never leaks across screen changes or rematches. */
+    fun cancelSubtitles() {
+        if (released) return
+        h.post {
+            pendingCrewLine?.let { h.removeCallbacks(it) }
+            pendingCrewLine = null
         }
     }
 

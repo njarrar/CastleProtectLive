@@ -106,6 +106,8 @@ export interface PProp { id: number; side: 0 | 1 | 2; kind: string; tag?: string
 export interface PGhost {
   index: number; side: PSide; hob: number; shot: string; angle: number; power: number; round: number;
   pin: [number, number] | null; self_hit: boolean; recalled: boolean; points: [number, number][];
+  /** Core-computed horizontal miss distance in blocks (negative = short, positive = long, null/0 = on target). */
+  miss_blocks?: number | null;
 }
 export interface PHandShell { id: string; name: string | null; match: string | null; weight: string | number | null; dud: boolean | null; card: unknown }
 export interface PHud {

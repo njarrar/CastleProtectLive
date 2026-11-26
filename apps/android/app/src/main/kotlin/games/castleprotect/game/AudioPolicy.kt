@@ -14,16 +14,16 @@ import android.media.AudioManager
  *   on a player action: a new screen, Resume, or a return to the app.
  */
 class FocusState {
-    var held = false
+    @Volatile var held = false
         private set
     /** Music gain from focus: 1 normal, 0.3 ducked, 0 lost. */
-    var music = 1f
+    @Volatile var music = 1f
         private set
     /** Effects gain from focus: 0 only during a transient loss. */
-    var effects = 1f
+    @Volatile var effects = 1f
         private set
     /** True after a full loss, until the player acts. */
-    var lost = false
+    @Volatile var lost = false
         private set
 
     fun onChange(change: Int) {

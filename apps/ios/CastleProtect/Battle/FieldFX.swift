@@ -274,6 +274,8 @@ final class FieldFX {
         lastShooter = nil
         lastTrail = [:]
         idleStart = [:]
+        hobDefs = [:]
+        hobClasses = [:]
     }
 
     // MARK: Clock
@@ -428,6 +430,7 @@ final class FieldFX {
                     case "crack": emitSound("ket_crack", 0, 1)
                     case "pop":
                         emitSound("ket_pop", 0, 1)
+                        emitSound("hit_sub_thud", -2, 1.0)
                         if popFramePending {
                             popFramePending = false
                             onPopFrame?()
@@ -561,6 +564,9 @@ final class FieldFX {
                 let band = SoundCues.band(radius: r)
                 impact(x: e.x, y: e.y, radius: r, type: raw.type ?? "blast", in: old.forts.isEmpty ? new : old, ground: new.ground)
                 emitSound(raw.type == "pierce" ? "hit_pierce" : SoundCues.blast(band), 0, 1, x: e.x)
+                if band == "large" || band == "huge" {
+                    emitSound("hit_sub_thud", 0, band == "huge" ? 1.0 : 0.85, x: e.x)
+                }
                 lastImpact = (e.x, e.y, nowNanos)
                 if firstBlast {
                     firstBlast = false
@@ -577,8 +583,8 @@ final class FieldFX {
                         hitStop(80, nowNanos: nowNanos)
                     } else if band == "large" || breaks >= 3 {
                         hitStop(50, nowNanos: nowNanos)
-                    } else if dmg >= 30 && hobHitThisBatch {
-                        hitStop(30, nowNanos: nowNanos)
+                    } else if (dmg >= 25 && hobHitThisBatch) || breaks >= 1 || band == "medium" {
+                        hitStop(45, nowNanos: nowNanos)
                     }
                 }
             case "carve":
@@ -606,6 +612,7 @@ final class FieldFX {
                     }
                 } else if raw.target == "kettle" {
                     emitSound("ket_hit", 0, 1, x: e.x)
+                    if dmg >= 20 { hitStop(45, nowNanos: nowNanos) }
                     if dmg > 0 {
                         let fort = raw.side.flatMap { new.fort($0) ?? old.fort($0) }
                         let cx = fort?.kettleX ?? e.x
@@ -752,6 +759,8 @@ final class FieldFX {
         guard let hob = raw.hob else { return }
         let side = raw.side ?? hobSide(hob, in: new) ?? 0
         let key = Self.key(side, hob)
+        if let def = hobDef(side: side, hob: hob, in: new) { hobDefs[key] = def }
+        if let cls = hobClass(side: side, hob: hob, in: new) { hobClasses[key] = cls }
         deferredBonks.remove(key)
         bonkedAt[key] = now
         hobAnims[key] = HobAnim(suffix: "bonked", start: now)
@@ -906,6 +915,11 @@ final class FieldFX {
         }
         knownPins = pins
         for fort in s.forts {
+            for h in fort.hobs {
+                let hKey = "\(fort.side):\(h.id)"
+                hobDefs[hKey] = h.def
+                hobClasses[hKey] = h.cls
+            }
             for room in fort.rooms {
                 let key = "\(fort.side):\(room.id)"
                 if let was = lastFlaps[key], was != room.flap, seededRooms {
@@ -942,11 +956,17 @@ final class FieldFX {
         s.fort(side)?.hobs.first { $0.id == String(hob) }?.def
     }
 
+    private func hobClass(side: Int, hob: Int, in s: BattleSnapshot) -> String? {
+        s.fort(side)?.hobs.first { $0.id == String(hob) }?.cls
+    }
+
     private var hobDefs: [String: String] = [:]
+    private var hobClasses: [String: String] = [:]
 
     private func playHob(side: Int, hob: Int, _ suffix: String, in s: BattleSnapshot) {
         let key = Self.key(side, hob)
         if let def = hobDef(side: side, hob: hob, in: s) { hobDefs[key] = def }
+        if let cls = hobClass(side: side, hob: hob, in: s) { hobClasses[key] = cls }
         if hobAnims[key]?.suffix == "bonked" && suffix != "cheer" { return }
         guard hobClip(key: key, suffix: suffix) != nil else {
             // No art for this Hob: the launch plays at once.
@@ -956,11 +976,18 @@ final class FieldFX {
         hobAnims[key] = HobAnim(suffix: suffix, start: now)
     }
 
-    /// The clip for a Hob key ("side:id") and a pose.
+    /// The clip for a Hob or Flattener key ("side:id") and a pose (H-I01).
     func hobClip(key: String, suffix: String) -> AnimClip? {
-        guard let def = hobDefs[key], let art = SpriteImages.hobArtName(id: def, name: "") else { return nil }
+        guard let def = hobDefs[key] else { return nil }
         let side = key.hasPrefix("1:") ? 1 : 0
-        return hobClip(art: art, side: side, suffix: suffix)
+        if let art = SpriteImages.hobArtName(id: def, name: "") {
+            return hobClip(art: art, side: side, suffix: suffix)
+        }
+        if side == 1 && !duel {
+            let fk = SpriteImages.flattenerArtName(def: def, cls: hobClasses[key] ?? "")
+            return library.clip("flattener_\(fk)_\(suffix)")
+        }
+        return nil
     }
 
     /// `hob_<art>_<team>_<suffix>`: blue for side 0, orange for Couch Duel player 2, and the
@@ -972,9 +999,11 @@ final class FieldFX {
         return library.clip("hob_\(art)_\(SpriteImages.team(side))_\(suffix)")
     }
 
-    /// Remembers a Hob's art so idle poses can play before any event.
-    func noteHob(side: Int, id: String, def: String) {
-        hobDefs["\(side):\(id)"] = def
+    /// Remembers a Hob or Flattener's art and class so poses and events can play before any action.
+    func noteHob(side: Int, id: String, def: String, cls: String = "") {
+        let key = "\(side):\(id)"
+        hobDefs[key] = def
+        if !cls.isEmpty { hobClasses[key] = cls }
     }
 
     private var pendingLaunch: [String: String] = [:]
@@ -1050,20 +1079,36 @@ final class FieldFX {
         return t > 0 ? min(18, t / 1000 * 8) : 0
     }
 
-    /// Logical pose string (`idle`, `aim`, `fire`, `hit`, `tumble`, `land`, `dig`, `cheer`, `bonked`)
+    /// Logical pose string (`idle`, `aim`, `fire`, `hit`, `tumble`, `land`, `dig`, `cheer`, `blink`, `bonked`)
     /// for a Flattener enemy unit, plus optional atlas frame when regenerated Flattener art is packed.
     func flattenerPose(side: Int, hob: HobView, selected: Bool, aiming: Bool, power: Int) -> (pose: String, timeMs: Double) {
         let id = Int(hob.id) ?? -1
         let key = Self.key(side, id)
+        if hobDefs[key] == nil { hobDefs[key] = hob.def }
+        if hobClasses[key] == nil { hobClasses[key] = hob.cls }
         if (hob.bonked || hob.hp <= 0) && !deferredBonks.contains(key) {
             let start = bonkedAt[key] ?? (now - 2000)
             return ("bonked", reduceMotion ? 0 : now - start)
         }
         if let a = hobAnims[key], a.suffix != "bonked" {
             let t = now - a.start
-            if t < 600 { return (a.suffix, t) }
+            if let clip = hobClip(key: key, suffix: a.suffix) {
+                if !clip.finished(at: t) || clip.loop {
+                    return (a.suffix, reduceMotion && clip.loop ? 0 : t)
+                }
+            } else if t < 600 {
+                return (a.suffix, t)
+            }
         }
         if selected && aiming { return ("aim", Double(power)) }
+        if !reduceMotion {
+            let last = lastBlink[key] ?? 0
+            if now - last > 2600 + 2400 * cosmetic(), hobClip(key: key, suffix: "blink") != nil {
+                lastBlink[key] = now
+                hobAnims[key] = HobAnim(suffix: "blink", start: now)
+                return ("blink", 0)
+            }
+        }
         let phase = Double(abs(id) * 317 % 1600)
         return ("idle", reduceMotion ? 0 : now + phase)
     }
@@ -1072,10 +1117,14 @@ final class FieldFX {
     /// when legacy atlases lack Flattener frames so the renderer draws the bespoke procedural Flattener rig.
     func flattenerSprite(side: Int, hob: HobView, selected: Bool, aiming: Bool, power: Int,
                          sheet: SpriteSheet) -> (String, AnimClip)? {
+        let id = Int(hob.id) ?? -1
+        let key = Self.key(side, id)
+        if hobDefs[key] == nil { hobDefs[key] = hob.def }
+        if hobClasses[key] == nil { hobClasses[key] = hob.cls }
         let fk = SpriteImages.flattenerArtName(def: hob.def, cls: hob.cls)
         let info = flattenerPose(side: side, hob: hob, selected: selected, aiming: aiming, power: power)
         let base = "flattener_\(fk)_"
-        if let clip = library.clip(base + info.pose) {
+        if let clip = hobClip(key: key, suffix: info.pose) ?? library.clip(base + info.pose) {
             let frameName = info.pose == "aim"
                 ? clip.pickFrame(value: power)
                 : clip.frame(at: reduceMotion && clip.loop ? 0 : info.timeMs)

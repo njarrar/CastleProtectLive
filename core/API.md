@@ -171,12 +171,12 @@ draft commands, which act for `draft.next` unless `side` is given.
 | `walk` | `dx` (cells, + right, - left) | Walk before the Action. 1 Steam per 4 cells, x2 uphill, x3 in mud, at most 40 Steam per turn. A step climbs at most 16 cells and drops at most 64; a drop over 48 is a Thump (10 to every block and Hob) and ends the walk. The height is found from the fort's base, so dirt on the roof is not ground. Reply has `moved`, `steam` |
 | `shove_off` | `hob` | Pay 15 Steam (`hud.shove_off_cost`) to clear a buried Loophole. No Action spent. Only diggable ground counts as burial (Rock and Bedrock never bury a Loophole); refused with `not_buried` if nothing would clear |
 | `fire` | optional `dial` (`"puff_up"`, `"rebuild"`, `"hops3"`), optional `target: [c, r]` | The Action: fire the selected Hob's selected shot. A shot that cannot fire is refused with nothing spent: `{"ok":false,"reason":"resting_plain_only","detail":"Marge Dumpling needs a rest: Plain Shot only","shot":"knack","hob":0,"ready_shot":"plain"}` (`ready_shot` is `"plain"` when the Plain Shot would fire, else null). Never ignore it: show `detail`, or switch to `ready_shot`. `target` aims a Mendglob at a block of your own fort (no arc). A dial trigger replaces the plain one (Barn Raising `puff_up` re-inflates, it does not also rebuild). A self shot that would do nothing is refused before anything is paid (`nothing_to_mend`, `no_one_to_puff_up`, `bad_target`). Phase becomes `resolve` |
-| `doodad` | `doodad`, plus `targets: [[c, r], …]` (Mend Bucket, default: most hurt blocks) or `room: "kettle" \| "nook:N"` (Pot Lid) | The Action: use a Doodad. A Mend Bucket with nothing hurt to mend is refused (`nothing_to_mend`) and not spent |
+| `doodad` | `doodad`, plus `targets: [[c, r], …]` (Mend Bucket, default: most hurt blocks) or `room: "kettle" \| "nook:N"` (Pot Lid) | The Action: use a Doodad. A Mend Bucket with nothing hurt or peepholed to mend is refused (`nothing_to_mend`) and not spent. A Pot Lid refuses an already-lidded room (`already_lidded`) or a broken room (`bad_target`) before spending |
 | `pass` | | Spend the Action doing nothing |
 | `ai_turn` | optional `preset` | Let the AI play this side's turn now (Walk, Shove Off, shot or Doodad), or in `draft` make this side's pick. Apps call it when `awaiting` is `"ai"`, after the think pose. Reply has `commands` (what the AI did) and `results`. The log keeps `{"cmd":"ai_turn"}` itself, not the commands: replaying it reruns the AI on the same state, memory and random stream |
-| `give_up` | optional `side` | End the battle now: the other side wins with `how: "give_up"`. Any phase but `ended`. Default side: the only human side, else the side to move. In the campaign it pays the loss reward. Logged (with the tick, so a replay matches) |
+| `give_up` | optional `side` | End the battle now: the other side wins with `how: "give_up"`. Any phase but `ended`. Default side: the only human side, else the side to move. In the campaign it pays the loss reward (40 Buttons), except a Round 1 forfeit with 0 shots fired pays 0 Buttons. Logged (with the tick, so a replay matches) |
 | `set_wind` | `wind` (-10 to 10) | `test_yard` only: the wind now and for every later front |
-| `resume` | `log` (a saved command log) | Only on a new battle (empty log). Replays the log, stepping tick by tick between commands as a live app does, and lands on the same state and hash as the battle that wrote it. Reply `{"ok":true,"applied":n,"hash":"…"}`, or `bad_log` with `index`. The next snapshot is full with the whole map |
+| `resume` | `log` (a saved command log) | Only on a new battle (empty log). Replays the log, stepping tick by tick between commands as a live app does, and lands on the same state and hash as the battle that wrote it. Reply `{"ok":true,"applied":n,"hash":"…"}`, or `bad_log` with `index` (nested `resume` and non-logged commands are refused with `bad_log`). The next snapshot is full with the whole map |
 
 ### Queries (any phase, change nothing)
 
@@ -184,7 +184,7 @@ draft commands, which act for `draft.next` unless `side` is given.
 |---|---|---|
 | `lean_lines` | `side`, `c`, `r` | `falls: [[c, r], …]`: blocks that would fall if that block broke |
 | `shimmer` | `side` | `blocks: [[c, r], …]` hanging at the end of their side reach |
-| `validate_blueprint` | `rows`, `seats` | `ok` plus `cost` (Buttons), `used` (blocks against the budget) and `budget` (72); or `reason: "invalid_blueprint"` with `detail` and `cells: [[c, r], …]` (hanging blocks and open room walls to mark). Every block must stand: the support solver runs on the fort |
+| `validate_blueprint` | `rows`, `seats` | `ok` plus `cost` (Buttons), `used` (blocks against the budget) and `budget` (72); or `reason: "invalid_blueprint"` with structured `problem` id (`no_kettle_room`, `kettle_room_size`, `kettle_room_edge`, `kettle_room_walls`, `too_small`, `too_big`, `footing_row`, `no_nook`, `nook_size`, `nook_walls`, `nooks_for_hobs`, `nooks_max`, `over_budget`, `no_support`, `check_failed`), `detail` and `cells: [[c, r], …]` (hanging blocks and open room walls to mark). Every block must stand: the support solver runs on the fort |
 | `hash` | | `hash`: the state hash (16 hex digits) |
 | `log` | | `log`: every accepted command so far. Save it with the setup and seed; `resume` (or replaying it) rebuilds the battle exactly |
 | `terrain_all` | | Marks every terrain chunk dirty; the next snapshot is full and sends the whole map (use after an app reload) |
@@ -197,8 +197,8 @@ draft commands, which act for `draft.next` unless `side` is given.
 `no_knack_uses`, `not_in_hand`, `no_heavy_first_turn`, `bad_dial`,
 `puff_up_not_allowed`, `cannot_walk_now`, `cannot_walk_there`,
 `cannot_shove_now`, `not_buried`, `not_enough_steam`, `no_hob`,
-`cannot_use_now`, `no_doodad`, `unknown_doodad`, `bad_room`, `no_ghost`,
-`pin_faded`, `invalid_blueprint`, and new in v0.2: `bad_value`,
+`cannot_use_now`, `no_doodad`, `unknown_doodad`, `bad_room`, `already_lidded`,
+`no_ghost`, `pin_faded`, `invalid_blueprint`, and new in v0.2: `bad_value`,
 `nothing_to_mend`, `no_one_to_puff_up`, `bad_target`, `no_actions_left`,
 `battle_over`, `test_yard_only`, `cannot_resume`, `bad_log`, `buried`,
 `resting` (in `hud.shots[].why`), and from the bindings `null_handle`,
@@ -265,7 +265,7 @@ hash is kept per terrain tile, so a lean frame costs microseconds.
 | `hobs[]` | Every Hob of both sides, see below |
 | `shells[]` | Shells in flight, compact: `[id, x, y, rot, shot]` (see below) |
 | `props[]` | Things on the field: Tick-Tock Crock, the turnip, cage bars, the captive |
-| `preview` | Aim preview dots `[x, y]` for the side in `plan` (30% of the arc, Marge +10% on Plain Shots, full on the first shot of 1-1). Empty when not planning |
+| `preview` | Aim preview dots `[x, y]` for the side in `plan` (30% of the arc, Marge +10% of that share to 33% on Plain Shots, full on the first shot of 1-1). Empty when not planning |
 | `ghosts[]` | Last 2 shots per Hob, both sides, with pins |
 | `hud` | Everything the HUD shows, see below |
 | `draft` | The Rummage, or null when the level has none |
@@ -317,7 +317,7 @@ weak spot block.
 the fight (HP 0, no turns). `dropped`, `tumbled` and `squashed` are hurt but
 alive: they keep their HP (1 or more), may act (`can_fire`) and are drawn as
 live Hobs. `squashed`: a falling chunk landed on the Hob in its Nook (crush);
-it pops back up (`open` or `seated`) at the end of its side's turn. The round
+it pops back up (`open` or `seated`) at the end of the turn. The round
 10 Fatigue collapse often leaves Hobs `squashed` or `dropped` at 1 HP: draw
 them hurt, never Bonked. `rest`: the cog (turns
 left to sit out; a value of 1 right after firing a Medium shot clears at the
@@ -341,7 +341,8 @@ roller for good; breaking the hinge jams the shears.
 
 ### ghosts[]
 
-`{"index", "side", "hob", "shot", "angle", "power", "round", "pin": [x, y] | null, "self_hit", "recalled", "points": [[x, y], …]}`.
+`{"index", "side", "hob", "shot", "angle", "power", "round", "pin": [x, y] | null, "miss_blocks": int | null, "self_hit", "recalled", "points": [[x, y], …]}`.
+`miss_blocks` is the signed horizontal miss from the rival fort in blocks (`< 0` short, `> 0` long, `null` when on the fort or without a Pin).
 `recall` takes the index among the active side's own ghosts in this list
 order.
 
@@ -468,10 +469,10 @@ blocks lost to a Thump (`why: "thump"`) or a Squall (`why: "squall"`).
 - `pennants_new`: Pennants earned now that `progress.pennants` did not hold.
 - `buttons`: what the player (side 0) earns, design 5.2, numbers from
   `content/app.json` `rewards`: campaign first clear 200 (Grand Fort 500)
-  + 25 per Pennant earned; replay win (`progress.cleared`) 80 (Grand Fort
-  150) + 10 per new Pennant; loss or Give up 40; Daily Dust-up first clear
-  of the day 60 (`progress.daily_paid` false); Skirmish, Couch Duel and Test
-  Yard 0.
+  + 25 per Pennant earned; replay win (`progress.cleared`) 80 (Cozy 125,
+  Grand Fort 150) + 10 per new Pennant; loss or Give up 40 (Round 1
+  zero-shot Give up 0); Daily Dust-up first clear of the day 60
+  (`progress.daily_paid` false); Skirmish, Couch Duel and Test Yard 0.
 - `score`: Siege Score per side (damage x the shot's Skill Factor, +150 per
   Bonk, +400 per Kettle Pop; at the end +50 per unused round and +200 for no
   Hob lost, except in Volley Points).
@@ -534,7 +535,7 @@ sides are out of Actions the higher Siege Score wins (`how:
 ## Grand Fort 1-10 phases
 
 Level rules `boss`: phase 2 when the boss kettle falls under 70% or the
-Sprinkler Root breaks, phase 3 under 35%, checked at the boss's turn start
+Sprinkler Root breaks, phase 3 under 40% (or at most 1 Rival Hob left), checked at the boss's turn start
 (a phase passed during the Squall is skipped). Phase 2 releases Big
 Smoothie Jr. (a `roller` prop, 60 HP boiler): from the next boss turn it
 rolls 120 cells toward the player each boss turn and shaves the ground down
@@ -548,8 +549,8 @@ the line to dodge it; breaking the hinge jams the shears for 2 boss turns.
 ## Rescue (1-7)
 
 No Squall (`squall: false`) and `cap_win: 1`. The player wins only by the
-objective (break 2 cage bars). The rival's kettle or crew does not end the
-fight. The player loses if the captive is Bonked (`captive_bonked`), the
+objective (break 2 cage bars), or if the Rival Bonks the captive. The rival's kettle or crew does not end the
+fight. If either side Bonks the captive (`captive_bonked`), the other side wins; `captive_safe` checks only damage dealt by side 0. The player also loses if the
 player's fort falls, or the cap runs out (`round_cap`, rival wins).
 
 ## Determinism
@@ -669,7 +670,8 @@ Rules version 5: saves from rules version 4 do not resume (kettle HP, kettle
 intake, Fatigue, fall damage, AI and level content changed, so an old log
 would not replay to the same fight).
 
-- **Heartkettle.** 200 HP (was 300); `kettle.max` is 200. Kettle intake:
+- **Heartkettle.** 200 HP (was 300); `kettle.max` is 200 (150 for Cozy
+  Campaign Rivals, where Side 0 also takes 25% less Squall damage). Kettle intake:
   Blast 75% (was 50%), crush 100% (was 50%), Pierce 100%. No half damage
   for a Beam that passed through a block. Per-shot cap 80 (was 60).
 - **Kettle crack.** At 100 HP or less the kettle cracks once: new event

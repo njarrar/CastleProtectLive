@@ -122,7 +122,7 @@ struct BattleLayout: Equatable, Sendable {
             }
             return layout
         case .tall:
-            let stripH: CGFloat = (72 * scale * (largeText ? 1.18 : 1)).rounded()
+            let stripH: CGFloat = (88 * scale * (largeText ? 1.15 : 1)).rounded()
             let fieldH: CGFloat = 32
             let crewH: CGFloat = 80 * scale
             let trayH: CGFloat = 58 * scale
@@ -181,12 +181,15 @@ struct BattleLayout: Equatable, Sendable {
 /// mapping: the core still judges every aim it is sent.
 struct AimGesture: Equatable, Sendable {
     static let dragThreshold: CGFloat = 8
-    static let cancelRadius: CGFloat = 12
+    /// Unified cancel radius for hit-test and Home-Return Cancel Halo (20 pt).
+    static let cancelRadius: CGFloat = 20
 
     /// The shortest pull for power 100 when the screen edge is close (QA playtest 1, m3).
     static let minPowerSpan: CGFloat = 64
-    /// A finger this close to the screen edge is on the edge.
-    static let edgeMargin: CGFloat = 2
+    /// A finger this close to the screen edge is on the edge (8 pt for comfortable edge-assist).
+    static let edgeMargin: CGFloat = 8
+    /// Safe margin keeping the anchor (and Home-Return Cancel Halo) reachable on screen (Rule 4).
+    static let safeAnchorPadding: CGFloat = 24
 
     private(set) var anchor: CGPoint
     private(set) var finger: CGPoint
@@ -197,22 +200,30 @@ struct AimGesture: Equatable, Sendable {
     let mode: DragMode
     /// The screen, so a pull into its edge keeps its angle; nil means no edge rule.
     let bounds: CGRect?
+    /// Safe top inset so the sliding anchor never hides beneath the Dynamic Island or top HUD.
+    let topInset: CGFloat
     /// The angle the drag had before the finger met the edge; while on the edge only power follows.
     private(set) var edgeAngle: Int?
+    /// Virtual overflow pull accumulated when the sliding anchor reaches safe screen bounds.
+    private(set) var edgeBonusPts: CGFloat = 0
     private var lastAngle: Int?
 
-    init(anchor: CGPoint, powerSpan: CGFloat, mode: DragMode, bounds: CGRect? = nil) {
+    init(anchor: CGPoint, powerSpan: CGFloat, mode: DragMode, bounds: CGRect? = nil, topInset: CGFloat = 0) {
         self.anchor = anchor
         self.finger = anchor
         self.powerSpan = max(1, powerSpan)
         self.mode = mode
         self.bounds = bounds
+        self.topInset = max(0, topInset)
     }
 
     var distance: CGFloat { hypot(finger.x - anchor.x, finger.y - anchor.y) }
 
     /// True when the finger is back inside the cancel ring around the anchor.
     var isInCancelRing: Bool { distance <= Self.cancelRadius }
+
+    /// True when the finger is approaching the cancel ring so the Home-Return Halo can bloom.
+    var isNearCancel: Bool { distance <= Self.cancelRadius * 1.6 }
 
     /// True when `point` is on the screen edge.
     func isOnEdge(_ point: CGPoint) -> Bool {
@@ -236,6 +247,24 @@ struct AimGesture: Equatable, Sendable {
         return max(0, t - Self.edgeMargin * 2)
     }
 
+    /// Unit vector from anchor toward the finger for `angleTenths` (screen coords, y grows down).
+    func pullUnit(for angleTenths: Int) -> CGPoint {
+        let r = Double(angleTenths) / 10 * .pi / 180
+        let sx = CGFloat(cos(r)), sy = CGFloat(-sin(r))
+        return mode == .pullBack ? CGPoint(x: -sx, y: -sy) : CGPoint(x: sx, y: sy)
+    }
+
+    /// Safe screen rect keeping the anchor and Home-Return Cancel Halo reachable.
+    private var safeAnchorBounds: CGRect? {
+        guard let b = bounds else { return nil }
+        let pad = Self.safeAnchorPadding
+        let minX = min(b.midX, b.minX + pad)
+        let maxX = max(b.midX, b.maxX - pad)
+        let minY = min(b.midY, b.minY + max(pad, topInset + pad))
+        let maxY = max(b.midY, b.maxY - pad)
+        return CGRect(x: minX, y: minY, width: max(0, maxX - minX), height: max(0, maxY - minY))
+    }
+
     /// Moves the finger. Returns true on the move that turns a touch into a drag.
     mutating func move(to point: CGPoint) -> Bool {
         finger = point
@@ -247,24 +276,40 @@ struct AimGesture: Equatable, Sendable {
         if isOnEdge(point) && isDragging {
             // On the edge the angle keeps the direction it had; only power follows the finger.
             if edgeAngle == nil { edgeAngle = lastAngle ?? rawAngleTenths }
+            if isInCancelRing { edgeBonusPts = 0 }
         } else {
             edgeAngle = nil
-            lastAngle = rawAngleTenths
+            edgeBonusPts = 0
+            if distance >= Self.dragThreshold { lastAngle = rawAngleTenths }
         }
         return started
     }
 
     /// Edge help (07 section 3.1 step 7): while the finger sits on the screen edge under power 100,
-    /// the anchor moves `points` along the shot's direction (pull-back) or against it (point mode),
-    /// so the pull keeps growing and the angle keeps its direction. Returns true when it moved.
+    /// the anchor moves `points` opposite the pull direction (clamped inside safe screen bounds so
+    /// the Cancel Halo never leaves the screen, with overflow added to `edgeBonusPts`).
     mutating func slide(points: CGFloat) -> Bool {
-        guard isDragging, isOnEdge(finger), power < 100, let a = edgeAngle else { return false }
-        let r = Double(a) / 10 * .pi / 180
-        // The shot's direction on screen (y grows down).
-        var ux = CGFloat(cos(r)), uy = CGFloat(-sin(r))
-        if mode != .pullBack { ux = -ux; uy = -uy }
-        anchor = CGPoint(x: anchor.x + ux * points, y: anchor.y + uy * points)
-        return true
+        guard isDragging, isOnEdge(finger), power < 100, let a = edgeAngle, points > 0 else { return false }
+        let pull = pullUnit(for: a)
+        // Slide anchor opposite the pull direction so pull length grows along the locked angle.
+        let ux = -pull.x, uy = -pull.y
+        var step = points
+        if let safe = safeAnchorBounds {
+            let loX = min(safe.minX, anchor.x), hiX = max(safe.maxX, anchor.x)
+            let loY = min(safe.minY, anchor.y), hiY = max(safe.maxY, anchor.y)
+            if ux > 0.0001 { step = min(step, max(0, (hiX - anchor.x) / ux)) }
+            else if ux < -0.0001 { step = min(step, max(0, (loX - anchor.x) / ux)) }
+            if uy > 0.0001 { step = min(step, max(0, (hiY - anchor.y) / uy)) }
+            else if uy < -0.0001 { step = min(step, max(0, (loY - anchor.y) / uy)) }
+        }
+        if step > 0 {
+            anchor = CGPoint(x: anchor.x + ux * step, y: anchor.y + uy * step)
+        }
+        let overflow = max(0, points - step)
+        if overflow > 0 {
+            edgeBonusPts = min(powerSpan, edgeBonusPts + overflow)
+        }
+        return step > 0.0001 || overflow > 0.0001
     }
 
     /// Angle in tenths of a degree, snapped to 0.5 degree, 0 right to 1800 left.
@@ -282,13 +327,27 @@ struct AimGesture: Equatable, Sendable {
         return min(1800, max(0, Int(halfSteps) * 5))
     }
 
+    /// Pull magnitude in points: projected onto the locked edge angle while on the edge
+    /// (plus any clamped virtual overflow), or raw Euclidean distance otherwise.
+    var effectivePull: CGFloat {
+        guard let a = edgeAngle else { return distance }
+        let pull = pullUnit(for: a)
+        let proj = (finger.x - anchor.x) * pull.x + (finger.y - anchor.y) * pull.y
+        return max(0, proj) + edgeBonusPts
+    }
+
     /// Power 0 to 100, whole numbers. Past 100 the band stops stretching.
     var power: Int {
-        min(100, max(0, Int((distance / powerSpan * 100).rounded())))
+        min(100, max(0, Int((effectivePull / powerSpan * 100).rounded())))
     }
 
     /// The finger point clamped to the 100-power band, for drawing.
     var bandEnd: CGPoint {
+        if let a = edgeAngle {
+            let pull = pullUnit(for: a)
+            let len = min(powerSpan, effectivePull)
+            return CGPoint(x: anchor.x + pull.x * len, y: anchor.y + pull.y * len)
+        }
         let d = distance
         guard d > powerSpan else { return finger }
         let k = powerSpan / d

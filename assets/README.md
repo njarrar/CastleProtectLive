@@ -42,23 +42,25 @@ One sim cell is 1 px at @1x. A block is 16 x 16 cells, so 16 px at @1x and 32 px
 
 `castle@1x.json` and `castle@2x.json` list the pages for each scale. Frames have a 2 px gap. They are not trimmed and not turned. Terrain tiles, backgrounds and the app icon are not in the atlas; load them as their own textures so they can repeat.
 
-## The v2 atlas (`--v2`, what is checked in now)
+## The v2 atlas (`--v2`, Retina `@2x` 2-page build)
 
 ```
 node tools/art-gen/gen-sprites.mjs --v2
 node tools/art-gen/render-sprites.mjs --v2
-node tools/art-gen/verify-atlas.mjs --strict --max-pages 1
+node tools/art-gen/verify-atlas.mjs --strict --max-pages 2 --require-2x-chars
 ```
 
-- One 2048 px page per scale. Frames are trimmed to their alpha box: each has `trim: [x, y, w, h]` (where the cut sits in the full sprite) and `sourceSize`.
-- Hobs are drawn once, with no team. The atlas index (`castle@2x.json`) maps each old name (`hob_marge_orange_fire_3`, `portrait_jax_blue`, `icon_gravel`) to the neutral frame in `aliases`, and lists what to draw on top in `overlays`: `{ sprite, dx, dy, rot, scale }`, in px at @1x from the base anchor. Team parts are the scarf (`hob_scarf_blue`, `hob_scarf_orange`), the P2 hat diamond (`hob_patch_orange`) and the Snooze Balloon.
-- Hob and Flattener frames sit on the @2x page at @1x size (`scale: 1` on the frame). That is what keeps it to one page; they are drawn at about 0.4 px per @1x px, so it costs a little sharpness on 3x screens. `render-sprites.mjs --v2 --char-scale=2` packs them at full @2x (more pages).
+- One 2048 px page at `@1x` (`castle@1x-0.png`) and two 2048 px pages at `@2x` (`castle@2x-0.png` and `castle@2x-1.png`, listed in `castle@2x.json` `pages`, ~32 MiB VRAM total). `apps/web/scripts/build-art.mjs`, Android `build.gradle.kts` (`atlas/castle@2x*.png`), and iOS `project.yml` (`castle@2x*`) all copy multi-page `@2x` atlases automatically.
+- Frames are trimmed to their alpha box: each has `trim: [x, y, w, h]` (where the cut sits in the full sprite) and `sourceSize`.
+- All 729 Hob and Flattener frames now render and pack at true `@2x` Retina resolution (`--char-scale=2` is the default; pass `--char-scale=1` only if you need an emergency single-page half-resolution character build).
+- Hobs without a behind-body hat tail (`marge`, `quill`, `jax`, `nan`, `grub`, `bobbin`, `hetty`) share one hatless neutral body across `blue`, `orange`, and `rival` teams. The atlas index (`castle@2x.json`) maps each team name (`hob_marge_blue_aim_2`, `hob_marge_orange_fire_3`, `hob_marge_rival_idle_0`, `portrait_jax_blue`, `icon_gravel`) to the neutral frame in `aliases`, and lists what to draw on top in `overlays`: `{ sprite, dx, dy, rot, scale }`, in px at `@1x` from the base anchor. Team parts are the scarf (`hob_scarf_blue`, `hob_scarf_orange`), the class or Rival hat (`hob_hat_<name>`, `hob_hat_<name>_rival`), the P2 hat diamond (`hob_patch_orange`), and the Snooze Balloon. Old Thumper keeps a baked Rival frame so his striped nightcap tail sits cleanly behind his back.
+- Materials and character rigs use upgraded gouache materiality in `tools/art-gen/`: woven criss-cross reed Wicker, chamfered wood-grain Timber with iron corner rivets, irregular mossy ashlar Cobble, hammered-copper Heartkettle with cyan water-sight glow and segmented brass dial, expressive squash-and-stretch Hob `aim_0..2` strain poses, and taller geometric Flatteners with crisp spirit-level cap rims.
 - `sprites/` still has a PNG for every old team name, drawn as base plus overlays. They are for code and tests that load single files; they are not in the atlas.
 - PNGs are re-compressed losslessly after render.
 
 ## Rival Hobs and idle timing
 
-- Rival Hobs have their own look: the Hob's own hat shape in Flattener slate with a green level vial, and the hatched orange scarf. Frames `hob_<name>_rival_<pose>_<i>`, clips `hob_<name>_rival_<action>` (same actions as blue and orange), portraits `portrait_<name>_rival`. These are real frames in the atlas, with the scarf and the Snooze Balloon baked in, so there are no aliases or overlays for them. Use them for any Hob on the Rival side in campaign and Skirmish. Couch Duel player 2 stays `orange`. Flatteners (`flattener_<key>_*`) are the other Rival look.
+- Rival Hobs have their own look: the Hob's own hat shape in Flattener slate with a green level vial, and the hatched orange scarf. Frames `hob_<name>_rival_<pose>_<i>`, clips `hob_<name>_rival_<action>` (same actions as blue and orange), portraits `portrait_<name>_rival`. Portraits keep the Rival hat baked in for clean circular clipping; body frames composite the neutral base with `hob_scarf_orange` and `hob_hat_<name>_rival` (except Old Thumper, whose Rival body frames stay baked for his behind-body nightcap tail). Use them for any Hob on the Rival side in campaign and Skirmish. Couch Duel player 2 stays `orange`. Flatteners (`flattener_<key>_*`) are the other Rival look.
 - Each Hob has its own `ms` for `idle`, `blink`, `fire` and `bonked` (Grub slow, Jax quick, Old Thumper with a hitch, Nan even, Bobbin fidgety). `fire` still releases on frame 0. Fire totals are 320 to 390 ms; the bonked `lift` lands 480 to 580 ms in.
 - Idle clips have `random_start: true` and a `start_offset_ms`. Start the idle loop at a random time in the loop so a crew never breathes in step; if you do not randomise, start at `start_offset_ms` (it differs per Hob and per team).
 
@@ -150,4 +152,4 @@ Hit stop, shake and slow motion numbers stay in `docs/design/07-ux-ui-audio.md` 
 - Hobs are frame sprites for now. The art doc asks for paper-doll rigs later; the poses and times here carry over.
 - Trails are grouped by damage type (blast, pierce, dig, fire, mend). The owner rim is drawn in code.
 - One next door glow serves all four Passives. It is gold, so it is never read as a team colour or the kettle teal.
-- The @2x atlas grew from 2 pages to 4 in v0.1. v2 packs it back to 1.
+- The @2x atlas grew from 2 pages to 4 in v0.1. v2 packs all 100% Retina @2x characters, blocks, props, and UI cleanly into 2 pages (`castle@2x-0.png` and `castle@2x-1.png`, ~32 MiB VRAM).

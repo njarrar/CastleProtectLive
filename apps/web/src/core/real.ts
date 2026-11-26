@@ -183,12 +183,13 @@ export class RealCore implements CoreApi {
     // v0.2: the core sends cost, used and budget; a refusal marks the cells (hanging blocks, open walls).
     // The reason id (and the core's own words, for the Workshop to read the problem from).
     const why = String(rep.detail ?? rep.reason ?? 'invalid_blueprint');
+    const problem = typeof rep.problem === 'string' ? rep.problem : undefined;
     const cells = Array.isArray(rep.cells) ? (rep.cells as [number, number][]) : [];
     return {
       ok: rep.ok, blocks: typeof rep.used === 'number' ? rep.used : blocks.length,
       budget: typeof rep.budget === 'number' ? rep.budget : RULES.workshop.budget,
       cost: typeof rep.cost === 'number' ? rep.cost : blocks.reduce((a, c) => a + (cost.get(c.kind) ?? 0), 0),
-      problems: rep.ok ? [] : cells.length ? cells.map(([c, r]) => ({ col: c, row: r, why })) : [{ col: -1, row: -1, why }],
+      problems: rep.ok ? [] : cells.length ? cells.map(([c, r]) => ({ col: c, row: r, why, ...(problem ? { problem } : {}) })) : [{ col: -1, row: -1, why, ...(problem ? { problem } : {}) }],
     };
   }
 
@@ -580,6 +581,8 @@ export class RealCore implements CoreApi {
         round: g.round, spent: g.recalled, angle: g.angle, power: g.power,
         path: g.points.map(([x, y]) => [x, H - y] as [number, number]),
         windAt: this.ghostWind.get(pid) ?? hud.wind,
+        selfHit: g.self_hit || undefined,
+        missBlocks: typeof g.miss_blocks === 'number' ? g.miss_blocks : undefined,
       });
     }
     const sel = s.hobs.find((h) => h.id === hud.selected.hob && h.side === active);
@@ -643,7 +646,7 @@ export class RealCore implements CoreApi {
         wish: s.draft.wish ?? undefined, done: s.phase !== 'draft',
       };
     }
-    const forts = s.castles.map((cs) => ({ x: cs.x, y: H - cs.base_y, w: cs.cols * 16, h: cs.rows * 16 })) as Snapshot['forts'];
+    const forts = s.castles.map((cs) => ({ x: cs.x, y: H - cs.base_y, w: cs.cols * (cs.block || 16), h: cs.rows * (cs.block || 16), block: cs.block || 16 })) as Snapshot['forts'];
     const preview = s.preview.map(([x, y]) => [x, H - y] as [number, number]);
     this.cache = { rev: this.rev, blocks, kettles, hobs, pins, rooms, props, chips, preview, forts, draft };
     return this.cache;
@@ -676,14 +679,20 @@ export class RealCore implements CoreApi {
     const hf = hud.fire;
     const whyVars = { hob: sel ? hobShort(sel.def, sel.name) : '', shot: picked?.name ?? '' };
     const pickedWhy = picked ? hud.shots?.find((x) => x.shot === picked.id || (picked.kind === 'shell' && x.id === picked.id))?.why : undefined;
-    const fireWhy = !(plan && human(active)) ? undefined
-      : hf ? (hf.ready ? undefined : byId('hud.why', hf.why ?? undefined, whyVars))
-      : picked && !picked.ready ? byId('hud.why', pickedWhy ?? undefined, whyVars) : undefined;
-    const anyCanAct = s.hobs.some((h) => h.side === active && (h.can_fire || h.buried));
+    const shoveCost = hud.shove_off_cost ?? 0;
+    const canShove = hud.steam[active] >= shoveCost && hud.steam_turn_left >= shoveCost;
+    let fireWhy = !(plan && human(active)) ? undefined
+      : hf ? (hf.ready ? undefined : whyLine(hf.why, whyVars))
+      : picked && !picked.ready ? whyLine(pickedWhy, whyVars) : undefined;
+    const anyCanAct = s.hobs.some((h) => h.side === active && (h.can_fire || (h.buried && canShove)));
     let fire: Snapshot['hud']['fire'];
     if (s.phase === 'resolve' || s.phase === 'settle') fire = s.shells.length ? 'flight' : 'fast';
     else if (!(plan && human(active))) fire = 'flight';
-    else if (sel?.buried) fire = 'dug';
+    else if (sel?.buried && canShove) fire = 'dug';
+    else if (sel?.buried && !canShove) {
+      if (!anyCanAct && !doodads.length) fire = 'pass';
+      else { fire = 'locked'; fireWhy = t('hud.shove_off.no_steam'); }
+    }
     else if (sel?.can_fire && (picked?.selfTarget || (aim?.power ?? 0) > 0) && !fireWhy) fire = 'ready';
     // Nobody can fire (trusting core `can_fire`, including squashed Hobs), nobody can be shoved off and no Doodad: offer Pass so the turn never locks.
     else if (!anyCanAct && !doodads.length) fire = 'pass';
@@ -854,6 +863,29 @@ export function bestOf(best: [ResultView['bestShot'], ResultView['bestShot']], w
   if (winner === 0 || winner === 1) return best[winner];
   const [a, b] = best;
   return a && b ? (b.dmg > a.dmg ? b : a) : a ?? b;
+}
+
+/** Fallback map from exact core refusal IDs to legacy text.json keys (used when running before Patch 01 adds the exact IDs). */
+const WHY_FALLBACK: Record<string, string> = {
+  not_enough_steam: 'hud.why.no_steam',
+  cannot_walk_now: 'hud.why.cannot_walk',
+  cannot_walk_there: 'hud.why.cannot_walk',
+  battle_over: 'hud.why.over',
+  not_your_turn: 'hud.why.not_planning',
+  bad_value: 'hud.why.out_of_range',
+  bad_target: 'hud.why.own_block',
+  nothing_to_mend: 'hud.mend.none',
+  no_one_to_puff_up: 'hud.dial.puff_up_none',
+  puff_up_not_allowed: 'hud.dial.puff_up_used',
+  already_lidded: 'hud.doodad.room_lidded',
+};
+
+/** Resolve a core refusal ID from `hud.why.<id>` first, falling back gracefully to legacy keys so Web works standalone and with Patch 01. */
+export function whyLine(id: string | null | undefined, vars?: Record<string, string | number | undefined>): string {
+  if (id && has(`hud.why.${id}`)) return t(`hud.why.${id}`, vars);
+  const fb = id ? WHY_FALLBACK[id] : undefined;
+  if (fb && has(fb)) return t(fb, vars);
+  return byId('hud.why', id ?? undefined, vars);
 }
 
 /** A refusal id from hud.shots, as the short chip word (`hud.why_short`). */

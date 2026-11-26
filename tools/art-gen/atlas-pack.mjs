@@ -3,7 +3,7 @@
 import zlib from 'zlib';
 import fs from 'fs';
 import path from 'path';
-import { SCARF_OVERLAYS, hobOverlayEntries, portraitOverlayEntries } from './sprite-hob.mjs';
+import { SCARF_OVERLAYS, HAT_DEDUP_HOBS, HOB_HAT_OVERLAYS, hobOverlayEntries, portraitOverlayEntries } from './sprite-hob.mjs';
 
 // Old sprite names the apps still ask for, kept as aliases of the renamed sprite.
 export const LEGACY_ALIASES = { icon_gravel: 'icon_gravel_sneeze' };
@@ -184,14 +184,17 @@ const HOB_TEAM_RE = /^hob_([a-z]+)_(blue|orange)_([a-z]+)_(\d+)$/;
 const PORTRAIT_NEUTRAL_RE = /^portrait_([a-z]+)_neutral$/;
 const PORTRAIT_TEAM_RE = /^portrait_([a-z]+)_(blue|orange)$/;
 
-// Build Hob deduplication aliases, scarf/balloon overlays, and canonical sprite list.
-// Works seamlessly on BOTH neutral manifests (gen-sprites --dedup-hobs) and legacy manifests.
+// Build Hob deduplication aliases, scarf/hat/balloon overlays, and canonical sprite list.
+// Works seamlessly on hat-deduped neutral manifests (v2 Retina @2x), legacy neutral manifests,
+// and legacy team-baked manifests.
 export function buildDedupTables(sprites) {
   const byName = new Map(sprites.map(s => [s.name, s]));
   const hasNeutralHobs = sprites.some(s => HOB_NEUTRAL_RE.test(s.name));
+  const hasHatOverlays = sprites.some(s => /^hob_hat_/.test(s.name));
   const aliases = {};
   const overlays = {};
   const packedSprites = [];
+  let usedHatDedup = false;
 
   for (const s of sprites) {
     if (hasNeutralHobs) {
@@ -199,10 +202,13 @@ export function buildDedupTables(sprites) {
       if (hm) {
         const [, hk, pose, idxStr] = hm;
         const idx = Number(idxStr);
-        for (const tk of ['blue', 'orange']) {
+        const dedupHat = hasHatOverlays && HAT_DEDUP_HOBS.includes(hk) && !byName.has(`hob_${hk}_rival_${pose}_${idx}`);
+        if (dedupHat) usedHatDedup = true;
+        const teams = dedupHat ? ['blue', 'orange', 'rival'] : ['blue', 'orange'];
+        for (const tk of teams) {
           const legacyName = `hob_${hk}_${tk}_${pose}_${idx}`;
           aliases[legacyName] = s.name;
-          overlays[legacyName] = hobOverlayEntries(hk, tk, pose, idx);
+          overlays[legacyName] = hobOverlayEntries(hk, tk, pose, idx, { hatOverlay: dedupHat });
         }
         packedSprites.push(s);
         continue;
@@ -257,8 +263,9 @@ export function buildDedupTables(sprites) {
     if (!byName.has(legacy) && byName.has(target)) aliases[legacy] = target;
   }
   return {
-    mode: hasNeutralHobs ? 'neutral-scarf' : 'legacy-dedup',
+    mode: hasNeutralHobs ? (usedHatDedup ? 'neutral-hat-scarf' : 'neutral-scarf') : 'legacy-dedup',
     scarfOverlays: Object.keys(SCARF_OVERLAYS),
+    ...(usedHatDedup ? { hatOverlays: Object.keys(HOB_HAT_OVERLAYS) } : {}),
     aliases: Object.fromEntries(Object.entries(aliases).sort(([a], [b]) => a.localeCompare(b))),
     overlays: Object.fromEntries(Object.entries(overlays).sort(([a], [b]) => a.localeCompare(b))),
     packedSprites,

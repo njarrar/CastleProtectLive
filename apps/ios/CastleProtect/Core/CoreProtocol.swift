@@ -301,12 +301,13 @@ struct CoreReply: Decodable, Equatable, Sendable {
     var ready: Bool?
     var why: String?
     var text: String?
-    /// `validate_blueprint`: Buttons cost, blocks used against the budget, the budget, and the
-    /// cells to mark (`[c, r]`, row 0 the Footing) when refused.
+    /// `validate_blueprint`: Buttons cost, blocks used against the budget, the budget, the
+    /// structured problem id, and the cells to mark (`[c, r]`, row 0 the Footing) when refused.
     var cost: Int?
     var used: Int?
     var budget: Int?
     var cells: [[Int]]?
+    var problem: String?
 
     /// The handle is dead (a panic, or every call after one): rebuild with cp_new and resume.
     var isDeadHandle: Bool { reason == "panic" || reason == "dead_handle" }
@@ -339,6 +340,7 @@ struct CoreReply: Decodable, Equatable, Sendable {
         used = c.value(.used, nil)
         budget = c.value(.budget, nil)
         cells = c.value(.cells, nil)
+        problem = c.value(.problem, nil)
     }
 
     static func decode(_ json: String) -> CoreReply {
@@ -347,7 +349,7 @@ struct CoreReply: Decodable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case ok, reason, detail, angle, power, moved, steam, hash, applied, index, shot, hob, ready, why, text
-        case cost, used, budget, cells
+        case cost, used, budget, cells, problem
         case canFire = "can_fire", readyShot = "ready_shot"
     }
 }
@@ -586,18 +588,20 @@ struct CoreGhost: Decodable, Equatable, Sendable {
     var pin: [Int]?
     var selfHit = false, recalled = false
     var points: [[Int]] = []
+    /// Optional core-computed miss distance in blocks (negative = short, positive = long, 0/nil = hit or older core).
+    var missBlocks: Int?
 
     init(from decoder: Decoder) throws {
         let k = try decoder.container(keyedBy: CodingKeys.self)
         index = k.value(.index, 0); side = k.value(.side, 0); hob = k.value(.hob, 0)
         shot = k.value(.shot, ""); angle = k.value(.angle, 0); power = k.value(.power, 0); round = k.value(.round, 0)
         pin = k.value(.pin, nil); selfHit = k.value(.selfHit, false); recalled = k.value(.recalled, false)
-        points = k.value(.points, [])
+        points = k.value(.points, []); missBlocks = k.value(.missBlocks, nil)
     }
 
     private enum CodingKeys: String, CodingKey {
         case index, side, hob, shot, angle, power, round, pin, recalled, points
-        case selfHit = "self_hit"
+        case selfHit = "self_hit", missBlocks = "miss_blocks"
     }
 }
 

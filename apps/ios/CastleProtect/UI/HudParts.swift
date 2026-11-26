@@ -688,7 +688,8 @@ struct ReadoutView: View {
 
     private var spokenAim: String {
         guard hud.aim.set else { return tx("hud.no_aim") }
-        let deg = String(format: "%.1f", Double(hud.aim.angle) / 10)
+        let shown = HudState.displayAngleTenths(hud.aim.angle, side: hud.hudSide)
+        let deg = String(format: "%.1f", Double(shown) / 10)
         return tx("hud.aim_readout", ["angle": deg, "power": hud.aim.power])
     }
 
@@ -734,7 +735,7 @@ struct FineTunePad: View {
             VStack(spacing: 2) {
                 Text(session.hud.angleText)
                     .font(Theme.number(15))
-                    .accessibilityLabel(tx("hud.angle") + " " + String(format: "%.1f", Double(session.hud.aim.angle) / 10))
+                    .accessibilityLabel(tx("hud.angle") + " " + String(format: "%.1f", Double(HudState.displayAngleTenths(session.hud.aim.angle, side: session.hud.hudSide)) / 10))
                     .accessibilityAdjustableAction { dir in
                         _ = session.nudge(angle: dir == .increment ? 5 : -5, power: 0)
                     }
@@ -1036,6 +1037,7 @@ struct PassButton: View {
                 .padding(2)
             }
             .hudTier3Pill(corner: compact ? 10 : 12, fill: Theme.cream)
+            .frame(minWidth: max(size, 52), minHeight: compact ? 44 : max(size, 48))
             .contentShape(Rectangle())
     }
 

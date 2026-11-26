@@ -173,8 +173,9 @@ export function prebattleScreen(app: App, route: Route): Screen {
     // The battle is built here so a refusal shows on this sheet; FIGHT never fails silently.
     if (!lvl.draft && !build()) return;
     if (!snap) return;
+    // Capture draft picks BEFORE ending draft and never drain core.snapshot() here so opening events survive (M-W07).
+    const finalPicks = snap.draft?.picks[0] ?? picks;
     if (snap.draft && !snap.draft.done) app.core.command({ cmd: 'end_draft' });
-    const finalPicks = app.core.snapshot().draft?.picks[0] ?? picks;
     if (lvl.draft && finalPicks.length) app.lastDraftPicks.set(lvl.id, [...finalPicks]);
     play('confirm');
     const { fortNote: _n, ...clean } = setup;

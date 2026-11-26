@@ -357,11 +357,11 @@ data class LevelInfo(
     /** Effective seat count for the player's default fort on this level. */
     val defaultSeats: Int get() = if (crewSize > 0) crewSize else playerCrew.size.coerceIn(1, 5)
 
-    /** The Rival a fight with [seed] meets before it starts: the level's own, or `roster[seed % size]` (Skirmish). */
+    /** The Rival a fight with [seed] meets before it starts: the level's own, or `roster[seed % size]` (unsigned, Skirmish). */
     fun rivalFor(seed: Long): RosterRival? {
         if (rival.isNotEmpty()) return RosterRival(rival, thinkMs)
         if (roster.isEmpty()) return null
-        return roster[Math.floorMod(seed, roster.size.toLong()).toInt()]
+        return roster[java.lang.Long.remainderUnsigned(seed, roster.size.toLong()).toInt()]
     }
 
     companion object {

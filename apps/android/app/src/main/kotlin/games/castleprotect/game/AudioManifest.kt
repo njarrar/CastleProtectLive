@@ -180,28 +180,29 @@ object Cues {
         "shears_snip" -> listOf("mat_timber_break")
         "shears_jam" -> listOf("doo_shears_jam")
         "boss_phase" -> listOf("cas_boss_horn")
-        "roller", "roller_stop", "roller_done" -> listOf("doo_roller_rumble")
+        "roller", "roller_move", "roller_stop" -> listOf("doo_roller_rumble")
         "bounce" -> listOf("fly_bounce_hop")
         "walk" -> listOf("cas_steam")
         else -> emptyList()
     }
 
-    /** Pitch for an event's cue in semitones: Little Ethel stopping or going home rumbles 3 semitones down. */
-    fun semis(e: GameEvent): Float = when (e.t) { "roller_stop", "roller_done" -> -3f; else -> 0f }
+    /** Pitch for an event's cue in semitones: Little Ethel stopping rumbles 3 semitones down. */
+    fun semis(e: GameEvent): Float = when (e.t) { "roller_stop" -> -3f; else -> 0f }
 
     /** Sound for an animation event (assets/audio/README.md "Sounds that follow animations"). */
     fun forAnim(anim: String, event: String, m: AudioManifest, shot: String? = null): String? {
+        val unit = anim.startsWith("hob_") || anim.startsWith("flattener_")
         return when {
-            anim.startsWith("hob_") && anim.endsWith("_fire") && event == "release" -> shot?.let { m.shotLaunch[it] } ?: "launch_lob"
-            anim.startsWith("hob_") && anim.endsWith("_hit") && event == "flash" -> "hob_hit_boing"
-            anim.startsWith("hob_") && anim.endsWith("_tumble") && event == "fall" -> "hob_tumble_roll"
-            anim.startsWith("hob_") && anim.endsWith("_land") && event == "thud" -> "hob_land_thud"
-            anim.startsWith("hob_") && anim.endsWith("_cheer") && event == "land" -> "hob_land_thud"
-            anim.startsWith("hob_") && anim.endsWith("_cheer") && event == "jump" -> "hob_cheer"
-            anim.startsWith("hob_") && anim.endsWith("_bonked") && event == "start" -> "hob_bonk"
-            anim.startsWith("hob_") && anim.endsWith("_bonked") && event == "inflate" -> "hob_balloon_inflate"
-            anim.startsWith("hob_") && anim.endsWith("_bonked") && event == "lift" -> "hob_balloon_float"
-            anim.startsWith("hob_") && anim.endsWith("_dig") && event == "clear" -> "hob_shove_dig"
+            unit && anim.endsWith("_fire") && event == "release" -> shot?.let { m.shotLaunch[it] } ?: "launch_lob"
+            unit && anim.endsWith("_hit") && event == "flash" -> "hob_hit_boing"
+            unit && anim.endsWith("_tumble") && event == "fall" -> "hob_tumble_roll"
+            unit && anim.endsWith("_land") && event == "thud" -> "hob_land_thud"
+            unit && anim.endsWith("_cheer") && event == "land" -> "hob_land_thud"
+            unit && anim.endsWith("_cheer") && event == "jump" -> "hob_cheer"
+            unit && anim.endsWith("_bonked") && event == "start" -> "hob_bonk"
+            unit && anim.endsWith("_bonked") && event == "inflate" -> "hob_balloon_inflate"
+            unit && anim.endsWith("_bonked") && event == "lift" -> "hob_balloon_float"
+            unit && anim.endsWith("_dig") && event == "clear" -> "hob_shove_dig"
             anim.startsWith("stomper_") && event == "stomp" -> "cas_step"
             anim == "kettle_pop" -> when (event) { "crack" -> "ket_crack"; "pop" -> "ket_pop"; "sit" -> "ket_sit_down"; else -> null }
             anim.startsWith("fx_impact_") && event == "flash" -> anim.removePrefix("fx_impact_").let { if (it == "dirt") "hit_miss_thud" else m.materialHit[it] }

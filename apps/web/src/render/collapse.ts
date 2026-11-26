@@ -24,8 +24,8 @@ const MAT_FILL: Record<string, string> = { wicker: '#E3B565', timber: '#B9733A',
 class CBlock {
   active = false;
   g!: CGroup;
-  x = 0; y = 0; mat = ''; sprite = ''; fall = 0; row = 0;
-  release = 0; landT = -1; broke = false; rubbled = false;
+  x = 0; y = 0; mat = ''; sprite = ''; fall = 0; row = 0; col = 0;
+  release = 0; landT = -1; broke = false; rubbled = false; dusted = false;
   crack: Clip | undefined;
 }
 
@@ -93,11 +93,11 @@ export class Collapses {
       const s = this.blocks.find((q) => !q.active);
       if (!s) break;
       g.left++; // only the slots taken count, so a full pool never leaves the group busy for good
-      s.active = true; s.g = g; s.x = b.x; s.y = b.y; s.mat = b.mat; s.fall = Math.max(0, b.fall); s.row = b.r - rMin;
+      s.active = true; s.g = g; s.x = b.x; s.y = b.y; s.mat = b.mat; s.fall = Math.max(0, b.fall); s.row = b.r - rMin; s.col = b.c;
       const pct = b.maxHp ? b.hp / b.maxHp : 1;
       s.sprite = `block_${b.mat}_${pct >= 0.67 ? 'fresh' : pct >= 0.34 ? 'scuffed' : 'battered'}`;
       s.release = CREAK + LEAN + s.row * g.gap;
-      s.landT = -1; s.broke = false; s.rubbled = false;
+      s.landT = -1; s.broke = false; s.rubbled = false; s.dusted = false;
       s.crack = anims.get(`fx_crack_${matKey(b.mat)}`);
     }
     if (!g.left) { g.active = false; return; }
@@ -126,6 +126,12 @@ export class Collapses {
     for (const b of this.blocks) {
       if (!b.active) continue;
       const g = b.g;
+      // 90 ms structural shudder anticipation: trickle mortar dust from cracking lower joints before the drop.
+      if (!this.reduceMotion && !b.dusted && b.row === 0 && g.t >= 20 && g.t < 110) {
+        b.dusted = true;
+        const p = fx.spawnName('fx_dustcloud', b.x + 8, b.y + 2, 0.24, 1);
+        if (p) { p.vy = -14; p.wind = 1.2; }
+      }
       const t = g.t - b.release;
       if (t >= 0 && !g.fell) {
         g.fell = true;
@@ -177,7 +183,12 @@ export class Collapses {
       const s = c.s;
       let rot = 0, shiver = 0, wob = 0, fallPx = 0, squash = 1, skid = 0;
       if (!rm) {
-        if (t < CREAK) { shiver = d ? track(d.creak.shiver_x, t) : 0; wob = track(g.wobble, t) * DEG; }
+        if (t < CREAK) {
+          shiver = d ? track(d.creak.shiver_x, t) : 0;
+          // Crisp 90 ms structural shudder anticipation beat (+/-1.5 px) before lean & drop.
+          if (t < 90) shiver += Math.sin(t * 0.19 + b.col * 1.7 + b.row * 1.1) * 1.5;
+          wob = track(g.wobble, t) * DEG;
+        }
         const leanT = Math.min(LEAN, Math.max(0, t - CREAK));
         rot = g.lean * g.deg * DEG * (d ? track(d.lean.track, leanT) : leanT / LEAN);
       }

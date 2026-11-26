@@ -39,7 +39,10 @@ class FortGrid(val cols: Int = COLS, val rows: Int = ROWS, val maxNooks: Int = M
         when (tool) {
             '.' -> {
                 if (here == '.') return false
-                if (here == 'K' || here in '1'..'5') clearGlyph(here) else cells[r][c] = '.'
+                if (here == 'K' || here in '1'..'5') {
+                    clearGlyph(here)
+                    if (here in '1'..'5') compactNooks()
+                } else cells[r][c] = '.'
             }
             'K', 'N' -> {
                 if (c + 1 >= cols || r + 1 >= rows) return false
@@ -63,16 +66,42 @@ class FortGrid(val cols: Int = COLS, val rows: Int = ROWS, val maxNooks: Int = M
     private fun isRoom(ch: Char) = ch == 'K' || ch in '1'..'5'
     private fun clearGlyph(g: Char) { for (row in cells) for (i in row.indices) if (row[i] == g) row[i] = '.' }
 
+    /** Renumbers remaining Nook glyphs to contiguous `'1'..'N'` so deleting Nook 1 or 2 never leaves a gap. */
+    private fun compactNooks() {
+        val present = nooks().sorted()
+        var needs = false
+        for (i in present.indices) if (present[i] != i + 1) { needs = true; break }
+        if (!needs) return
+        val map = CharArray(6) { ('0'.code + it).toChar() }
+        for (i in present.indices) map[present[i]] = ('1'.code + i).toChar()
+        for (row in cells) {
+            for (i in row.indices) {
+                val ch = row[i]
+                if (ch in '1'..'5') row[i] = map[ch - '0']
+            }
+        }
+    }
+
     /**
      * The rows for the core: cut to the used columns, top down, with the Footing row last.
-     * Empty when nothing is placed.
+     * Nook digits are compacted to contiguous `1..N`. Empty when nothing is placed.
      */
     fun toRows(): List<String> {
         var c0 = cols; var c1 = -1; var top = -1
         for (r in 0 until rows) for (c in 0 until cols) if (cells[r][c] != '.') { c0 = minOf(c0, c); c1 = maxOf(c1, c); top = maxOf(top, r) }
         if (c1 < 0) return emptyList()
+        val present = nooks().sorted()
+        val map = CharArray(6) { ('0'.code + it).toChar() }
+        for (i in present.indices) map[present[i]] = ('1'.code + i).toChar()
         val out = ArrayList<String>(top + 2)
-        for (r in top downTo 0) out.add(String(cells[r], c0, c1 - c0 + 1))
+        val buf = CharArray(c1 - c0 + 1)
+        for (r in top downTo 0) {
+            for (c in c0..c1) {
+                val ch = cells[r][c]
+                buf[c - c0] = if (ch in '1'..'5') map[ch - '0'] else ch
+            }
+            out.add(String(buf))
+        }
         out.add("F".repeat(c1 - c0 + 1))
         return out
     }
@@ -127,19 +156,32 @@ class FortCheck(
             o.optJSONArray("cells")?.let { a -> for (i in 0 until a.length()) a.optJSONArray(i)?.let { p -> if (p.length() >= 2) cells.add(p.getInt(0) to p.getInt(1)) } }
             val ok = o.optBoolean("ok", false)
             if (ok) return FortCheck(true, "", o.optInt("used"), o.optInt("budget"), o.optInt("cost"), cells, "")
-            val (kind, args) = problemOf(o.optString("detail"))
+            val detail = o.optString("detail")
+            val coreProblem = if (o.isNull("problem")) null else o.optString("problem").takeIf { it.isNotEmpty() }
+            val (kind, args) = problemOf(detail, coreProblem)
             return FortCheck(false, words(kind, args), o.optInt("used"), o.optInt("budget"), o.optInt("cost"), cells, kind)
         }
 
         private val NUMS = Regex("\\d+")
 
         /**
-         * The core sends a problem as English `detail` only (reason `invalid_blueprint`). This reads it
-         * into a `workshop.problems` key and its numbers, so the player sees the table's words.
+         * Reads a core `validate_blueprint` problem into a `workshop.problems` key and its numbers.
+         * Prefers the structured core `problem` ID when present; falls back to parsing `detail`.
          */
-        fun problemOf(detail: String): Pair<String, Array<Pair<String, Any?>>> {
-            val d = detail.lowercase()
+        fun problemOf(detail: String, coreProblem: String? = null): Pair<String, Array<Pair<String, Any?>>> {
             val n = NUMS.findAll(detail).map { it.value.toInt() }.toList()
+            if (!coreProblem.isNullOrEmpty() && (coreProblem == "wont_stand" || Text.has("workshop.problems.$coreProblem"))) {
+                val args: Array<Pair<String, Any?>> = when (coreProblem) {
+                    "nook_walls" -> arrayOf("n" to (n.firstOrNull() ?: 1))
+                    "nooks_for_hobs" -> if (n.size >= 2) arrayOf("n" to n[0], "hobs" to n[1]) else emptyArray()
+                    "nooks_max" -> arrayOf("n" to (n.firstOrNull() ?: 5))
+                    "over_budget" -> if (n.size >= 2) arrayOf("n" to (n[0] - n[1]).coerceAtLeast(1)) else arrayOf("n" to (n.firstOrNull() ?: 1))
+                    "too_big" -> arrayOf("cols" to n.getOrElse(4) { n.getOrElse(0) { 0 } }, "rows" to n.getOrElse(5) { n.getOrElse(1) { 0 } })
+                    else -> emptyArray()
+                }
+                return coreProblem to args
+            }
+            val d = detail.lowercase()
             return when {
                 d.isBlank() || d == "no rows" -> "too_small" to emptyArray()
                 "support" in d || "float" in d || "nothing under" in d -> "nothing_under" to emptyArray()
@@ -150,7 +192,7 @@ class FortCheck(
                 "nook" in d && ("walled" in d || "walls" in d) -> "nook_walls" to arrayOf("n" to (n.firstOrNull() ?: 1))
                 "nooks for" in d && n.size >= 2 -> "nooks_for_hobs" to arrayOf("n" to n[0], "hobs" to n[1])
                 "at most" in d && "nook" in d -> "nooks_max" to arrayOf("n" to (n.firstOrNull() ?: 5))
-                "nook" in d && ("no " in d || "needs" in d) -> "no_nook" to emptyArray()
+                "nook" in d && ("no " in d || "needs" in d || "gap" in d) -> "no_nook" to emptyArray()
                 "budget" in d && n.size >= 2 -> "over_budget" to arrayOf("n" to (n[0] - n[1]).coerceAtLeast(1))
                 "footing" in d || "row 0" in d -> "footing_row" to emptyArray()
                 "outside" in d && n.size >= 2 -> (if (n[0] < 3 || n[1] < 3) "too_small" else "too_big") to arrayOf("cols" to n.getOrElse(4) { 0 }, "rows" to n.getOrElse(5) { 0 })

@@ -13,7 +13,7 @@ final class WeakRef<T: AnyObject>: @unchecked Sendable {
 @MainActor
 final class Haptics {
     enum Kind: String, CaseIterable, Sendable {
-        case tick, dragStart = "drag_start", fire
+        case tick, ratchet = "aim_ratchet", dragStart = "drag_start", fire
         case blastSmall = "blast_small", blastLarge = "blast_large"
         case chunk, hobHit = "hob_hit", bonkTheirs = "bonk_theirs", bonkYours = "bonk_yours"
         case kettlePop = "kettle_pop", thump, threaded, pennant, illegal
@@ -129,6 +129,9 @@ final class Haptics {
         case .tick:
             selectionGenerator.selectionChanged()
             selectionGenerator.prepare()
+        case .ratchet:
+            lightImpact.impactOccurred(intensity: 0.55)
+            lightImpact.prepare()
         case .dragStart, .threaded:
             lightImpact.impactOccurred()
             lightImpact.prepare()
@@ -157,6 +160,7 @@ final class Haptics {
     static func taps(_ kind: Kind) -> [(Double, Float, Float)] {
         switch kind {
         case .tick: return [(0, 0.35, 0.9)]
+        case .ratchet: return [(0, 0.28, 0.85)]
         case .dragStart: return [(0, 0.45, 0.6)]
         case .fire: return [(0, 0.7, 0.5)]
         case .blastSmall: return [(0, 0.7, 0.4)]

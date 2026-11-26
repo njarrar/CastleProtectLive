@@ -179,18 +179,21 @@ final class FakeCoreBridge: CoreBridge {
         var out: [String: Any] = ["cost": cost, "used": used, "budget": 72]
         let cols = rows.first?.count ?? 0
         var detail: String?
-        if rows.isEmpty { detail = "no rows" }
-        else if rows.contains(where: { $0.count != cols }) { detail = "rows differ in width" }
+        var problem: String?
+        if rows.isEmpty { detail = "no rows"; problem = "too_small" }
+        else if rows.contains(where: { $0.count != cols }) { detail = "rows differ in width"; problem = "too_big" }
         else if cols > 8 || rows.count > 10 || cols < 3 || rows.count < 3 {
             detail = "grid \(cols)x\(rows.count) outside 3x3 to 8x10"
-        } else if rows.last?.allSatisfy({ $0 == "F" }) != true { detail = "row 0 must be full Footing" }
-        else if !body.contains(where: { $0.contains("K") }) { detail = "Kettle Room must be walled" }
-        else if Set(body.joined().filter { $0.isNumber }).count < seats { detail = "Not enough Nooks for \(seats) Hobs" }
-        else if used > 72 { detail = "Block Budget \(used) over 72" }
+            problem = (cols < 3 || rows.count < 3) ? "too_small" : "too_big"
+        } else if rows.last?.allSatisfy({ $0 == "F" }) != true { detail = "row 0 must be full Footing"; problem = "footing_row" }
+        else if !body.contains(where: { $0.contains("K") }) { detail = "No Kettle Room"; problem = "no_kettle_room" }
+        else if Set(body.joined().filter { $0.isNumber }).count < seats { detail = "Not enough Nooks for \(seats) Hobs"; problem = "nooks_short" }
+        else if used > 72 { detail = "Block Budget \(used) over 72"; problem = "over_budget" }
         if let detail {
             out["ok"] = false
             out["reason"] = "invalid_blueprint"
             out["detail"] = detail
+            if let problem { out["problem"] = problem }
             out["cells"] = [[Int]]()
         } else {
             out["ok"] = true

@@ -57,12 +57,72 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
     private val hillPath = Path()
     private val r = RectF()
     private val boxRect = RectF()
+    private val tmpPropBox = RectF()
+    private val arcRect = RectF()
+    private val screenRect = RectF()
     private val mtx = Matrix()
     private var sky: LinearGradient? = null; private var skyH = 0f
     private var haze: LinearGradient? = null; private var hazeH = 0f
     private var time = 0f
     private val ghostDash = DashPathEffect(floatArrayOf(8 * dp, 6 * dp), 0f)
-    private val visPins = IntArray(4)
+    private val cancelDash = DashPathEffect(floatArrayOf(6f * dp, 4f * dp), 0f)
+    private val visPins = IntArray(5)
+
+    // Precomputed zero-alloc warm palettes (Blue -> Warm Gold -> Amber -> Crimson; ZERO neon green, M-A03).
+    private val heatLut = IntArray(101)
+    private val pearlLut = IntArray(101)
+
+    // Zero-alloc cached telemetry and miss strings (M-A03).
+    private val cancelLabel: String by lazy { Text.opt("hud.release_to_cancel") ?: Text.t("hud.cancel_aim") }
+    private var cacheMissN = -1
+    private var cacheMissShort = false
+    private var cacheMissStr = ""
+    private var cachePillSide = -1
+    private var cachePillAngle = -1
+    private var cachePillPower = -1
+    private var cachePillStr = ""
+    private var cacheDeltaSide = -1
+    private var cacheDeltaA = Int.MIN_VALUE
+    private var cacheDeltaP = Int.MIN_VALUE
+    private var cacheDeltaStr = ""
+    private var missPinX = 0f
+    private var missPinY = 0f
+    private var missN = 0
+    private var missShort = false
+
+    init {
+        val cBlue = 0xFF3E7FD1.toInt()
+        val cGold = 0xFFE8B84B.toInt()
+        val cAmber = 0xFFE8731A.toInt()
+        val cCrimson = 0xFFDC353B.toInt()
+        val pCream = 0xFFFFF7E2.toInt()
+        val pGold = 0xFFFFD670.toInt()
+        val pAmber = 0xFFF29635.toInt()
+        val pEmber = 0xFFE64B3C.toInt()
+        for (p in 0..100) {
+            heatLut[p] = when {
+                p <= 40 -> lerpColor(cBlue, cGold, p / 40f)
+                p <= 82 -> lerpColor(cGold, cAmber, (p - 40) / 42f)
+                else -> lerpColor(cAmber, cCrimson, (p - 82) / 18f)
+            }
+            pearlLut[p] = when {
+                p <= 75 -> lerpColor(pCream, pGold, p / 75f)
+                p <= 92 -> lerpColor(pGold, pAmber, (p - 75) / 17f)
+                else -> lerpColor(pAmber, pEmber, (p - 92) / 8f)
+            }
+        }
+    }
+
+    private fun lerpColor(c0: Int, c1: Int, t: Float): Int {
+        val u = t.coerceIn(0f, 1f)
+        val a0 = (c0 ushr 24) and 0xFF; val r0 = (c0 ushr 16) and 0xFF; val g0 = (c0 ushr 8) and 0xFF; val b0 = c0 and 0xFF
+        val a1 = (c1 ushr 24) and 0xFF; val r1 = (c1 ushr 16) and 0xFF; val g1 = (c1 ushr 8) and 0xFF; val b1 = c1 and 0xFF
+        val a = (a0 + (a1 - a0) * u).toInt()
+        val rr = (r0 + (r1 - r0) * u).toInt()
+        val gg = (g0 + (g1 - g0) * u).toInt()
+        val bb = (b0 + (b1 - b0) * u).toInt()
+        return (a shl 24) or (rr shl 16) or (gg shl 8) or bb
+    }
 
     // Sprite tables built once per sprites.generation.
     private class Looks(val gen: Int, val sp: Sprites.Sprite?)
@@ -250,9 +310,9 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
     /** Draw time for [Sprites.Sprite.usedAt], so a low memory trim keeps what is on screen. */
     private var stamp = 0L
 
-    /** Zero-allocation lookup of the last 2 ghosts with Pins per side (Plate 2 visual cap). */
-    private fun fillVisiblePins(ghosts: List<Ghost>) {
-        visPins[0] = -1; visPins[1] = -1; visPins[2] = -1; visPins[3] = -1
+    /** Zero-allocation lookup of the last 2 ghosts with Pins per side plus [keepIdx] for the picked Hob (Plate 2, H-A09). */
+    private fun fillVisiblePins(ghosts: List<Ghost>, keepIdx: Int = -1) {
+        visPins[0] = -1; visPins[1] = -1; visPins[2] = -1; visPins[3] = -1; visPins[4] = keepIdx
         var c0 = 0; var c1 = 0
         for (i in ghosts.indices.reversed()) {
             val g = ghosts[i]
@@ -264,7 +324,7 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
     }
 
     private fun isVisiblePinIndex(idx: Int): Boolean =
-        idx == visPins[0] || idx == visPins[1] || idx == visPins[2] || idx == visPins[3]
+        idx == visPins[0] || idx == visPins[1] || idx == visPins[2] || idx == visPins[3] || (visPins[4] >= 0 && idx == visPins[4])
 
     fun drawLens(c: Canvas, l: Lens, f: Frame, me: Int, drag: FloatArray?, readout: String?, shake: FloatArray? = null) {
         tables()
@@ -311,12 +371,13 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         val ks = f.castles
         for (ki in ks.indices) drawCastle(c, l, f, ks[ki])
 
-        // Ghost lines and Pins capped to the most recent 2 per side so Round 10 Fatigue never crowds the fort (Plate 2).
-        fillVisiblePins(f.ghosts)
+        // Ghost lines and Pins capped to the most recent 2 per side, always keeping the picked Hob's newest shot visible (H-A09).
+        val selHob = f.selectedHob
+        val lastSelIdx = if (f.phase == Phase.PLAN && selHob != null) lastGhostIndexOf(f, selHob) else -1
+        val lastSel = if (lastSelIdx >= 0) f.ghosts[lastSelIdx] else null
+        fillVisiblePins(f.ghosts, lastSelIdx)
         line.strokeWidth = 1.5f * dp
         line.pathEffect = ghostDash
-        // The picked Hob's newest shot draws as dots in its side's colour, like the aim (Tank Stars).
-        val lastSel = f.selectedHob?.let { if (f.phase == Phase.PLAN) lastGhostOf(f, it) else null }
         for (gi in f.ghosts.indices) {
             val g = f.ghosts[gi]
             if (g.hasPin && !isVisiblePinIndex(gi)) continue
@@ -347,11 +408,9 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
             } else drawPin(c, l.sx(g.pinX.toFloat()), l.sy(g.pinY.toFloat()), g.side, g.round, g.recalled)
         }
 
-        // The preview for the side in Plan: a beam, thick and bright at the Loophole and thinner
-        // along the path, then three beads. Same length as the dots it replaced (00 section 2.4).
-        val selHob = f.selectedHob
-        if (f.preview.size >= 4) drawAimBeam(c, l, f.preview, selHob?.power ?: 0)
-        // How far the newest shot of the picked Hob missed the other fort, by its Pin.
+        // Core-only painterly pearl trajectory preview (Rule 1 compliant, H-A04, L-A02).
+        if (f.preview.size >= 4) drawAimBeam(c, l, f.preview, selHob?.power ?: 0, f.hud.wind)
+        // How far the newest shot of the picked Hob missed the other fort, by its Pin (in-lens only, H-A09).
         if (selHob != null && f.phase == Phase.PLAN && f.hud.human(f.side)) drawMissTag(c, l, f, selHob)
 
         // Props: crocks, turnips, 1-7 rescue cage & captive Hetty, 1-10 Big Smoothie Jr. roller and Topiary Shears.
@@ -386,72 +445,142 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         fx.draw(c, l, f)
         if (f.hud.squallRound > 0) fx.drawSquall(c, l)
 
-        // Aim Drag: the power scale band, the last shot's notch, the cancel spot and the badges.
-        val hob = f.selectedHob
-        if (drag != null && f.phase == Phase.PLAN && hob != null) drawAimBand(c, l, f, hob, drag)
         c.restore()
+        // Legacy callers passing drag directly into drawLens still draw unclipped above the lens.
+        if (drag != null && f.phase == Phase.PLAN && selHob != null) {
+            drawAimOverlay(c, l, f, drag, selHob.angle, selHob.power, inCancelNow = false, tall = false, viewW = rc.right, viewH = rc.bottom)
+        }
     }
 
-    /** Aim colour by power: blue at 0, orange near 89, red only from 90. */
-    private fun aimHeat(power: Int): Int {
-        val p = power.coerceIn(0, 100)
-        val hue = if (p >= 90) 4f else 205f - 175f * p / 89f
-        return Color.HSVToColor(floatArrayOf(hue, 0.78f, 0.92f))
-    }
+    /** Zero-alloc warm tension colour: Cerulean Blue -> Sunlit Gold -> Burnished Amber -> Forged Crimson (no neon green). */
+    private fun aimHeat(power: Int): Int = heatLut[power.coerceIn(0, 100)]
 
-    private fun drawAimBeam(c: Canvas, l: Lens, pv: IntArray, power: Int) {
+    /**
+     * Painterly tapering pearl trajectory ribbon drawn strictly from core's `f.preview` points
+     * (Rule 1 honest physics: zero fabricated client-side trailing beads, H-A04, L-A02).
+     */
+    private fun drawAimBeam(c: Canvas, l: Lens, pv: IntArray, power: Int, wind: Int) {
         val n = pv.size / 2
-        val k0 = (l.scale * 1.4f).coerceIn(0.7f, 1.2f) * dp
-        val col = aimHeat(power)
+        if (n < 2) return
+        val k0 = (l.scale / dp * 1.4f).coerceIn(0.7f, 1.2f) * dp
+        val pClamped = power.coerceIn(0, 100)
+        val pearlCol = pearlLut[pClamped]
+        val heatCol = aimHeat(pClamped)
+        // Soft sunlit connecting halo ribbon (batched single Path, zero allocs).
+        path.rewind()
+        path.moveTo(l.sx(pv[0].toFloat()), l.sy(pv[1].toFloat()))
+        var pi = 1
+        while (pi < n) {
+            path.lineTo(l.sx(pv[pi * 2].toFloat()), l.sy(pv[pi * 2 + 1].toFloat()))
+            pi += 2
+        }
+        if ((n - 1) % 2 != 0) path.lineTo(l.sx(pv[(n - 1) * 2].toFloat()), l.sy(pv[(n - 1) * 2 + 1].toFloat()))
         line.pathEffect = null
-        for (pass in 0..1) {
-            var i = 1
-            while (i < n) {
-                val f = i.toFloat() / n
-                val w = (10f * (1f - f) + 2f) * k0
-                val j = max(0, i - 2)
-                line.color = if (pass == 1) col else ink
-                line.alpha = (255 * (if (pass == 1) 0.95f else 0.4f) * (1f - f * 0.6f)).toInt()
-                line.strokeWidth = if (pass == 1) w else w + 3f * dp
-                c.drawLine(l.sx(pv[j * 2].toFloat()), l.sy(pv[j * 2 + 1].toFloat()), l.sx(pv[i * 2].toFloat()), l.sy(pv[i * 2 + 1].toFloat()), line)
-                i += 2
-            }
-        }
+        line.color = heatCol
+        line.alpha = 56
+        line.strokeWidth = 6.2f * k0
+        c.drawPath(path, line)
         line.alpha = 255
-        if (n >= 6) {
-            val lx = pv[(n - 1) * 2].toFloat(); val ly = pv[(n - 1) * 2 + 1].toFloat()
-            val vx = lx - pv[(n - 6) * 2]; val vy = ly - pv[(n - 6) * 2 + 1]
-            val vl = max(1f, kotlin.math.hypot(vx, vy))
-            for (b in 1..3) {
-                val x = l.sx(lx + vx / vl * b * 28f); val y = l.sy(ly + vy / vl * b * 28f - b * b * 3f)
-                val rad = (3.4f - b * 0.6f) * k0
-                fill.color = col; fill.alpha = ((0.85f - b * 0.2f) * 255).toInt(); c.drawCircle(x, y, rad, fill)
-                line.color = ink; line.strokeWidth = 1f * dp; line.alpha = fill.alpha; c.drawCircle(x, y, rad, line)
+
+        // Tapering cream-to-gold-to-ember pearl beads strictly along core preview points.
+        val targetBeads = 13
+        val step = max(1, (n - 1) / targetBeads)
+        var i = 0
+        while (i < n) {
+            val frac = i.toFloat() / max(1, n - 1)
+            val sx = l.sx(pv[i * 2].toFloat())
+            val sy = l.sy(pv[i * 2 + 1].toFloat())
+            val rad = (5.0f * (1f - frac * 0.56f)) * k0
+            val fade = 1f - frac * 0.42f
+            val alpha = (fade * 245f).toInt().coerceIn(55, 255)
+            // Warm sunlit outer halo
+            fill.color = heatCol; fill.alpha = (fade * 68f).toInt().coerceIn(18, 90)
+            c.drawCircle(sx, sy, rad * 1.55f, fill)
+            // Pearl fill + espresso ink outline
+            fill.color = if (frac > 0.72f && pClamped >= 80) heatCol else pearlCol
+            fill.alpha = alpha
+            c.drawCircle(sx, sy, rad, fill)
+            line.color = ink; line.strokeWidth = 1.25f * dp; line.alpha = alpha
+            c.drawCircle(sx, sy, rad, line)
+            // Sunlit top-left specular gleam on nearer beads
+            if (frac < 0.65f && rad >= 2.6f * dp) {
+                fill.color = Color.WHITE; fill.alpha = (fade * 170f).toInt()
+                c.drawCircle(sx - rad * 0.28f, sy - rad * 0.28f, rad * 0.30f, fill)
             }
-            fill.alpha = 255; line.alpha = 255
+            // Subtle wind-drift wisps off the final 3 core preview beads proportional to wind.
+            if (wind != 0 && i >= n - step * 3) {
+                val wLen = (wind.coerceIn(-8, 8) * 1.8f) * k0
+                line.color = 0xFFFFF7E2.toInt(); line.alpha = (fade * 145f).toInt(); line.strokeWidth = 1.2f * dp
+                c.drawLine(sx, sy, sx + wLen, sy - 0.6f * dp, line)
+            }
+            if (i == n - 1) break
+            i = min(n - 1, i + step)
         }
+        fill.alpha = 255; line.alpha = 255
+    }
+
+    /** Index of the newest Ghost with a Pin of [hob], or -1. */
+    private fun lastGhostIndexOf(f: Frame, hob: Hob): Int {
+        var bestIdx = -1
+        var bestRound = Int.MIN_VALUE
+        val gs = f.ghosts
+        for (i in gs.indices) {
+            val g = gs[i]
+            if (g.side == hob.side && g.hob == hob.id && g.hasPin && g.round >= bestRound) {
+                bestIdx = i
+                bestRound = g.round
+            }
+        }
+        return bestIdx
     }
 
     /** The newest Ghost with a Pin of [hob], or null. */
     private fun lastGhostOf(f: Frame, hob: Hob): Ghost? {
-        var best: Ghost? = null
-        for (g in f.ghosts) if (g.side == hob.side && g.hob == hob.id && g.hasPin && (best == null || g.round >= best.round)) best = g
-        return best
+        val idx = lastGhostIndexOf(f, hob)
+        return if (idx >= 0) f.ghosts[idx] else null
+    }
+
+    /** Populates [missPinX], [missPinY], [missN], [missShort] for [hob]'s newest Pin; returns false when hit/self-hit/none. */
+    private fun computeMiss(f: Frame, hob: Hob): Boolean {
+        val g = lastGhostOf(f, hob) ?: return false
+        if (g.selfHit) return false
+        val mine = f.castles.firstOrNull { it.side == hob.side } ?: return false
+        val rival = f.castles.firstOrNull { it.side != hob.side } ?: return false
+        val blockSz = max(1, rival.block).toFloat()
+        val rx0 = rival.x.toFloat(); val rx1 = rx0 + rival.cols * blockSz
+        val px = g.pinX.toFloat()
+        val toward = if ((rx0 + rx1) * 0.5f > mine.x + mine.cols * max(1, mine.block) * 0.5f) 1 else -1
+        val edge = if (px < rx0) rx0 else rx1
+        val n: Int
+        val short: Boolean
+        if (g.hasMissBlocks) {
+            if (g.missBlocks == 0) return false
+            n = kotlin.math.abs(g.missBlocks)
+            short = if (g.missBlocks < 0) true else if (px !in rx0..rx1) (px - edge) * toward < 0 else false
+        } else {
+            if (px in rx0..rx1) return false
+            n = max(1, kotlin.math.round(kotlin.math.abs(px - edge) / blockSz).toInt())
+            short = (px - edge) * toward < 0
+        }
+        missPinX = px; missPinY = g.pinY.toFloat(); missN = n; missShort = short
+        return true
+    }
+
+    private fun missText(n: Int, short: Boolean): String {
+        if (n != cacheMissN || short != cacheMissShort || cacheMissStr.isEmpty()) {
+            cacheMissN = n; cacheMissShort = short
+            val key = if (short) (if (n == 1) "hud.miss_short_one" else "hud.miss_short") else (if (n == 1) "hud.miss_long_one" else "hud.miss_long")
+            cacheMissStr = Text.t(key, "n" to n)
+        }
+        return cacheMissStr
     }
 
     private fun drawMissTag(c: Canvas, l: Lens, f: Frame, hob: Hob) {
-        val g = lastGhostOf(f, hob) ?: return
-        val mine = f.castles.firstOrNull { it.side == hob.side } ?: return
-        val rival = f.castles.firstOrNull { it.side != hob.side } ?: return
-        val rx0 = rival.x.toFloat(); val rx1 = rx0 + rival.cols * rival.block
-        val px = g.pinX.toFloat()
-        if (px in rx0..rx1) return
-        val toward = if ((rx0 + rx1) / 2f > mine.x + mine.cols * mine.block / 2f) 1 else -1
-        val edge = if (px < rx0) rx0 else rx1
-        val n = max(1, kotlin.math.round(kotlin.math.abs(px - edge) / 16f).toInt())
-        val short = (px - edge) * toward < 0
-        val key = if (short) (if (n == 1) "hud.miss_short_one" else "hud.miss_short") else (if (n == 1) "hud.miss_long_one" else "hud.miss_long")
-        tag(c, l.rect, Text.t(key, "n" to n), l.sx(px), l.sy(g.pinY.toFloat()) - 44f * dp, ink)
+        if (!computeMiss(f, hob)) return
+        val sx = l.sx(missPinX); val sy = l.sy(missPinY)
+        // Only draw inside the lens that actually contains the Pin (fixes Portrait Bottom Lens phantom duplicate, H-A09).
+        if (sx < l.rect.left - 10f * dp || sx > l.rect.right + 10f * dp || sy < l.rect.top - 10f * dp || sy > l.rect.bottom + 10f * dp) return
+        tag(c, l.rect, missText(missN, missShort), sx, sy - 44f * dp, ink)
     }
 
     private fun tag(c: Canvas, rc: RectF, s: String, x: Float, y: Float, color: Int) {
@@ -465,89 +594,197 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         text.color = color; c.drawText(s, bx + w / 2, by + 14.5f * dp, text); text.color = ink
     }
 
-    private val quad = Path()
-
-    private fun drawAimBand(c: Canvas, l: Lens, f: Frame, hob: Hob, drag: FloatArray) {
-        val ax = drag[0]; val ay = drag[1]; val fx = drag[2]; val fy = drag[3]
-        val full = if (aimFull > 0f) aimFull else 0.4f * min(l.rect.width(), l.rect.height())
-        val inCancel = kotlin.math.hypot(fx - ax, fy - ay) < 12f * dp
-        val sgn = if (pointMode) -1f else 1f
-        // Direction from the anchor toward the finger for an aim angle in tenths.
-        fun along(angle: Int): FloatArray { val a = Math.toRadians(angle / 10.0); return floatArrayOf((-cos(a)).toFloat() * sgn, sin(a).toFloat() * sgn) }
-        line.pathEffect = null
-        if (!inCancel) {
-            val u = along(hob.angle); val ux = u[0]; val uy = u[1]
-            val nx = -uy; val ny = ux; val hw = 5f * dp
-            val seg = full / 10f; val pull = hob.power / 100f * full
-            fun quadTo(b0: Float, b1: Float) {
-                quad.rewind()
-                quad.moveTo(ax + ux * b0 + nx * hw, ay + uy * b0 + ny * hw); quad.lineTo(ax + ux * b1 + nx * hw, ay + uy * b1 + ny * hw)
-                quad.lineTo(ax + ux * b1 - nx * hw, ay + uy * b1 - ny * hw); quad.lineTo(ax + ux * b0 - nx * hw, ay + uy * b0 - ny * hw); quad.close()
-            }
-            for (k in 0 until 10) {
-                val b0 = k * seg + 1.5f * dp; val b1 = (k + 1) * seg - 1.5f * dp
-                quadTo(b0, b1)
-                fill.color = 0x8CFFF4DE.toInt(); c.drawPath(quad, fill)
-                line.color = ink; line.alpha = 150; line.strokeWidth = 1f * dp; c.drawPath(quad, line); line.alpha = 255
-                if (pull > b0) { quadTo(b0, min(b1, pull)); fill.color = aimHeat((k + 1) * 10); c.drawPath(quad, fill) }
-            }
-            val last = lastGhostOf(f, hob)
-            if (last != null) {
-                val v = along(last.angle); val d = last.power / 100f * full
-                val mx = ax + v[0] * d; val my = ay + v[1] * d
-                c.save(); c.rotate(Math.toDegrees(kotlin.math.atan2(v[1], v[0]).toDouble()).toFloat(), mx, my)
-                r.set(mx - 2.5f * dp, my - 11f * dp, mx + 2.5f * dp, my + 11f * dp)
-                fill.color = 0xFFFFF4DE.toInt(); c.drawRect(r, fill); line.color = ink; line.strokeWidth = 1.5f * dp; c.drawRect(r, line)
-                c.restore()
-                val dpw = hob.power - last.power; val da = (hob.angle - last.angle) / 10f
-                fun sign(v: Float) = if (v > 0f) "+" else if (v < 0f) "\u2212" else "\u00B1"
-                val s = sign(dpw.toFloat()) + kotlin.math.abs(dpw) + " | " + sign(da) + String.format(java.util.Locale.ROOT, "%.1f", kotlin.math.abs(da)) + "\u00B0"
-                tag(c, l.rect, s, mx + nx * 22f * dp, my + ny * 22f * dp, ink)
-            }
-        } else {
-            line.color = ink; line.alpha = 115; line.strokeWidth = 4f * dp; c.drawLine(ax, ay, fx, fy, line); line.alpha = 255
+    private fun aimPillText(side: Int, angle: Int, power: Int): String {
+        if (side != cachePillSide || angle != cachePillAngle || power != cachePillPower || cachePillStr.isEmpty()) {
+            cachePillSide = side; cachePillAngle = angle; cachePillPower = power
+            val elev = if (side == 1) (1800 - angle).coerceIn(0, 1800) else angle.coerceIn(0, 1800)
+            cachePillStr = String.format(java.util.Locale.ROOT, "%.1f\u00B0 \u00B7 %d%%", elev / 10f, power.coerceIn(0, 100))
         }
-        // The cancel spot.
-        val red = 0xFFE5484D.toInt(); val paper = 0xFFFFF4DE.toInt()
-        fill.color = if (inCancel) red else paper; c.drawCircle(ax, ay, 15f * dp, fill)
-        line.color = ink; line.strokeWidth = 2f * dp; c.drawCircle(ax, ay, 15f * dp, line)
-        line.color = if (inCancel) paper else ink; line.strokeWidth = 3f * dp
-        val q = 5.5f * dp
-        c.drawLine(ax - q, ay - q, ax + q, ay + q, line); c.drawLine(ax + q, ay - q, ax - q, ay + q, line)
-        if (inCancel) tag(c, l.rect, Text.t("hud.cancel_aim"), ax, ay - 30f * dp, red)
-        // Power and angle badges at the top of the lens.
-        val bw = 124f * dp; val top = l.rect.top + 64f * dp; val x0 = l.rect.centerX() - bw - 5f * dp
-        badge(c, x0, top, bw, true, Text.t("hud.power").uppercase(), "${hob.power}%", hob.power, 0f)
-        badge(c, x0 + bw + 10f * dp, top, bw, false, Text.t("hud.angle").uppercase(), String.format(java.util.Locale.ROOT, "%.1f\u00B0", hob.angle / 10f), hob.power, hob.angle / 10f)
+        return cachePillStr
     }
 
-    private fun badge(c: Canvas, x: Float, y: Float, w: Float, bolt: Boolean, title: String, value: String, power: Int, deg: Float) {
-        val h = 36f * dp
-        r.set(x, y, x + w, y + h)
-        fill.color = 0xE02B1E2E.toInt(); c.drawRoundRect(r, h / 2, h / 2, fill)
-        val cx = x + 18f * dp; val cy = y + 18f * dp
-        fill.color = 0xFFFFF4DE.toInt(); c.drawCircle(cx, cy, 14f * dp, fill)
-        if (bolt) {
-            quad.rewind()
-            quad.moveTo(cx + 2 * dp, cy - 9 * dp); quad.lineTo(cx - 5 * dp, cy + 1 * dp); quad.lineTo(cx, cy + 1 * dp)
-            quad.lineTo(cx - 2 * dp, cy + 9 * dp); quad.lineTo(cx + 5 * dp, cy - 1 * dp); quad.lineTo(cx, cy - 1 * dp); quad.close()
-            c.save(); c.clipPath(quad)
-            fill.color = aimHeat(power); val fr = power / 100f
-            c.drawRect(cx - 8 * dp, cy + 9 * dp - 18 * dp * fr, cx + 8 * dp, cy + 9 * dp, fill)
-            c.restore()
-            line.color = ink; line.strokeWidth = 1.2f * dp; c.drawPath(quad, line)
-        } else {
-            c.save(); c.rotate(-deg, cx, cy)
-            line.color = ink; line.strokeWidth = 2.2f * dp; c.drawLine(cx - 7 * dp, cy, cx + 5 * dp, cy, line)
-            quad.rewind(); quad.moveTo(cx + 9 * dp, cy); quad.lineTo(cx + 2 * dp, cy - 5 * dp); quad.lineTo(cx + 2 * dp, cy + 5 * dp); quad.close()
-            fill.color = ink; c.drawPath(quad, fill)
-            c.restore()
+    private fun aimDeltaText(side: Int, angle: Int, power: Int, lastAngle: Int, lastPower: Int): String {
+        val elevNow = if (side == 1) (1800 - angle).coerceIn(0, 1800) else angle.coerceIn(0, 1800)
+        val elevLast = if (side == 1) (1800 - lastAngle).coerceIn(0, 1800) else lastAngle.coerceIn(0, 1800)
+        val dA = elevNow - elevLast
+        val dP = power - lastPower
+        if (side != cacheDeltaSide || dA != cacheDeltaA || dP != cacheDeltaP || cacheDeltaStr.isEmpty()) {
+            cacheDeltaSide = side; cacheDeltaA = dA; cacheDeltaP = dP
+            val sA = if (dA > 0) "+" else if (dA < 0) "\u2212" else "\u00B1"
+            val sP = if (dP > 0) "+" else if (dP < 0) "\u2212" else "\u00B1"
+            cacheDeltaStr = String.format(
+                java.util.Locale.ROOT, "%s%.1f\u00B0 \u00B7 %s%d%%",
+                sA, kotlin.math.abs(dA) / 10f, sP, kotlin.math.abs(dP),
+            )
         }
-        val al = text.textAlign
-        text.textAlign = Paint.Align.LEFT; text.color = 0xFFFFF4DE.toInt()
-        text.textSize = 10f * dp; c.drawText(title, x + 38f * dp, y + 14f * dp, text)
-        text.textSize = 15f * dp; c.drawText(value, x + 38f * dp, y + 30f * dp, text)
-        text.textAlign = al; text.color = ink
+        return cacheDeltaStr
+    }
+
+    /**
+     * Award-winning unclipped Aim Overlay drawn AFTER lens clip restore (H-A03, H-A08, M-A02, M-A03):
+     * - Curved Radial Brass Tension Arc (~84 dp radius) hugging the fort with 10 brass ticks and warm tension fill
+     * - Armed crimson outer ring when Quick Fire is enabled and armed (H-A08)
+     * - Ivory-and-brass Last-Shot Notch directly on the arc
+     * - Elastic braided-leather pull line + subtle tremor at 92-100% power
+     * - Soft dashed amber Home-Return Cancel Halo (20 dp unified radius; never covers the Hob's face with a black X)
+     * - Single clean clamped parchment pill using live drag angle/power & intuitive Side 1 elevation
+     */
+    fun drawAimOverlay(
+        c: Canvas, l: Lens, f: Frame, drag: FloatArray,
+        liveAngle: Int, livePower: Int, inCancelNow: Boolean,
+        tall: Boolean, viewW: Float, viewH: Float,
+    ) {
+        val hob = f.selectedHob ?: return
+        if (f.phase != Phase.PLAN) return
+        val ax = drag[0]; val ay = drag[1]; val fx = drag[2]; val fy = drag[3]
+        val angle = if (liveAngle >= 0) liveAngle else hob.angle
+        val power = (if (livePower >= 0) livePower else hob.power).coerceIn(0, 100)
+        val cancelR = Aim.CANCEL_RADIUS_DP * dp
+        val dist = kotlin.math.hypot(fx - ax, fy - ay)
+        val inCancel = inCancelNow || dist < cancelR
+        val nearCancel = dist < 34f * dp
+        val pillTop = if (tall) (l.rect.top + 8f * dp) else (hudTopPad + 8f * dp)
+        screenRect.set(0f, max(0f, pillTop), max(1f, viewW), max(1f, viewH))
+
+        // Curved Radial Brass Tension Arc geometry (100% on-screen, never clips off edges or dock).
+        val baseArcR = (84f * dp).coerceAtMost(min(viewW, viewH) * 0.25f)
+        val sideRight = hob.side == 0
+        val useTopArch = if (sideRight) ax < baseArcR + 18f * dp else (viewW - ax) < baseArcR + 18f * dp
+        val startDeg: Float
+        val sweepDeg: Float
+        if (useTopArch) {
+            if (sideRight) { startDeg = 205f; sweepDeg = 130f } else { startDeg = 335f; sweepDeg = -130f }
+        } else {
+            if (sideRight) { startDeg = 120f; sweepDeg = 120f } else { startDeg = 60f; sweepDeg = -120f }
+        }
+        val minCy = pillTop + 44f * dp + if (useTopArch) baseArcR else baseArcR * 0.9f
+        val maxCy = max(minCy, viewH - (if (useTopArch) 24f * dp else baseArcR * 0.9f + 12f * dp))
+        val acx = ax.coerceIn(if (useTopArch) baseArcR + 12f * dp else 16f * dp, max(16f * dp, viewW - (if (useTopArch) baseArcR + 12f * dp else 16f * dp)))
+        val acy = ay.coerceIn(minCy, maxCy)
+        arcRect.set(acx - baseArcR, acy - baseArcR, acx + baseArcR, acy + baseArcR)
+
+        val last = lastGhostOf(f, hob)
+        val heatCol = aimHeat(power)
+        line.pathEffect = null
+
+        if (!inCancel) {
+            // 1. Diegetic braided-leather pull cord from anchor to thumb pouch (subtle micro-tremor at 92-100%).
+            val jitter = if (power >= 92 && !reduceMotion) sin(time * 62f) * 1.2f * dp else 0f
+            val tx = fx + jitter; val ty = fy - jitter * 0.6f
+            line.color = ink; line.alpha = 180; line.strokeWidth = 4.4f * dp
+            c.drawLine(ax, ay, tx, ty, line)
+            line.color = lerpColor(0xFF9C6638.toInt(), 0xFF5A3118.toInt(), power / 100f)
+            line.alpha = 235; line.strokeWidth = 2.6f * dp
+            c.drawLine(ax, ay, tx, ty, line)
+            // Leather thumb pouch ring
+            fill.color = 0xFF7A4B2A.toInt(); fill.alpha = 235; c.drawCircle(tx, ty, 5.5f * dp, fill)
+            line.color = brassMid; line.alpha = 240; line.strokeWidth = 1.6f * dp; c.drawCircle(tx, ty, 5.5f * dp, line)
+
+            // 2. Curved Radial Brass Tension Arc: espresso housing + warm parchment channel + tension fill.
+            line.color = ink; line.alpha = 195; line.strokeWidth = 13.5f * dp
+            c.drawArc(arcRect, startDeg, sweepDeg, false, line)
+            line.color = 0xD8FAF3E3.toInt(); line.alpha = 230; line.strokeWidth = 9.5f * dp
+            c.drawArc(arcRect, startDeg, sweepDeg, false, line)
+            if (power > 0) {
+                line.color = heatCol; line.alpha = 245; line.strokeWidth = 8.4f * dp
+                c.drawArc(arcRect, startDeg, sweepDeg * (power / 100f), false, line)
+                // Subtle hammered-brass rim gleam
+                line.color = brassHi; line.alpha = 135; line.strokeWidth = 1.6f * dp
+                c.drawArc(arcRect, startDeg, sweepDeg * (power / 100f), false, line)
+            }
+
+            // 3. Ten tactile riveted brass tick notches (0..100% by 10%).
+            for (k in 0..10) {
+                val deg = startDeg + sweepDeg * (k / 10f)
+                val rad = Math.toRadians(deg.toDouble())
+                val cs = cos(rad).toFloat(); val sn = sin(rad).toFloat()
+                val major = k == 0 || k == 5 || k == 10
+                val r0 = baseArcR - (if (major) 6.5f else 4.6f) * dp
+                val r1 = baseArcR + (if (major) 6.5f else 4.6f) * dp
+                line.color = ink; line.alpha = if (major) 235 else 165; line.strokeWidth = (if (major) 2f else 1.2f) * dp
+                c.drawLine(acx + cs * r0, acy + sn * r0, acx + cs * r1, acy + sn * r1, line)
+                if (major) {
+                    fill.color = brassHi; fill.alpha = 240
+                    c.drawCircle(acx + cs * (baseArcR + 0.2f), acy + sn * (baseArcR + 0.2f), 1.8f * dp, fill)
+                }
+            }
+
+            // 4. Ivory-and-brass Last-Shot Notch directly on the brass arc.
+            if (last != null) {
+                val lDeg = startDeg + sweepDeg * (last.power.coerceIn(0, 100) / 100f)
+                val lRad = Math.toRadians(lDeg.toDouble())
+                val lcs = cos(lRad).toFloat(); val lsn = sin(lRad).toFloat()
+                val ix0 = acx + lcs * (baseArcR - 9.5f * dp); val iy0 = acy + lsn * (baseArcR - 9.5f * dp)
+                val ix1 = acx + lcs * (baseArcR + 9.5f * dp); val iy1 = acy + lsn * (baseArcR + 9.5f * dp)
+                line.color = ink; line.alpha = 245; line.strokeWidth = 4.2f * dp; c.drawLine(ix0, iy0, ix1, iy1, line)
+                line.color = 0xFFFFF4DE.toInt(); line.strokeWidth = 2.2f * dp; c.drawLine(ix0, iy0, ix1, iy1, line)
+                val tipX = acx + lcs * (baseArcR + 10.5f * dp); val tipY = acy + lsn * (baseArcR + 10.5f * dp)
+                fill.color = brassMid; fill.alpha = 255; c.drawCircle(tipX, tipY, 3.2f * dp, fill)
+                line.color = ink; line.strokeWidth = 1.2f * dp; c.drawCircle(tipX, tipY, 3.2f * dp, line)
+            }
+
+            // 5. H-A08: Quick Fire Armed Crimson Outer Ring (unmistakable lift-to-fire warning!).
+            if (quickFire) {
+                val pulse = if (reduceMotion) 1f else 0.78f + 0.22f * sin(time * 7f)
+                val qR = baseArcR + 9f * dp
+                r.set(acx - qR, acy - qR, acx + qR, acy + qR)
+                line.color = 0xFFE5484D.toInt()
+                line.alpha = (pulse * 255f).toInt().coerceIn(180, 255)
+                line.strokeWidth = 2.6f * dp
+                c.drawArc(r, startDeg, sweepDeg, false, line)
+            }
+            fill.alpha = 255; line.alpha = 255
+        } else {
+            // Subtle dashed return line while finger sits inside Home-Return Cancel Halo.
+            line.color = 0xFFE5484D.toInt(); line.alpha = 150; line.strokeWidth = 2.2f * dp
+            line.pathEffect = cancelDash
+            c.drawLine(ax, ay, fx, fy, line)
+            line.pathEffect = null; line.alpha = 255
+        }
+
+        // 6. Soft Home-Return Cancel Halo (ZERO giant black X hiding the Hob's face!).
+        if (inCancel || nearCancel) {
+            val haloCol = if (inCancel) 0xFFE5484D.toInt() else orange
+            fill.color = haloCol; fill.alpha = if (inCancel) 58 else 38
+            c.drawCircle(ax, ay, cancelR, fill)
+            line.color = haloCol; line.alpha = if (inCancel) 245 else 195
+            line.strokeWidth = 2.4f * dp; line.pathEffect = cancelDash
+            c.drawCircle(ax, ay, cancelR, line)
+            line.pathEffect = null; fill.alpha = 255; line.alpha = 255
+            if (inCancel) tag(c, screenRect, cancelLabel, ax, ay - cancelR - 14f * dp, 0xFFE5484D.toInt())
+        } else {
+            // Whisper-subtle brass pivot ring so the Hob's expression stays 100% clear.
+            line.color = brassMid; line.alpha = 135; line.strokeWidth = 1.6f * dp
+            c.drawCircle(ax, ay, 5.5f * dp, line)
+            line.alpha = 255
+        }
+
+        // 7. Single clean clamped parchment telemetry pill at top of aim lens (M-A02, M-A03).
+        val mainStr = aimPillText(hob.side, angle, power)
+        val deltaStr = if (last != null && !inCancel) aimDeltaText(hob.side, angle, power, last.angle, last.power) else null
+        text.textSize = 14.5f * dp
+        val mainW = text.measureText(mainStr)
+        val deltaW = if (deltaStr != null) { text.textSize = 11.5f * dp; text.measureText(deltaStr) } else 0f
+        val pillW = max(mainW + 30f * dp, deltaW + 24f * dp)
+        val pillH = if (deltaStr != null) 40f * dp else 28f * dp
+        val px0 = (l.rect.centerX() - pillW * 0.5f).coerceIn(8f * dp, max(8f * dp, viewW - pillW - 8f * dp))
+        val py0 = pillTop.coerceIn(4f * dp, max(4f * dp, viewH - pillH - 8f * dp))
+        r.set(px0, py0, px0 + pillW, py0 + pillH)
+        fill.color = 0xF2FAF3E3.toInt(); c.drawRoundRect(r, 14f * dp, 14f * dp, fill)
+        line.color = if (quickFire && !inCancel) 0xFFE5484D.toInt() else brassLo
+        line.strokeWidth = if (quickFire && !inCancel) 2.2f * dp else 1.8f * dp
+        c.drawRoundRect(r, 14f * dp, 14f * dp, line)
+        // Small warm tension bead inside pill
+        val dotX = px0 + 13f * dp; val dotY = py0 + 14f * dp
+        fill.color = if (inCancel) 0xFFE5484D.toInt() else heatCol; c.drawCircle(dotX, dotY, 4.5f * dp, fill)
+        line.color = ink; line.strokeWidth = 1.1f * dp; c.drawCircle(dotX, dotY, 4.5f * dp, line)
+        text.color = ink; text.textSize = 14.5f * dp
+        c.drawText(mainStr, px0 + pillW * 0.5f + 5f * dp, py0 + 19f * dp, text)
+        if (deltaStr != null) {
+            text.color = 0xFF6E5742.toInt(); text.textSize = 11.5f * dp
+            c.drawText(deltaStr, px0 + pillW * 0.5f, py0 + 34.5f * dp, text)
+            text.color = ink
+        }
     }
 
     @Volatile var reduceMotion = false
@@ -556,9 +793,11 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
     /** Highlighted own-fort block [c, r] when targeting Mendglob (Android-H5). */
     @Volatile var mendTarget: Pair<Int, Int>? = null
     @Volatile var mendSide: Int = -1
-    /** The pull in px for power 100 (40% of the short side) and the drag mode, from the view. */
+    /** The pull in px for power 100 (40% of the short side), drag mode, Quick Fire armed cue, and Wide top HUD pad. */
     @Volatile var aimFull = 0f
     @Volatile var pointMode = false
+    @Volatile var quickFire = false
+    @Volatile var hudTopPad = 0f
 
     private fun hasProp(props: List<games.castleprotect.core.Prop>, id: Int): Boolean { for (i in props.indices) if (props[i].id == id) return true; return false }
 
@@ -600,8 +839,12 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
             }
             "roller" -> {
                 val sp = propRollerSp
-                if (sp != null) spriteAt(c, sp, px, py - 14f * u, max(24f * dp, 44f * l.scale))
-                else drawBigSmoothieJr(c, px, py, u)
+                if (sp != null) {
+                    sp.usedAt = stamp
+                    val hPx = max(24f * dp, 44f * l.scale)
+                    val su = if (sp.meta.h > 0f) hPx / sp.meta.h else u
+                    sprites.drawAnchored(c, sp, px, py, su, flip = false, dst = r, paint = bmp)
+                } else drawBigSmoothieJr(c, px, py, u)
             }
             "shears" -> {
                 val sp = propShearsSp
@@ -676,8 +919,9 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
     private fun drawTopiaryShears(c: Canvas, px: Float, py: Float, u: Float) {
         val sw = max(1.4f * dp, 1.7f * u)
         val open = if (reduceMotion) 14f else 14f + 7f * sin(time * 2.4f)
-        // Two crossed steel blades
-        for (sign in intArrayOf(-1, 1)) {
+        // Two crossed steel blades (zero per-frame array allocation, M-A03).
+        var sign = -1
+        while (sign <= 1) {
             c.save(); c.rotate(sign * open, px, py)
             path.rewind()
             path.moveTo(px, py - 3f * u)
@@ -692,6 +936,7 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
             fill.color = orange; c.drawRoundRect(r, 3.5f * u, 3.5f * u, fill)
             c.drawRoundRect(r, 3.5f * u, 3.5f * u, line)
             c.restore()
+            sign += 2
         }
         // Gleaming brass hinge rivet
         fill.color = brassMid; c.drawCircle(px, py, 5.2f * u, fill)
@@ -799,7 +1044,7 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
     private fun isFlattener(f: Frame, h: Hob): Boolean {
         if (h.dummy) return false
         if (h.def in FLATTENER_DEFS) return true
-        return h.side == 1 && !f.hud.human(1) && !fx.hasAnim("hob_${Sprites.hobKey(h.def)}_rival_idle")
+        return f.mode != "couch" && h.side == 1 && !f.hud.human(1) && !fx.hasAnim("hob_${Sprites.hobKey(h.def)}_rival_idle")
     }
 
     /** The lawn sign's words (`hud.signs`, the first is the 1-10 sign), split over two lines. */
@@ -990,7 +1235,13 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
             val flat = h.squashed
             if (flat) { c.save(); c.scale(1.18f, 0.55f, hx, hy) }
 
-            if (flattener) {
+            // Both Hobs and Flatteners play their FieldFx clip first (unblocking all 70 flattener_* clips, H-A01).
+            val anim = fx.hobClip(h)
+            val asp = anim?.let { fx.spriteOf(it) }
+            if (anim != null && asp != null) {
+                asp.usedAt = stamp
+                sprites.drawAnchored(c, asp, hx, hy, HOB_K * l.scale, flip = k.side == 1, dst = r, paint = bmp)
+            } else if (flattener) {
                 val flook = hobLook(h, team, flattener = true)
                 val fsp = when {
                     h.bonked -> flook.bonked[frame2 % 2]
@@ -1003,20 +1254,14 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
                     drawProceduralFlattener(c, hx, hy, l.scale, h, flip = k.side == 1)
                 }
             } else {
-                val anim = fx.hobClip(h)
-                val asp = anim?.let { fx.spriteOf(it) }
-                if (anim != null && asp != null) {
-                    sprites.drawAnchored(c, asp, hx, hy, HOB_K * l.scale, flip = k.side == 1, dst = r, paint = bmp)
-                } else {
-                    val look = hobLook(h, team, flattener = false)
-                    val sp = when {
-                        h.bonked -> look.bonked[frame2 % 2]
-                        selected && f.phase == Phase.PLAN -> look.aim[frame2 % 2]
-                        else -> look.idle[(frame2 + h.id) % 3]
-                    } ?: look.idle[0]
-                    if (sp != null) sprite(c, sp, l, h.x.toFloat(), h.y.toFloat() - dy, look.k, flip = k.side == 1)
-                    else drawProceduralHob(c, hx, hy, hr, col, h)
-                }
+                val look = hobLook(h, team, flattener = false)
+                val sp = when {
+                    h.bonked -> look.bonked[frame2 % 2]
+                    selected && f.phase == Phase.PLAN -> look.aim[frame2 % 2]
+                    else -> look.idle[(frame2 + h.id) % 3]
+                } ?: look.idle[0]
+                if (sp != null) sprite(c, sp, l, h.x.toFloat(), h.y.toFloat() - dy, look.k, flip = k.side == 1)
+                else drawProceduralHob(c, hx, hy, hr, col, h)
             }
 
             if (flat) { c.restore(); drawStars(c, hx, hy - 16f * l.scale, hr) }
@@ -1073,7 +1318,7 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
             val ly = l.sy(k.baseY.toFloat())
             val strideSp = if (walking) fx.legClip(k.side, leg % 2)?.let { fx.spriteOf(it) } else null
             val sp = strideSp ?: legSpBase
-            if (sp != null && walking) {
+            if (sp != null) {
                 sp.usedAt = stamp
                 val su = u * 1.1f
                 boxRect.set(lx - 13f * su, ly - 4f * su, lx + 15f * su, ly + 22f * su)
@@ -1233,11 +1478,16 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         }
     }
 
-    /** Boss 1-10 glowing vine-wrapped Sprinkler Root weak point (Plate 1 & 3). */
+    /** Boss 1-10 glowing vine-wrapped Sprinkler Root weak point (Plate 1 & 3, 4:5 aspect ratio preserved, L-A04). */
     private fun drawSprinklerRoot(c: Canvas, l: Lens, box: RectF) {
         val sp = propSprinklerRootSp
         if (sp != null) {
-            sprites.drawBox(c, sp, box, r, bmp)
+            sp.usedAt = stamp
+            val aspect = if (sp.meta.w > 0f && sp.meta.h > 0f) sp.meta.h / sp.meta.w else 1.25f
+            val w = box.width()
+            val h = w * aspect
+            tmpPropBox.set(box.left, box.bottom - h, box.right, box.bottom)
+            sprites.drawBox(c, sp, tmpPropBox, r, bmp)
             return
         }
         val cx = box.centerX(); val cy = box.centerY()
@@ -1453,7 +1703,9 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
             if (k.side == 0) c.drawRect(x - s, y - 2 * s, x + s, y, fill)
             else { path.rewind(); path.moveTo(x, y - 2.4f * s); path.lineTo(x + 1.2f * s, y - s * 1.2f); path.lineTo(x, y); path.lineTo(x - 1.2f * s, y - s * 1.2f); path.close(); c.drawPath(path, fill) }
         }
-        fillVisiblePins(f.ghosts)
+        val selHob = f.selectedHob
+        val keepIdx = if (f.phase == Phase.PLAN && selHob != null) lastGhostIndexOf(f, selHob) else -1
+        fillVisiblePins(f.ghosts, keepIdx)
         for (gi in f.ghosts.indices) {
             if (!isVisiblePinIndex(gi)) continue
             val g = f.ghosts[gi]
@@ -1467,6 +1719,23 @@ class BattleRenderer(private val sprites: Sprites, private val dp: Float, val fx
         line.color = ink; line.strokeWidth = 2 * dp
         bracket(c, rc, l1, pad, mw)
         if (l2 != null) bracket(c, rc, l2, pad, mw)
+        // Portrait valley miss pill on Field Strip when the picked Hob's miss Pin falls outside both lenses (H-A09).
+        if (l2 != null && f.phase == Phase.PLAN && f.hud.human(f.side) && selHob != null && computeMiss(f, selHob)) {
+            val in1 = l1.live && l1.sx(missPinX) in (l1.rect.left - 10f * dp)..(l1.rect.right + 10f * dp)
+            val in2 = l2.live && l2.sx(missPinX) in (l2.rect.left - 10f * dp)..(l2.rect.right + 10f * dp)
+            if (!in1 && !in2) {
+                val s = missText(missN, missShort)
+                text.textSize = 11f * dp
+                val pw = text.measureText(s) + 10f * dp
+                val ph = 18f * dp
+                val bx = (mx(missPinX) - pw * 0.5f).coerceIn(rc.left + 4f * dp, max(rc.left + 4f * dp, rc.right - pw - 4f * dp))
+                val by = rc.centerY() - ph * 0.5f
+                r.set(bx, by, bx + pw, by + ph)
+                fill.color = 0xF2FFF4DE.toInt(); c.drawRoundRect(r, 6f * dp, 6f * dp, fill)
+                line.color = ink; line.strokeWidth = 1.2f * dp; c.drawRoundRect(r, 6f * dp, 6f * dp, line)
+                text.color = ink; c.drawText(s, bx + pw * 0.5f, by + 13f * dp, text)
+            }
+        }
     }
 
     private fun bracket(c: Canvas, rc: RectF, l: Lens, pad: Float, mw: Float) {

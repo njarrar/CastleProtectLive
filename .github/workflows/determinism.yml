@@ -16,6 +16,12 @@ on:
       - "content/**"
       - "scripts/**"
       - ".github/workflows/determinism.yml"
+  pull_request:
+    paths:
+      - "core/**"
+      - "content/**"
+      - "scripts/**"
+      - ".github/workflows/determinism.yml"
   workflow_dispatch:
 
 permissions:
@@ -26,9 +32,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RUST_VERSION: "1.99.1"
+  RUST_VERSION: "1.97.0"
   NODE_VERSION: "22"
-  WASM_BINDGEN_VERSION: "0.2.130"
+  WASM_BINDGEN_VERSION: "0.2.100"
   CARGO_TERM_COLOR: always
 
 jobs:

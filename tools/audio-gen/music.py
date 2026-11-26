@@ -18,7 +18,17 @@ R = rng('music')
 
 # ---------------- instruments (mono, start at t = 0) ----------------
 _cache = {}
-_VEL_BR = (0.86, 1.0, 1.15)     # 3 discrete timbre/velocity layers: soft, neutral, accented
+_VEL_BR = (0.82, 0.91, 1.0, 1.09, 1.18)    # 5 discrete timbre/velocity layers: pp..ff
+_DETUNE_CENTS = (-4.5, -1.5, 1.5, 4.5)     # 4 deterministic micro-detune takes per note (anti machine-gun)
+
+
+def _note_hz(m, take=0):
+    cents = _DETUNE_CENTS[int(take) % len(_DETUNE_CENTS)]
+    return midi(m) * (2.0 ** (cents / 1200.0))
+
+
+def _vel_br(vel):
+    return _VEL_BR[max(0, min(len(_VEL_BR) - 1, int(vel)))]
 
 
 def cached(fn):
@@ -31,21 +41,22 @@ def cached(fn):
 
 
 @cached
-def banjo(m, dur, vel=1):
+def banjo(m, dur, vel=2, take=0):
     """Banjolele pluck: bright, short, a little twang."""
-    f = midi(m)
-    br = _VEL_BR[vel]
-    r = rng(f'banjo_{m}_{dur}_{vel}')
+    f = _note_hz(m, take)
+    br = _vel_br(vel)
+    r = rng(f'banjo_{m}_{dur}_{vel}_{take}')
     n = n_of(dur + 0.25)
     t = np.arange(n) / SR
     out = np.zeros(n)
+    ph0 = r.uniform(0, 0.35)
     for k in range(1, 15):
         fk = f * k * (1 + 0.0004 * k * k)
         if fk > 9000:
             break
-        a = abs(np.sin(k * np.pi * 0.17)) / k ** (0.6 / br)
-        out += a * np.exp(-t / (0.32 / (1 + 0.3 * k))) * np.sin(TAU * fk * t)
-    out *= 1 + 0.004 * np.sin(TAU * 5 * t)
+        a = abs(np.sin(k * np.pi * (0.16 + 0.006 * take))) / k ** (0.6 / br)
+        out += a * np.exp(-t / (0.32 / (1 + 0.3 * k))) * np.sin(TAU * fk * t + k * ph0)
+    out *= 1 + 0.004 * np.sin(TAU * (4.8 + 0.25 * take) * t)
     pick = noise(0.012, r, 1500, 6000) * decay(n_of(0.012), 0.003)
     kp = min(n, len(pick))
     out[:kp] += 0.5 * br * pick[:kp]
@@ -58,21 +69,22 @@ def banjo(m, dur, vel=1):
 
 
 @cached
-def pizz(m, dur, vel=1):
+def pizz(m, dur, vel=2, take=0):
     """Folk string pizzicato: warm woody pluck that cuts cleanly on phone speakers."""
-    f = midi(m)
-    br = _VEL_BR[vel]
-    r = rng(f'pizz_{m}_{dur}_{vel}')
+    f = _note_hz(m, take)
+    br = _vel_br(vel)
+    r = rng(f'pizz_{m}_{dur}_{vel}_{take}')
     n = n_of(dur + 0.18)
     t = np.arange(n) / SR
     out = np.zeros(n)
+    ph0 = r.uniform(0, 0.4)
     for k in range(1, 11):
         fk = f * k * (1 + 0.0002 * k * k)
         if fk > 7500:
             break
-        a = abs(np.sin(k * np.pi * 0.22)) / k ** (0.85 / br)
+        a = abs(np.sin(k * np.pi * (0.21 + 0.006 * take))) / k ** (0.85 / br)
         body = 1.0 + 0.45 / np.sqrt(1 + ((fk - 720) / 380) ** 2)
-        out += a * body * np.exp(-t / (0.28 / (1 + 0.28 * k))) * np.sin(TAU * fk * t)
+        out += a * body * np.exp(-t / (0.28 / (1 + 0.28 * k))) * np.sin(TAU * fk * t + k * ph0)
     pluck = noise(0.009, r, 950, 4200) * decay(n_of(0.009), 0.0025)
     kp = min(n, len(pluck))
     out[:kp] += 0.38 * br * pluck[:kp]
@@ -80,29 +92,31 @@ def pizz(m, dur, vel=1):
 
 
 @cached
-def pbass(m, dur, vel=1):
+def pbass(m, dur, vel=2, take=0):
     """Plucked bass: round, with enough upper harmonics for a phone speaker."""
-    f = midi(m)
-    br = _VEL_BR[vel]
+    f = _note_hz(m, take)
+    br = _vel_br(vel)
+    r = rng(f'pbass_{m}_{dur}_{vel}_{take}')
     n = n_of(dur + 0.1)
     t = np.arange(n) / SR
     out = np.zeros(n)
+    ph0 = r.uniform(0, 0.3)
     for k in range(1, 10):
-        a = abs(np.sin(k * np.pi * 0.25)) / k ** 0.9 + (0.25 * br if k in (2, 3, 4) else 0)
-        out += a * np.exp(-t / (0.6 / (1 + 0.25 * k))) * np.sin(TAU * f * k * t)
+        a = abs(np.sin(k * np.pi * (0.24 + 0.005 * take))) / k ** 0.9 + (0.25 * br if k in (2, 3, 4) else 0)
+        out += a * np.exp(-t / (0.6 / (1 + 0.25 * k))) * np.sin(TAU * f * k * t + k * ph0)
     return out * ar(n, 0.003, 0.08) * 0.6
 
 
 @cached
-def tuba(m, dur, vel=1):
+def tuba(m, dur, vel=2, take=0):
     """Toy tuba: soft puffed 'oom'."""
-    f = midi(m)
-    br = _VEL_BR[vel]
-    r = rng(f'tuba_{m}_{dur}_{vel}')
+    f = _note_hz(m, take)
+    br = _vel_br(vel)
+    r = rng(f'tuba_{m}_{dur}_{vel}_{take}')
     n = n_of(dur)
     t = np.arange(n) / SR
-    fr = f * (1 - 0.02 * np.exp(-t / 0.03))
-    ph = TAU * np.cumsum(fr) / SR
+    fr = f * (1 - (0.018 + 0.002 * take) * np.exp(-t / 0.03))
+    ph = TAU * np.cumsum(fr) / SR + r.uniform(0, 0.25)
     env = ar(n, 0.035, min(0.09, dur * 0.4)) * (0.8 + 0.2 * np.exp(-t / 0.15))
     out = np.zeros(n)
     for k in range(1, 13):
@@ -115,15 +129,16 @@ def tuba(m, dur, vel=1):
 
 
 @cached
-def whistle(m, dur, vel=1):
+def whistle(m, dur, vel=2, take=0):
     """Tin whistle: nearly pure, breathy, with a chiff."""
-    f = midi(m)
-    br = _VEL_BR[vel]
-    r = rng(f'whistle_{m}_{dur}_{vel}')
+    f = _note_hz(m, take)
+    br = _vel_br(vel)
+    r = rng(f'whistle_{m}_{dur}_{vel}_{take}')
     n = n_of(dur)
     t = np.arange(n) / SR
     vph = r.uniform(0, TAU)
-    vib = 1 + 0.006 * np.sin(TAU * 5.3 * t + vph) * np.clip((t - 0.12) / 0.15, 0, 1)
+    vrate = 5.1 + 0.18 * take
+    vib = 1 + 0.006 * np.sin(TAU * vrate * t + vph) * np.clip((t - 0.12) / 0.15, 0, 1)
     fr = f * vib * (1 + 0.015 * np.exp(-t / 0.012))
     env = ar(n, 0.022, min(0.05, dur * 0.3))
     tone = osc(fr, harm=(1, 0.14 * br, 0.06 * br, 0.02 * br)) * env
@@ -135,38 +150,40 @@ def whistle(m, dur, vel=1):
 
 
 @cached
-def mbox(m, dur, vel=1):
+def mbox(m, dur, vel=2, take=0):
     """Music box tine."""
-    f = midi(m)
-    br = _VEL_BR[vel]
-    r = rng(f'mbox_{m}_{dur}_{vel}')
+    f = _note_hz(m, take)
+    br = _vel_br(vel)
+    r = rng(f'mbox_{m}_{dur}_{vel}_{take}')
     d = max(dur, 0.25) + 0.5
     x = modal([(f, 1, 0.5), (f * 2.0, 0.12 * br, 0.25), (f * 5.4, 0.3 * br, 0.05), (f * 8.9, 0.12 * br, 0.02)], d, r)
     return x * ar(len(x), 0.001, 0.1) * 0.45
 
 
 @cached
-def tina(m, dur, vel=1):
+def tina(m, dur, vel=2, take=0):
     """Concertina: two reeds a hair apart."""
-    f = midi(m)
-    br = _VEL_BR[vel]
+    f = _note_hz(m, take)
+    br = _vel_br(vel)
+    r = rng(f'tina_{m}_{dur}_{vel}_{take}')
     n = n_of(dur)
     t = np.arange(n) / SR
-    env = ar(n, 0.05, min(0.1, dur * 0.4)) * (1 + 0.05 * np.sin(TAU * 5 * t))
+    env = ar(n, 0.05, min(0.1, dur * 0.4)) * (1 + 0.05 * np.sin(TAU * (4.8 + 0.18 * take) * t + r.uniform(0, TAU)))
     harm = tuple((1.0 if k % 2 else 0.55) / k ** (1.1 / br) for k in range(1, 12))
-    a = osc(np.full(n, f * 1.0025), harm=harm)
-    b = osc(np.full(n, f * 0.9975), harm=harm, phase0=1.0)
+    a = osc(np.full(n, f * 1.0025), harm=harm, phase0=r.uniform(0, 0.4))
+    b = osc(np.full(n, f * 0.9975), harm=harm, phase0=1.0 + r.uniform(0, 0.4))
     return filt((a + b) * env, 150, 4500) * 0.22
 
 
 @cached
-def horn(m, dur, vel=1):
+def horn(m, dur, vel=2, take=0):
     """Soft toy brass: gets brighter as it gets louder."""
-    f = midi(m)
-    br = _VEL_BR[vel]
+    f = _note_hz(m, take)
+    br = _vel_br(vel)
+    r = rng(f'horn_{m}_{dur}_{vel}_{take}')
     n = n_of(dur)
     t = np.arange(n) / SR
-    fr = f * (1 - 0.012 * np.exp(-t / 0.025)) * (1 + 0.004 * np.sin(TAU * 5 * t) * np.clip(t / 0.3, 0, 1))
+    fr = f * (1 - 0.012 * np.exp(-t / 0.025)) * (1 + 0.004 * np.sin(TAU * (4.8 + 0.15 * take) * t + r.uniform(0, TAU)) * np.clip(t / 0.3, 0, 1))
     ph = TAU * np.cumsum(fr) / SR
     env = ar(n, 0.03, min(0.08, dur * 0.4)) * (0.75 + 0.25 * np.exp(-t / 0.2))
     out = np.zeros(n)
@@ -179,7 +196,7 @@ def horn(m, dur, vel=1):
 
 def _perc(var=0):
     r = rng(f'perc_{var}')
-    det = (0.985, 1.0, 1.015)[var]
+    det = (0.980, 0.990, 1.0, 1.010, 1.020)[var]
     p = {}
     n = n_of(0.07)
     t = np.arange(n) / SR
@@ -206,13 +223,13 @@ def _perc(var=0):
     return p
 
 
-PERC_VARS = [_perc(v) for v in range(3)]
-PERC = PERC_VARS[1]
+PERC_VARS = [_perc(v) for v in range(5)]
+PERC = PERC_VARS[2]
 INS = dict(banjo=banjo, pizz=pizz, pbass=pbass, tuba=tuba, whistle=whistle, mbox=mbox, tina=tina, horn=horn)
 
 CHORDS = {   # root pitch class name, third and fifth as semitone steps
     'G': ('G', 4, 7), 'C': ('C', 4, 7), 'D': ('D', 4, 7), 'Em': ('E', 3, 7), 'Am': ('A', 3, 7),
-    'Bm': ('B', 3, 7), 'A7': ('A', 4, 7), 'D7': ('D', 4, 7),
+    'Bm': ('B', 3, 7), 'A7': ('A', 4, 7), 'D7': ('D', 4, 7), 'B7': ('B', 4, 7),
 }
 
 
@@ -236,6 +253,7 @@ class Stem:
         self.dry = np.zeros((2, self.n + self.tail + SR))
         self.send = np.zeros((2, self.n + self.tail + SR))
         self.hr = rng(seed)
+        self._last_take = {}
 
     def at(self, u):
         return int(round(u * self.unit))
@@ -255,24 +273,31 @@ class Stem:
         self.send[0, a:a + e] += wet * l * sig[:e]
         self.send[1, a:a + e] += wet * r * sig[:e]
 
-    def _humanize(self, u, gain, late, jitter):
-        vm = float(self.hr.uniform(0.90, 1.10))
-        vel = 0 if vm < 0.96 else (2 if vm > 1.04 else 1)
+    def _humanize(self, u, gain, late, jitter, key='note'):
+        vm = float(self.hr.uniform(0.88, 1.12))
+        vel = int(np.clip(round((vm - 0.88) / 0.24 * (len(_VEL_BR) - 1)), 0, len(_VEL_BR) - 1))
+        # Anti-repeat deterministic micro-detune take so back-to-back notes never machine-gun
+        n_takes = len(_DETUNE_CENTS)
+        prev = self._last_take.get(key, -1)
+        take = int(self.hr.integers(0, n_takes))
+        if take == prev:
+            take = (take + 1 + int(self.hr.integers(0, n_takes - 1))) % n_takes
+        self._last_take[key] = take
         if jitter > 0:
             dt = float(self.hr.uniform(0.0, jitter) if (self.loop and u <= 0) else self.hr.uniform(-jitter, jitter))
         else:
             dt = 0.0
-        return gain * vm, late + dt, vel
+        return gain * vm, late + dt, vel, take
 
     def hit(self, name, u, gain=1.0, pan=0.0, wet=0.2, late=0.0, jitter=0.008):
         """Place a humanized percussion hit with deterministic velocity, micro-timing and variant."""
-        g, lt, vel = self._humanize(u, gain, late, jitter)
+        g, lt, vel, _ = self._humanize(u, gain, late, jitter, key=f'perc_{name}')
         self.put(PERC_VARS[vel][name], u, g, pan, wet, lt)
 
     def play(self, ins, m, u, units, gain=1.0, pan=0.0, wet=0.2, late=0.0, hold=0.92, jitter=0.008):
         dur = round(units * hold * self.unit / SR, 4)
-        g, lt, vel = self._humanize(u, gain, late, jitter)
-        self.put(INS[ins](int(m), dur, vel), u, g, pan, wet, lt)
+        g, lt, vel, take = self._humanize(u, gain, late, jitter, key=f'{ins}_{int(m)}')
+        self.put(INS[ins](int(m), dur, vel, take), u, g, pan, wet, lt)
 
     def line(self, ins, text, u0, gain=1.0, pan=0.0, wet=0.2, shift=0, hold=0.92, accent=None, jitter=0.008):
         """Play 'G4:2 B4:2 r:4' from unit u0. Returns the unit after the line."""
@@ -468,6 +493,79 @@ def r1_peril():
             s.play('horn', f1, u + 6, 1.5, 0.38, 0.22, 0.25)
             s.play('horn', r1 + 12, u + 6, 1.2, 0.22, -0.22, 0.25)
     return s.render('r1')
+
+
+# ---------------- Boss 1-10: Marshal Trimm's Topiary March ----------------
+# Optional 32-bar E-minor / E-Dorian march built on a pompous minor inversion of the Lump Tune
+# (108 bpm, 2/4, 35.56 s seamless stereo loop). Enabled via build.py --boss-theme.
+BOSS_BARS = 32
+BOSS_MEL_A = [
+    "E5:2 G5:2 B5:2 G5:2", "F#5:2 E5:1 D5:1 B4:2 E5:2", "C5:2 E5:2 D5:2 B4:2", "F#4:2 B4:2 E5:4",
+    "E5:2 G5:2 B5:2 C6:2", "B5:2 A5:1 G5:1 F#5:2 D5:2", "E5:2 G5:2 F#5:2 D5:2", "B4:2 F#5:2 E5:4",
+]
+BOSS_MEL_B = [
+    "G5:2 B5:2 D6:2 B5:2", "E5:2 G5:2 C6:2 G5:2", "A5:2 F#5:2 D5:2 F#5:2", "G5:2 B5:2 D5:4",
+    "E5:2 G5:2 B5:2 G5:2", "C5:2 E5:2 A5:2 E5:2", "F#5:2 D#5:2 B4:2 F#5:2", "B4:2 D#5:2 E5:4",
+]
+BOSS_TUNE = BOSS_MEL_A + BOSS_MEL_A + BOSS_MEL_B + BOSS_MEL_A
+BOSS_CH = (
+    ['Em', 'Em', 'C', 'B7', 'Em', 'Am', 'Bm', 'Em']
+    + ['Em', 'Em', 'Am', 'B7', 'Em', 'C', 'B7', 'Em']
+    + ['G', 'C', 'D', 'G', 'Em', 'Am', 'B7', 'B7/Em']
+    + ['Em', 'Em', 'C', 'B7', 'Em', 'Am', 'B7', 'Em']
+)
+
+
+def r1_boss():
+    """Boss 1-10 theme (The Topiary Keep): crisp Neat Brigade march vs defiant Lump Tune."""
+    s = Stem(BOSS_BARS * BAR, U1, seed='r1_boss')
+    acc = lambda u: 1.05 if u % 4 == 0 else 0.86
+    for b in range(BOSS_BARS):
+        u = b * BAR
+        sec = b // 8
+        h = _halves(BOSS_CH[b])
+        # Rigid stomping toy-tuba march bass
+        for i, c in enumerate(h):
+            root, third, fifth = chord_notes(c, 40)
+            low = root if (i == 0 or h[0] != h[1]) else (fifth - 12 if fifth - 12 >= 40 else fifth)
+            s.play('tuba', low, u + 4 * i, 2.2, 0.88, 0.0, 0.09, hold=0.85, jitter=0.004)
+            # Crisp pizzicato off-beat counter-chops
+            cr, ct, cf = chord_notes(c, 52)
+            s.play('pizz', cr, u + 4 * i + 2, 1.3, 0.34, 0.30, 0.16, hold=0.78, jitter=0.005)
+            s.play('pizz', cf, u + 4 * i + 2, 1.3, 0.28, 0.34, 0.16, late=0.005, hold=0.78, jitter=0.005)
+        # Pompous brass horn fanfare chords on downbeats & section turnarounds
+        r0, t0, f0 = chord_notes(h[0], 52)
+        if b % 2 == 0:
+            s.play('horn', r0, u, 2.8, 0.44, -0.24, 0.24, hold=0.88)
+            s.play('horn', f0, u, 2.8, 0.34, 0.24, 0.24, hold=0.88)
+        else:
+            s.play('horn', t0, u + 2, 1.6, 0.36, 0.24, 0.24, hold=0.84)
+            s.play('horn', r0 + 12, u + 6, 1.6, 0.32, -0.24, 0.24, hold=0.84)
+        # Lead melody: whistle + concertina/banjo trade-offs across sections
+        tune = BOSS_TUNE[b]
+        if sec == 2:
+            # Defiant Lump Tune breakthrough in bright G major before Trimm clamps back down
+            s.line('whistle', tune, u, 0.62, -0.22, 0.30, 0, accent=acc)
+            s.line('banjo', tune, u, 0.44, 0.28, 0.20, -12, accent=acc)
+        elif sec == 1:
+            s.line('whistle', tune, u, 0.58, -0.20, 0.28, 0, accent=acc)
+            s.line('mbox', tune, u, 0.42, 0.26, 0.30, 0, accent=acc)
+        else:
+            s.line('tina', tune, u, 0.66, 0.18, 0.26, 0, accent=acc)
+            s.line('whistle', tune, u, 0.48, -0.24, 0.30, 0, accent=acc)
+        # Clipped military snare-tick, spoons, and march drums
+        s.hit('drum_lo', u, 0.60, -0.10, 0.10, jitter=0.004)
+        s.hit('drum_lo', u + 4, 0.52, -0.10, 0.10, jitter=0.004)
+        for k in (2, 6):
+            s.hit('snare_tick', u + k, 0.52, -0.28, 0.14, jitter=0.004)
+            s.hit('spoon', u + k, 0.38, 0.32, 0.14, jitter=0.004)
+        s.hit('snare_tick', u + 7, 0.34, -0.28, 0.14, jitter=0.004)
+        for k in (0, 2, 4, 6):
+            s.hit('wash', u + k, 0.24 if k % 4 == 0 else 0.18, 0.24, 0.10, jitter=0.004)
+        if b % 8 == 7:
+            s.hit('cowbell', u + 4, 0.44, -0.32, 0.16, jitter=0.004)
+            s.hit('snare_tick', u + 5, 0.36, -0.28, 0.14, jitter=0.003)
+    return s.render('r1_boss')
 
 
 # ---------------- Brickabrac Map ----------------

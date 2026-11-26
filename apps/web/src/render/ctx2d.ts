@@ -16,7 +16,7 @@ export const SKIA_WEBKIT = !!nav
   && /AppleWebKit/.test(nav.userAgent) && !/Chrome|Chromium|Edg\//.test(nav.userAgent)
   && /Linux/i.test(nav.platform ?? '') && !/Android/i.test(nav.userAgent);
 
-/** A 2D context: CPU-backed on WebKit/Linux (see above), the browser's default elsewhere. */
-export function ctx2d(c: HTMLCanvasElement): CanvasRenderingContext2D {
-  return c.getContext('2d', SKIA_WEBKIT ? { willReadFrequently: true } : undefined)!;
+/** A 2D context: CPU-backed on WebKit/Linux or when `read` is true, the browser's default elsewhere. */
+export function ctx2d(c: HTMLCanvasElement, read = false): CanvasRenderingContext2D {
+  return c.getContext('2d', SKIA_WEBKIT || read ? { willReadFrequently: true } : undefined)!;
 }

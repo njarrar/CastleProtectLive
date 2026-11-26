@@ -42,7 +42,8 @@ struct BattleView: View {
                 } else {
                     WideHud(session: session, insets: insets, inspectedShot: $inspectedShot)
                 }
-                DragBandLayer(model: session.dragModel, side: session.hud.activeSide, colours: session.settings.colourSet)
+                DragBandLayer(model: session.dragModel, side: session.hud.activeSide,
+                              colours: session.settings.colourSet, layout: session.layout)
                 if let nudge = session.aimNudge {
                     // A drag from the sky: where to press, by your fort (QA playtest 2, owner rule).
                     SubtitleView(text: nudge.text, side: session.hud.activeSide, colours: session.settings.colourSet)
@@ -106,17 +107,24 @@ struct BattleView: View {
     @ViewBuilder
     private var keyboardShortcuts: some View {
         Group {
-            Button("") { _ = session.nudge(angle: 5, power: 0) }.keyboardShortcut(.upArrow, modifiers: [])
-            Button("") { _ = session.nudge(angle: -5, power: 0) }.keyboardShortcut(.downArrow, modifiers: [])
-            Button("") { _ = session.nudge(angle: 0, power: 1) }.keyboardShortcut(.rightArrow, modifiers: [])
-            Button("") { _ = session.nudge(angle: 0, power: -1) }.keyboardShortcut(.leftArrow, modifiers: [])
-            Button("") { session.fire() }.keyboardShortcut(.return, modifiers: [])
-            Button("") { session.fire() }.keyboardShortcut(.space, modifiers: [])
-            Button("") { session.recall() }.keyboardShortcut("r", modifiers: [])
-            Button("") { _ = session.walk(-1) }.keyboardShortcut("[", modifiers: [])
-            Button("") { _ = session.walk(1) }.keyboardShortcut("]", modifiers: [])
+            // M-I01: block gameplay shortcuts while ShellInspectCard is open; Escape closes it first.
+            Button("") { guard inspectedShot == nil else { return }; _ = session.nudge(angle: 5, power: 0) }.keyboardShortcut(.upArrow, modifiers: [])
+            Button("") { guard inspectedShot == nil else { return }; _ = session.nudge(angle: -5, power: 0) }.keyboardShortcut(.downArrow, modifiers: [])
+            Button("") { guard inspectedShot == nil else { return }; _ = session.nudge(angle: 0, power: 1) }.keyboardShortcut(.rightArrow, modifiers: [])
+            Button("") { guard inspectedShot == nil else { return }; _ = session.nudge(angle: 0, power: -1) }.keyboardShortcut(.leftArrow, modifiers: [])
+            Button("") { guard inspectedShot == nil else { return }; session.fire() }.keyboardShortcut(.return, modifiers: [])
+            Button("") { guard inspectedShot == nil else { return }; session.fire() }.keyboardShortcut(.space, modifiers: [])
+            Button("") { guard inspectedShot == nil else { return }; session.recall() }.keyboardShortcut("r", modifiers: [])
+            Button("") { guard inspectedShot == nil else { return }; _ = session.walk(-1) }.keyboardShortcut("[", modifiers: [])
+            Button("") { guard inspectedShot == nil else { return }; _ = session.walk(1) }.keyboardShortcut("]", modifiers: [])
             Button("") {
-                if session.paused { session.resume() } else { session.pause() }
+                if inspectedShot != nil {
+                    inspectedShot = nil
+                } else if session.paused {
+                    session.resume()
+                } else {
+                    session.pause()
+                }
             }.keyboardShortcut(.escape, modifiers: [])
         }
         .frame(width: 0, height: 0)
@@ -136,25 +144,27 @@ struct DragBandLayer: View {
     @ObservedObject var model: DragModel
     let side: Int
     let colours: ColourSet
+    let layout: BattleLayout
 
     var body: some View {
-        DragBandView(drag: model.overlay, side: side, colours: colours)
+        DragBandView(drag: model.overlay, side: side, colours: colours, layout: layout)
     }
 }
 
-/// Aim colour by power: blue at 0, orange near 89, red only from 90. Shape and numbers carry power too.
+/// Aim colour by power: Brickabrac blue -> dusk slate -> warm gold -> amber -> ember -> crimson (zero green).
 func aimHeat(_ power: Int) -> Color {
-    let p = Double(min(100, max(0, power)))
-    let hue = p >= 90 ? 4.0 : 205 - 175 * p / 89
-    return Color(hue: hue / 360, saturation: 0.78, brightness: 0.92)
+    let c = LensLayer.aimHeatRGB(power)
+    return Color(red: c.r, green: c.g, blue: c.b)
 }
 
-/// The Aim Drag: a 10 step power scale from the anchor that fills as you pull, the last shot's
-/// notch and the change from it, the cancel spot at the anchor, and power and angle badges.
+/// Award-Winning Aim Drag: Curved Radial Brass Tension Arc hugging the fort, 10 riveted brass
+/// tick notches, zero-green `aimHeat`, braided leather slingshot straps leaving Hob's face clear,
+/// ivory/brass Last-Shot Notch, soft dashed amber Home-Return Cancel Halo, and layout-aware top badges.
 struct DragBandView: View {
     let drag: DragOverlay?
     let side: Int
     let colours: ColourSet
+    let layout: BattleLayout
 
     /// The direction from the anchor toward the finger for an aim angle in tenths (screen, y down).
     private func along(_ angle: Int, _ d: DragOverlay) -> CGVector {
@@ -163,86 +173,272 @@ struct DragBandView: View {
         return CGVector(dx: -CGFloat(cos(r)) * s, dy: CGFloat(sin(r)) * s)
     }
 
-    private func quad(_ a: CGPoint, _ u: CGVector, _ b0: CGFloat, _ b1: CGFloat, _ hw: CGFloat) -> Path {
-        let n = CGVector(dx: -u.dy, dy: u.dx)
-        var p = Path()
-        p.move(to: CGPoint(x: a.x + u.dx * b0 + n.dx * hw, y: a.y + u.dy * b0 + n.dy * hw))
-        p.addLine(to: CGPoint(x: a.x + u.dx * b1 + n.dx * hw, y: a.y + u.dy * b1 + n.dy * hw))
-        p.addLine(to: CGPoint(x: a.x + u.dx * b1 - n.dx * hw, y: a.y + u.dy * b1 - n.dy * hw))
-        p.addLine(to: CGPoint(x: a.x + u.dx * b0 - n.dx * hw, y: a.y + u.dy * b0 - n.dy * hw))
-        p.closeSubpath()
-        return p
-    }
-
     private static func signed(_ v: Double, digits: Int) -> String {
         let s = v > 0 ? "+" : v < 0 ? "\u{2212}" : "\u{00B1}"
         return s + String(format: "%.\(digits)f", abs(v))
     }
 
+    /// Layout-aware badge Y centre avoiding Dynamic Island and top telemetry HUD (H-I02).
+    nonisolated static func badgeTopY(layout: BattleLayout, size: CGSize) -> CGFloat {
+        let raw: CGFloat
+        if layout.mode == .tall {
+            raw = layout.aimRegion.minY + 26
+        } else {
+            raw = (layout.lenses.first?.frame.minY ?? (layout.insets.top + 48)) + 26
+        }
+        let lo = layout.insets.top + 28
+        let hi = max(lo, size.height - layout.insets.bottom - 28)
+        return min(hi, max(lo, raw))
+    }
+
+    private struct ArcMetrics {
+        let midRad: Double
+        let startRad: Double
+        let sweepRad: Double
+        let radius: CGFloat
+    }
+
+    /// Computes a clip-proof center angle and radius for the 120-degree curved brass tension arc.
+    private func arcGeometry(for d: DragOverlay, in size: CGSize, topFloor: CGFloat) -> ArcMetrics {
+        let u = along(d.angle, d)
+        let pullRad = Double(atan2(u.dy, u.dx))
+        let desiredR = min(84, max(62, d.span * 0.48))
+        let padX: CGFloat = 20
+        let minX = layout.insets.left + padX
+        let maxX = max(minX + 1, size.width - layout.insets.right - padX)
+        let minY = max(layout.insets.top + 20, topFloor + 28)
+        let maxY = max(minY + 1, size.height - layout.insets.bottom - 20)
+        // Check if pulling along `pullRad` would clip an edge; if so, smoothly rotate arc toward interior.
+        let testX = d.anchor.x + CGFloat(cos(pullRad)) * desiredR
+        let testY = d.anchor.y + CGFloat(sin(pullRad)) * desiredR
+        let clips = testX < minX || testX > maxX || testY < minY || testY > maxY
+        let midRad: Double
+        if clips {
+            let cx = (minX + maxX) / 2
+            let cy = (minY + maxY) / 2
+            midRad = Double(atan2(cy - d.anchor.y, cx - d.anchor.x))
+        } else {
+            midRad = pullRad
+        }
+        // Keep arc radius cleanly inside available clearance along `midRad`.
+        let dx = CGFloat(cos(midRad)), dy = CGFloat(sin(midRad))
+        var maxR = desiredR
+        if dx > 0.05 { maxR = min(maxR, max(44, (maxX - d.anchor.x) / dx)) }
+        else if dx < -0.05 { maxR = min(maxR, max(44, (minX - d.anchor.x) / dx)) }
+        if dy > 0.05 { maxR = min(maxR, max(44, (maxY - d.anchor.y) / dy)) }
+        else if dy < -0.05 { maxR = min(maxR, max(44, (minY - d.anchor.y) / dy)) }
+        let sweepRad = Double.pi * 2.0 / 3.0 // 120 degrees
+        return ArcMetrics(midRad: midRad, startRad: midRad - sweepRad / 2, sweepRad: sweepRad, radius: max(44, min(desiredR, maxR)))
+    }
+
+    private func clampedPoint(_ p: CGPoint, in size: CGSize, halfW: CGFloat, halfH: CGFloat, topFloor: CGFloat) -> CGPoint {
+        let minX = layout.insets.left + halfW + 8
+        let maxX = max(minX, size.width - layout.insets.right - halfW - 8)
+        let minY = max(layout.insets.top + halfH + 8, topFloor + halfH + 26)
+        let maxY = max(minY, size.height - layout.insets.bottom - halfH - 8)
+        return CGPoint(x: min(maxX, max(minX, p.x)), y: min(maxY, max(minY, p.y)))
+    }
+
+    private var cancelText: String {
+        GameText.shared.complete("hud.release_to_cancel")
+            ?? GameText.shared.t("hud.cancel_aim", or: "Release to cancel")
+    }
+
+    /// Draws braided slingshot straps, Curved Radial Brass Tension Arc, 10 notches, Last-Shot Notch,
+    /// and soft Home-Return Cancel Halo in one fast `Canvas` pass.
+    private func drawArcCanvas(_ ctx: inout GraphicsContext, drag: DragOverlay, arc: ArcMetrics, cancelR: CGFloat) {
+        let anchor = drag.anchor
+        if drag.cancel {
+            var guide = Path()
+            guide.move(to: anchor)
+            guide.addLine(to: drag.finger)
+            ctx.stroke(guide, with: .color(Color(hex: 0xE5484D).opacity(0.45)),
+                       style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [4, 4]))
+        } else {
+            drawSlingshotAndArc(&ctx, drag: drag, arc: arc)
+        }
+        drawCancelHalo(&ctx, drag: drag, cancelR: cancelR)
+    }
+
+    private func drawSlingshotAndArc(_ ctx: inout GraphicsContext, drag: DragOverlay, arc: ArcMetrics) {
+        let anchor = drag.anchor
+        let u = along(drag.angle, drag)
+        let perp = CGVector(dx: -u.dy, dy: u.dx)
+        let postOffset: CGFloat = 15
+        let postA = CGPoint(x: anchor.x + perp.dx * postOffset, y: anchor.y + perp.dy * postOffset)
+        let postB = CGPoint(x: anchor.x - perp.dx * postOffset, y: anchor.y - perp.dy * postOffset)
+        let pouch = drag.end
+
+        // 1. Braided leather slingshot straps leaving Hob's face cleanly open.
+        let pNorm = Double(drag.power) / 100.0
+        let leatherFill = Color(red: 0.43 - 0.12 * pNorm, green: 0.27 - 0.08 * pNorm, blue: 0.14 - 0.05 * pNorm)
+        for post in [postA, postB] {
+            var strap = Path()
+            strap.move(to: post)
+            strap.addLine(to: pouch)
+            ctx.stroke(strap, with: .color(Theme.ink.opacity(0.85)),
+                       style: StrokeStyle(lineWidth: 6.5, lineCap: .round))
+            ctx.stroke(strap, with: .color(leatherFill),
+                       style: StrokeStyle(lineWidth: 3.8, lineCap: .round))
+        }
+        for post in [postA, postB] {
+            let rivet = Path(ellipseIn: CGRect(x: post.x - 3.2, y: post.y - 3.2, width: 6.4, height: 6.4))
+            ctx.fill(rivet, with: .color(Theme.brassHi))
+            ctx.stroke(rivet, with: .color(Theme.ink), lineWidth: 1.4)
+        }
+        let pouchPath = Path(ellipseIn: CGRect(x: pouch.x - 8, y: pouch.y - 8, width: 16, height: 16))
+        ctx.fill(pouchPath, with: .color(leatherFill))
+        ctx.stroke(pouchPath, with: .color(Theme.ink), lineWidth: 2)
+        let pouchShine = Path(ellipseIn: CGRect(x: pouch.x - 3.5, y: pouch.y - 4.5, width: 5, height: 3.5))
+        ctx.fill(pouchShine, with: .color(Theme.paper.opacity(0.45)))
+
+        // 2. Curved Radial Brass Tension Arc hugging the fort.
+        let r = arc.radius
+        let a0 = arc.startRad
+        let a1 = arc.startRad + arc.sweepRad
+
+        if drag.edgeLocked {
+            var edgeGlow = Path()
+            edgeGlow.addArc(center: anchor, radius: r, startAngle: .radians(a0), endAngle: .radians(a1), clockwise: false)
+            ctx.stroke(edgeGlow, with: .color(Theme.gold.opacity(0.50)),
+                       style: StrokeStyle(lineWidth: 18, lineCap: .round))
+        }
+        if drag.armed {
+            var armedRing = Path()
+            armedRing.addArc(center: anchor, radius: r + 8.5, startAngle: .radians(a0), endAngle: .radians(a1), clockwise: false)
+            ctx.stroke(armedRing, with: .color(Color(hex: 0xE5484D).opacity(0.92)),
+                       style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+        }
+
+        var track = Path()
+        track.addArc(center: anchor, radius: r, startAngle: .radians(a0), endAngle: .radians(a1), clockwise: false)
+        ctx.stroke(track, with: .color(Theme.ink.opacity(0.88)), style: StrokeStyle(lineWidth: 14, lineCap: .round))
+        ctx.stroke(track, with: .color(Color(hex: 0x4E3924).opacity(0.86)), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+
+        let frac = Double(min(100, max(0, drag.power))) / 100.0
+        let segSweep = arc.sweepRad / 10.0
+        for k in 0..<10 {
+            let lo = Double(k) / 10.0
+            let hi = Double(k + 1) / 10.0
+            guard frac > lo else { break }
+            let segEnd = a0 + min(frac, hi) * arc.sweepRad
+            let segStart = a0 + lo * arc.sweepRad + 0.012
+            guard segEnd > segStart else { continue }
+            var segPath = Path()
+            segPath.addArc(center: anchor, radius: r, startAngle: .radians(segStart), endAngle: .radians(segEnd), clockwise: false)
+            ctx.stroke(segPath, with: .color(aimHeat((k + 1) * 10)), style: StrokeStyle(lineWidth: 8.5, lineCap: .butt))
+            var rim = Path()
+            rim.addArc(center: anchor, radius: r - 2.2, startAngle: .radians(segStart), endAngle: .radians(segEnd), clockwise: false)
+            ctx.stroke(rim, with: .color(Theme.paper.opacity(0.32)), style: StrokeStyle(lineWidth: 1.5, lineCap: .butt))
+        }
+
+        // 10 riveted brass tick notches across the arc bezel.
+        for k in 0...10 {
+            let ang = a0 + Double(k) * segSweep
+            let major = (k == 0 || k == 5 || k == 10)
+            let innerR = r - (major ? 7.5 : 5.5)
+            let outerR = r + (major ? 7.5 : 5.5)
+            var tick = Path()
+            tick.move(to: CGPoint(x: anchor.x + CGFloat(cos(ang)) * innerR, y: anchor.y + CGFloat(sin(ang)) * innerR))
+            tick.addLine(to: CGPoint(x: anchor.x + CGFloat(cos(ang)) * outerR, y: anchor.y + CGFloat(sin(ang)) * outerR))
+            ctx.stroke(tick, with: .color(Theme.ink), lineWidth: major ? 3.2 : 2.2)
+            ctx.stroke(tick, with: .color(Theme.brassHi), lineWidth: major ? 1.6 : 1.1)
+        }
+
+        // Ivory & brass Last-Shot Notch directly on the arc.
+        if let lp = drag.lastPower {
+            let lf = Double(min(100, max(0, lp))) / 100.0
+            let lang = a0 + lf * arc.sweepRad
+            let rx = CGFloat(cos(lang)), ry = CGFloat(sin(lang))
+            let mx = anchor.x + rx * r, my = anchor.y + ry * r
+            let tx = -ry, ty = rx
+            var pin = Path()
+            pin.move(to: CGPoint(x: mx + rx * 10, y: my + ry * 10))
+            pin.addLine(to: CGPoint(x: mx + tx * 5.5, y: my + ty * 5.5))
+            pin.addLine(to: CGPoint(x: mx - rx * 10, y: my - ry * 10))
+            pin.addLine(to: CGPoint(x: mx - tx * 5.5, y: my - ty * 5.5))
+            pin.closeSubpath()
+            ctx.fill(pin, with: .color(Theme.paper))
+            ctx.stroke(pin, with: .color(Theme.ink), lineWidth: 1.8)
+            let coreDot = Path(ellipseIn: CGRect(x: mx - 2.3, y: my - 2.3, width: 4.6, height: 4.6))
+            ctx.fill(coreDot, with: .color(Theme.brassHi))
+        }
+    }
+
+    private func drawCancelHalo(_ ctx: inout GraphicsContext, drag: DragOverlay, cancelR: CGFloat) {
+        let anchor = drag.anchor
+        let halo = Path(ellipseIn: CGRect(x: anchor.x - cancelR, y: anchor.y - cancelR, width: cancelR * 2, height: cancelR * 2))
+        if drag.cancel {
+            ctx.fill(halo, with: .color(Color(hex: 0xE5484D).opacity(0.26)))
+            ctx.stroke(halo, with: .color(Color(hex: 0xE5484D)),
+                       style: StrokeStyle(lineWidth: 2.6, lineCap: .round, dash: [5, 4]))
+        } else if drag.nearCancel {
+            ctx.fill(halo, with: .color(Color(hex: 0xF5A623).opacity(0.18)))
+            ctx.stroke(halo, with: .color(Color(hex: 0xF5A623).opacity(0.90)),
+                       style: StrokeStyle(lineWidth: 2.2, lineCap: .round, dash: [5, 4]))
+        } else {
+            ctx.stroke(halo, with: .color(Theme.brassHi.opacity(0.24)),
+                       style: StrokeStyle(lineWidth: 1.4, lineCap: .round, dash: [3, 5]))
+        }
+    }
+
     var body: some View {
         if let drag {
             GeometryReader { geo in
+                let topY = Self.badgeTopY(layout: layout, size: geo.size)
+                let arc = arcGeometry(for: drag, in: geo.size, topFloor: topY)
+                let displayDeg = Double(HudState.displayAngleTenths(drag.angle, side: drag.side)) / 10
+                let cancelR = AimGesture.cancelRadius
                 ZStack(alignment: .topLeading) {
+                    Canvas { ctx, _ in
+                        drawArcCanvas(&ctx, drag: drag, arc: arc, cancelR: cancelR)
+                    }
+
+                    // Clamped delta whisper pill near the Last-Shot Notch.
+                    if !drag.cancel, let la = drag.lastAngle, let lp = drag.lastPower {
+                        let shownCur = HudState.displayAngleTenths(drag.angle, side: drag.side)
+                        let shownLast = HudState.displayAngleTenths(la, side: drag.side)
+                        let lf = Double(min(100, max(0, lp))) / 100.0
+                        let lang = arc.startRad + lf * arc.sweepRad
+                        let rawPos = CGPoint(x: drag.anchor.x + CGFloat(cos(lang)) * (arc.radius + 26),
+                                             y: drag.anchor.y + CGFloat(sin(lang)) * (arc.radius + 26))
+                        let clamped = clampedPoint(rawPos, in: geo.size, halfW: 64, halfH: 15, topFloor: topY)
+                        Text(Self.signed(Double(drag.power - lp), digits: 0) + "% \u{00B7} "
+                             + Self.signed(Double(shownCur - shownLast) / 10, digits: 1) + "\u{00B0}")
+                            .font(Theme.number(12))
+                            .foregroundStyle(Theme.ink)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Theme.paper.opacity(0.94)))
+                            .overlay(Capsule().stroke(Theme.ink, lineWidth: 1.5))
+                            .fixedSize()
+                            .position(clamped)
+                    }
+
+                    // Calm "Release to cancel" whisper pill inside cancel halo.
                     if drag.cancel {
-                        Path { p in p.move(to: drag.anchor); p.addLine(to: drag.finger) }
-                            .stroke(Theme.ink.opacity(0.45), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                    } else {
-                        let u = along(drag.angle, drag)
-                        let seg = drag.span / 10
-                        let pull = CGFloat(drag.power) / 100 * drag.span
-                        ForEach(0..<10, id: \.self) { k in
-                            let b0 = CGFloat(k) * seg + 1.5, b1 = CGFloat(k + 1) * seg - 1.5
-                            quad(drag.anchor, u, b0, b1, 5)
-                                .fill(Theme.paper.opacity(0.55))
-                                .overlay(quad(drag.anchor, u, b0, b1, 5)
-                                    .stroke(drag.armed ? Color(hex: 0xE5484D) : Theme.ink.opacity(0.6), lineWidth: drag.armed ? 2 : 1))
-                            if pull > b0 {
-                                quad(drag.anchor, u, b0, min(b1, pull), 5).fill(aimHeat((k + 1) * 10))
-                            }
-                        }
-                        if let la = drag.lastAngle, let lp = drag.lastPower {
-                            let v = along(la, drag)
-                            let d = CGFloat(lp) / 100 * drag.span
-                            let m = CGPoint(x: drag.anchor.x + v.dx * d, y: drag.anchor.y + v.dy * d)
-                            Rectangle()
-                                .fill(Theme.paper)
-                                .overlay(Rectangle().stroke(Theme.ink, lineWidth: 1.5))
-                                .frame(width: 5, height: 22)
-                                .rotationEffect(.radians(Double(atan2(v.dy, v.dx))))
-                                .position(m)
-                            Text(Self.signed(Double(drag.power - lp), digits: 0) + " | " + Self.signed(Double(drag.angle - la) / 10, digits: 1) + "\u{00B0}")
-                                .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(Theme.ink)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(RoundedRectangle(cornerRadius: 6).fill(Theme.paper.opacity(0.94)))
-                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.ink, lineWidth: 1.5))
-                                .position(x: m.x - v.dy * 24, y: m.y + v.dx * 24)
-                        }
+                        let rawCancelPos = CGPoint(x: drag.anchor.x, y: drag.anchor.y - cancelR - 18)
+                        let cancelPos = clampedPoint(rawCancelPos, in: geo.size, halfW: 76, halfH: 15, topFloor: topY)
+                        Text(cancelText)
+                            .font(Theme.label(12))
+                            .foregroundStyle(Color(hex: 0xC9363E))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Theme.paper.opacity(0.95)))
+                            .overlay(Capsule().stroke(Color(hex: 0xE5484D), lineWidth: 1.6))
+                            .fixedSize()
+                            .position(cancelPos)
                     }
-                    // The cancel spot: drag back onto it and let go to keep the old aim.
-                    ZStack {
-                        Circle().fill(drag.cancel ? Color(hex: 0xE5484D) : Theme.paper)
-                        Circle().stroke(Theme.ink, lineWidth: 2)
-                        Image(systemName: "xmark").font(.system(size: 12, weight: .heavy))
-                            .foregroundStyle(drag.cancel ? Theme.paper : Theme.ink)
-                    }
-                    .frame(width: 30, height: 30)
-                    .position(drag.anchor)
-                    if drag.cancel {
-                        Text(GameText.shared.t("hud.cancel_aim"))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color(hex: 0xE5484D))
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(Theme.paper.opacity(0.94)))
-                            .position(x: drag.anchor.x, y: max(20, drag.anchor.y - 32))
-                    }
-                    // Power and angle badges at the top, where the eyes are free.
+
+                    // Layout-aware top Power and Angle badges (H-I02, M-I05, Side 1 intuitive elevation).
                     HStack(spacing: 10) {
-                        AimBadge(bolt: true, title: GameText.shared.t("hud.power").uppercased(), value: "\(drag.power)%", power: drag.power, degrees: 0)
+                        AimBadge(bolt: true, title: GameText.shared.t("hud.power").uppercased(),
+                                 value: "\(drag.power)%", power: drag.power, degrees: 0)
                         AimBadge(bolt: false, title: GameText.shared.t("hud.angle").uppercased(),
-                                 value: String(format: "%.1f\u{00B0}", Double(drag.angle) / 10), power: drag.power, degrees: Double(drag.angle) / 10)
+                                 value: String(format: "%.1f\u{00B0}", displayDeg),
+                                 power: drag.power, degrees: Double(drag.angle) / 10)
                     }
-                    .position(x: geo.size.width / 2, y: 76)
+                    .position(x: geo.size.width / 2, y: topY)
                 }
             }
             .allowsHitTesting(false)
@@ -251,7 +447,8 @@ struct DragBandView: View {
     }
 }
 
-/// One aim badge: an icon in a light circle, a small title and the value.
+/// One aim badge: dynamic-type-safe title (`Theme.label(12)`) and value (`Theme.number(15)`),
+/// with bottom-to-top power fill inside the bolt glyph (M-I05).
 struct AimBadge: View {
     let bolt: Bool
     let title: String
@@ -260,13 +457,23 @@ struct AimBadge: View {
     let degrees: Double
 
     var body: some View {
+        let fillFrac = CGFloat(min(100, max(0, power))) / 100.0
         HStack(spacing: 8) {
             ZStack {
                 Circle().fill(Theme.paper)
                 if bolt {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Theme.ink.opacity(0.18))
+                        .frame(width: 20, height: 20)
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(aimHeat(power))
+                        .frame(width: 20, height: 20)
+                        .mask(alignment: .bottom) {
+                            Rectangle()
+                                .frame(height: 20 * fillFrac)
+                        }
                 } else {
                     Image(systemName: "arrow.right")
                         .font(.system(size: 13, weight: .bold))
@@ -276,14 +483,18 @@ struct AimBadge: View {
             }
             .frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 0) {
-                Text(title).font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.paper)
-                Text(value).font(.system(size: 15, weight: .bold).monospacedDigit()).foregroundStyle(Theme.paper)
+                Text(title).font(Theme.label(12)).foregroundStyle(Theme.paper.opacity(0.9))
+                Text(value).font(Theme.number(15)).foregroundStyle(Theme.paper)
             }
             Spacer(minLength: 0)
         }
-        .padding(.leading, 4)
-        .frame(width: 124, height: 36)
+        .padding(.leading, 5)
+        .padding(.trailing, 10)
+        .padding(.vertical, 3)
+        .frame(minWidth: 124, minHeight: 38)
+        .fixedSize()
         .background(Capsule().fill(Theme.ink.opacity(0.88)))
+        .overlay(Capsule().stroke(Theme.brassHi.opacity(0.65), lineWidth: 1.2))
     }
 }
 
@@ -510,6 +721,8 @@ struct ActionOptionsBar: View {
                             .padding(.horizontal, 10)
                             .frame(minHeight: 34)
                             .panel(corner: 10, fill: active ? Theme.gold : Theme.paper)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(!item.enabled)
@@ -533,6 +746,8 @@ struct ActionOptionsBar: View {
                     .padding(.horizontal, 10)
                     .frame(minHeight: 34)
                     .panel(corner: 10, fill: (session.pickingMendTarget || session.selectedBlockTarget != nil) ? Theme.gold : Theme.paper)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         } else if session.armedDoodad == "pot_lid" {
@@ -549,6 +764,8 @@ struct ActionOptionsBar: View {
                                 .padding(.horizontal, 10)
                                 .frame(minHeight: 34)
                                 .panel(corner: 10, fill: active ? Theme.gold : Theme.paper)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -565,13 +782,19 @@ struct ActionOptionsBar: View {
                     .frame(minHeight: 34)
                     .panel(corner: 10, fill: Theme.cream)
                 if count > 0 {
-                    Button(tx("common.clear")) { session.clearDoodadTargets() }
-                        .font(Theme.label(12))
-                        .foregroundStyle(Theme.ink)
-                        .padding(.horizontal, 8)
-                        .frame(minHeight: 34)
-                        .panel(corner: 10, fill: Theme.paper)
-                        .buttonStyle(.plain)
+                    Button {
+                        session.clearDoodadTargets()
+                    } label: {
+                        Text(tx("common.clear"))
+                            .font(Theme.label(12))
+                            .foregroundStyle(Theme.ink)
+                            .padding(.horizontal, 8)
+                            .frame(minHeight: 34)
+                            .panel(corner: 10, fill: Theme.paper)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -829,7 +1052,7 @@ struct PauseButton: View {
             SpriteIcon(name: "ui_pause", fallback: "pause.fill", size: compact ? 20 : 24)
                 .frame(width: compact ? 36 : 44, height: compact ? 32 : 40)
                 .hudTier3Pill(corner: 10)
-                .frame(minWidth: 48, minHeight: compact ? 34 : 48)
+                .frame(minWidth: 48, minHeight: compact ? 44 : 48)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

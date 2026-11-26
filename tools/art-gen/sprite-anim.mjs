@@ -3,7 +3,7 @@
 // and returns the text of assets/animations.json.
 // Rule for every frame set: all frames of one animation share one size and one anchor.
 import * as L from './lib.mjs';
-import { posedHob, HOBS, POSES, TEAMS, V01_FRAMES, NEXT_DOOR } from './sprite-hob.mjs';
+import { posedHob, HOBS, POSES, TEAMS, V01_FRAMES, NEXT_DOOR, HAT_DEDUP_HOBS } from './sprite-hob.mjs';
 import { posedFlattener } from './sprite-flattener.mjs';
 const { C, rr, circ, ell, path, line, g, star4, burst, clipped, f, MAT } = L;
 const ink = C.ink;
@@ -19,7 +19,7 @@ const scl = (inner, sx, sy, cx, cy) => g(inner, `translate(${f(cx)} ${f(cy)}) sc
 export function buildAnim({ add: addSprite, find, solidBlock, SHELLS, shared, HOB_NAME, FLATTENERS = {}, dedupHobs = false }) {
   const A = {};      // animations
   const add = (name, group, w, h, vb, body, purpose, o = {}) => addSprite(name, group, w, h, vb, body, purpose, o);
-  const resolveSprite = (n) => find(n) || (dedupHobs ? find(n.replace(/^(hob_[a-z]+)_(blue|orange)_/, '$1_neutral_')) : null);
+  const resolveSprite = (n) => find(n) || (dedupHobs ? find(n.replace(/^(hob_[a-z]+)_(blue|orange|rival)_/, '$1_neutral_')) : null);
   // anim(key, frames, ms, opts). ms = one number for all frames, or one per frame.
   // opts: loop, loop_from, events { name: frame index }, next (animation), hold (sprite), pick, note, random_start, start_offset_ms
   function anim(key, frames, ms, o = {}) {
@@ -72,7 +72,9 @@ export function buildAnim({ add: addSprite, find, solidBlock, SHELLS, shared, HO
       tumble: ['hangs in the air', 'falls, flail 1', 'falls, flail 2', 'falls, flail 3'], land: ['splat', 'pops back'],
       dig: ['pulls back', 'shoves the dirt out', 'clods fly'], nextdoor: ['glow low', 'glow high'],
     };
-    for (const tk of spriteTeams) {
+    const hobSpriteTeams = dedupHobs ? (HAT_DEDUP_HOBS.includes(hk) ? ['neutral'] : ['neutral', 'rival']) : spriteTeams;
+    for (const tk of hobSpriteTeams) {
+      const omitHat = dedupHobs && tk === 'neutral' && HAT_DEDUP_HOBS.includes(hk);
       const P = `hob_${hk}_${tk}_`;
       const who = tk === 'neutral' ? `${HOB_NAME[hk]}, neutral base` : tk === 'rival' ? `${HOB_NAME[hk]}, Rival look` : `${HOB_NAME[hk]}, ${tk} team`;
       for (const [pose, frames] of Object.entries(POSES)) {
@@ -82,7 +84,7 @@ export function buildAnim({ add: addSprite, find, solidBlock, SHELLS, shared, HO
           const i = from + j, tall = pose === 'bonked';
           const vb = tall ? [-60, -224, 144, 232] : [-60, -152, 144, 160];
           const extra = pose === 'nextdoor' ? ` Shows that ${NEXT_DOOR[hk]} is live` : '';
-          add(`${P}${pose}_${i}`, 'hobs', 72, vb[3] / 2, vb, posedHob(hk, tk, p), `${who}, ${pose} frame ${i}: ${what[pose][j]}.${extra} Faces right. Anchor is the feet`, { anchor: [30, -vb[1] / 2] });
+          add(`${P}${pose}_${i}`, 'hobs', 72, vb[3] / 2, vb, posedHob(hk, tk, omitHat ? { ...p, omitHat: true } : p), `${who}, ${pose} frame ${i}: ${what[pose][j]}.${extra} Faces right. Anchor is the feet`, { anchor: [30, -vb[1] / 2] });
         });
       }
     }

@@ -99,6 +99,43 @@ class Part2RedesignTest {
         assertEquals(200f, bounds[3], 1e-4f)
     }
 
+    @Test fun atlasIndexParsesMultiPageV2AtlasCleanly() {
+        val indexJson = """
+            {
+              "scale": 2,
+              "v2": true,
+              "trimmed": true,
+              "pages": ["castle@2x-0.json", "castle@2x-1.json"]
+            }
+        """.trimIndent()
+        val page0 = """
+            {
+              "image": "castle@2x-0.png",
+              "size": 2048,
+              "scale": 2,
+              "frames": {
+                "block_timber_fresh": { "x": 0, "y": 0, "w": 32, "h": 32, "scale": 2 }
+              }
+            }
+        """.trimIndent()
+        val page1 = """
+            {
+              "image": "castle@2x-1.png",
+              "size": 2048,
+              "scale": 2,
+              "frames": {
+                "hob_marge_neutral_idle_0": { "x": 4, "y": 4, "w": 76, "h": 138, "scale": 2 }
+              }
+            }
+        """.trimIndent()
+        val idx = AtlasIndex.parse(indexJson) { p ->
+            when (p) { "castle@2x-0.json" -> page0; "castle@2x-1.json" -> page1; else -> null }
+        }
+        assertEquals("castle@2x-0.png", idx.frameFor("block_timber_fresh")!!.page)
+        assertEquals("castle@2x-1.png", idx.frameFor("hob_marge_neutral_idle_0")!!.page)
+        assertEquals(2f, idx.frameFor("hob_marge_neutral_idle_0")!!.frameScale, 1e-6f)
+    }
+
     // ---- 2. Painterly stratified earth --------------------------------------
 
     @Test fun terrainStrataProducesDeterministicMultiToneTexturesPerMaterial() {

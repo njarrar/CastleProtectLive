@@ -740,7 +740,7 @@ fun NoticeBar(text: String, onOk: () -> Unit) {
     Box(Modifier.fillMaxSize().safeDrawingPadding().padding(12.dp), contentAlignment = Alignment.TopCenter) {
         Plate(Modifier.widthIn(max = 420.dp).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }, color = C.Cream) {
             Label(text, size = 13)
-            CastleButton("OK", onOk, Modifier.padding(top = 6.dp), color = C.Paper, size = 13)
+            CastleButton(Text.opt("common.ok") ?: Text.t("common.close"), onOk, Modifier.padding(top = 6.dp), color = C.Paper, size = 13)
         }
     }
 }

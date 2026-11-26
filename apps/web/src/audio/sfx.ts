@@ -13,7 +13,8 @@ export type Sfx =
   | 'tap' | 'fire' | 'whoosh' | 'hit' | 'break' | 'bonk' | 'thud' | 'turn' | 'turn2' | 'pennant' | 'pop' | 'squall'
   | 'sheet' | 'win' | 'lose' | 'walk' | 'creak' | 'whump' | 'coin' | 'handoff' | 'fire_press' | 'denied' | 'roll'
   | 'shears' | 'snip' | 'boom' | 'crock' | 'carve' | 'mound'
-  | 'aim_start' | 'aim_limit' | 'aim_recall' | 'aim_set' | 'aim_tick'
+  | 'aim_start' | 'aim_limit' | 'aim_recall' | 'aim_set' | 'aim_tick' | 'aim_ratchet_tick' | 'aim_release_twang' | 'aim_cancel_whoosh'
+  | 'hit_sub_thud'
   | 'mend_bucket' | 'mend_fizz' | 'ket_patch' | 'bounce' | 'fast_zip' | 'split'
   | 'title_jingle' | 'block_place' | 'hob_pick' | 'back' | 'card_take' | 'confirm' | 'slider_tick' | 'toggle_on' | 'steam'
   // One cue per event where one sound used to cover many (assets/audio/README.md).
@@ -134,7 +135,7 @@ export function unlockAudio(): boolean {
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = rand() * 2 - 1;
-    void manifestP?.then(() => { void warmUp(); if (wanted) setMusic(wanted); if (barkHobs.length) preloadBarks(barkCrews, barkRival); });
+    void manifestP?.then(() => { void warmUp(); if (wanted) setMusic(wanted); if (barkHobs.length) startBarkDecode(barkGen); });
   }
   // iOS reports 'interrupted' after a call or Siri; any state but running needs a resume.
   if (ctx.state !== 'running' && document.visibilityState === 'visible') void ctx.resume().catch(() => undefined);
@@ -238,7 +239,7 @@ export function loadAudio(at: string): Promise<void> {
       }
     } catch { /* no subtitles file */ }
     // Barks name their sound ids in barks.json, so they are fetched once both lists are in.
-    if (ctx && man) { void warmUp(); if (wanted) setMusic(wanted); if (barkHobs.length) preloadBarks(barkCrews, barkRival); }
+    if (ctx && man) { void warmUp(); if (wanted) setMusic(wanted); if (barkHobs.length) startBarkDecode(barkGen); }
   })();
   return manifestP;
 }
@@ -284,7 +285,7 @@ function buffer(id: string, expectedGen?: number): Promise<AudioBuffer | null> {
     }
     const stale = id.startsWith('bark_') && (
       (expectedGen !== undefined && expectedGen !== barkGen) ||
-      !barkHobs.some((h) => id.startsWith(`bark_${h}_`))
+      !barkWant.has(id)
     );
     if (b && !stale) buffers.set(id, b);
     pending.delete(id);
@@ -297,15 +298,18 @@ function buffer(id: string, expectedGen?: number): Promise<AudioBuffer | null> {
 /** Drop decoded sounds (Web Audio keeps them as 32 bit floats: a minute of music is about 20 MB). */
 function release(ids: Iterable<string>): void { for (const id of ids) buffers.delete(id); }
 
-const isWebKit = () => typeof navigator !== 'undefined' && /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
+/** Linux WebKitGTK/WPE only: Safari on iOS/iPadOS/macOS caches audio cleanly offline. */
+const isLinuxWebKit = () => typeof navigator !== 'undefined'
+  && /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent)
+  && (/Linux/i.test(navigator.platform ?? '') || /Linux/i.test(navigator.userAgent)) && !/Android/i.test(navigator.userAgent);
 
 /**
  * Sound files fetched before the service worker controlled the page went past its cache.
  * Fetch them again through it, so a second launch offline still has the sounds played so far.
- * Skipped on WebKit where the SW deliberately ignores audio routes.
+ * Skipped only on Linux WebKitGTK where the SW deliberately ignores audio routes.
  */
 export function warmOfflineCache(): void {
-  if (!navigator.serviceWorker?.controller || isWebKit()) return;
+  if (!navigator.serviceWorker?.controller || isLinuxWebKit()) return;
   for (const u of fetched) void fetch(u).catch(() => undefined);
 }
 
@@ -425,6 +429,10 @@ const PLAY_ID: Partial<Record<Sfx, [string, number, 'ui' | 'sfx']>> = {
   aim_recall: ['aim_recall', 0, 'ui'],
   aim_set: ['aim_set', 0, 'ui'],
   aim_tick: ['aim_tick', 0, 'ui'],
+  aim_ratchet_tick: ['aim_ratchet_tick', 0, 'ui'],
+  aim_release_twang: ['aim_release_twang', 0, 'ui'],
+  aim_cancel_whoosh: ['aim_cancel_whoosh', 0, 'ui'],
+  hit_sub_thud: ['hit_sub_thud', 0, 'sfx'],
   bonk: ['hob_bonk', 0, 'sfx'],
   thud: ['hit_miss_thud', 0, 'sfx'],
   hit: ['hit_blast_small', 0, 'sfx'],
@@ -479,30 +487,40 @@ const CAPTION_KEY: Partial<Record<Sfx | Cue, string>> = {
   wind: 'wind',
   front_chime: 'wind',
   creak: 'creaks',
+  crack: 'creaks',
+  kettle_crack: 'creaks',
   fall: 'collapse',
   thump: 'thump',
+  lid: 'lid',
   lid_bounce: 'lid',
   buried: 'buried',
   boss_horn: 'boss_phase',
   shears: 'shears_open',
   snip: 'snip',
   mend_bucket: 'mend',
+  mend_fizz: 'mend',
   ket_patch: 'relight',
 };
 const caption = (k: Sfx | Cue): string | undefined => { const c = CAPTION_KEY[k]; return c ? t(`captions.${c}`) : undefined; };
 
-export function play(s: Sfx, pan = 0): void {
+export function play(s: Sfx, pan = 0, semis = 0): void {
   const cap = caption(s);
   if (cap) captionSink?.(cap);
-  if (!ctx || muted || !gate(s)) return;
+  if (!ctx || muted) return;
+  if (s !== 'aim_ratchet_tick' && !gate(s)) return;
   const id = PLAY_ID[s];
-  if (id && sample(id[0], 1, id[1], id[2], pan)) return;
-  synth(s);
+  if (id && sample(id[0], 1, id[1] + semis, id[2], pan)) return;
+  synth(s, semis);
 }
 
-function synth(s: Sfx): void {
+function synth(s: Sfx, semis = 0): void {
+  const rate = semis ? Math.pow(2, semis / 12) : 1;
   switch (s) {
-    case 'tap': case 'slider_tick': case 'aim_tick': case 'hob_pick': tone(660, 0.05, 'triangle', 0.22); break;
+    case 'tap': case 'slider_tick': case 'aim_tick': case 'hob_pick': tone(660 * rate, 0.05, 'triangle', 0.22); break;
+    case 'aim_ratchet_tick': tone(760 * rate, 0.026, 'triangle', 0.16, 0.72); noise(0.016, 0.07, 2200, 3); break;
+    case 'aim_release_twang': tone(190 * rate, 0.13, 'triangle', 0.24, 1.55); noise(0.06, 0.11, 1400, 1.4); break;
+    case 'aim_cancel_whoosh': noise(0.11, 0.08, 680, 1.2); break;
+    case 'hit_sub_thud': tone(66, 0.18, 'sine', 0.42, 0.55); break;
     case 'back': tone(440, 0.07, 'triangle', 0.2, 0.75); break;
     case 'confirm': case 'toggle_on': case 'card_take': case 'block_place': tone(580, 0.08, 'triangle', 0.24, 1.25); break;
     case 'aim_start': case 'aim_set': case 'aim_recall': tone(520, 0.06, 'sine', 0.18, 1.15); break;
@@ -589,7 +607,7 @@ function cueId(c: Cue, arg: string): string | null | undefined {
 }
 const CUE_SYNTH: Partial<Record<Cue, Sfx>> = {
   release: 'fire', hit: 'hit', hit_hob: 'hit', break: 'break', bonk: 'bonk', thud: 'thud', boom: 'hit', pop: 'pop', creak: 'creak',
-  land: 'thud', hob_land: 'thud', stomp: 'walk', splash: 'thud', kettle_crack: 'break', threaded: 'bonk', thump: 'thud', dig: 'walk',
+  land: 'thud', hob_land: 'thud', stomp: 'walk', splash: 'thud', kettle_crack: 'break', threaded: 'threaded', thump: 'thud', dig: 'walk',
   cheer: 'pennant', squall: 'squall', wind: 'whoosh', pin: 'tap', flap: 'sheet', lid: 'sheet', split: 'split',
 };
 
@@ -600,9 +618,15 @@ export function cue(c: Cue, arg = '', gain = 1, pan = 0): void {
   if (!ctx || muted) return;
   const id = cueId(c, arg);
   if (!gate(id ?? c)) return;
-  if (sample(id, gain, 0, 'sfx', pan)) return;
-  const s = CUE_SYNTH[c];
-  if (s) synth(s);
+  const played = !!sample(id, gain, 0, 'sfx', pan);
+  if (!played) {
+    const s = CUE_SYNTH[c];
+    if (s) synth(s);
+  }
+  // Sub-bass punch layer under large/huge blasts and Kettle Pops (Patch 02 sample or 66 Hz fallback).
+  if ((c === 'boom' && (arg === 'large' || arg === 'huge')) || c === 'pop') {
+    if (!sample('hit_sub_thud', 0.72 * gain, 0, 'sfx', pan)) synth('hit_sub_thud');
+  }
 }
 
 // ---------- barks (Hob-speak) ----------
@@ -620,6 +644,8 @@ const lastLine = new Map<string, string>();
 let lastBark = -1e9;
 const barkStep = [-1, -1];
 let barkHobs: string[] = [];
+/** Resolved bark sound IDs wanted for this fight (e.g. `old_thumper` -> `bark_thumper_*`). */
+let barkWant = new Set<string>();
 let barkGen = 0;
 /** Who is in this fight: each side's content Hob ids, and the Rival's short name ('' when unnamed). */
 let barkCrews: [string[], string[]] = [[], []];
@@ -628,6 +654,22 @@ let barkRival = '';
 /** The sound id for a Hob's bark: the entry's own `sound`, else bark_<id>_<event>. */
 function barkSound(hob: string, ev: string): string {
   return barkLines?.[hob]?.barks?.[ev]?.sound ?? `bark_${hob}_${ev}`;
+}
+
+/** Decode wanted barks for `gen` without bumping `barkGen` (safe from `unlockAudio`/`loadAudio`). */
+function startBarkDecode(gen: number): void {
+  if (!ctx || !man || !barkHobs.length || gen !== barkGen) return;
+  const want = new Set<string>();
+  for (const hb of barkHobs) for (const ev of Object.keys(barkLines?.[hb]?.barks ?? {})) want.add(barkSound(hb, ev));
+  barkWant = want;
+  const ids = [...byId.keys()].filter((id) => want.has(id));
+  void (async () => {
+    for (const id of ids) {
+      if (gen !== barkGen) return;
+      await buffer(id, gen);
+      await new Promise((r) => setTimeout(r, 12));
+    }
+  })();
 }
 
 /**
@@ -639,17 +681,9 @@ export function preloadBarks(crews: [string[], string[]], rival = ''): number {
   barkCrews = [[...new Set(crews[0])], [...new Set(crews[1])]];
   barkRival = rival;
   barkHobs = [...new Set([...crews[0], ...crews[1]])];
-  if (!ctx || !man) return gen;
-  const want = new Set<string>();
-  for (const hb of barkHobs) for (const ev of Object.keys(barkLines?.[hb]?.barks ?? {})) want.add(barkSound(hb, ev));
-  const ids = [...byId.keys()].filter((id) => want.has(id));
-  void (async () => {
-    for (const id of ids) {
-      if (gen !== barkGen) return;
-      await buffer(id, gen);
-      await new Promise((r) => setTimeout(r, 12));
-    }
-  })();
+  barkWant = new Set<string>();
+  for (const hb of barkHobs) for (const ev of Object.keys(barkLines?.[hb]?.barks ?? {})) barkWant.add(barkSound(hb, ev));
+  startBarkDecode(gen);
   return gen;
 }
 
@@ -657,6 +691,7 @@ export function preloadBarks(crews: [string[], string[]], rival = ''): number {
 export function releaseBarks(gen?: number): void {
   if (gen !== undefined && gen !== barkGen) return;
   barkHobs = [];
+  barkWant.clear();
   release([...buffers.keys()].filter((id) => id.startsWith('bark_')));
 }
 
@@ -790,7 +825,7 @@ export function setMusic(key: 'battle' | 'map' | ''): void {
   clearTimeout(layersT);
   const old = music;
   music = [];
-  if (ctx) for (const m of old) { m.g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); m.src.stop(ctx.currentTime + 1.5); }
+  if (ctx) for (const m of old) { m.g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); try { m.src.stop(ctx.currentTime + 1.5); } catch { /* already stopped */ } }
   for (const k of ['battle', 'map'] as const) if (k !== key) release(THEME[k]);
   if (!key || !ctx || !musicBus) return;
   const ids = THEME[key];

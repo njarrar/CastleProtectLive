@@ -99,7 +99,7 @@ class AnimsAudioTest {
     @Test fun everyCueTheAppPlaysIsInTheManifest() {
         val events = listOf("explode", "hit", "break", "carve", "mound", "split", "castle_drop", "thump", "threaded", "lid", "lid_block",
             "mend", "rebuild", "front", "squall_warning", "draft_start", "draft_pick", "miss", "relight", "shears_snip", "boss_phase",
-            "buried", "roller", "roller_stop", "roller_done", "shears_jam")
+            "buried", "roller", "roller_move", "roller_stop", "shears_jam")
         val targets = listOf("block", "kettle", "hob")
         for (t in events) for (target in targets) for (r in listOf(0, 10, 18, 28, 42, 64)) {
             val e = GameEvent(t, 0, 0, 0, r, 1, 0, 30, 0, -1, 0, target, "", "", false, kind = if (r == 0) "mend_bucket" else "")
@@ -140,10 +140,11 @@ class AnimsAudioTest {
         assertEquals(listOf("wx_squall_bell"), cue("squall_warning"))
         val bells = listOf("explode", "lid", "lid_block", "buried", "boss_phase", "front", "threaded", "roller", "shears_jam", "relight", "miss").filter { "wx_squall_bell" in cue(it) }
         assertTrue("bell on $bells", bells.isEmpty())
-        // Ethel stopping or going home: the same rumble, 3 semitones down.
+        // Ethel moving runs at normal pitch; stopping rumbles 3 semitones down (M-A04).
+        assertEquals(listOf("doo_roller_rumble"), cue("roller_move"))
         assertEquals(0f, Cues.semis(ev("roller")), 0f)
+        assertEquals(0f, Cues.semis(ev("roller_move")), 0f)
         assertEquals(-3f, Cues.semis(ev("roller_stop")), 0f)
-        assertEquals(-3f, Cues.semis(ev("roller_done")), 0f)
     }
 
     @Test fun rivalHobsHaveTheirOwnClipsAndIdlesStartAnywhere() {

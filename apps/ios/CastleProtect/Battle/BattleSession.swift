@@ -126,7 +126,18 @@ struct HudState: Equatable {
     var theirCrew: [HobView] { 1 - hudSide < crews.count ? crews[1 - hudSide] : [] }
     var myName: String { names[hudSide] }
     var activeName: String { activeSide < names.count ? names[activeSide] : "" }
-    var angleText: String { aim.set ? String(format: "%.1f\u{00B0}", Double(aim.angle) / 10) : "--" }
+
+    /// Intuitive elevation above horizon in tenths of a degree: mirrors Couch Duel Side 1
+    /// (`1800 - angle`) so aiming left reads `31.5°` instead of raw `148.5°`.
+    nonisolated static func displayAngleTenths(_ angleTenths: Int, side: Int) -> Int {
+        side == 1 ? max(0, min(1800, 1800 - angleTenths)) : angleTenths
+    }
+
+    var angleText: String {
+        guard aim.set else { return "--" }
+        let shown = Self.displayAngleTenths(aim.angle, side: hudSide)
+        return String(format: "%.1f\u{00B0}", Double(shown) / 10)
+    }
     var powerText: String { aim.set ? "\(aim.power)" : "--" }
 }
 
@@ -136,7 +147,7 @@ struct DragOverlay: Equatable {
     var end: CGPoint
     var angle: Int
     var power: Int
-    /// Quick Fire is on and the finger is outside the cancel ring: lifting fires.
+    /// Quick Fire is on, fire is ready, and the finger is outside the cancel ring: lifting fires.
     var armed: Bool
     /// The finger, and the pull in points for power 100.
     var finger: CGPoint = .zero
@@ -147,6 +158,12 @@ struct DragOverlay: Equatable {
     var lastAngle: Int?
     var lastPower: Int?
     var pullBack = true
+    /// True when the finger is near the cancel halo so the Home-Return Halo can bloom gently.
+    var nearCancel = false
+    /// True while edge-assist holds the angle locked on a screen edge.
+    var edgeLocked = false
+    /// Active firing side (0 left fort, 1 right fort in Couch Duel).
+    var side = 0
 }
 
 /// "Drag from your fort to aim": a short line by the player's fort (view points).
@@ -350,6 +367,8 @@ final class BattleSession: ObservableObject {
     var onPausedChanged: ((Bool) -> Void)?
     /// One-shot UI/aim audio cues (`aim_set`, `aim_limit`, `aim_tick`, `aim_recall`, `turn_hob_pick`, `fly_fast_zip`).
     var onAudioCue: ((String) -> Void)?
+    /// Pitched optional audio cues (`aim_ratchet_tick`, `aim_release_twang`), played silently if absent.
+    var onPitchedCue: ((String, Double, Float) -> Void)?
     /// Continuous aim band stretch loop `(gain, pitch)`.
     var onAimBand: ((Float, Double) -> Void)?
     /// Current slow-motion time scale for music/loop varispeed.
@@ -371,6 +390,9 @@ final class BattleSession: ObservableObject {
     private var aimBeforeDrag: AimView?
     private var dragEndedAt: UInt64 = 0
     private var hitFullPower = false
+    private var lastRatchetBucket = -1
+    private var wasInCancelRing = false
+    private var edgeEnteredAt: UInt64 = 0
     private var squallWarned = false
     /// The last Rival turn banner was a `rivals.banner.thinking` line (never two running).
     private var lastRivalLine = false
@@ -474,6 +496,10 @@ final class BattleSession: ObservableObject {
         gesture = nil
         pendingAim = nil
         dragModel.overlay = nil
+        hitFullPower = false
+        lastRatchetBucket = -1
+        wasInCancelRing = false
+        edgeEnteredAt = 0
         onAimBand?(0, 0)
         onSlowMo?(1)
         if dragging { dragging = false }
@@ -787,7 +813,11 @@ final class BattleSession: ObservableObject {
     }
 
     /// The text.json key for a refusal id the core sends (core/API.md, Refusal reasons).
+    /// Checks exact `hud.why.<reason>` first so newly added core refusal keys resolve automatically.
     nonisolated static func refusalKey(_ reason: String) -> String {
+        if !reason.isEmpty && GameText.shared.has("hud.why.\(reason)") {
+            return "hud.why.\(reason)"
+        }
         switch reason {
         case "resting_plain_only", "resting", "buried", "no_knack_uses", "not_in_hand", "no_heavy_first_turn",
              "no_actions_left", "already_acted", "not_planning", "hob_cannot_fire", "no_ghost":
@@ -805,6 +835,9 @@ final class BattleSession: ObservableObject {
         case "no_one_to_puff_up", "puff_up_not_allowed": return "hud.dial.puff_up_none"
         case "no_doodad": return "hud.doodad.none_left"
         case "cannot_use_now": return "hud.doodad.not_now"
+        case "already_lidded": return "hud.doodad.room_lidded"
+        case "room_gone": return "hud.doodad.room_gone"
+        case "no_room": return "hud.doodad.no_room"
         case "recovered": return "errors.turn_reset"
         case "dead_handle", "panic", "null_handle": return "errors.core_stopped"
         default: return "hud.why.default"
@@ -889,9 +922,13 @@ final class BattleSession: ObservableObject {
             return
         }
         gesture = AimGesture(anchor: point, powerSpan: layout.powerSpan, mode: settings.dragMode,
-                             bounds: CGRect(origin: .zero, size: viewSize == .zero ? layout.size : viewSize))
+                             bounds: CGRect(origin: .zero, size: viewSize == .zero ? layout.size : viewSize),
+                             topInset: viewInsets.top)
         aimBeforeDrag = snapshot.aim
         hitFullPower = false
+        lastRatchetBucket = -1
+        wasInCancelRing = false
+        edgeEnteredAt = 0
     }
 
     // MARK: Camera pan
@@ -1032,9 +1069,48 @@ final class BattleSession: ObservableObject {
             }
         }
         guard g.isDragging else { return }
+        updateDragFeedback(g)
+    }
+
+    /// True when Quick Fire is allowed to fire immediately on drag release (Rule 4: never triggers
+    /// Shove Off, Doodads, or an unready shot).
+    private var canQuickFireNow: Bool {
+        settings.quickFire && snapshot.canFire && !snapshot.dugIn && armedDoodad == nil
+    }
+
+    /// Shared drag feedback driven by both `touchMoved` and `slideAim` (H-I03):
+    /// holds `prevAim` silently inside the cancel halo, updates throttled `pendingAim`,
+    /// drives continuous stretch audio, fires 5%-step ratchet haptics/ticks, and signals 100% power.
+    private func updateDragFeedback(_ g: AimGesture) {
+        if g.isInCancelRing {
+            onAimBand?(0, 0)
+            hitFullPower = false
+            lastRatchetBucket = -1
+            if !wasInCancelRing {
+                wasInCancelRing = true
+                if let before = aimBeforeDrag, before.set {
+                    pendingAim = (before.angle, before.power)
+                } else {
+                    pendingAim = nil
+                }
+            }
+            publishOverlay(g)
+            return
+        }
+        wasInCancelRing = false
         // Throttled: the newest aim goes out at most every 66 ms, and always on release (H8).
         pendingAim = (g.angleTenths, g.power)
         onAimBand?(min(1, Float(g.power) / 100), Double(g.power) / 100 * 5)
+        let bucket = g.power / 5
+        if bucket != lastRatchetBucket {
+            let hadPrevious = lastRatchetBucket >= 0
+            lastRatchetBucket = bucket
+            if hadPrevious && g.power > 0 && g.power < 100 {
+                onLocalHaptic?(.ratchet)
+                let semi = Double(bucket - 10) * 0.4
+                onPitchedCue?("aim_ratchet_tick", semi, 0.72)
+            }
+        }
         if g.power >= 100 && !hitFullPower {
             hitFullPower = true
             onLocalHaptic?(.tick)
@@ -1048,10 +1124,13 @@ final class BattleSession: ObservableObject {
     private func publishOverlay(_ g: AimGesture) {
         let last = lastPinOfPicked()
         dragModel.overlay = DragOverlay(anchor: g.anchor, end: g.bandEnd, angle: g.angleTenths, power: g.power,
-                                        armed: settings.quickFire && !g.isInCancelRing,
+                                        armed: canQuickFireNow && !g.isInCancelRing,
                                         finger: g.finger, span: g.powerSpan, cancel: g.isInCancelRing,
                                         lastAngle: last?.angle, lastPower: last?.power,
-                                        pullBack: g.mode == .pullBack)
+                                        pullBack: g.mode == .pullBack,
+                                        nearCancel: g.isNearCancel,
+                                        edgeLocked: g.edgeAngle != nil,
+                                        side: snapshot.activeSide)
     }
 
     /// The newest Pin of the picked Hob on the side in turn.
@@ -1061,15 +1140,32 @@ final class BattleSession: ObservableObject {
     }
 
     private var lastSlideAt: UInt64 = 0
-    /// Edge help: a finger held on the screen edge slides the anchor until power 100, about 2.5 s from 0.
+    /// 220 ms edge-dwell grace before edge-assist begins sliding the anchor.
+    static let edgeDwellNanos: UInt64 = 220_000_000
+
+    /// Edge help: after dwelling 220 ms on the screen edge under power 100, slides the anchor
+    /// (clamped inside safe screen bounds with virtual overflow) at powerSpan / 2500 ms and
+    /// shares stretch audio, 5%-step ratchets, and full-power feedback with `touchMoved`.
     private func slideAim(nanos: UInt64) {
         defer { lastSlideAt = nanos }
-        guard lastSlideAt > 0, nanos > lastSlideAt, var g = gesture, g.isDragging, canAct else { return }
+        guard var g = gesture, g.isDragging, canAct else {
+            edgeEnteredAt = 0
+            return
+        }
+        guard g.isOnEdge(g.finger), g.edgeAngle != nil else {
+            edgeEnteredAt = 0
+            return
+        }
+        if edgeEnteredAt == 0 {
+            edgeEnteredAt = nanos
+            return
+        }
+        guard nanos >= edgeEnteredAt &+ Self.edgeDwellNanos else { return }
+        guard lastSlideAt > 0, nanos > lastSlideAt else { return }
         let ms = min(100, Double(nanos - lastSlideAt) / 1_000_000)
         guard g.slide(points: g.powerSpan * CGFloat(ms / 2500)) else { return }
         gesture = g
-        pendingAim = (g.angleTenths, g.power)
-        publishOverlay(g)
+        updateDragFeedback(g)
     }
 
     private func flushAim(now: UInt64, force: Bool) {
@@ -1085,6 +1181,10 @@ final class BattleSession: ObservableObject {
         gesture = nil
         pendingAim = nil
         dragModel.overlay = nil
+        hitFullPower = false
+        lastRatchetBucket = -1
+        wasInCancelRing = false
+        edgeEnteredAt = 0
         onAimBand?(0, 0)
         if dragging { dragging = false }
     }
@@ -1108,7 +1208,7 @@ final class BattleSession: ObservableObject {
         dragEndedAt = DispatchTime.now().uptimeNanoseconds
         fineTuneOpen = true
         scheduleFold()
-        if settings.quickFire {
+        if canQuickFireNow {
             sendFire()
         }
     }
@@ -1174,14 +1274,20 @@ final class BattleSession: ObservableObject {
         armedDoodad == nil && (selectedShotDef?.hasSelfTarget ?? false)
     }
 
-    /// Rooms that Pot Lid may protect on the active side's fort (`kettle` or `nook:N`).
+    /// Rooms that Pot Lid may protect on the active side's fort (`kettle` or `nook:N`),
+    /// excluding destroyed rooms and rooms already covered by a Pot Lid (H-I04).
     var potLidRooms: [(id: String, label: String)] {
         let text = GameText.shared
         let kettle: (id: String, label: String) = ("kettle", text.t("hud.doodad.kettle_room"))
         guard let fort = snapshot.fort(snapshot.activeSide) else { return [kettle] }
-        return [kettle] + fort.rooms.enumerated().map { idx, room -> (id: String, label: String) in
-            (id: "nook:\(room.id)", label: text.t("hud.doodad.nook", ["n": idx + 1]))
+        var out: [(id: String, label: String)] = []
+        if fort.kettleIntact && !fort.kettleLid {
+            out.append(kettle)
         }
+        for (idx, room) in fort.rooms.enumerated() where room.intact && !room.lid {
+            out.append((id: "nook:\(room.id)", label: text.t("hud.doodad.nook", ["n": idx + 1])))
+        }
+        return out
     }
 
     /// True while a field tap should select an own-fort block instead of starting an Aim Drag.
@@ -1300,10 +1406,12 @@ final class BattleSession: ObservableObject {
         let targetToSend = canPickMendTarget ? selectedBlockTarget : nil
         let reply = game.send(.fire(dial: dialToSend, target: targetToSend))
         if reply.ok {
+            let twangSemi = (Double(snapshot.aim.power) / 100.0 - 0.5) * 4.0
             fineTuneOpen = false
             if rivalPeek { rivalPeek = false }
             resetActionOptions()
             onLocalHaptic?(.fire)
+            onPitchedCue?("aim_release_twang", twangSemi, 0.85)
         } else {
             // Rules 3: a refused Fire spends nothing. Show the core's words, and move the pick to
             // the shot it names (`ready_shot`), so the next tap fires (QA playtest 1, M1).
@@ -1341,7 +1449,7 @@ final class BattleSession: ObservableObject {
         guard canAct else { return }
         let next = armedDoodad == id ? nil : id
         armedDoodad = next
-        armedDoodadRoom = "kettle"
+        armedDoodadRoom = next == "pot_lid" ? (potLidRooms.first?.id ?? "kettle") : "kettle"
         armedDoodadTargets = []
         pickingMendTarget = false
         onLocalHaptic?(.tick)

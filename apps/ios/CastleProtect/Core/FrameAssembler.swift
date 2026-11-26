@@ -293,6 +293,7 @@ final class FrameAssembler {
             fort.cols = cs.cols
             fort.fatigue = cs.fatigue
             fort.kettleRoom = CGRectLike(core: cs.kettle.room, mapHeight: H)
+            fort.kettleIntact = cs.kettle.intact
             fort.kettleLid = cs.kettle.lid
             fort.rooms = cs.rooms.compactMap { r in
                 guard let box = CGRectLike(core: r.box, mapHeight: H) else { return nil }
@@ -402,7 +403,8 @@ final class FrameAssembler {
             path.reserveCapacity(g.points.count * 2)
             for p in g.points where p.count >= 2 { path.append(Double(p[0])); path.append(H - Double(p[1])) }
             return PinView(x: Double(pin[0]), y: H - Double(pin[1]), side: g.side, round: g.round,
-                           spent: g.recalled, hob: String(g.hob), angle: g.angle, power: g.power, path: path)
+                           spent: g.recalled, hob: String(g.hob), angle: g.angle, power: g.power, path: path,
+                           missBlocks: g.missBlocks, selfHit: g.selfHit)
         }
         v.ghostCount = [s.ghosts.filter { $0.side == 0 }.count, s.ghosts.filter { $0.side == 1 }.count]
         v.shells = s.shells.map { ShellView(id: $0.id, x: Double($0.x), y: H - Double($0.y), kind: $0.shot, rot: $0.rot) }

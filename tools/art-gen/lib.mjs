@@ -231,30 +231,124 @@ export function block(mat, x, y, s, state = 0, seed = 1) {
   let inner = '';
   const shape = rr(0, 0, 100, 100, 10, m.base);
   if (state === 3) return g(rubble(mat, R), `translate(${f(x)} ${f(y)}) scale(${f(k)})`);
-  // interior surface
+  // interior surface (tactile gouache materiality: reads cleanly at 32x32 @2x and 96x96 palette)
   if (mat === 'wicker') {
-    for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
-      const alt = (r + c) % 2;
-      const off = r % 2 ? -16 : 0;
-      inner += rr(c * 36 + off + 2, r * 25 + 3, 34, 19, 9.5, alt ? C.wkL : C.wk, { stroke: C.wkD, sw: 2.2 });
-      if (r % 2) inner += rr(3 * 36 - 16 + 2, r * 25 + 3, 34, 19, 9.5, (r + 3) % 2 ? C.wkL : C.wk, { stroke: C.wkD, sw: 2.2 });
+    // Deep basketwork cavity backdrop for tucked reed shadows
+    inner += rr(0, 0, 100, 100, 10, '#6B461B');
+    // Continuous interlocking over-under woven reed lattice (3 warp stakes x 3 weft bands)
+    const centers = [17, 50, 83];
+    const band = 26;
+    const drawHSeg = (cx, cy, over) => {
+      const x0 = cx - 18, y0 = cy - band / 2;
+      const w = 36, h = band;
+      const col = over ? '#ECC270' : '#B98135';
+      const hiCol = over ? '#FBE7B2' : '#D5A04E';
+      let s = '';
+      s += rr(x0, y0, w, h, over ? 5 : 2, col, { stroke: '#7A4E1F', sw: 2.1 });
+      // Sunlit upper straw crown + subtle woven reed grain fibres
+      s += line(x0 + 2, y0 + 5.2, x0 + w - 2, y0 + 5.2, hiCol, over ? 3.2 : 1.8, { op: over ? .95 : .55 });
+      s += line(x0 + 2, y0 + 12.8, x0 + w - 2, y0 + 12.8, '#C28A38', 1.4, { op: .65 });
+      s += line(x0 + 2, y0 + 20.5, x0 + w - 2, y0 + 20.5, '#8A5620', 2.2, { op: .72 });
+      if (over) {
+        // Soft tucked shadows cast onto the vertical reeds passing underneath left & right
+        s += line(x0 + 0.5, y0 + 2, x0 + 0.5, y0 + h - 2, '#3B230E', 3.4, { op: .48 });
+        s += line(x0 + w - 0.5, y0 + 2, x0 + w - 0.5, y0 + h - 2, '#3B230E', 3.4, { op: .48 });
+      }
+      return s;
+    };
+    const drawVSeg = (cx, cy, over) => {
+      const x0 = cx - band / 2, y0 = cy - 18;
+      const w = band, h = 36;
+      const col = over ? '#E5B75F' : '#AD762E';
+      const hiCol = over ? '#FAE3A6' : '#CF9A4A';
+      let s = '';
+      s += rr(x0, y0, w, h, over ? 5 : 2, col, { stroke: '#7A4E1F', sw: 2.1 });
+      s += line(x0 + 5.2, y0 + 2, x0 + 5.2, y0 + h - 2, hiCol, over ? 3.0 : 1.7, { op: over ? .92 : .5 });
+      s += line(x0 + 12.8, y0 + 2, x0 + 12.8, y0 + h - 2, '#BA8232', 1.4, { op: .65 });
+      s += line(x0 + 20.5, y0 + 2, x0 + 20.5, y0 + h - 2, '#824F1C', 2.2, { op: .72 });
+      if (over) {
+        // Soft tucked shadows cast onto the horizontal reeds passing underneath top & bottom
+        s += line(x0 + 2, y0 + 0.5, x0 + w - 2, y0 + 0.5, '#3B230E', 3.4, { op: .48 });
+        s += line(x0 + 2, y0 + h - 0.5, x0 + w - 2, y0 + h - 0.5, '#3B230E', 3.4, { op: .48 });
+      }
+      return s;
+    };
+    // Pass 1: all under-reeds; Pass 2: all over-reeds (true woven criss-cross overlap!)
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      const hOver = (r + c) % 2 === 0;
+      inner += hOver ? drawVSeg(centers[c], centers[r], false) : drawHSeg(centers[c], centers[r], false);
     }
-    for (let c = 0; c < 4; c++) inner += line(c * 33 + 1, 0, c * 33 + 1, 100, C.wkD, 3, { op: .5 });
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      const hOver = (r + c) % 2 === 0;
+      inner += hOver ? drawHSeg(centers[c], centers[r], true) : drawVSeg(centers[c], centers[r], true);
+    }
+    // Corner rattan lashings
+    for (const [bx, by, dx2, dy2] of [[2, 13, 13, 2], [87, 2, 98, 13], [2, 87, 13, 98], [87, 98, 98, 87]]) {
+      inner += line(bx, by, dx2, dy2, '#6A421A', 5.0) + line(bx, by, dx2, dy2, '#F4D48A', 2.0, { op: .85 });
+    }
   } else if (mat === 'timber') {
+    // Deep walnut mortise shadow backing
+    inner += rr(0, 0, 100, 100, 10, '#4A2814');
+    const tones = ['#C67E42', '#B56D34', '#A7612B'];
+    const joints = [68, 30, 62];
     for (let r = 0; r < 3; r++) {
       const y0 = r * 33.3;
-      inner += rr(-2, y0 + 1.5, 104, 30.5, 4, r === 1 ? C.tb : '#B06C35', { stroke: C.tbD, sw: 2.5 });
-      inner += path(`M8 ${f(y0 + 12 + R() * 6)} C30 ${f(y0 + 6)} 55 ${f(y0 + 22)} 92 ${f(y0 + 13)}`, 'none', { stroke: C.tbL, sw: 2.2, op: .8 });
-      inner += path(`M20 ${f(y0 + 22)} C40 ${f(y0 + 18)} 60 ${f(y0 + 26)} 80 ${f(y0 + 21)}`, 'none', { stroke: C.tbD, sw: 1.6, op: .6 });
-      inner += circ(9, y0 + 16, 3, C.tbH) + circ(91, y0 + 16, 3, C.tbH);
+      const jx = joints[r];
+      // Main chamfered plank body
+      inner += rr(-1, y0 + 2, 102, 29.2, 4, tones[r], { stroke: '#623416', sw: 2.2 });
+      // Chamfered sunlit top bevel & dark underside bevel
+      inner += line(2, y0 + 4.4, 98, y0 + 4.4, '#E7AE6E', 3.0, { op: .9 });
+      inner += line(2, y0 + 28.8, 98, y0 + 28.8, '#6B3817', 3.0, { op: .82 });
+      // Expressive warm wood-grain cathedral curves
+      const gOff = R() * 4;
+      inner += path(`M4 ${f(y0 + 11 + gOff)} C28 ${f(y0 + 6)} 56 ${f(y0 + 19)} 96 ${f(y0 + 12)}`, 'none', { stroke: '#E0A05E', sw: 2.2, op: .75 });
+      inner += path(`M6 ${f(y0 + 21)} C32 ${f(y0 + 16 + gOff * .5)} 62 ${f(y0 + 25)} 94 ${f(y0 + 19)}`, 'none', { stroke: '#7A401A', sw: 1.8, op: .68 });
+      if (r === 1) {
+        // Subtle timber knot swirl
+        inner += ell(58, y0 + 16, 7.5, 4.2, '#8A4B22', { stroke: '#623416', sw: 1.6, op: .8 })
+          + ell(57, y0 + 15.5, 3, 1.8, '#B8723A', { op: .75 });
+      }
+      // Chamfered vertical plank butt-joint seam with sunlit left edge & dark crease
+      inner += line(jx, y0 + 2.5, jx, y0 + 30.5, '#4A2612', 2.8)
+        + line(jx + 2.4, y0 + 4, jx + 2.4, y0 + 29, '#E2A668', 1.6, { op: .65 });
+      // Small recessed iron nails flanking the butt joint
+      inner += circ(jx - 5.5, y0 + 16.5, 2.2, '#353138', { stroke: '#2C221E', sw: .9 })
+        + circ(jx + 6.5, y0 + 16.5, 2.2, '#353138', { stroke: '#2C221E', sw: .9 });
+    }
+    // Forged dark iron corner straps & rivets
+    for (const [rx, ry] of [[10, 11], [90, 11], [10, 89], [90, 89]]) {
+      inner += rr(rx - 7.5, ry - 7.5, 15, 15, 3, '#48454E', { stroke: '#2C221E', sw: 2.0 });
+      inner += circ(rx, ry, 4.1, '#34323A', { stroke: '#2C221E', sw: 1.4 })
+        + circ(rx - 1.3, ry - 1.3, 1.4, '#A8B0BE', { op: .85 });
     }
   } else if (mat === 'cobble') {
-    const stones = [[4, 4, 50, 28], [57, 4, 39, 28], [4, 35, 30, 29], [37, 35, 36, 29], [76, 35, 20, 29], [4, 67, 44, 29], [51, 67, 45, 29]];
-    for (const [sx, sy, sw2, sh] of stones) {
-      inner += rr(sx, sy, sw2, sh, 11, C.cb, { stroke: C.cbD, sw: 2.4 });
-      inner += path(`M${sx + 6} ${sy + sh - 6} Q${sx + sw2 - 4} ${sy + sh - 2} ${sx + sw2 - 5} ${sy + 8}`, 'none', { stroke: C.cbD, sw: 3, op: .55 });
-      inner += path(`M${sx + 6} ${sy + 9} Q${sx + 10} ${sy + 5} ${sx + 18} ${sy + 5}`, 'none', { stroke: C.cbL, sw: 3 });
+    // Cool slate mortar bed with subtle gritty texture
+    inner += rr(0, 0, 100, 100, 10, '#535C68');
+    inner += rr(2, 2, 96, 96, 8, '#5E6875', { op: .5 });
+    // Stacked irregular hand-carved ashlar stones: [polyPath, fill, hiPath, shPath]
+    const stones = [
+      ['M4 8 L10 3 L52 4 L55 12 L52 30 L8 31 L3 25 Z', '#BCB6AA', 'M9 6 L50 7', 'M52 12 L50 28 L10 29'],
+      ['M59 4 L92 3 L97 10 L96 29 L62 31 L58 24 Z', '#9CA1A6', 'M62 6 L91 6', 'M94 11 L93 27 L63 29'],
+      ['M3 37 L9 34 L33 35 L35 45 L32 62 L7 63 L3 56 Z', '#92979E', 'M8 37 L30 37', 'M32 42 L30 60 L9 61'],
+      ['M39 36 L44 33 L73 34 L77 44 L73 63 L41 62 L38 54 Z', '#B3ADA2', 'M44 36 L71 37', 'M74 43 L71 60 L43 60'],
+      ['M80 35 L95 34 L97 42 L96 62 L82 63 L79 53 Z', '#C4BEB2', 'M83 37 L93 37', 'M94 42 L93 60 L83 61'],
+      ['M4 68 L11 66 L46 67 L49 77 L45 96 L9 97 L3 89 Z', '#A7A39A', 'M10 69 L44 70', 'M46 76 L43 94 L11 95'],
+      ['M53 67 L60 66 L93 67 L97 75 L94 96 L56 96 L52 87 Z', '#969AA0', 'M59 69 L91 70', 'M94 75 L92 94 L58 94'],
+    ];
+    for (const [d, col, hiP, shP] of stones) {
+      inner += path(d, col, { stroke: '#464C54', sw: 2.6 });
+      inner += path(shP, 'none', { stroke: '#5C616B', sw: 3.4, op: .65 });
+      inner += path(hiP, 'none', { stroke: '#EAE5DA', sw: 3.2, op: .85 });
     }
+    // Subtle gouache limestone flecks
+    inner += circ(26, 18, 2.2, '#D8D2C6', { op: .55 }) + circ(78, 17, 1.8, '#6F7680', { op: .5 })
+      + circ(56, 48, 2.4, '#D8D2C6', { op: .5 }) + circ(24, 82, 2.0, '#72767E', { op: .45 });
+    // Tucked olive-moss tufts in mortar joints
+    const moss = (mx, my, rx, ry) =>
+      ell(mx + 1, my + 2, rx * 1.05, ry * .9, '#2C3D24', { op: .45 })
+      + ell(mx, my, rx, ry, '#5D8E46', { stroke: '#3B5C2B', sw: 1.5 })
+      + ell(mx - rx * .25, my - ry * .28, rx * .55, ry * .45, '#8CC065', { op: .9 });
+    inner += moss(56, 32, 8.5, 4.2) + moss(36, 64, 9.5, 4.5) + moss(77, 65, 6.5, 3.6);
   } else if (mat === 'brass') {
     inner += rr(0, 0, 100, 100, 10, C.bp);
     inner += path('M12 88 L88 12', 'none', { stroke: C.bpD, sw: 4, op: .5 });
@@ -273,13 +367,24 @@ export function block(mat, x, y, s, state = 0, seed = 1) {
     inner += star4(78, 50, 6, C.mbL);
   } else if (mat === 'footing') {
     inner += rr(0, 0, 100, 100, 6, C.ft);
+    // Beveled iron-granite plinth bands
+    inner += rr(0, 0, 100, 14, 0, '#726258') + line(2, 5, 98, 5, '#9A8A80', 2.4, { op: .75 });
+    inner += rr(0, 86, 100, 14, 0, '#3C302A') + line(2, 15, 98, 15, '#2E2420', 2.5);
+    // Embossed structural chevron steel truss with top highlight & shadow groove
+    inner += path('M0 32 L25 52 L50 32 L75 52 L100 32', 'none', { stroke: '#2C221E', sw: 9, op: .65 });
     inner += path('M0 30 L25 50 L50 30 L75 50 L100 30', 'none', { stroke: C.ftL, sw: 6 });
+    inner += path('M0 28 L25 48 L50 28 L75 48 L100 28', 'none', { stroke: '#A6968C', sw: 1.8, op: .75 });
+    inner += path('M0 64 L25 84 L50 64 L75 84 L100 64', 'none', { stroke: '#2C221E', sw: 9, op: .65 });
     inner += path('M0 62 L25 82 L50 62 L75 82 L100 62', 'none', { stroke: C.ftL, sw: 6 });
-    for (const [bx, by] of [[10, 10], [90, 10], [10, 90], [90, 90]]) inner += circ(bx, by, 4.5, C.ftB, { stroke: C.ftD, sw: 2 });
+    inner += path('M0 60 L25 80 L50 60 L75 80 L100 60', 'none', { stroke: '#A6968C', sw: 1.8, op: .75 });
+    // Forged bolted corner plates
+    for (const [bx, by] of [[10, 10], [90, 10], [10, 90], [90, 90]]) {
+      inner += circ(bx, by, 5.2, C.ftB, { stroke: C.ftD, sw: 2 }) + circ(bx - 1.5, by - 1.5, 1.5, '#DED5CE', { op: .8 });
+    }
   }
-  // shade band, highlight
-  let shade = path('M100 58 L100 100 L0 100 L0 86 Q50 84 100 58 Z', C.ink, { op: .14 });
-  let hi = path('M10 7 L40 7', 'none', { stroke: '#FFFFFF', sw: 4, op: .45 });
+  // Gouache warm top-left sunlight rim & espresso bottom-right ambient occlusion bevel
+  let shade = path('M100 54 L100 100 L0 100 L0 86 Q52 84 100 54 Z', '#2C221E', { op: .18 });
+  let hi = path('M8 6 H48 M6 8 V34', 'none', { stroke: '#FFF4DE', sw: 3.6, op: .45 });
   // damage
   let dmg = '';
   if (state >= 1) dmg += damage(mat, state, R);
@@ -640,33 +745,100 @@ export function flattener(type, x, y, s = 1, o = {}) {
 // ---------------------------------------------------------------- Heartkettle
 export function kettle(x, y, s = 1, o = {}) {
   const { hp = 1, popped = false, glowOn = true } = o;
-  const ink = C.ink, cu = '#D9773A', cuD = '#A4521F', cuL = '#F2A469';
-  let b = '';
+  const ink = C.ink, cu = '#D9773A', cuD = '#9A481E', cuL = '#F6B47A';
+  const gCu = id('kcu'), gSight = id('ksg'), gBand = id('kbd');
+  let b = `<defs>`
+    + `<radialGradient id="${gCu}" cx="32%" cy="28%" r="72%" fx="26%" fy="22%">`
+    + `<stop offset="0%" stop-color="#FFD4A3"/><stop offset="28%" stop-color="#EC8B49"/>`
+    + `<stop offset="68%" stop-color="#D46B2E"/><stop offset="100%" stop-color="#8F3F16"/>`
+    + `</radialGradient>`
+    + `<linearGradient id="${gBand}" x1="0" y1="0" x2="1" y2="0">`
+    + `<stop offset="0%" stop-color="#B88220"/><stop offset="28%" stop-color="#FBE08C"/>`
+    + `<stop offset="56%" stop-color="#E0AE3E"/><stop offset="100%" stop-color="#966818"/>`
+    + `</linearGradient>`
+    + `<radialGradient id="${gSight}" cx="38%" cy="35%" r="68%">`
+    + (popped
+      ? `<stop offset="0%" stop-color="#584E5A"/><stop offset="65%" stop-color="#352E38"/><stop offset="100%" stop-color="#1E1822"/>`
+      : `<stop offset="0%" stop-color="#E6FFF8"/><stop offset="38%" stop-color="#5CEFD0"/><stop offset="76%" stop-color="#1DB6AE"/><stop offset="100%" stop-color="#0C6B73"/>`)
+    + `</radialGradient>`
+    + `</defs>`;
   if (glowOn && !popped) b += circ(0, -44, 62, C.glow, { op: .22 }) + circ(0, -44, 46, C.glow, { op: .22 });
-  b += ell(0, 0, 44, 6, ink, { op: .2 });
-  // feet
-  b += rr(-34, -10, 14, 10, 4, C.br, { stroke: ink, sw: 3 }) + rr(20, -10, 14, 10, 4, C.br, { stroke: ink, sw: 3 });
-  // spout
-  b += path('M30 -46 C48 -50 54 -64 62 -76 L70 -72 C64 -54 56 -36 32 -28 Z', cu, { stroke: ink, sw: 3 });
-  // body
+  b += ell(0, 0, 44, 6, ink, { op: .22 });
+  // feet: forged brass claw-pads with top bevel gleam
+  b += rr(-34, -10, 14, 10, 4, C.br, { stroke: ink, sw: 3 }) + line(-31, -7.5, -24, -7.5, C.brL, 2)
+    + rr(20, -10, 14, 10, 4, C.br, { stroke: ink, sw: 3 }) + line(23, -7.5, 30, -7.5, C.brL, 2);
+  // spout: hammered copper curve with warm ridge highlight & flared lip
+  const spD = 'M30 -46 C48 -50 54 -64 62 -76 L70 -72 C64 -54 56 -36 32 -28 Z';
+  b += path(spD, cu, { stroke: ink, sw: 3 })
+    + path('M36 -43 C50 -48 56 -59 63 -71', 'none', { stroke: cuL, sw: 3.2, op: .85 })
+    + path('M60 -77 L72 -71', 'none', { stroke: C.br, sw: 4.2 })
+    + path('M60 -77 L72 -71', 'none', { stroke: ink, sw: 1.8 });
+  // body: hammered copper with radial glow, dimple facets, and bright specular gleam
   const bd = 'M-40 -40 C-40 -70 -24 -82 0 -82 C24 -82 40 -70 40 -40 C40 -16 26 -8 0 -8 C-26 -8 -40 -16 -40 -40 Z';
-  b += path(bd, cu, { stroke: ink, sw: 3.5 });
-  b += clipped(path(bd, '#000'), path('M10 -84 C44 -70 46 -20 20 -6 L60 -6 L60 -84 Z', ink, { op: .18 }) + rr(-40, -48, 80, 9, 0, C.br) + rr(-40, -48, 80, 9, 0, 'none', { stroke: C.brD, sw: 2 }) + path('M-28 -66 C-22 -74 -12 -77 -4 -77', 'none', { stroke: cuL, sw: 5 }));
-  for (let i = -3; i <= 3; i++) b += circ(i * 11, -43.5, 2, C.brL, { stroke: C.brD, sw: 1 });
-  // porthole glow window
-  b += circ(0, -28, 11, popped ? '#3A3236' : C.glow, { stroke: ink, sw: 3 });
-  if (!popped) b += circ(-3, -31, 3.5, C.glowL);
-  // gauge
-  b += circ(-22, -62, 9, C.paper, { stroke: ink, sw: 2.5 });
+  b += path(bd, `url(#${gCu})`, { stroke: ink, sw: 3.5 });
+  const hammeredFacets =
+    ell(-16, -68, 7, 4.5, '#FFE0B8', { op: .34 })
+    + ell(10, -64, 6.5, 4, '#C45B24', { op: .28 })
+    + ell(-25, -30, 6, 4.5, '#F4A66A', { op: .28 })
+    + ell(20, -26, 7.5, 4.8, '#8A3B14', { op: .34 })
+    + ell(-12, -16, 8, 3.6, '#F4A66A', { op: .24 });
+  b += clipped(path(bd, '#000'),
+    hammeredFacets
+    + path('M12 -84 C44 -70 46 -20 18 -6 L60 -6 L60 -84 Z', '#2C1810', { op: .24 })
+    + path('M-34 -18 Q0 -6 34 -18 L38 -6 L-38 -6 Z', '#2C1810', { op: .22 })
+    + rr(-40, -49, 80, 10, 0, `url(#${gBand})`)
+    + line(-40, -48.5, 40, -48.5, '#FFF2BE', 1.6, { op: .8 })
+    + rr(-40, -49, 80, 10, 0, 'none', { stroke: C.brD, sw: 2 })
+    // Warm hammered copper shoulder highlight + crisp specular gleam
+    + path('M-30 -64 C-23 -74 -11 -78 -1 -78', 'none', { stroke: cuL, sw: 5.5, op: .85 })
+    + path('M-28 -65 C-23 -72 -15 -75 -9 -76', 'none', { stroke: '#FFF4DE', sw: 2.4, op: .9 })
+    + circ(-31, -55, 2.2, '#FFF4DE', { op: .75 }));
+  b += path(bd, 'none', { stroke: ink, sw: 3.5 });
+  for (let i = -3; i <= 3; i++) {
+    b += circ(i * 11, -44, 2.2, C.brL, { stroke: C.brD, sw: 1.1 })
+      + circ(i * 11 - 0.6, -44.6, 0.7, '#FFF8DF');
+  }
+  // porthole water-sight glow window with thick riveted brass bezel
+  b += circ(0, -28, 13.2, C.br, { stroke: ink, sw: 2.6 })
+    + path('M-9 -37 A12.5 12.5 0 0 1 7 -38', 'none', { stroke: C.brL, sw: 2, op: .85 });
+  b += circ(0, -28, 10.2, `url(#${gSight})`, { stroke: ink, sw: 2.4 });
+  if (!popped) {
+    // Deep cyan sight-glass inner sheen & rising glowing bubbles
+    b += circ(0, -28, 8.2, 'none', { stroke: '#A6FFF0', sw: 1.2, op: .55 })
+      + circ(-3.2, -31.5, 3.2, '#FFFFFF', { op: .82 })
+      + circ(3.2, -24.5, 1.8, '#D8FFF8', { op: .8 })
+      + circ(1.2, -29.5, 1.2, '#FFFFFF', { op: .75 })
+      + path('M-6.5 -24 Q0 -20.5 6.5 -24', 'none', { stroke: '#0D5E66', sw: 1.5, op: .5 });
+  } else {
+    b += path('M-5 -32 L5 -24 M5 -32 L-5 -24', 'none', { stroke: '#7A707E', sw: 1.8, op: .7 });
+  }
+  // crisp brass pressure dial with segmented safe/caution/red zones & specular glass glint
+  b += circ(-22, -62, 10.6, C.br, { stroke: ink, sw: 2.2 })
+    + path('M-29 -69 A10 10 0 0 1 -15 -69', 'none', { stroke: C.brL, sw: 1.6, op: .9 })
+    + circ(-22, -62, 8.2, '#FFF6E4', { stroke: ink, sw: 1.6 });
+  b += path('M-27.8 -60.5 A6.2 6.2 0 0 1 -22 -68.2', 'none', { stroke: C.good, sw: 2.1, cap: 'butt' })
+    + path('M-22 -68.2 A6.2 6.2 0 0 1 -17.4 -66.1', 'none', { stroke: C.saffron, sw: 2.1, cap: 'butt' })
+    + path('M-17.4 -66.1 A6.2 6.2 0 0 1 -16.2 -60.5', 'none', { stroke: C.danger, sw: 2.2, cap: 'butt' });
+  for (const deg of [-150, -120, -90, -60, -30]) {
+    const r0 = deg * Math.PI / 180;
+    b += line(-22 + Math.cos(r0) * 5.2, -62 + Math.sin(r0) * 5.2, -22 + Math.cos(r0) * 7.2, -62 + Math.sin(r0) * 7.2, ink, 1);
+  }
   const ang = -150 + (1 - hp) * 120;
   const a = ang * Math.PI / 180;
-  b += line(-22, -62, -22 + Math.cos(a) * 6.5, -62 + Math.sin(a) * 6.5, hp <= .25 ? C.danger : ink, 2);
-  b += path('M-28 -58 A8 8 0 0 1 -16 -58', 'none', { stroke: C.danger, sw: 2.5 });
+  b += line(-22, -62, -22 + Math.cos(a) * 6.4, -62 + Math.sin(a) * 6.4, hp <= .25 ? C.danger : ink, 2)
+    + circ(-22, -62, 1.9, C.brD, { stroke: ink, sw: .9 })
+    + path('M-26.5 -66.5 Q-23 -69 -19.5 -67', 'none', { stroke: '#FFFFFF', sw: 1.4, op: .75 });
   // lid and handle. Critical (25% or less): the lid rattles
   const crit = hp <= .25 && !popped, hurt = hp <= .5 && !popped;
   if (!popped) {
-    b += path('M-34 -82 C-30 -118 30 -118 34 -82', 'none', { stroke: C.brD, sw: 8 }) + path('M-34 -82 C-30 -118 30 -118 34 -82', 'none', { stroke: C.br, sw: 4 });
-    const lid = path('M-18 -80 C-18 -92 18 -92 18 -80 Z', cuD, { stroke: ink, sw: 3 }) + circ(0, -92, 5, C.br, { stroke: ink, sw: 2.5 });
+    b += path('M-34 -82 C-30 -118 30 -118 34 -82', 'none', { stroke: ink, sw: 10 })
+      + path('M-34 -82 C-30 -118 30 -118 34 -82', 'none', { stroke: C.brD, sw: 7 })
+      + path('M-34 -82 C-30 -118 30 -118 34 -82', 'none', { stroke: C.br, sw: 4 })
+      + path('M-26 -96 C-16 -110 8 -113 20 -104', 'none', { stroke: C.brL, sw: 1.8, op: .85 });
+    const lid = path('M-18 -80 C-18 -92 18 -92 18 -80 Z', cuD, { stroke: ink, sw: 3 })
+      + path('M-11 -86 C-5 -89 4 -89 9 -86', 'none', { stroke: cuL, sw: 2.2, op: .8 })
+      + circ(0, -92, 5.2, C.br, { stroke: ink, sw: 2.5 })
+      + circ(-1.6, -93.6, 1.5, '#FFF4DE', { op: .85 });
     b += crit ? g(lid, 'rotate(-9 -18 -80) translate(0 -3)') + path('M22 -92 l7 -5 M25 -84 l8 -1 M-26 -90 l-6 -5', 'none', { stroke: ink, sw: 2 }) : lid;
   } else {
     b += path('M-34 -82 C-36 -96 -40 -104 -46 -106', 'none', { stroke: C.br, sw: 4 });

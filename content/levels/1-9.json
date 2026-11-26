@@ -119,6 +119,9 @@
       "mower_minder",
       "rake_hand"
     ],
+    "doodads": [
+      "mend_bucket"
+    ],
     "aim": 2,
     "knack_uses": 1,
     "hp_pct": 95

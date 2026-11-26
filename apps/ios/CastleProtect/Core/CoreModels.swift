@@ -374,8 +374,9 @@ struct FortView: Equatable, Sendable {
     var block: Double = 16
     var cols: Int = 0
     var rooms: [RoomView] = []
-    /// The Kettle Room box and whether the Pot Lid is on it.
+    /// The Kettle Room box, whether it is intact, and whether the Pot Lid is on it.
     var kettleRoom: CGRectLike?
+    var kettleIntact = true
     var kettleLid = false
     var fatigue = false
 
@@ -437,6 +438,9 @@ struct PinView: Equatable, Sendable {
     var angle = 0
     var power = 0
     var path: [Double] = []
+    /// Optional core-computed miss blocks (signed or magnitude) and self-hit flag.
+    var missBlocks: Int? = nil
+    var selfHit = false
 }
 
 struct ShellView: Equatable, Sendable {

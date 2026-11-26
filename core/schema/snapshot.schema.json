@@ -592,6 +592,12 @@
               }
             ]
           },
+          "miss_blocks": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "self_hit": {
             "type": "boolean"
           },
