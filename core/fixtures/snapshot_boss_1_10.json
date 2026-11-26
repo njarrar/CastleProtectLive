@@ -1694,7 +1694,7 @@
   ],
   "full": true,
   "ghosts": [],
-  "hash": "1f379c79b45797e1",
+  "hash": "7163ca2152422cfd",
   "hobs": [
     {
       "aim": {
@@ -1977,7 +1977,10 @@
       ]
     ],
     "doodads": [
-      [],
+      [
+        "mend_bucket",
+        "pot_lid"
+      ],
       []
     ],
     "fatigue": false,

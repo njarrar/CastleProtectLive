@@ -25,6 +25,9 @@
         "reason": {
           "type": "string"
         },
+        "problem": {
+          "type": "string"
+        },
         "detail": {
           "type": "string"
         },

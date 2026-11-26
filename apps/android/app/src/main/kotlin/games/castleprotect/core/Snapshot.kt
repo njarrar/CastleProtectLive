@@ -72,6 +72,9 @@ class Ghost(
     @JvmField val selfHit: Boolean, @JvmField val recalled: Boolean,
     /** x0, y0, x1, y1, ... */
     @JvmField val points: IntArray,
+    /** Core-reported miss distance in blocks (negative = short, positive = long, 0 = on fort or absent). */
+    @JvmField val missBlocks: Int = 0,
+    @JvmField val hasMissBlocks: Boolean = false,
 )
 
 data class CrewPip(val id: Int, val hpPct: Int, val state: String, val cls: String, val rest: Int)
@@ -535,6 +538,7 @@ class SnapshotParser {
         while (j.hasNext()) {
             var index = 0; var side = 0; var hob = 0; var shot = ""; var angle = 0; var power = 0; var round = 0
             var hasPin = false; var px = 0; var py = 0; var selfHit = false; var recalled = false; var points = IntArray(0)
+            var missBlocks = 0; var hasMissBlocks = false
             j.beginObject()
             while (j.hasNext()) when (j.nextName()) {
                 "index" -> index = j.nextInt(); "side" -> side = j.nextInt(); "hob" -> hob = j.nextInt(); "shot" -> shot = j.nextString()
@@ -542,10 +546,11 @@ class SnapshotParser {
                 "pin" -> { val a = j.nextIntArray(); if (a.size >= 2) { hasPin = true; px = a[0]; py = a[1] } }
                 "self_hit" -> selfHit = j.nextBoolean(); "recalled" -> recalled = j.nextBoolean()
                 "points" -> points = j.nextPairs()
+                "miss_blocks" -> if (j.nextNull()) { hasMissBlocks = false } else { missBlocks = num(j); hasMissBlocks = true }
                 else -> j.skipValue()
             }
             j.endObject()
-            out.add(Ghost(index, side, hob, shot, angle, power, round, hasPin, px, py, selfHit, recalled, points))
+            out.add(Ghost(index, side, hob, shot, angle, power, round, hasPin, px, py, selfHit, recalled, points, missBlocks, hasMissBlocks))
         }
         j.endArray()
         return out

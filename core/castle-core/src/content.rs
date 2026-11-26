@@ -102,6 +102,11 @@ fn d50() -> i32 {
     50
 }
 
+fn parse_level_num(id: &str) -> Option<(i32, i32)> {
+    let (a, b) = id.split_once('-')?;
+    Some((a.parse().ok()?, b.parse().ok()?))
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ClassDef {
@@ -892,6 +897,16 @@ impl Content {
             "some" => Some(120),
             "lots" => Some(140),
             _ => None,
+        }
+    }
+
+    /// True when walking is unlocked on a campaign level (`app.campaign.walk_from`).
+    /// Non-numbered level ids (skirmish or custom maps) always allow walking.
+    pub fn campaign_walk_allowed(&self, level_id: &str) -> bool {
+        let from = self.app["campaign"]["walk_from"].as_str().unwrap_or("1-5");
+        match (parse_level_num(level_id), parse_level_num(from)) {
+            (Some(cur), Some(min)) => cur >= min,
+            _ => true,
         }
     }
 

@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -143,7 +144,8 @@ fun BattleScreen(session: GameSession) {
     val keepPad = touchExplore || s.tapOnly
     LaunchedEffect(fineOpen, fineTuneAt, keepPad) { if (fineOpen && !keepPad) { delay(4000); fineOpen = false } }
     LaunchedEffect(u.humanTurn, keepPad) { if (!u.humanTurn) { fineOpen = false; potLidOpen = false; inspectShotId = null } else if (keepPad) fineOpen = true }
-    LaunchedEffect(u.phase) { if (u.phase == Phase.ENDED) { delay(1400); session.showResults() } }
+    LaunchedEffect(u.phase) { if (u.phase == Phase.ENDED) { delay(if (session.settings.subtitles) 2000 else 1400); session.showResults() } }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { session.clearSubtitle() } }
 
     val nudge: (Int, Int, Boolean) -> Boolean = { da, dp, open ->
         val (a0, p0) = session.aimBase(session.ui.value)
@@ -183,15 +185,34 @@ fun BattleScreen(session: GameSession) {
             val safe = WindowInsets.safeDrawing.asPaddingValues()
             val dir = LocalLayoutDirection.current
             val density = LocalDensity.current
+            var tallTopPx by remember { mutableStateOf(0f) }
+            var tallDockPx by remember { mutableStateOf(0f) }
             ref.view?.tall = tall
             val hidden = if (cardUp) Modifier.clearAndSetSemantics { } else Modifier
 
+            // Full-screen BattleView behind HUD in BOTH Portrait and Wide so fullPull & onEdge use full window bounds (H-A02).
+            Box(Modifier.fillMaxSize().then(hidden)) { field() }
+
             if (tall) {
-                Column(Modifier.fillMaxSize().padding(top = safe.calculateTopPadding()).then(hidden)) {
-                    CompactHud { TopStrip(u, tall = true, pause = { PauseButton(session) }) }
-                    // Battle field (100% unobstructed lower player fort: Walk & Readout live inside the dock below!).
+                val safeTop = safe.calculateTopPadding()
+                val safeBottom = safe.calculateBottomPadding()
+                val topSafePx = with(density) { safeTop.toPx() }
+                val botSafePx = with(density) { safeBottom.toPx() }
+                val defaultTopPx = with(density) { 62.dp.toPx() }
+                val defaultDockPx = with(density) { 218.dp.toPx() }
+                ref.view?.tallTopInset = topSafePx + (if (tallTopPx > 0f) tallTopPx else defaultTopPx)
+                ref.view?.tallBottomInset = if (tallDockPx > 0f) tallDockPx else (botSafePx + defaultDockPx)
+                Column(Modifier.fillMaxSize().padding(top = safeTop).then(hidden)) {
+                    Box(
+                        Modifier.fillMaxWidth().onSizeChanged {
+                            tallTopPx = it.height.toFloat()
+                            ref.view?.tallTopInset = topSafePx + tallTopPx
+                        },
+                    ) {
+                        CompactHud { TopStrip(u, tall = true, pause = { PauseButton(session) }) }
+                    }
+                    // Transparent overlay window above the full-screen BattleView (touches fall through to BattleView!).
                     Box(Modifier.weight(1f).fillMaxWidth()) {
-                        field()
                         TurnBanner(session, u, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
                         BattleBanner(session, Modifier.align(Alignment.TopCenter).padding(top = 60.dp))
                         if (u.mode == "test_yard" && !flying && !dragging) {
@@ -206,12 +227,18 @@ fun BattleScreen(session: GameSession) {
                         }
                         FireNote(session, u, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp))
                     }
-                    // Stitched parchment bottom dock kept at steady height during flight so SurfaceView never resizes.
+                    // Stitched parchment bottom dock fades cleanly while dragging so full lower pull runway stays visible (H-A02).
                     val dockDim = dim || flying
-                    val dockAlpha = if (dim) 0.25f else if (flying) 0.42f else 1f
+                    val dockBgAlpha = if (dim) 0.16f else 1f
+                    val dockContentAlpha = if (dim) 1f else if (flying) 0.42f else 1f
                     Column(
                         Modifier
                             .fillMaxWidth()
+                            .onSizeChanged {
+                                tallDockPx = it.height.toFloat()
+                                ref.view?.tallBottomInset = tallDockPx
+                            }
+                            .alpha(dockBgAlpha)
                             .background(C.HudTier2Bg)
                             .drawBehind {
                                 drawLine(C.SepiaBorder, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 2.dp.toPx())
@@ -223,12 +250,12 @@ fun BattleScreen(session: GameSession) {
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx())),
                                 )
                             }
-                            .padding(top = 6.dp, bottom = safe.calculateBottomPadding()),
+                            .padding(top = 6.dp, bottom = safeBottom),
                     ) {
                         // Slim integrated Walk + Steam + Readout rail (keeps the lower fort completely clear!).
                         HandRow(
                             s.leftHand,
-                            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp).alpha(dockAlpha).blockInput(dockDim),
+                            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp).alpha(dockContentAlpha).blockInput(dockDim),
                             start = { CompactHud { WalkRail(session, u, canAct && !flying) } },
                             end = {
                                 if (!flying && u.humanTurn && !dragging) {
@@ -242,12 +269,12 @@ fun BattleScreen(session: GameSession) {
                             },
                         )
                         if (!flying && u.selected?.buried == true && u.humanTurn) {
-                            Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp).alpha(dockAlpha).blockInput(dockDim), contentAlignment = Alignment.Center) {
+                            Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp).alpha(dockContentAlpha).blockInput(dockDim), contentAlignment = Alignment.Center) {
                                 ShoveOff(session, u, canAct)
                             }
                         }
                         // Illustrated Shot Tray
-                        Box(Modifier.alpha(dockAlpha).blockInput(dockDim).padding(top = 2.dp)) {
+                        Box(Modifier.alpha(dockContentAlpha).blockInput(dockDim).padding(top = 2.dp)) {
                             CompactHud {
                                 ShotTray(
                                     session = session, u = u, enabled = canAct && !flying, chip = 52.dp,
@@ -260,7 +287,7 @@ fun BattleScreen(session: GameSession) {
                         HandRow(
                             s.leftHand,
                             Modifier.fillMaxWidth().heightIn(min = 80.dp).padding(horizontal = 8.dp, vertical = 2.dp),
-                            start = { Box(Modifier.weight(1f).alpha(dockAlpha).blockInput(dockDim)) { CrewRow(session, u, viewer, canAct && !flying, vertical = false) } },
+                            start = { Box(Modifier.weight(1f).alpha(dockContentAlpha).blockInput(dockDim)) { CrewRow(session, u, viewer, canAct && !flying, vertical = false) } },
                             end = {
                                 if (flying) Box(Modifier.size(76.dp), contentAlignment = Alignment.Center) { SpeedButton(session) }
                                 else FireButton(session, u, fire, pass)
@@ -269,16 +296,17 @@ fun BattleScreen(session: GameSession) {
                     }
                 }
             } else {
-                // Wide layout: report exact HUD padding so auto-frame keeps both forts in the Clear Rect.
+                // Wide layout: swap left/right HUD pads in Left-Hand mode so CrewRow never overlaps framed forts (M-A07).
                 with(density) {
+                    val leftCrewPad = if (s.leftHand) 8.dp else 60.dp
+                    val rightCrewPad = if (s.leftHand) 60.dp else 8.dp
                     ref.view?.hudPad = floatArrayOf(
-                        (safe.calculateLeftPadding(dir) + 60.dp).toPx(),
+                        (safe.calculateLeftPadding(dir) + leftCrewPad).toPx(),
                         (safe.calculateTopPadding() + 44.dp).toPx(),
-                        (safe.calculateRightPadding(dir) + 8.dp).toPx(),
+                        (safe.calculateRightPadding(dir) + rightCrewPad).toPx(),
                         (safe.calculateBottomPadding() + 86.dp).toPx(),
                     )
                 }
-                Box(Modifier.fillMaxSize().then(hidden)) { field() }
                 Column(
                     Modifier
                         .fillMaxSize()
@@ -309,9 +337,13 @@ fun BattleScreen(session: GameSession) {
                             val onRight = rv.rivalPeekRight.value
                             val label = if (peeking) RivalPeek.HOME else RivalPeek.VIEW
                             val shown = if (onRight) "$label ▶" else "◀ $label"
+                            val sharesEdgeWithCrew = onRight == s.leftHand
                             CastleButton(
                                 shown, { rv.tapRivalPeek() },
-                                Modifier.align(if (onRight) Alignment.CenterEnd else Alignment.CenterStart).padding(horizontal = 6.dp),
+                                Modifier.align(if (onRight) Alignment.CenterEnd else Alignment.CenterStart).padding(
+                                    start = if (!onRight && sharesEdgeWithCrew) 64.dp else 6.dp,
+                                    end = if (onRight && sharesEdgeWithCrew) 64.dp else 6.dp,
+                                ),
                                 color = C.Orange, size = 12, description = label,
                                 pad = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                 textColor = Color.White,
@@ -319,7 +351,13 @@ fun BattleScreen(session: GameSession) {
                         }
                         if (fineOpen && u.humanTurn && !dragging && !flying) {
                             val start = PhoneLayout.pad(tall = false, mySide = viewer) == PhoneLayout.Pad.TOP_START
-                            Box(Modifier.align(if (start) Alignment.TopStart else Alignment.TopEnd).padding(start = if (start) 60.dp else 0.dp, end = if (start) 0.dp else 4.dp, top = if (manual) 56.dp else 4.dp)) {
+                            Box(
+                                Modifier.align(if (start) Alignment.TopStart else Alignment.TopEnd).padding(
+                                    start = if (start && !s.leftHand) 60.dp else 4.dp,
+                                    end = if (!start && s.leftHand) 60.dp else 4.dp,
+                                    top = if (manual) 56.dp else 4.dp,
+                                ),
+                            ) {
                                 CompactHud { FineTunePad(session, u, s.tapOnly, nudge, recall) }
                             }
                         }
@@ -441,14 +479,15 @@ private fun TopStrip(u: BattleUi, tall: Boolean, pause: (@Composable () -> Unit)
         .clearAndSetSemantics { contentDescription = desc }
 
     if (tall) {
+        val splitBossBadge = statusBadge != null && h.boss != null
         Row(Modifier.fillMaxWidth().background(C.HudTier3Bg), verticalAlignment = Alignment.CenterVertically) {
             pause?.let { Box(Modifier.padding(start = 4.dp)) { it() } }
-            Column(stripBg.weight(1f).heightIn(min = 56.dp).padding(horizontal = 6.dp, vertical = 3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(stripBg.weight(1f).heightIn(min = 56.dp).padding(horizontal = 5.dp, vertical = 3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     KettleGauge(u, 0)
-                    Spacer(Modifier.weight(1f))
-                    RoundTelemetry(roundCompact, statusBadge, isSquall)
-                    Spacer(Modifier.weight(1f))
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        RoundTelemetry(roundCompact, if (splitBossBadge) null else statusBadge, isSquall)
+                    }
                     KettleGauge(u, 1)
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -457,6 +496,11 @@ private fun TopStrip(u: BattleUi, tall: Boolean, pause: (@Composable () -> Unit)
                     Wind(u)
                     Spacer(Modifier.weight(1f))
                     Pips(u, 1)
+                }
+                if (splitBossBadge && statusBadge != null) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        StatusBadgePill(statusBadge, isSquall)
+                    }
                 }
             }
         }
@@ -516,19 +560,24 @@ private fun Pips(u: BattleUi, side: Int) {
 @Composable
 private fun RoundTelemetry(round: String, statusBadge: String?, isSquall: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        HudTier3Pill(pad = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
-            Label(round, size = 13, bold = true, color = C.Ink, maxLines = 1)
+        HudTier3Pill(pad = PaddingValues(horizontal = 7.dp, vertical = 2.dp)) {
+            Label(round, size = 12, bold = true, color = C.Ink, maxLines = 1)
         }
         if (statusBadge != null) {
-            HudTier3Pill(
-                color = if (isSquall) C.BadBg else C.BrassHi,
-                borderColor = if (isSquall) C.BadBorder else C.OrangeInk,
-                pad = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-            ) {
-                FatigueFlameIcon(Modifier.size(14.dp))
-                Label(statusBadge, size = 12, bold = true, color = if (isSquall) C.BadInk else C.OrangeInk, maxLines = 1)
-            }
+            StatusBadgePill(statusBadge, isSquall)
         }
+    }
+}
+
+@Composable
+private fun StatusBadgePill(statusBadge: String, isSquall: Boolean) {
+    HudTier3Pill(
+        color = if (isSquall) C.BadBg else C.BrassHi,
+        borderColor = if (isSquall) C.BadBorder else C.OrangeInk,
+        pad = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+    ) {
+        FatigueFlameIcon(Modifier.size(14.dp))
+        Label(statusBadge, size = 12, bold = true, color = if (isSquall) C.BadInk else C.OrangeInk, maxLines = 1)
     }
 }
 
@@ -583,14 +632,15 @@ private fun TurnBanner(session: GameSession, u: BattleUi, modifier: Modifier) {
     val name = u.hud.names.getOrElse(u.side) { "" }
     val both = u.hud.human(0) && u.hud.human(1)
     val plus = "+".repeat(u.hud.handicap.getOrNull(u.side)?.marks ?: 0)
-    // The Rival's turn: its start taunt once, now and then a "thinking" line (one turn in four at most), else "aims".
+    // The Rival's turn: its start taunt once, now and then a "thinking" line (every 4th Rival turn), else "aims" (M-A10).
     val rivalLine = remember(u.hud.turn) {
         val rival = Names.rivalShort(u.level, name)
         val key = Names.rivalKey(u.level, name)
+        val rivalTurn = (u.hud.turn + 1) / 2
         when {
             u.hud.human(u.side) -> ""
             u.hud.turn <= 2 && Text.has("rivals.$key.taunts.start") -> Text.t("rivals.$key.taunts.start")
-            u.hud.turn % 4 == 3 && Text.has("rivals.banner.thinking") -> Text.t("rivals.banner.thinking", "rival" to rival)
+            rivalTurn > 1 && rivalTurn % 4 == 0 && Text.has("rivals.banner.thinking") -> Text.t("rivals.banner.thinking", "rival" to rival)
             else -> Text.t("banners.rival_aims", "rival" to rival)
         }
     }
@@ -672,15 +722,15 @@ private fun WalkRail(session: GameSession, u: BattleUi, enabled: Boolean) {
     val steam = u.hud.steam.getOrElse(u.side) { 0 }
     val maxSteam = u.hud.steamMax.getOrElse(u.side) { 100 }.coerceAtLeast(1)
     val can = enabled && u.hud.steamTurnLeft > 0 && steam > 0
-    HudTier2Plate(pad = PaddingValues(horizontal = 6.dp, vertical = 2.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    HudTier2Plate(pad = PaddingValues(horizontal = 4.dp, vertical = 2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             Column(horizontalAlignment = Alignment.Start) {
                 Label(
                     Text.t("hud.steam", "n" to steam),
                     Modifier.semantics { contentDescription = Text.t("hud.steam_long", "n" to steam, "max" to maxSteam, "left" to u.hud.steamTurnLeft) },
-                    size = 12, bold = true, color = C.Ink, maxLines = 1,
+                    size = 11, bold = true, color = C.Ink, maxLines = 1,
                 )
-                Box(Modifier.width(56.dp).height(6.dp).clip(RoundedCornerShape(3.dp)).background(C.NookBack)) {
+                Box(Modifier.width(44.dp).height(6.dp).clip(RoundedCornerShape(3.dp)).background(C.NookBack)) {
                     Box(Modifier.fillMaxHeight().fillMaxWidth(steam.coerceIn(0, maxSteam).toFloat() / maxSteam).background(C.Kettle))
                 }
             }
@@ -982,18 +1032,23 @@ private fun CrewRow(session: GameSession, u: BattleUi, side: Int, enabled: Boole
             }
         }
     }
-    if (vertical) Column(verticalArrangement = Arrangement.spacedBy(5.dp)) { items() } else Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { items() }
+    if (vertical) {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(5.dp)) { items() }
+    } else {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) { items() }
+    }
 }
 
 @Composable
 private fun Readout(session: GameSession, u: BattleUi, onTap: () -> Unit, nudge: (Int, Int, Boolean) -> Boolean) {
     val aim by session.aimState.collectAsState()
     val h = u.selected
-    val text = if (h != null) String.format(java.util.Locale.ROOT, "%.1f° | %d", aim.angle / 10f, aim.power) else "--° | --"
+    val dispAngle = if (h != null && h.side == 1) (1800 - aim.angle).coerceIn(0, 1800) else aim.angle
+    val text = if (h != null) String.format(java.util.Locale.ROOT, "%.1f° | %d", dispAngle / 10f, aim.power) else "--° | --"
     val d = LocalDensity.current
     val step by rememberUpdatedState(nudge)
     HudTier2Plate(
-        Modifier.widthIn(min = 108.dp).heightIn(min = 48.dp)
+        Modifier.widthIn(min = 88.dp).heightIn(min = 48.dp)
             .clickable(onClickLabel = Text.t("hud.fine_tune"), onClick = onTap)
             .pointerInput(Unit) {
                 var ax = 0f; var ay = 0f
@@ -1004,10 +1059,10 @@ private fun Readout(session: GameSession, u: BattleUi, onTap: () -> Unit, nudge:
                     if (da != 0 || dpw != 0) { ax -= da * stepPx; ay += dpw * stepPx; step(-da * 5, dpw, false) }
                 }
             }
-            .semantics { contentDescription = if (h != null) Text.t("hud.aim_readout", "angle" to String.format(java.util.Locale.ROOT, "%.1f", aim.angle / 10f), "power" to aim.power) else Text.t("hud.no_hob") },
-        pad = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            .semantics { contentDescription = if (h != null) Text.t("hud.aim_readout", "angle" to String.format(java.util.Locale.ROOT, "%.1f", dispAngle / 10f), "power" to aim.power) else Text.t("hud.no_hob") },
+        pad = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
     ) {
-        Label(text, size = 16, bold = true, color = C.Ink, maxLines = 1)
+        Label(text, size = 15, bold = true, color = C.Ink, maxLines = 1)
     }
 }
 

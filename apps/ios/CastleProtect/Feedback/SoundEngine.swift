@@ -1,5 +1,6 @@
 import AVFoundation
 import os
+import UIKit
 
 /// One sound from assets/audio/audio.json.
 struct SoundEntry: Equatable, Sendable {
@@ -183,11 +184,12 @@ final class UncheckedBox<T>: @unchecked Sendable {
     init(_ value: T) { self.value = value }
 }
 
-/// Holds NotificationCenter tokens and the fade timer so `nonisolated deinit` can tear both down safely in Swift 6.
+/// Holds NotificationCenter tokens, the fade timer and crewWinTask so `nonisolated deinit` can tear them down safely in Swift 6.
 private final class SoundCleanupBag: @unchecked Sendable {
     private let lock = NSLock()
     private var observers: [NSObjectProtocol] = []
     private var fadeTimer: Timer?
+    private var crewWinTask: Task<Void, Never>?
 
     func addObserver(_ token: NSObjectProtocol) {
         lock.lock()
@@ -209,13 +211,24 @@ private final class SoundCleanupBag: @unchecked Sendable {
         old?.invalidate()
     }
 
+    func setCrewWinTask(_ task: Task<Void, Never>?) {
+        lock.lock()
+        let old = crewWinTask
+        crewWinTask = task
+        lock.unlock()
+        old?.cancel()
+    }
+
     func tearDown() {
         lock.lock()
         let obs = observers
         observers = []
         let timer = fadeTimer
         fadeTimer = nil
+        let winTask = crewWinTask
+        crewWinTask = nil
         lock.unlock()
+        winTask?.cancel()
         let nc = NotificationCenter.default
         for token in obs { nc.removeObserver(token) }
         if let timer {
@@ -345,6 +358,8 @@ final class SoundEngine {
     private var worldMixer = AVAudioMixerNode()
     private var musicMixer = AVAudioMixerNode()
     private var musicSpeed = AVAudioUnitVarispeed()
+    /// Dedicated sting mixer attached directly to mainMixerNode so slow-motion varispeed never pitch-warps stings (H-I05).
+    private var stingMixer = AVAudioMixerNode()
     private var voiceMixer = AVAudioMixerNode()
     private var voices: [(player: AVAudioPlayerNode, pitch: AVAudioUnitVarispeed, panner: AVAudioMixerNode)] = []
     private var pool = VoicePool(count: 16)
@@ -385,10 +400,11 @@ final class SoundEngine {
     private var lastBark: UInt64 = 0
     private var barkSides: Set<Int> = []
     private var lastLines: [String: String] = [:]
-    private var crewWinTask: Task<Void, Never>?
     private var rng: UInt32 = 0x1F12_3BB5
     /// `secondaryAudioShouldBeSilencedHint`, read once and refreshed on notice / resume (L4).
     private var otherAudioPlaying = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint
+    /// VoiceOver status, tracked so music/world duck to 0.35 and SFX/voices duck to 0.55 while VoiceOver speaks (M-I06).
+    private var voiceOverRunning = UIAccessibility.isVoiceOverRunning
 
     /// Sliders, 0 to 100.
     var volume = 85 { didSet { applyVolume() } }
@@ -455,6 +471,12 @@ final class SoundEngine {
                 me.value?.applyVolume()
             }
         })
+        cleanup.addObserver(nc.addObserver(forName: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                me.value?.voiceOverRunning = UIAccessibility.isVoiceOverRunning
+                me.value?.applyVolume()
+            }
+        })
     }
 
     private func interrupted(began: Bool, shouldResume: Bool) {
@@ -490,6 +512,7 @@ final class SoundEngine {
     /// Media services were reset: every node is gone. Build the graph again on the next sound.
     private func rebuild() {
         stopFades()
+        cleanup.setCrewWinTask(nil)
         let track = musicTrack ?? suspendedTrack ?? pendingMusicAfterSting
         let wanted = loopWanted
         voices = []
@@ -519,6 +542,7 @@ final class SoundEngine {
         worldMixer = AVAudioMixerNode()
         musicMixer = AVAudioMixerNode()
         musicSpeed = AVAudioUnitVarispeed()
+        stingMixer = AVAudioMixerNode()
         voiceMixer = AVAudioMixerNode()
         musicTrack = nil
         suspendedTrack = nil
@@ -553,6 +577,7 @@ final class SoundEngine {
         held = on
         if on {
             stopFades()
+            cleanup.setCrewWinTask(nil)
             if started { engine.pause() }
         } else {
             resume()
@@ -563,6 +588,7 @@ final class SoundEngine {
     func resume() {
         guard !held else { return }
         otherAudioPlaying = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint
+        voiceOverRunning = UIAccessibility.isVoiceOverRunning
         applyVolume()
         // One failed start does not silence the whole run: try again on each foreground (L4).
         failed = false
@@ -623,11 +649,13 @@ final class SoundEngine {
             engine.attach(worldMixer)
             engine.attach(musicMixer)
             engine.attach(musicSpeed)
+            engine.attach(stingMixer)
             engine.attach(voiceMixer)
             engine.connect(sfxMixer, to: engine.mainMixerNode, format: nil)
             engine.connect(worldMixer, to: engine.mainMixerNode, format: nil)
             engine.connect(musicMixer, to: musicSpeed, format: stereoFormat)
             engine.connect(musicSpeed, to: engine.mainMixerNode, format: stereoFormat)
+            engine.connect(stingMixer, to: engine.mainMixerNode, format: stereoFormat)
             engine.connect(voiceMixer, to: engine.mainMixerNode, format: nil)
             for _ in 0..<pool.count {
                 let p = AVAudioPlayerNode()
@@ -721,12 +749,16 @@ final class SoundEngine {
 
     private func applyVolume() {
         let master: Float = muted ? 0 : 1
+        let voMusic: Float = voiceOverRunning ? 0.35 : 1.0
+        let voSfx: Float = voiceOverRunning ? 0.55 : 1.0
         let sfx = master * Float(max(0, min(100, volume))) / 100
-        sfxMixer.outputVolume = sfx
-        worldMixer.outputVolume = sfx * worldDuckGain
-        voiceMixer.outputVolume = master * Float(max(0, min(100, voiceVolume))) / 100
+        sfxMixer.outputVolume = sfx * voSfx
+        worldMixer.outputVolume = sfx * worldDuckGain * voMusic
+        voiceMixer.outputVolume = master * Float(max(0, min(100, voiceVolume))) / 100 * voSfx
         // Another app's music wins over ours (silent switch is the session's job).
-        musicMixer.outputVolume = otherAudioPlaying ? 0 : master * Float(max(0, min(100, musicVolume))) / 100 * duckGain
+        let musicBase: Float = otherAudioPlaying ? 0 : master * Float(max(0, min(100, musicVolume))) / 100 * voMusic
+        musicMixer.outputVolume = musicBase * duckGain
+        stingMixer.outputVolume = musicBase
     }
 
     /// Shifts music and active loop playback rate gently during battle slow-motion moments.
@@ -888,6 +920,7 @@ final class SoundEngine {
     }
 
     func stopLoops() {
+        cleanup.setCrewWinTask(nil)
         removeAllLoops()
     }
 
@@ -1146,7 +1179,7 @@ final class SoundEngine {
             stingPlayer = p
         }
         engine.disconnectNodeOutput(p)
-        engine.connect(p, to: musicMixer, format: file.processingFormat)
+        engine.connect(p, to: stingMixer, format: file.processingFormat)
         p.stop()
         stingToken += 1
         let token = stingToken
@@ -1173,6 +1206,7 @@ final class SoundEngine {
     }
 
     func stopMusic() {
+        cleanup.setCrewWinTask(nil)
         for p in layers.values {
             p.stop()
             engine.detach(p)
@@ -1222,12 +1256,12 @@ final class SoundEngine {
     private func crewWinLine(side: Int) {
         guard !manifest.crewWin.isEmpty else { return }
         let line = manifest.crewWin[Int(nextRandom() * Double(manifest.crewWin.count)) % manifest.crewWin.count]
-        crewWinTask?.cancel()
-        crewWinTask = Task { @MainActor [weak self] in
+        let task = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 2_200_000_000)
             guard !Task.isCancelled, let self else { return }
             self.onSubtitle?(line, side)
         }
+        cleanup.setCrewWinTask(task)
     }
 
     /// A new turn step: each side may bark again.

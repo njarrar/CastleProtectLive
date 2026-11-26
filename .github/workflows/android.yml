@@ -127,6 +127,7 @@ jobs:
           readelf_bin="$(find "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt" -name llvm-readelf \( -type f -o -type l \) | head -n1)"
           [ -n "$readelf_bin" ] || { echo "::error::llvm-readelf not found in the NDK"; exit 1; }
           bad=0
+          zipalign_bin="$(ls -d "${ANDROID_SDK_ROOT:-$ANDROID_HOME}"/build-tools/*/zipalign 2>/dev/null | sort -V | tail -n1 || true)"
           for apk in "$debug_apk" "$release_apk"; do
             echo "Checking APK: $apk"
             for abi in arm64-v8a armeabi-v7a x86_64; do
@@ -135,34 +136,35 @@ jobs:
                 unzip -l "$apk" | grep -q "$so" || { echo "::error::$so is missing from $apk"; bad=1; }
               done
             done
-          done
-          tmp="$RUNNER_TEMP/apk"; rm -rf "$tmp"; mkdir -p "$tmp"; unzip -q "$debug_apk" 'lib/*' -d "$tmp"
-          # Every ABI shim must need the core by bare name, never a CI build path.
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            jni_so="$tmp/lib/$abi/libcastle_jni.so"
-            [ -f "$jni_so" ] || { echo "::error::$jni_so missing after unzip"; bad=1; continue; }
-            "$readelf_bin" -d "$jni_so" | grep NEEDED
-            if "$readelf_bin" -d "$jni_so" | grep NEEDED | grep -q '/'; then
-              echo "::error::$jni_so records a path for a needed library"; bad=1
+            tmp="$RUNNER_TEMP/apk_$(basename "$apk" .apk)"
+            rm -rf "$tmp"; mkdir -p "$tmp"; unzip -q "$apk" 'lib/*' -d "$tmp"
+            # Every ABI shim must need the core by bare name, never a CI build path.
+            for abi in arm64-v8a armeabi-v7a x86_64; do
+              jni_so="$tmp/lib/$abi/libcastle_jni.so"
+              [ -f "$jni_so" ] || { echo "::error::$jni_so missing after unzip ($apk)"; bad=1; continue; }
+              "$readelf_bin" -d "$jni_so" | grep NEEDED
+              if "$readelf_bin" -d "$jni_so" | grep NEEDED | grep -q '/'; then
+                echo "::error::$jni_so records a path for a needed library ($apk)"; bad=1
+              fi
+            done
+            # 16 KB pages: the castle libraries on 64-bit ABIs, and the APK's zip alignment.
+            for so in "$tmp"/lib/arm64-v8a/libcastle_*.so "$tmp"/lib/x86_64/libcastle_*.so; do
+              [ -f "$so" ] || continue
+              if "$readelf_bin" -lW "$so" | awk '$1=="LOAD" {print $NF}' | grep -qv '^0x4000$\|^0x10000$'; then
+                echo "::error::not 16 KB aligned: $so ($apk)"; bad=1
+              fi
+            done
+            if [ -n "$zipalign_bin" ]; then
+              "$zipalign_bin" -c -P 16 -v 4 "$apk" > /dev/null || { echo "::error::APK is not 16 KB zip aligned: $apk"; bad=1; }
             fi
           done
+          if [ -z "$zipalign_bin" ]; then
+            echo "::notice::zipalign not found, APK alignment not checked"
+          fi
           # Verify R8 kept CoreJni native methods in the release APK DEX.
           rtmp="$RUNNER_TEMP/release_dex"; rm -rf "$rtmp"; mkdir -p "$rtmp"; unzip -q "$release_apk" 'classes*.dex' -d "$rtmp"
           if ! grep -qa "Lgames/castleprotect/core/CoreJni;" "$rtmp"/classes*.dex || ! grep -qa "nativeDailySeed" "$rtmp"/classes*.dex; then
             echo "::error::CoreJni native entry points were stripped by R8 from release DEX"; bad=1
-          fi
-          # 16 KB pages: the castle libraries on 64-bit ABIs, and the APK's zip alignment.
-          for so in "$tmp"/lib/arm64-v8a/libcastle_*.so "$tmp"/lib/x86_64/libcastle_*.so; do
-            [ -f "$so" ] || continue
-            if "$readelf_bin" -lW "$so" | awk '$1=="LOAD" {print $NF}' | grep -qv '^0x4000$\|^0x10000$'; then
-              echo "::error::not 16 KB aligned: $so"; bad=1
-            fi
-          done
-          zipalign_bin="$(ls -d "${ANDROID_SDK_ROOT:-$ANDROID_HOME}"/build-tools/*/zipalign 2>/dev/null | sort -V | tail -n1 || true)"
-          if [ -n "$zipalign_bin" ]; then
-            "$zipalign_bin" -c -P 16 -v 4 "$debug_apk" > /dev/null || { echo "::error::Debug APK is not 16 KB zip aligned"; bad=1; }
-          else
-            echo "::notice::zipalign not found, APK alignment not checked"
           fi
           exit $bad
 

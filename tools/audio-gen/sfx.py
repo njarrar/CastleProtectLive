@@ -6,8 +6,8 @@ kettles, toy springs. No real blasts, no cries of hurt. Big sounds carry a
 """
 import numpy as np
 from dsp import (SR, TAU, n_of, tt, db, midi, note, decay, ar, fade, curve, smooth, osc, glide,
-                 modal, white, filt, peak, reson, high_shelf, overlap_wrap, noise, loop_noise,
-                 sweep_noise, tv_filter, verb, mix, soft_clip, convolve)
+                 modal, white, filt, peak, reson, high_shelf, overlap_wrap, make_seamless_loop,
+                 noise, loop_noise, sweep_noise, tv_filter, verb, mix, soft_clip, convolve)
 
 # ---------------- building blocks ----------------
 
@@ -188,26 +188,49 @@ def aim_drag_start(r):
 def aim_band_stretch(r):
     """1 s loop. The game raises the pitch with power."""
     dur = 1.0
-    tail = n_of(0.5)
+    fade_ms = 50.0
+    tail = n_of(fade_ms / 1000.0)
     n = n_of(dur)
     n_ext = n + tail
-    t = np.arange(n) / SR
     t_ext = np.arange(n_ext) / SR
-    f = 196.0   # 196 whole cycles in 1 s; pi/2 phase keeps wrap slope near zero
-    tone = osc(np.full(n, f), harm=(0.6, 0.55, 0.5, 0.45, 0.5, 0.45, 0.4, 0.35, 0.28, 0.22, 0.16, 0.12), phase0=np.pi / 2)
-    grain = 0.65 + 0.35 * np.sin(TAU * 23 * t) * np.sin(TAU * 3 * t)
+    f = 196.0   # 196 whole cycles in 1 s for coherent circular loop phase
+    tone_ext = osc(np.full(n_ext, f), harm=(0.6, 0.55, 0.5, 0.45, 0.5, 0.45, 0.4, 0.35, 0.28, 0.22, 0.16, 0.12), phase0=0.0)
+    grain_ext = 0.72 + 0.28 * np.sin(TAU * 23 * t_ext) * np.sin(TAU * 3 * t_ext)
     # Resinous cord fibre + stick-slip upper-harmonic creaks (800 Hz - 2.8 kHz) for phone clarity
-    mod_ext = 0.5 + 0.5 * np.sin(TAU * 23 * t_ext + 1.0)
+    mod_ext = 0.55 + 0.45 * np.sin(TAU * 23 * t_ext + 1.0)
     fibre_ext = filt(white(n_ext, r), 850, 2800) * mod_ext * 0.45
     creaks_ext = np.zeros(n_ext)
-    for i in range(36):
+    for i in range(26):
         a = int((i + 0.35 + r.uniform(-0.15, 0.15)) / 24 * SR)
         s = modal([(r.uniform(900, 1450), 0.7, 0.008), (r.uniform(1650, 2550), 0.5, 0.006)], 0.035, r) * ar(n_of(0.035), 0.002, 0.008)
         if 0 <= a < n_ext:
             e = min(len(s), n_ext - a)
             creaks_ext[a:a + e] += s[:e] * r.uniform(0.35, 0.75)
-    texture = overlap_wrap(fibre_ext + creaks_ext * 0.4, tail)
-    return tone * grain * 0.42 + texture
+    return make_seamless_loop(tone_ext * grain_ext * 0.44 + fibre_ext + creaks_ext * 0.38, SR, fade_ms=fade_ms)
+
+
+def aim_ratchet_tick(r):
+    """Crisp ~30 ms wooden-brass ratchet pawl click for every 5% aim pull step."""
+    dur = 0.028
+    n = n_of(dur)
+    wood = modal([(1340, 1.0, 0.0045), (2620, 0.55, 0.0032)], dur, r)
+    brass = modal([(3420, 0.48, 0.0030), (5180, 0.24, 0.0020)], dur, r)
+    snap = noise(dur, r, 1600, 5600) * decay(n, 0.0018) * 0.42
+    return fade(wood + brass + snap, 0.0004, 0.005)
+
+
+def aim_release_twang(r):
+    """Snappy ~145 ms braided-leather slingshot release snap."""
+    dur = 0.145
+    n = n_of(dur)
+    t = np.arange(n) / SR
+    # Leather pouch whip crack + elastic cord pitch recoil
+    whip = sweep_noise(0.055, r, [(0, 3800), (1, 1100)], 1.6) * decay(n_of(0.055), 0.011) * ar(n_of(0.055), 0.0006, 0.008)
+    f_band = curve([(0, 250), (0.14, 430), (0.55, 225), (1.0, 175)], n) * (1 + 0.055 * np.exp(-t / 0.045) * np.sin(TAU * 34 * t))
+    twang = osc(f_band, harm=(1.0, 0.58, 0.32, 0.14, 0.06)) * decay(n, 0.048) * ar(n, 0.0015, 0.022)
+    fork = knock(r, 470, 0.075, 0.013, (1, 2.35, 4.1), (0.9, 0.45, 0.2))
+    out = mix(twang * 0.95, (whip, 0.0, 0.72), (fork, 0.004, 0.65))[:n]
+    return soft_clip(fade(out, 0.0008, 0.016), 1.15)
 
 
 def aim_set(r):
@@ -305,14 +328,14 @@ def launch_roll(r):
 def fly_whistle_loop(r):
     """1 s loop. The game bends the pitch with the shell's height."""
     n = SR
-    tail = n_of(0.5)
+    fade_ms = 50.0
+    tail = n_of(fade_ms / 1000.0)
     n_ext = n + tail
-    t = np.arange(n) / SR
-    f = 1200 * (1 + 0.006 * np.sin(TAU * 6 * t))
-    tone = osc(f, harm=(1, 0.12, 0.04), phase0=np.pi / 2) * (0.85 + 0.15 * np.sin(TAU * 6 * t + 0.7))
+    t_ext = np.arange(n_ext) / SR
+    f_ext = 1200.0 * (1 + 0.006 * np.sin(TAU * 6 * t_ext))
+    tone_ext = osc(f_ext, harm=(1, 0.12, 0.04), phase0=0.0) * (0.86 + 0.14 * np.sin(TAU * 6 * t_ext))
     air_ext = reson(white(n_ext, r), 1200, 6) * 2.5 + filt(white(n_ext, r), 2500, 7000) * 0.05
-    air = overlap_wrap(air_ext, tail)
-    return tone * 0.6 + air * 0.25
+    return make_seamless_loop(tone_ext * 0.6 + air_ext * 0.25, SR, fade_ms=fade_ms)
 
 
 def fly_fast_zip(r):
@@ -335,19 +358,20 @@ def fly_bounce_hop(r):
 
 def fly_roll_loop(r):
     n = SR
-    tail = n_of(0.5)
+    fade_ms = 50.0
+    tail = n_of(fade_ms / 1000.0)
     n_ext = n + tail
     t = np.arange(n_ext) / SR
-    bumps = 0.45 + 0.55 * np.abs(np.sin(TAU * 7 * t)) ** 3
+    bumps = 0.50 + 0.50 * np.abs(np.sin(TAU * 7 * t)) ** 3
     body = filt(white(n_ext, r), 110, 700) * bumps
     knocks = np.zeros(n_ext)
-    for i in range(21):
+    for i in range(15):
         s = knock(r, r.uniform(280, 520), 0.05, 0.01)
         a = int(((i + 0.5) / 14) * n)
         if a < n_ext:
             e = min(len(s), n_ext - a)
             knocks[a:a + e] += s[:e] * r.uniform(0.3, 0.8)
-    return overlap_wrap(body + 0.35 * knocks, tail)
+    return make_seamless_loop(body + 0.35 * knocks, SR, fade_ms=fade_ms)
 
 
 # ---------------- impact ----------------
@@ -357,6 +381,19 @@ def hit_blast_small(r): return blast(r, 1)
 def hit_blast_medium(r): return blast(r, 2)
 def hit_blast_large(r): return verb(blast(r, 3), r, 0.1, 0.5, 0.14, 3500)
 def hit_blast_huge(r): return verb(blast(r, 4), r, 0.16, 0.8, 0.22, 3000)
+
+
+def hit_sub_thud(r):
+    """Warm 60-110 Hz sub-bass weight thump (~220 ms) layered under big blasts and Kettle Pop."""
+    dur = 0.22
+    n = n_of(dur)
+    # Warm 108 -> 62 Hz sub-bass drop paired with warm upper-bass/chest body so it translates on phones
+    sub = osc(glide(108.0, 62.0, n, 0.65), harm=(1.0, 0.35, 0.22)) * decay(n, 0.068) * ar(n, 0.0025, 0.028)
+    chest = osc(glide(240.0, 155.0, n, 0.55), harm=(0.7, 0.85, 0.45)) * decay(n, 0.044) * ar(n, 0.0015, 0.022)
+    punch = modal([(255.0, 1.0, 0.032), (385.0, 0.85, 0.022), (560.0, 0.42, 0.014)], dur, r)
+    thump_air = filt(white(n, r), 210, 680) * decay(n, 0.028) * ar(n, 0.0015, 0.02) * 0.58
+    out = soft_clip(sub * 1.05 + chest * 0.85 + punch * 0.95 + thump_air, 1.35)
+    return fade(out, 0.0015, 0.025)
 
 
 def hit_pierce(r):
@@ -491,13 +528,14 @@ def _gusts(n, dur, r, k=(1, 2, 3)):
 
 def wx_wind_loop(r):
     dur = 4.0
-    tail = n_of(0.5)
+    fade_ms = 50.0
+    tail = n_of(fade_ms / 1000.0)
     n_ext = n_of(dur) + tail
     g = _gusts(n_ext, dur, r)
-    low = filt(white(n_ext, r), 250, 900) * (0.4 + 0.6 * g)
+    low = filt(white(n_ext, r), 250, 900) * (0.45 + 0.55 * g)
     wn = white(n_ext, r)
-    hiss = (reson(wn, 950, 5) * (1 - g) + reson(wn, 1400, 5) * g) * (0.3 + 0.7 * g) * 2
-    return overlap_wrap(low + hiss, tail)
+    hiss = (reson(wn, 950, 5) * (1 - g) + reson(wn, 1400, 5) * g) * (0.35 + 0.65 * g) * 2
+    return make_seamless_loop(low + hiss, SR, fade_ms=fade_ms)
 
 
 def wx_wind_shift(r):
@@ -509,19 +547,20 @@ def wx_wind_shift(r):
 
 def wx_squall_loop(r):
     dur = 4.0
-    tail = n_of(0.5)
+    fade_ms = 50.0
+    tail = n_of(fade_ms / 1000.0)
     n_ext = n_of(dur) + tail
     g = _gusts(n_ext, dur, r, (1, 3))
     rumble = filt(white(n_ext, r), 60, 300) * (0.6 + 0.4 * _gusts(n_ext, dur, r, (2, 5)))
     knockband = filt(white(n_ext, r), 380, 800) * (0.5 + 0.5 * g) * 0.5
     rain = filt(white(n_ext, r), 2500, 9000) * (0.5 + 0.5 * g) * 0.25
     drops = np.zeros(n_ext)
-    for _ in range(191):
+    for _ in range(175):
         s = tick(r, r.uniform(1800, 5000), 0.002, 0.012, 0.8) * r.uniform(0.1, 0.5)
         a = r.integers(0, n_ext - len(s))
         drops[a:a + len(s)] += s
     wind = reson(white(n_ext, r), 700, 3) * (0.3 + 0.7 * g) * 1.5
-    return overlap_wrap(rumble * 1.0 + knockband + rain + drops + wind, tail)
+    return make_seamless_loop(rumble * 1.0 + knockband + rain + drops + wind, SR, fade_ms=fade_ms)
 
 
 def wx_squall_bell(r):
@@ -580,14 +619,31 @@ def ket_hit(r):
 
 
 def ket_whistle_loop(r):
-    """Three pulses near 2 kHz. The game plays it, waits 4 s, plays it again."""
+    """Continuous 1.34 s kettle steam-and-whistle loop with steady boundary RMS (no silence dip)."""
+    dur = 1.34
+    fade_ms = 50.0
+    n = n_of(dur)
+    tail = n_of(fade_ms / 1000.0)
+    n_ext = n + tail
+    t = np.arange(n_ext) / SR
+    # Continuous simmering kettle steam & whistling spout bed (keeps boundary RMS steady > 0.8)
+    bed_f = 1976.0 * (1 + 0.004 * np.sin(TAU * 9 * t))
+    bed_tone = osc(bed_f, harm=(0.65, 0.12, 0.04), phase0=0.0) * (0.72 + 0.14 * np.sin(TAU * 3 * t / dur))
+    bed_steam = reson(white(n_ext, r), 1976, 10) * 3.0 + filt(white(n_ext, r), 1500, 4200) * 0.22
+    out = bed_tone * 0.48 + bed_steam * 0.28
+    # Three urgent kettle-pipe swells layered over the steady steam bed
     def pulse(d, f):
-        n = n_of(d)
-        t = np.arange(n) / SR
-        tone = osc(f * (1 + 0.004 * np.sin(TAU * 9 * t)) * curve([(0, 0.97), (0.2, 1), (1, 1)], n), harm=(1, 0.08))
-        air = reson(white(n, r), f, 12) * 4
-        return (tone * 0.7 + air * 0.3) * ar(n, 0.05, 0.08)
-    return mix(pulse(0.32, 1976), (pulse(0.32, 1976), 0.42), (pulse(0.5, 2093), 0.84))
+        np_ = n_of(d)
+        tp = np.arange(np_) / SR
+        tone = osc(f * (1 + 0.004 * np.sin(TAU * 9 * tp)) * curve([(0, 0.98), (0.2, 1), (1, 1)], np_), harm=(1, 0.08))
+        air = reson(white(np_, r), f, 12) * 3.5
+        return (tone * 0.65 + air * 0.30) * ar(np_, 0.045, 0.075)
+    for start_s, d_s, freq in ((0.06, 0.30, 1976), (0.46, 0.30, 1976), (0.86, 0.42, 2093)):
+        p_sig = pulse(d_s, freq)
+        a = n_of(start_s)
+        e = min(len(p_sig), n_ext - a)
+        out[a:a + e] += p_sig[:e] * 0.52
+    return make_seamless_loop(out, SR, fade_ms=fade_ms)
 
 
 def ket_crack(r):
@@ -794,8 +850,8 @@ def meta_block_place(r):
 # ---------------- registry ----------------
 # id: (function, bus, target LUFS, loop, volume, trigger, anim event or None, caption or None)
 
-def S(fn, bus, lufs, trig, anim=None, loop=False, vol=1.0, pitch_var=1.0, note=None, gap=None):
-    return dict(fn=fn, bus=bus, lufs=lufs, loop=loop, volume=vol, trigger=trig, anim=anim, pitch_var=pitch_var, note=note, gap=gap)
+def S(fn, bus, lufs, trig, anim=None, loop=False, vol=1.0, pitch_var=1.0, note=None, gap=None, shelf_db=None):
+    return dict(fn=fn, bus=bus, lufs=lufs, loop=loop, volume=vol, trigger=trig, anim=anim, pitch_var=pitch_var, note=note, gap=gap, shelf_db=shelf_db)
 
 
 HOB_ANIM = 'hob_<id>_<side>_'
@@ -816,6 +872,8 @@ SFX = {
 
     'aim_drag_start': S(aim_drag_start, 'ui', -24, 'Aim Drag starts, band appears'),
     'aim_band_stretch': S(aim_band_stretch, 'ui', -20, 'While dragging. Pitch 0 to +12 semitones with power 0 to 100', loop=True, vol=0.6, pitch_var=0),
+    'aim_ratchet_tick': S(aim_ratchet_tick, 'ui', -23, 'Aim Drag crosses each 5% power notch (pitch up +0.4 semitones per step)', pitch_var=0.3),
+    'aim_release_twang': S(aim_release_twang, 'launch', -18, 'Slingshot band snaps forward on shot release; scales with pull tension', HOB_ANIM + 'fire:release', pitch_var=0.6),
     'aim_set': S(aim_set, 'ui', -23, 'Finger up, aim set. Play 5 semitones down for a cancel', pitch_var=0),
     'aim_tick': S(aim_tick, 'ui', -25, 'Fine Tune step. Angle at pitch 0, power 5 semitones down', pitch_var=0),
     'aim_limit': S(aim_limit, 'ui', -24, 'Aim or power at its limit', pitch_var=0),
@@ -846,6 +904,7 @@ SFX = {
     'hit_blast_medium': S(hit_blast_medium, 'impact', -14, 'Core event explode, band medium', pitch_var=1.5),
     'hit_blast_large': S(hit_blast_large, 'impact', -13, 'Core event explode, band large'),
     'hit_blast_huge': S(hit_blast_huge, 'impact', -12, 'Core event explode, band huge'),
+    'hit_sub_thud': S(hit_sub_thud, 'impact', -15, 'Warm 60-110 Hz sub-bass weight thump layered under hit_blast_large, hit_blast_huge, and ket_pop', pitch_var=0.5, shelf_db=-1.0),
     'hit_pierce': S(hit_pierce, 'impact', -16, 'Core event explode, type pierce, and event threaded'),
     'hit_dig_carve': S(hit_dig_carve, 'impact', -16, 'Core event carve', 'fx_trail_dig'),
     'hit_water_splash': S(hit_water_splash, 'impact', -17, 'A shell or block lands in water', 'fx_splash:plop'),

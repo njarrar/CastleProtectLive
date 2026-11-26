@@ -7,7 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import { FLATTENERS } from './sprite-flattener.mjs';
-import { SCARF_OVERLAYS } from './sprite-hob.mjs';
+import { SCARF_OVERLAYS, HOB_HAT_OVERLAYS, HAT_DEDUP_HOBS } from './sprite-hob.mjs';
 import { REDESIGN_SPRITE_NAMES } from './gen-redesign-ui.mjs';
 import { pngAlphaBbox, packShelf, packMaxRects, buildDedupTables, DEFAULT_PAGE, DEFAULT_PAD } from './atlas-pack.mjs';
 
@@ -21,6 +21,7 @@ function flagVal(name, fallback = null) {
 
 const STRICT = args.includes('--strict');
 const SIMULATE_V2 = args.includes('--simulate-v2');
+const REQUIRE_2X_CHARS = args.includes('--require-2x-chars');
 const JSON_OUT = args.includes('--json');
 const MAX_PAGES = flagVal('--max-pages') ? Number(flagVal('--max-pages')) : null;
 
@@ -84,6 +85,7 @@ const REQUIRED_GROUPS = {
   'Part 2 cutaway fort': REDESIGN_SPRITE_NAMES.fort,
   'Part 2 soil strata': REDESIGN_SPRITE_NAMES.terrain,
   'Scarf overlays': Object.keys(SCARF_OVERLAYS),
+  ...(manifest.dedup?.mode === 'neutral-hat-scarf' || REQUIRE_2X_CHARS ? { 'Hob hat overlays': Object.keys(HOB_HAT_OVERLAYS) } : {}),
 };
 const missingRequired = {};
 for (const [label, list] of Object.entries(REQUIRED_GROUPS)) {
@@ -221,27 +223,23 @@ if (fs.existsSync(spritesDir)) {
     const legacyPages = packShelf(existing2xItems.map(x => ({ name: x.sprite.name, w: x.sw, h: x.sh })), DEFAULT_PAGE, DEFAULT_PAD, 2);
     const trimPages = packShelf(existing2xItems.map(x => ({ name: x.sprite.name, w: x.trim[2], h: x.trim[3], trim: x.trim, sourceW: x.sw, sourceH: x.sh })), DEFAULT_PAGE, DEFAULT_PAD, 2);
 
-    // Simulate --v2 (--trim --dedup-hobs + oversampled charScale=1 at @2x)
+    // Simulate --v2 (--trim --dedup-hobs + TRUE @2x Retina charScale=2 with hat+scarf overlay dedup)
     const dedup = buildDedupTables(existing2xItems.map(x => x.sprite));
     const v2Items = [];
     for (const s of dedup.packedSprites) {
-      const isChar = (s.group === 'hobs' || s.group === 'flatteners') && !/^hob_(scarf|patch)_/.test(s.name);
-      if (isChar && existing1xTrimByName.has(s.name)) {
-        const d1 = existing1xTrimByName.get(s.name);
-        // In neutral mode, bonked frames omit the baked snooze balloon (height ~<= 66 px @1x)
-        const bh = (s.group === 'hobs' && /_bonked_[013]$/.test(s.name)) ? Math.min(d1.trim[3], 66) : d1.trim[3];
-        v2Items.push({ name: s.name, w: d1.trim[2], h: bh, trim: [d1.trim[0], d1.trim[1], d1.trim[2], bh], sourceW: d1.sw, sourceH: d1.sh, frameScale: 1 });
-      } else {
-        const d2 = existing2xTrimByName.get(s.name);
-        if (!d2) continue;
-        const w = isChar ? Math.ceil(d2.trim[2] / 2) : d2.trim[2];
-        const h = isChar ? Math.ceil(d2.trim[3] / 2) : d2.trim[3];
-        v2Items.push({ name: s.name, w, h, trim: d2.trim, sourceW: d2.sw, sourceH: d2.sh, frameScale: isChar ? 1 : 2 });
-      }
+      // When simulating against an older manifest that still baked rival Hobs, fold rival Hobs into hat overlays
+      const rm = /^hob_([a-z]+)_rival_/.exec(s.name);
+      if (rm && HAT_DEDUP_HOBS.includes(rm[1])) continue;
+      const d2 = existing2xTrimByName.get(s.name);
+      if (!d2) continue;
+      v2Items.push({ name: s.name, w: d2.trim[2], h: d2.trim[3], trim: d2.trim, sourceW: d2.sw, sourceH: d2.sh, frameScale: 2 });
     }
-    // Include the 6 scarf overlays (32x32 @2x) if not already in existing sprites
+    // Include scarf and hat overlays at @2x if not already in existing sprites
     for (const sc of Object.keys(SCARF_OVERLAYS)) {
       if (!v2Items.some(i => i.name === sc)) v2Items.push({ name: sc, w: 32, h: 32, frameScale: 2 });
+    }
+    for (const ht of Object.keys(HOB_HAT_OVERLAYS)) {
+      if (!v2Items.some(i => i.name === ht)) v2Items.push({ name: ht, w: 72, h: 68, frameScale: 2 });
     }
     const v2Pages = packMaxRects(v2Items, DEFAULT_PAGE, DEFAULT_PAD, 2);
     const v2Area = v2Items.reduce((acc, it) => acc + it.w * it.h, 0);
@@ -250,7 +248,7 @@ if (fs.existsSync(spritesDir)) {
       legacyPages2x: legacyPages.length,
       trimOnlyPages2x: trimPages.length,
       v2Pages2x: v2Pages.length,
-      v2FillPct: Number(((v2Area / (DEFAULT_PAGE * DEFAULT_PAGE)) * 100).toFixed(1)),
+      v2FillPct: Number(((v2Area / (v2Pages.length * DEFAULT_PAGE * DEFAULT_PAGE)) * 100).toFixed(1)),
       v2PackedFrames: v2Items.length,
       v2Aliases: Object.keys(dedup.aliases).length,
     };
@@ -259,7 +257,7 @@ if (fs.existsSync(spritesDir)) {
 
 // 7. Packed atlas pages: every packed sprite, alias target, overlay and animation frame resolves to a
 // frame; frames sit inside their page and do not overlap; legacy per-team names keep their own files.
-const atlasCheck = { pages: [], framesChecked: 0, animFrames: 0, legacyFiles: 0 };
+const atlasCheck = { pages: [], framesChecked: 0, animFrames: 0, legacyFiles: 0, halfResCharFrames2x: 0 };
 const pngSize = (file) => { const b = fs.readFileSync(file); return [b.readUInt32BE(16), b.readUInt32BE(20)]; };
 for (const tag of ['1x', '2x']) {
   const ip = path.join(atlasDir, `castle@${tag}.json`);
@@ -278,6 +276,10 @@ for (const tag of ['1x', '2x']) {
       if (frames.has(n)) errors.push(`Atlas @${tag}: frame ${n} is on two pages`);
       frames.set(n, f);
       if (f.x < 0 || f.y < 0 || f.x + f.w > pw || f.y + f.h > ph || f.w <= 0 || f.h <= 0) errors.push(`Atlas ${page.image}: frame ${n} is outside the page`);
+      if (tag === '2x' && /^(hob|flattener)_/.test(n) && !/^hob_(scarf|patch|hat)_/.test(n)) {
+        const effScale = f.scale ?? page.scale ?? 2;
+        if (effScale < 2) atlasCheck.halfResCharFrames2x++;
+      }
     }
     rects.sort((a, b) => a[1].x - b[1].x);
     for (let i = 0; i < rects.length; i++) {
@@ -312,6 +314,11 @@ for (const tag of ['1x', '2x']) {
     }
   }
   if (tag === '2x') {
+    if (atlasCheck.halfResCharFrames2x > 0) {
+      const msg = `Atlas @2x contains ${atlasCheck.halfResCharFrames2x} half-resolution (@1x) character frames (rebuild with default --char-scale=2)`;
+      if (REQUIRE_2X_CHARS) errors.push(msg);
+      else warnings.push(msg);
+    }
     for (const a of Object.keys(al)) {
       for (const f of [`${a}.png`, `${a}@2x.png`]) {
         if (fs.existsSync(path.join(spritesDir, f))) atlasCheck.legacyFiles++;

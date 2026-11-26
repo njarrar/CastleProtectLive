@@ -62,7 +62,11 @@ pub fn auto(b: &mut Battle, turns: i32) {
 /// reply of the first entry the battle refused.
 pub fn replay_log(b: &mut Battle, log: &[Value]) -> Result<(), (usize, Value)> {
     for (i, c) in log.iter().enumerate() {
-        if c["cmd"] == "give_up" {
+        let name = c["cmd"].as_str().unwrap_or("");
+        if name == "resume" || !(crate::battle::is_logged(name) || name == "ai_turn") {
+            return Err((i, serde_json::json!({"ok": false, "reason": "bad_log"})));
+        }
+        if name == "give_up" {
             if let Some(t) = c["tick"].as_i64() {
                 while b.tick < t && matches!(b.phase, Phase::Resolve | Phase::Settle(_)) {
                     b.step(1);

@@ -203,15 +203,15 @@ E0 = ('picked', 'fire', 'hit_lands', 'takes_hit', 'bonked', 'win')
 BARKS = {
     'marge': {
         'picked':    (['bo', 'dum'], [0, 3], [0.13, 0.16], 'flat'),
-        'fire':      (['hoop'], [5], [0.14], 'up'),
+        'fire':      (['hoop', 'dum'], [3, 6], [0.09, 0.13], 'up'),
         'hit_lands': (['lub', 'bo'], [2, 7], [0.11, 0.22], 'up'),
-        'takes_hit': (['oof'], [1], [0.2], 'down'),
+        'takes_hit': (['oof', 'mop'], [2, -2], [0.12, 0.15], 'down'),
         'bonked':    (['mop', 'hoo'], [0, -5], [0.2, 0.34], 'down'),
         'win':       (['bo', 'dum', 'lub'], [0, 4, 7], [0.11, 0.11, 0.28], 'up'),
     },
     'thumper': {
-        'picked':    (['hem'], [0], [0.22], 'up'),
-        'fire':      (['hup'], [4], [0.12], 'flat'),
+        'picked':    (['humf'], [0], [0.22], 'up'),
+        'fire':      (['grum', 'hup'], [1, 5], [0.10, 0.11], 'flat'),
         'hit_lands': (['grum', 'gob'], [3, 0], [0.12, 0.14], 'flat'),
         'takes_hit': (['oof', 'humf'], [2, -3], [0.14, 0.16], 'down'),
         'bonked':    (['hoo', 'grum'], [-2, -7], [0.26, 0.3], 'down'),
@@ -222,14 +222,14 @@ BARKS = {
         'fire':      (['tet'], [4], [0.07], 'flat'),
         'hit_lands': (['pip', 'pin'], [3, 7], [0.07, 0.1], 'flat'),
         'takes_hit': (['tik'], [6], [0.1], 'down'),
-        'bonked':    (['pip', 'fen'], [2, -4], [0.1, 0.3], 'down'),
+        'bonked':    (['pin', 'fen'], [2, -4], [0.1, 0.3], 'down'),
         'win':       (['tet', 'pip', 'tik'], [0, 4, 9], [0.07, 0.07, 0.2], 'up'),
     },
     'jax': {
         'picked':    (['ta', 'ta', 'trat'], [0, 0, 4], [0.05, 0.05, 0.12], 'flat'),
         'fire':      (['ha', 'rrap'], [5, 7], [0.06, 0.09], 'flat'),
         'hit_lands': (['bo', 'pep', 'bim'], [2, 4, 9], [0.06, 0.06, 0.16], 'up'),
-        'takes_hit': (['ha', 'ha', 'oof'], [7, 5, 0], [0.05, 0.05, 0.14], 'down'),
+        'takes_hit': (['pep', 'ha', 'oof'], [7, 5, 0], [0.05, 0.05, 0.14], 'down'),
         'bonked':    (['wub', 'pep', 'hoo'], [0, -2, -7], [0.09, 0.09, 0.3], 'down'),
         'win':       (['ta', 'trat', 'rrap', 'bim'], [0, 2, 5, 9], [0.05, 0.05, 0.1, 0.24], 'up'),
     },
@@ -245,7 +245,7 @@ BARKS = {
         'picked':    (['mmm'], [0], [0.2], 'flat'),
         'fire':      (['hmm'], [3], [0.13], 'flat'),
         'hit_lands': (['hem', 'mub'], [2, 0], [0.13, 0.13], 'flat'),
-        'takes_hit': (['mumf'], [1], [0.18], 'down'),
+        'takes_hit': (['mub'], [1], [0.18], 'down'),
         'bonked':    (['mmm', 'mub'], [-1, -6], [0.22, 0.32], 'down'),
         'win':       (['hmm', 'hem', 'mmm'], [0, 2, 4], [0.11, 0.11, 0.24], 'flat'),
     },
@@ -253,7 +253,7 @@ BARKS = {
         'picked':    (['bo', 'ing'], [0, 7], [0.09, 0.16], 'up'),
         'fire':      (['dib', 'la'], [4, 9], [0.08, 0.12], 'up'),
         'hit_lands': (['bim', 'lop', 'bim'], [2, 5, 9], [0.08, 0.08, 0.16], 'up'),
-        'takes_hit': (['wub', 'oof'], [7, 0], [0.09, 0.15], 'down'),
+        'takes_hit': (['dib', 'oof'], [7, 0], [0.09, 0.15], 'down'),
         'bonked':    (['lop', 'bo', 'hoo'], [5, 0, -5], [0.12, 0.14, 0.3], 'down'),
         'win':       (['gla', 'dib', 'ing', 'bim'], [0, 4, 7, 12], [0.09, 0.09, 0.09, 0.24], 'up'),
     },
@@ -289,6 +289,9 @@ def check_own():
             for other in BARKS:
                 if other != hob and any(sy in ev[0] for ev in BARKS[other].values()):
                     raise ValueError(f'{other} says {sy}, which belongs to {hob}')
+        for ev_name, ev in BARKS[hob].items():
+            if not any(sy in own for sy in ev[0]):
+                raise ValueError(f'{hob}.{ev_name} ({ev[0]}) does not contain any OWN signature syllable {own}')
 
 
 check_own()

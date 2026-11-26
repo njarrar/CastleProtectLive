@@ -106,7 +106,11 @@
       "hetty"
     ],
     "crew_size": 4,
-    "blueprint": "bp_home_4"
+    "blueprint": "bp_home_4",
+    "doodads": [
+      "mend_bucket",
+      "pot_lid"
+    ]
   },
   "rival": {
     "name": "Corporal Dibber",
@@ -118,6 +122,9 @@
       "rake_hand",
       "mower_minder",
       "rake_hand"
+    ],
+    "doodads": [
+      "mend_bucket"
     ],
     "aim": 2,
     "knack_uses": 1,
@@ -155,7 +162,7 @@
     }
   ],
   "map_note": "Home Knoll, a ford, a low hump, then Loaf Hill between you and the Rival on High Hill. A boulder at the foot of High Hill.",
-  "new_thing": "Walk and Steam.",
+  "new_thing": "Pot Lid Doodad.",
   "water": [
     {
       "x0": 600,

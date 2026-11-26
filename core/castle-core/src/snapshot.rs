@@ -146,7 +146,7 @@ impl Battle {
                 json!({
                     "side": cs.side, "x": cs.x, "base_y": cs.base_y, "cols": cs.cols, "rows": cs.rows, "block": crate::castle::BLOCK,
                     "blocks": blocks, "rooms": rooms,
-                    "kettle": {"hp": cs.kettle_hp.max(0), "max": crate::castle::KETTLE_HP, "box": [kb.0, kb.1, kb.2, kb.3], "room": [kx0, ky0, kx1, ky1], "c": cs.kettle.c, "r": cs.kettle.r, "lid": cs.kettle.lid, "intact": cs.room_intact(&cs.kettle, false)},
+                    "kettle": {"hp": cs.kettle_hp.max(0), "max": cs.kettle_max, "box": [kb.0, kb.1, kb.2, kb.3], "room": [kx0, ky0, kx1, ky1], "c": cs.kettle.c, "r": cs.kettle.r, "lid": cs.kettle.lid, "intact": cs.room_intact(&cs.kettle, false)},
                     "steam": cs.steam, "steam_turn": cs.steam_turn, "fatigue": cs.fatigue,
                     "shimmer": cs.shimmer(&content, &held).iter().map(|p| json!([p.0, p.1])).collect::<Vec<_>>(),
                     "held": held.iter().map(|p| json!([p.0, p.1])).collect::<Vec<_>>(),
@@ -182,7 +182,7 @@ impl Battle {
                 let gs = (g.side as usize).min(1);
                 let i = side_idx[gs];
                 side_idx[gs] += 1;
-                json!({"index": i, "side": g.side, "hob": g.hob, "shot": g.shot, "angle": g.angle, "power": g.power, "round": g.round, "pin": g.pin.map(|p| json!([p.0, p.1])), "self_hit": g.self_hit, "recalled": g.recalled, "points": g.points.iter().map(|p| json!([p.0, p.1])).collect::<Vec<_>>()})
+                json!({"index": i, "side": g.side, "hob": g.hob, "shot": g.shot, "angle": g.angle, "power": g.power, "round": g.round, "pin": g.pin.map(|p| json!([p.0, p.1])), "miss_blocks": self.miss_blocks(g), "self_hit": g.self_hit, "recalled": g.recalled, "points": g.points.iter().map(|p| json!([p.0, p.1])).collect::<Vec<_>>()})
             })
             .collect();
         let preview: Vec<Value> = self.preview().iter().map(|p| json!([p.0, p.1])).collect();
@@ -262,9 +262,9 @@ impl Battle {
         } else {
             json!(crate::battle::FATIGUE_ROUND - self.round)
         };
-        let kpct = |hp: i32| {
-            if hp > 0 {
-                (hp * 100 / crate::castle::KETTLE_HP).max(1)
+        let kpct = |cs: &crate::castle::Castle| {
+            if cs.kettle_hp > 0 {
+                (cs.kettle_hp * 100 / cs.kettle_max.max(1)).max(1)
             } else {
                 0
             }
@@ -274,7 +274,7 @@ impl Battle {
             "wind": self.wind, "forecast": self.forecast(), "front_rounds_left": self.front_rounds_left(),
             "steam": [self.castles[0].steam, self.castles[1].steam],
             "steam_turn_left": crate::battle::STEAM_PER_TURN - self.castles[s].steam_turn,
-            "kettle_pct": [kpct(self.castles[0].kettle_hp), kpct(self.castles[1].kettle_hp)],
+            "kettle_pct": [kpct(&self.castles[0]), kpct(&self.castles[1])],
             "crew": [crew(0), crew(1)],
             "squall_warning": self.squall_warning(), "squall_round": self.squall_round(), "squall": self.rules.squall,
             "hands": [hand(0), hand(1)], "doodads": [self.doodads[0].clone(), self.doodads[1].clone()],
@@ -340,6 +340,30 @@ impl Battle {
             "last_ai": self.last_ai,
             "hash": crate::hash::hex(self.hash()),
         })
+    }
+
+    /// Signed horizontal miss distance from the rival fort in blocks for a ghost
+    /// Pin (`< 0` short, `> 0` long, `None` when on the fort or without a Pin).
+    pub(crate) fn miss_blocks(&self, g: &crate::battle::Ghost) -> Option<i32> {
+        let (px, _) = g.pin?;
+        let gs = (g.side as usize).min(1);
+        let mine = &self.castles[gs];
+        let rival = &self.castles[1 - gs];
+        let rx0 = rival.x;
+        let rw = rival.width_cells();
+        let rx1 = rx0 + rw;
+        if px >= rx0 && px <= rx1 {
+            return None;
+        }
+        let toward = if rx0 + rw / 2 > mine.x + mine.width_cells() / 2 {
+            1
+        } else {
+            -1
+        };
+        let edge = if px < rx0 { rx0 } else { rx1 };
+        let b = crate::castle::BLOCK;
+        let n = (((px - edge).abs() + b / 2) / b).max(1);
+        Some(if (px - edge) * toward < 0 { -n } else { n })
     }
 }
 

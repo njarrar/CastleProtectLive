@@ -86,7 +86,9 @@ export function scarfOverlaySvg(name) {
 }
 
 // Compute exact @1x px overlay compositing transforms relative to the Hob's feet anchor.
-export function hobOverlayEntries(hk, teamKey, pose, frameIndex) {
+// When `hatOverlay` is true (v2 Retina @2x 2-page atlas), the Hob's neutral body is packed hatless
+// and the class hat (or Rival slate hat + spirit-level vial) composites cleanly on top.
+export function hobOverlayEntries(hk, teamKey, pose, frameIndex, { hatOverlay = false } = {}) {
   const def = HOBS[hk];
   const frames = POSES[pose];
   if (!def || !frames || !frames[frameIndex]) return [];
@@ -100,7 +102,8 @@ export function hobOverlayEntries(hk, teamKey, pose, frameIndex) {
   const ry = ly * Math.cos(rad);
   const r2 = (n) => Math.round(n * 100) / 100;
   const r3 = (n) => Math.round(n * 1000) / 1000;
-  const scarfSprite = teamKey === 'orange' ? 'hob_scarf_orange' : 'hob_scarf_blue';
+  const isOrangeStyle = teamKey === 'orange' || teamKey === 'rival';
+  const scarfSprite = isOrangeStyle ? 'hob_scarf_orange' : 'hob_scarf_blue';
   const entry = {
     sprite: scarfSprite,
     dx: r2((dx + rx) * 0.5),
@@ -109,12 +112,16 @@ export function hobOverlayEntries(hk, teamKey, pose, frameIndex) {
     scale: r3(((sx + sy) * 0.5) * s),
   };
   const out = [entry];
+  if (hatOverlay && HAT_DEDUP_HOBS.includes(hk)) {
+    const hatSprite = teamKey === 'rival' ? `hob_hat_${hk}_rival` : `hob_hat_${hk}`;
+    out.push(hatOverlayEntry(def, p, s, hatSprite));
+  }
   // Orange team: the diamond hat patch (the colour-blind cue the v0.1 sprites had baked in).
   if (teamKey === 'orange') out.push(hatPatchEntry(def, p, s));
   if (p.balloon !== null && p.balloon !== undefined) {
     const bo = typeof p.balloon === 'object' ? p.balloon : { sway: p.balloon ? 5 : -2, str: p.balloon ? 50 : 40 };
     out.push({
-      sprite: teamKey === 'orange' ? 'fx_snooze_balloon_p2' : 'fx_snooze_balloon',
+      sprite: isOrangeStyle ? 'fx_snooze_balloon_p2' : 'fx_snooze_balloon',
       dx: r2((-4 + dx) * 0.5),
       dy: r2((dy - 92 * s) * 0.5),
       rot: 0,
@@ -122,6 +129,32 @@ export function hobOverlayEntries(hk, teamKey, pose, frameIndex) {
     });
   }
   return out;
+}
+
+// Hobs whose hat sits purely in front of the head (no behind-body hatBack tail) so neutral bodies
+// can share one hatless Retina @2x base across blue, orange, and rival teams, keeping all 729
+// character frames at true @2x resolution inside two 2048x2048 atlas pages (~32 MiB VRAM).
+export const HAT_DEDUP_HOBS = ['marge', 'quill', 'jax', 'nan', 'grub', 'bobbin', 'hetty'];
+export const HOB_HAT_OVERLAYS = Object.fromEntries(HAT_DEDUP_HOBS.flatMap(hk => [
+  [`hob_hat_${hk}`, { hob: hk, rival: false, purpose: `Class hat overlay for ${HOBS[hk].name} (48x46 @1x, pivot at (0, -78) du). Composite on hatless neutral Hob` }],
+  [`hob_hat_${hk}_rival`, { hob: hk, rival: true, purpose: `Rival slate hat with green level vial overlay for ${HOBS[hk].name} (48x46 @1x, pivot at (0, -78) du). Composite on hatless neutral Hob` }],
+]));
+export function hobHatSvg(hk, rival = false) {
+  const def = HOBS[hk];
+  if (!def) throw new Error('unknown hob hat: ' + hk);
+  return rival ? rivalRecolour(def.o.hatSvg, def.cls) + rivalVial(def.patch[0], def.patch[1]) : def.o.hatSvg;
+}
+function hatOverlayEntry(def, p, s, spriteName) {
+  const hatDy = p.hatDy || 0, hatRot = p.hatRot || 0;
+  const dx = p.dx || 0, dy = p.dy || 0, sx = p.sx || 1, sy = p.sy || 1, lean = p.lean || 0;
+  const rad = lean * Math.PI / 180;
+  // Hat pivot in Hob drawing units is (0, -78 + hatDy), transformed through body scale, lean, translate.
+  const ly = (-78 + hatDy) * sy * s;
+  const x2 = -ly * Math.sin(rad);
+  const y2 = ly * Math.cos(rad);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const r3 = (n) => Math.round(n * 1000) / 1000;
+  return { sprite: spriteName, dx: r2((dx + x2) * 0.5), dy: r2((dy + y2) * 0.5), rot: lean + hatRot, scale: r3(((sx + sy) * 0.5) * s) };
 }
 
 // Hat patch overlay (P2 diamond). 8x8 @1x px, viewBox [-8, -8, 16, 16], anchor [4, 4]: same 0.5 px/du as Hobs.
@@ -168,9 +201,12 @@ export const POSES = {
     { face: 'happy', sy: 1.025, sx: .99, hatDy: -1 },
   ],
   aim: [
-    { face: 'grit', toolRot: -12, hf: [23, -32], lean: -2 },
-    { face: 'grit', toolRot: -18, hf: [23, -35], lean: -4, hb: [-22, -30] },
-    { face: 'grit', toolRot: -26, hf: [22, -39], lean: -5, hb: [-23, -32], sy: .98 },
+    // aim_0: braced lean, knees lightly bent, tool poised forward
+    { face: 'grit', toolRot: -8, hf: [25, -31], hb: [-23, -31], dx: 1, lean: -7, sx: 1.03, sy: .96, hatRot: -3 },
+    // aim_1: deep back-lean with tensed pull arm hauled back, knees coiled, front hand bracing forward
+    { face: 'grit', toolRot: -12, hf: [26, -34], hb: [-28, -36], dx: 2, dy: 1.5, lean: -13, sx: 1.06, sy: .91, hatDy: 1, hatRot: -8 },
+    // aim_2: full stretch: puffed cheeks, squinted brow, tilted hat, planted forward brace, face clear
+    { face: 'strain', toolRot: -16, hf: [27, -37], hb: [-30, -40], dx: 4, dy: 2.5, lean: -17, sx: 1.09, sy: .87, hatDy: 2, hatRot: -14, strain: true },
   ],
   fire: [
     { face: 'shout', toolRot: -12, hf: [27, -34], dx: -5, lean: -5, sy: .96, puff: true },
@@ -230,6 +266,16 @@ function faceSvg(kind, skin) {
       return path('M1 -66 m-3 -3 l6 6 m0 -6 l-6 6', 'none', { stroke: ink, sw: 2.5 }) + path('M14 -66 m-3 -3 l6 6 m0 -6 l-6 6', 'none', { stroke: ink, sw: 2.5 }) + nose + ell(9, -50, 3.5, 3, ink);
     case 'grit':
       return eyes + nose + blush + path('M4 -50 L16 -50', 'none', { stroke: ink, sw: 2.5 }) + path('M-1 -72 L6 -70 M12 -70 L19 -72', 'none', { stroke: ink, sw: 2.5 });
+    case 'strain': {
+      // Full-pull aim strain: tightly squinted brow/eyes, puffed rosy cheeks, pursed breath-holding mouth
+      const puffed = ell(-5.5, -54, 6.2, 5.2, C.blush, { op: .78 }) + ell(19.5, -54, 5.2, 4.8, C.blush, { op: .78 })
+        + path('M-10.5 -53 Q-8 -49 -4 -49.5 M16 -49.5 Q20 -49 22.5 -53', 'none', { stroke: ink, sw: 1.6, op: .65 });
+      const squint = path('M-2 -71 L7 -68 M20 -71 L11 -68', 'none', { stroke: ink, sw: 2.8 })
+        + path('M-1 -66 L6 -64.5 L0 -62.5 M19 -66 L12 -64.5 L18 -62.5', 'none', { stroke: ink, sw: 2.4 });
+      const pursed = path('M5.5 -50 Q10 -53.2 14.5 -50 M4 -51.5 Q5.5 -50 4 -48.5 M16 -51.5 Q14.5 -50 16 -48.5', 'none', { stroke: ink, sw: 2.3 });
+      const sweat = path('M-12 -71 C-14 -67.5 -10 -67.5 -12 -71 Z', '#9FE3FF', { stroke: ink, sw: 1.3 });
+      return puffed + squint + nose + pursed + sweat;
+    }
     case 'shout':
       return eyes + nose + blush + ell(10, -49, 4.5, 5, ink) + path('M7.5 -47 Q10 -45 12.5 -47', 'none', { stroke: C.blush, sw: 2 });
     case 'blink':
@@ -271,7 +317,7 @@ export function snoozeBalloon(x, y, o = {}) {
 export function posedHob(key, teamKey, p = {}) {
   const def = HOBS[key], o = def.o, team = TEAMS[teamKey];
   const { face = 'happy', toolRot = 0, hf = [20, -27], hb = [-21, -28], dx = 0, dy = 0, sx = 1, sy = 1, lean = 0, hatDy = 0, tool = true, stars = null, balloon = null, puff = false,
-    shadow = true, hatRot = 0, boots = '', flash = false, lines = false, dust = 0, dirt = null, glow = 0 } = p;
+    shadow = true, hatRot = 0, boots = '', flash = false, lines = false, dust = 0, dirt = null, glow = 0, omitHat = false, strain = false } = p;
   const skin = o.skin, coat = o.coat, hand = o.hands || skin;
   const s = def.scale || 1;
   let b = '';
@@ -301,19 +347,21 @@ export function posedHob(key, teamKey, p = {}) {
     }
   }
   // head
-  const hatBack = team.rival ? rivalRecolour(o.hatBack, def.cls) : o.hatBack;
+  const hatBack = (!omitHat && o.hatBack) ? (team.rival ? rivalRecolour(o.hatBack, def.cls) : o.hatBack) : '';
   let head = hatBack ? g(hatBack, `translate(0 ${f(hatDy * .4)})`) : '';
   head += circ(-19, -60, 5.5, skin, { stroke: ink, sw: 3 });
   head += circ(0, -62, 21, skin, { stroke: ink, sw: 3 });
   head += clipped(circ(0, -62, 21, '#000'), circ(9, -56, 21, ink, { op: .13 }));
   head += faceSvg(face, skin);
   head += o.faceAdd || '';
-  let hat = team.rival ? rivalRecolour(o.hatSvg, def.cls) + rivalVial(def.patch[0], def.patch[1]) : o.hatSvg;
-  if (teamKey === 'orange') {
-    const [px, py] = def.patch;
-    hat += g(path('M0 -6.5 L6 0 L0 6.5 L-6 0 Z', team.col, { stroke: ink, sw: 2 }) + path('M0 -3.6 L3.3 0 L0 3.6 L-3.3 0 Z', 'none', { stroke: '#FFFFFF', sw: 1.1, dash: '1.6 1.6' }), `translate(${px} ${py})`);
+  if (!omitHat) {
+    let hat = team.rival ? rivalRecolour(o.hatSvg, def.cls) + rivalVial(def.patch[0], def.patch[1]) : o.hatSvg;
+    if (teamKey === 'orange') {
+      const [px, py] = def.patch;
+      hat += g(path('M0 -6.5 L6 0 L0 6.5 L-6 0 Z', team.col, { stroke: ink, sw: 2 }) + path('M0 -3.6 L3.3 0 L0 3.6 L-3.3 0 Z', 'none', { stroke: '#FFFFFF', sw: 1.1, dash: '1.6 1.6' }), `translate(${px} ${py})`);
+    }
+    head += g(hat, hatRot ? `translate(0 ${f(hatDy)}) rotate(${hatRot} 0 -78)` : hatDy ? `translate(0 ${f(hatDy)})` : '');
   }
-  head += g(hat, hatRot ? `translate(0 ${f(hatDy)}) rotate(${hatRot} 0 -78)` : hatDy ? `translate(0 ${f(hatDy)})` : '');
   b += head;
   // tool and front hand: the tool turns about the hand
   if (tool) {
@@ -323,6 +371,7 @@ export function posedHob(key, teamKey, p = {}) {
   b += circ(hf[0], hf[1], 6.5, hand, { stroke: ink, sw: 3 });
   // extras that ride with the body
   let fx = '';
+  if (strain) fx += path('M-28 -78 l-6 -4 M-30 -68 l-7 0 M-27 -58 l-6 4', 'none', { stroke: ink, sw: 2.1, op: .65 });
   if (puff) fx += path('M50 -62 l9 -6 M54 -50 l11 -1 M50 -38 l9 5', 'none', { stroke: ink, sw: 2.5 }) + star4(46, -50, 5, C.gold, { stroke: ink, sw: 1.5 });
   if (flash) fx += star4(52, -44, 11, '#FFF3C4', { stroke: C.gold, sw: 2 }) + star4(52, -44, 4.5, '#FFFFFF');
   if (lines) fx += path('M-34 -96 v-20 M-29 -72 v-14 M40 -98 v-20 M35 -74 v-14', 'none', { stroke: ink, sw: 2.5, op: .55 });

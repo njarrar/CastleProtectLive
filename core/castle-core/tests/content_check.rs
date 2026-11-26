@@ -326,3 +326,89 @@ fn skirmish_rival_is_named_by_seed() {
     assert_eq!(b.names[1], "Warden Snedd");
     assert_eq!(b.think_ms[1], Some(600));
 }
+
+#[test]
+fn text_json_matches_core_refusals_and_voice_rules() {
+    let txt = read(&repo().join("content/text.json"));
+    assert_eq!(txt["common"]["ok"], "OK");
+    assert_eq!(txt["hud"]["release_to_cancel"], "Release to cancel");
+    for key in [
+        "resting_plain_only",
+        "resting",
+        "buried",
+        "no_knack_uses",
+        "not_in_hand",
+        "no_heavy_first_turn",
+        "no_actions_left",
+        "already_acted",
+        "not_planning",
+        "hob_cannot_fire",
+        "not_enough_steam",
+        "cannot_walk_now",
+        "cannot_walk_there",
+        "battle_over",
+        "bad_value",
+        "bad_target",
+        "no_shot",
+        "nothing_to_mend",
+        "no_one_to_puff_up",
+        "puff_up_not_allowed",
+        "already_lidded",
+        "no_doodad",
+    ] {
+        assert!(
+            txt["hud"]["why"][key]
+                .as_str()
+                .is_some_and(|s| !s.is_empty()),
+            "missing hud.why.{key}"
+        );
+    }
+    for path in [
+        &txt["levels"]["1-2"]["goals"]["bonk_nook"],
+        &txt["levels"]["1-6"]["goals"]["bonk_nook"],
+        &txt["pennants"]["bonk_nook"],
+    ] {
+        assert!(
+            path.as_str().is_some_and(|s| s.contains("first")),
+            "bonk_nook goal must mention 'first': {path}"
+        );
+    }
+    assert_eq!(
+        txt["levels"]["1-6"]["goals"]["kettle_above_pct"],
+        "Kettle over {n}%"
+    );
+    let shouts = ["Bonk!", "Thump!", "Drop!", "Snip!", "Kettle Pop!"];
+    fn check_strings(v: &serde_json::Value, path: &str, shouts: &[&str]) {
+        match v {
+            serde_json::Value::Object(m) => {
+                for (k, val) in m {
+                    if k.starts_with('_') {
+                        continue;
+                    }
+                    let next = if path.is_empty() {
+                        k.clone()
+                    } else {
+                        format!("{path}.{k}")
+                    };
+                    check_strings(val, &next, shouts);
+                }
+            }
+            serde_json::Value::Array(a) => {
+                for (i, val) in a.iter().enumerate() {
+                    check_strings(val, &format!("{path}[{i}]"), shouts);
+                }
+            }
+            serde_json::Value::String(s) => {
+                assert!(!s.contains('\u{2014}'), "em-dash in text.json at {path}");
+                if s.contains('!') {
+                    assert!(
+                        shouts.contains(&s.as_str()),
+                        "unexpected '!' in text.json at {path}: {s}"
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    check_strings(&txt, "", &shouts);
+}

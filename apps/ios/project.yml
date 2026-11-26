@@ -38,16 +38,23 @@ targets:
       - path: ../../assets/animations.json
         buildPhase: resources
         optional: true
-      - path: ../../content
-        type: folder
-        buildPhase: resources
-        optional: true
     preBuildScripts:
       - name: Core module map
         path: scripts/core-module.sh
         basedOnDependencyAnalysis: false
     postCompileScripts:
-      # assets/atlas: only @2x atlas sheets and index JSON (iOS never loads @1x).
+      # content: runtime JSON game data only (exclude content/schema/ and authoring *.md files, L-I01).
+      - name: Copy content
+        basedOnDependencyAnalysis: false
+        script: |
+          SRC="${SRCROOT}/../../content"
+          DST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/content"
+          if [ -d "$SRC" ]; then
+            mkdir -p "$DST"
+            rsync -a --delete --exclude='schema/' --exclude='*.md' "$SRC/" "$DST/"
+            echo "Copied $(find "$DST" -type f | wc -l | tr -d ' ') content files."
+          fi
+      # assets/atlas: only @2x atlas sheets and index JSON (multi-page castle@2x-*.png / .json; iOS never loads @1x).
       - name: Copy @2x atlas
         basedOnDependencyAnalysis: false
         script: |
@@ -58,7 +65,7 @@ targets:
             rsync -a --delete --include='castle@2x*' --exclude='*' "$SRC/" "$DST/"
             echo "Copied $(find "$DST" -type f | wc -l | tr -d ' ') @2x atlas files."
           fi
-      # assets/sprites: UI-only @2x sprites and app icon (field frames come from the @2x atlas).
+      # assets/sprites: UI-only @2x sprites and app icon (all field props & Flattener frames come from the @2x atlas, L-I01).
       - name: Copy UI sprites
         basedOnDependencyAnalysis: false
         script: |
@@ -70,8 +77,6 @@ targets:
               --include='portrait_*@2x.png' \
               --include='icon_*@2x.png' \
               --include='ui_*@2x.png' \
-              --include='prop_*@2x.png' \
-              --include='flattener_*@2x.png' \
               --include='app_icon-512.png' \
               --exclude='*' "$SRC/" "$DST/"
             echo "Copied $(find "$DST" -type f | wc -l | tr -d ' ') UI sprite files."

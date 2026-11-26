@@ -23,12 +23,23 @@ const MAX_NOOKS = RULES.workshop.max_nooks;
 const COL_LETTERS = Array.from({ length: COLS }, (_, i) => String.fromCharCode(65 + i));
 const BLOCK_COST: Record<string, number> = Object.fromEntries((materials.blocks ?? []).map((b) => [b.id, b.cost]));
 
+/** Compact Nook room numbers cleanly to 1..k in order so erasing a middle Nook never leaves gaps (M-W06). */
+function compactNooks(cells: BlueprintCell[]): void {
+  const nums = [...new Set(cells.filter((x) => x.kind === 'nook').map((x) => x.room ?? 1))].sort((a, b) => a - b);
+  const map = new Map<number, number>();
+  nums.forEach((n, idx) => map.set(n, idx + 1));
+  for (const x of cells) {
+    if (x.kind === 'nook') x.room = map.get(x.room ?? 1) ?? 1;
+  }
+}
+
 export function workshopScreen(app: App): Screen {
   const fresh = (): Blueprint => {
     const b = structuredClone(app.progress.blueprint ?? app.core.defaultBlueprint());
     b.cols = COLS;
     b.rows = ROWS;
     b.cells = b.cells.filter((x) => x.row < ROWS);
+    compactNooks(b.cells);
     return b;
   };
   let bp: Blueprint = fresh();
@@ -47,7 +58,7 @@ export function workshopScreen(app: App): Screen {
 
   const gridEl = h('div', { class: 'grid', role: 'grid', 'aria-label': t('workshop.grid') });
   const loopholeGutter = h('div', { class: 'loophole-gutter', 'aria-hidden': 'true' });
-  const status = h('div', { class: 'status', 'aria-live': 'polite' });
+  const status = h('div', { class: 'status status-card', 'aria-live': 'polite' });
   const metricsEl = h('div', { class: 'ws-metrics' });
   const saveBtn = btn(t('common.save'), () => save(), 'primary silent');
   const testBtn = btn(t('workshop.test_yard'), () => {
@@ -68,8 +79,10 @@ export function workshopScreen(app: App): Screen {
     if (tool === 'erase') {
       const hit = cellAt(c, r);
       if (hit?.kind === 'kettle') bp.cells = bp.cells.filter((x) => x.kind !== 'kettle');
-      else if (hit?.kind === 'nook') bp.cells = bp.cells.filter((x) => !(x.kind === 'nook' && x.room === hit.room));
-      else bp.cells = bp.cells.filter((x) => !(x.col === c && x.row === r));
+      else if (hit?.kind === 'nook') {
+        bp.cells = bp.cells.filter((x) => !(x.kind === 'nook' && x.room === hit.room));
+        compactNooks(bp.cells);
+      } else bp.cells = bp.cells.filter((x) => !(x.col === c && x.row === r));
       play('tap');
     } else if (tool === 'kettle' || tool === 'nook') {
       // Rooms are 2 x 2. One Kettle Room; Nooks are numbered 1 to 5 (seat order).
@@ -77,9 +90,16 @@ export function workshopScreen(app: App): Screen {
       let room: number | undefined;
       if (tool === 'kettle') bp.cells = bp.cells.filter((x) => x.kind !== 'kettle');
       else {
+        compactNooks(bp.cells);
         const used = new Set(bp.cells.filter((x) => x.kind === 'nook').map((x) => x.room));
         room = Array.from({ length: MAX_NOOKS }, (_, i) => i + 1).find((n) => !used.has(n));
-        if (!room) { undo.pop(); status.textContent = `${MAX_NOOKS} Nooks at most.`; play('denied'); return; }
+        if (!room) {
+          undo.pop();
+          status.className = 'status status-card bad';
+          status.replaceChildren(h('div', { class: 'status-head' }, t('workshop.problems.nooks_max', { n: MAX_NOOKS })));
+          play('denied');
+          return;
+        }
       }
       const box = [[c, r], [c + 1, r], [c, r + 1], [c + 1, r + 1]];
       if (bp.cells.some((x) => (x.kind === 'nook' || x.kind === 'kettle') && box.some(([a, b]) => a === x.col && b === x.row))) { undo.pop(); play('denied'); return; }
@@ -136,15 +156,17 @@ export function workshopScreen(app: App): Screen {
   function paint(): void {
     bp.rowsText = undefined;
     const check = app.core.checkBlueprint(trim(bp));
-    const minC = bp.cells.length ? Math.min(COLS, ...bp.cells.map((x) => x.col)) : 0;
+    const hasCells = bp.cells.length > 0;
+    const minC = hasCells ? Math.min(COLS, ...bp.cells.map((x) => x.col)) : 0;
+    const maxC = hasCells ? Math.max(0, ...bp.cells.map((x) => x.col)) : COLS - 1;
     // Rust prepends the footing row at row 0 (p.row === 0), so editable grid row is `p.row - 1` (Web-C3).
-    const badMap = new Map<string, string>();
+    const badMap = new Map<string, { why: string; problem?: string }>();
     for (const p of check.problems) {
-      if (p.col >= 0 && p.row >= 1) badMap.set(key(p.col + minC, p.row - 1), p.why);
+      if (p.col >= 0 && p.row >= 1) badMap.set(key(p.col + minC, p.row - 1), { why: p.why, problem: p.problem });
     }
     // Compute bottom-left origin of each 2x2 room so Kettle and Nooks render as unified rooms (Plate 4).
     const roomOrigin = new Map<string, [number, number]>();
-    const nookTopRows = new Set<number>();
+    const nookTopRows = new Map<number, number>(); // top row -> rightmost nook right-edge col
     for (const cell of bp.cells) {
       if (cell.kind !== 'kettle' && cell.kind !== 'nook') continue;
       const rk = cell.kind === 'kettle' ? 'kettle' : `nook:${cell.room ?? 0}`;
@@ -152,8 +174,22 @@ export function workshopScreen(app: App): Screen {
       if (!cur) roomOrigin.set(rk, [cell.col, cell.row]);
       else roomOrigin.set(rk, [Math.min(cur[0], cell.col), Math.min(cur[1], cell.row)]);
     }
-    for (const [rk, [, r0]] of roomOrigin.entries()) {
-      if (rk.startsWith('nook:')) nookTopRows.add(r0 + 1);
+    for (const [rk, [c0, r0]] of roomOrigin.entries()) {
+      if (rk.startsWith('nook:')) {
+        const topR = r0 + 1;
+        nookTopRows.set(topR, Math.max(nookTopRows.get(topR) ?? -1, c0 + 1));
+      }
+    }
+    // Snap each Nook row's Loophole arch flush onto the fort's actual rightmost solid wall column (M-W06).
+    const loopholeAt = new Set<string>();
+    for (const [topR, nookRightC] of nookTopRows.entries()) {
+      let wallC = -1;
+      for (const cell of bp.cells) {
+        if (cell.row === topR && cell.col > nookRightC && cell.kind !== 'nook' && cell.kind !== 'kettle') {
+          if (cell.col > wallC) wallC = cell.col;
+        }
+      }
+      if (wallC >= 0) loopholeAt.add(key(wallC, topR));
     }
 
     const hadFocus = gridEl.contains(document.activeElement);
@@ -164,8 +200,8 @@ export function workshopScreen(app: App): Screen {
         const cell = cellAt(c, r);
         const img = cell && cell.kind !== 'nook' && cell.kind !== 'kettle' ? sprites.url(`block_${cell.kind}_fresh`) : undefined;
         const on = c === cursor[0] && r === cursor[1];
-        const badWhy = badMap.get(key(c, r));
-        const isBad = badWhy !== undefined;
+        const badEntry = badMap.get(key(c, r));
+        const isBad = badEntry !== undefined;
         let quad = '';
         let roomArt: HTMLElement | string = '';
         if (cell && (cell.kind === 'kettle' || cell.kind === 'nook')) {
@@ -178,16 +214,21 @@ export function workshopScreen(app: App): Screen {
             if (top && left) roomArt = buildRoomArt(cell.kind, cell.room ?? 1);
           }
         }
-        // Pinpoint inline error callout badge on empty gaps ("Needs wall") or unsupported blocks ("Floating").
+        // Pinpoint inline error callout badge aligned inward on outer columns 0 & 7 so it never clips row ticks (M-W06).
         let errBadge: HTMLElement | string = '';
-        if (isBad) {
+        if (isBad && badEntry) {
           const isGap = !cell;
-          const tag = isGap ? t('workshop.problems.needs_wall') : /float|hang|ground|support/i.test(badWhy) ? t('workshop.problems.nothing_under') : t('workshop.fix');
-          errBadge = h('span', { class: `cell-err ${isGap ? 'gap' : 'blk'}`, 'aria-hidden': 'true' }, tag);
+          const isFloat = badEntry.problem === 'floating' || badEntry.problem === 'unsupported' || badEntry.problem === 'no_support' || /float|hang|ground|support/i.test(badEntry.why);
+          const tag = isGap ? t('workshop.problems.needs_wall') : isFloat ? t('workshop.problems.nothing_under') : t('workshop.fix');
+          const edgeCls = c === 0 ? ' edge-l' : c === COLS - 1 ? ' edge-r' : '';
+          errBadge = h('span', { class: `cell-err ${isGap ? 'gap' : 'blk'}${edgeCls}`, 'aria-hidden': 'true' }, tag);
         }
+        const lpArch = loopholeAt.has(key(c, r))
+          ? h('i', { class: 'cell-lp-arch', title: t('workshop.shoots_this_way'), 'aria-hidden': 'true' })
+          : '';
         const colName = COL_LETTERS[c] ?? String(c + 1);
         const what = !cell ? '' : cell.kind === 'nook' ? t('workshop.nook', { n: cell.room ?? 1 }) : cell.kind === 'kettle' ? t('workshop.kettle_room') : t(`workshop.tools.${cell.kind}`);
-        const problem = isBad ? (cell ? plainWhy(badWhy ?? '') : t('workshop.problems.needs_wall')) : '';
+        const problem = isBad && badEntry ? (cell ? plainWhy(badEntry.why, badEntry.problem) : t('workshop.problems.needs_wall')) : '';
         const label = !cell
           ? (isBad ? t('a11y.workshop_cell_bad', { col: colName, row: r + 1, what: t('workshop.tools.erase'), problem: problem.replace(/\.$/, '') }) : t('a11y.workshop_cell_empty', { col: colName, row: r + 1 }))
           : isBad ? t('a11y.workshop_cell_bad', { col: colName, row: r + 1, what, problem: problem.replace(/\.$/, '') }) : t('a11y.workshop_cell', { col: colName, row: r + 1, what });
@@ -196,27 +237,27 @@ export function workshopScreen(app: App): Screen {
           role: 'gridcell', 'data-c': c, 'data-r': r, tabindex: on ? 0 : -1,
           'aria-label': label,
           style: img ? `background-image:url(${img})` : undefined,
-        }, roomArt, errBadge);
+        }, roomArt, lpArch, errBadge);
         row.append(el);
       }
       gridEl.append(row);
     }
     if (hadFocus) gridEl.querySelector<HTMLElement>('[tabindex="0"]')?.focus();
-    gridEl.append(...Array.from({ length: COLS }, () => h('div', { class: 'cell footing-row', 'aria-hidden': 'true' })));
-
-    // Right-hand enemy-facing arched Loophole gutter synced with Nook rows.
-    loopholeGutter.replaceChildren(
-      ...Array.from({ length: ROWS }, (_, idx) => {
-        const r = ROWS - 1 - idx;
-        return h('span', { class: `lp-slot ${nookTopRows.has(r) ? 'has-lp' : ''}` },
-          nookTopRows.has(r) ? h('i', { class: 'lp-arch', title: t('workshop.shoots_this_way') }) : '',
-        );
-      }),
-      h('span', { class: 'lp-slot foot' }),
-    );
+    // Render active Footing columns as carved stone and unused outer columns as blueprint dashed slots (M-W06).
+    gridEl.append(...Array.from({ length: COLS }, (_, c) => h('div', {
+      class: `cell footing-row${!hasCells || c < minC || c > maxC ? ' footing-empty' : ''}`,
+      'aria-hidden': 'true',
+    })));
+    // Align illustrated Stomper legs directly beneath the active Footing span.
+    const spanCols = hasCells ? Math.max(1, maxC - minC + 1) : COLS;
+    const leftPct = hasCells ? (minC / COLS) * 100 : 0;
+    const widthPct = (spanCols / COLS) * 100;
+    stompersEl.style.setProperty('--st-left', `${leftPct.toFixed(2)}%`);
+    stompersEl.style.setProperty('--st-w', `${widthPct.toFixed(2)}%`);
+    loopholeGutter.replaceChildren();
 
     // Structured Inspector Panel (Plate 4): honest counts + AA+ status card + issue list.
-    const why = [...new Set(check.problems.map((p) => plainWhy(p.why)))];
+    const why = [...new Set(check.problems.map((p) => plainWhy(p.why, p.problem)))];
     const solidCells = bp.cells.filter((x) => x.kind === 'wicker' || x.kind === 'timber' || x.kind === 'cobble');
     const blocksCount = !check.ok && check.blocks === 0 && solidCells.length > 0 ? solidCells.length : check.blocks;
     const costTotal = !check.ok && check.cost === 0 && solidCells.length > 0
@@ -226,8 +267,7 @@ export function workshopScreen(app: App): Screen {
     const crewTarget = Math.max(1, Math.min(MAX_NOOKS, Math.max(3, rosterIds.length)));
     const blockPct = Math.min(100, Math.round((blocksCount / Math.max(1, check.budget)) * 100));
 
-    status.classList.toggle('bad', !check.ok);
-    status.classList.toggle('good', check.ok);
+    status.className = `status status-card ${check.ok ? 'good' : 'bad'}`;
     if (check.ok) {
       status.replaceChildren(
         h('div', { class: 'status-head' }, `✓ ${savedNote ? t('workshop.saved_ready') : t('workshop.ready')}`),
@@ -243,7 +283,7 @@ export function workshopScreen(app: App): Screen {
     metricsEl.replaceChildren(
       h('div', { class: 'metric-row' },
         h('span', { class: 'metric-k' }, t('workshop.nooks', { n: nookCount, total: crewTarget })),
-        h('b', { class: `metric-v ${nookCount >= crewTarget ? 'ok' : ''}`, 'aria-hidden': 'true' }, `${nookCount} / ${crewTarget}`),
+        nookCount >= crewTarget ? h('b', { class: 'metric-v ok', 'aria-hidden': 'true' }, '✓') : '',
       ),
       h('div', { class: 'metric-row' },
         h('span', { class: 'metric-k' }, t('workshop.blocks')),
@@ -299,7 +339,6 @@ export function workshopScreen(app: App): Screen {
     return btn(h('span', { class: 'tool-in' }, ic ? h('img', { src: ic, alt: '' }) : '', label), () => { tool = tl; paintPalette(); }, `chip tool ${tool === tl ? 'on' : ''}`, { 'aria-pressed': String(tool === tl) });
   }));
   paintPalette();
-  sprites.whenLoaded(() => { paintPalette(); paint(); });
 
   function save(): void {
     const tb = trim(bp);
@@ -367,15 +406,44 @@ export function workshopScreen(app: App): Screen {
     ),
   );
   paint();
+  // After every element paint() touches exists: whenLoaded may run at once.
+  sprites.whenLoaded(() => { paintPalette(); paint(); });
   return { el, destroy: () => window.removeEventListener('blur', stop) };
 }
 
 /**
- * The core's blueprint refusal in the table's words (workshop.problems). The core sends one reason
- * id (invalid_blueprint) with an English detail; the detail is only read here, never shown.
+ * The core's blueprint refusal in the table's words (workshop.problems). Reads the structured
+ * `problem` id first (Patch 01) and falls back cleanly to regex matching on legacy core strings (M-W06).
  */
-function plainWhy(w: string): string {
+function plainWhy(w: string, problem?: string): string {
   let m: RegExpMatchArray | null;
+  if (problem) {
+    switch (problem) {
+      case 'too_small': return t('workshop.problems.too_small');
+      case 'too_big': return t('workshop.problems.too_big', { cols: COLS, rows: ROWS });
+      case 'floating':
+      case 'unsupported':
+      case 'no_support': return t('workshop.problems.nothing_under');
+      case 'nook_walls': return t('workshop.problems.nook_walls', { n: w.match(/(\d+)/)?.[1] ?? '1' });
+      case 'nooks_for_hobs': {
+        const pair = w.match(/(\d+)\D+(\d+)/);
+        return t('workshop.problems.nooks_for_hobs', { n: pair?.[1] ?? '0', hobs: pair?.[2] ?? '1' });
+      }
+      case 'nooks_max': return t('workshop.problems.nooks_max', { n: MAX_NOOKS });
+      case 'over_budget': {
+        const over = w.match(/(\d+)\D+(\d+)/);
+        const diff = over ? Math.max(1, Number(over[1]) - Number(over[2])) : 1;
+        return plural('workshop.problems.over_budget', diff);
+      }
+      case 'kettle_room_edge': return t('workshop.problems.kettle_room_edge');
+      case 'kettle_room_walls': return t('workshop.problems.kettle_room_walls');
+      case 'kettle_room_size': return t('workshop.problems.kettle_room_size');
+      case 'no_kettle_room': return t('workshop.problems.no_kettle_room');
+      case 'no_nook': return t('workshop.problems.no_nook');
+      case 'footing_row': return t('workshop.problems.footing_row');
+      case 'empty': return t('workshop.empty');
+    }
+  }
   if (/outside|grid \d+x\d+/i.test(w)) return /outside 3x3/.test(w) && /grid [0-2]x|grid \dx[0-2]\b/.test(w) ? t('workshop.problems.too_small') : t('workshop.problems.too_big', { cols: COLS, rows: ROWS });
   if (/no support|hanging|float/i.test(w)) return t('workshop.problems.nothing_under');
   if ((m = w.match(/Nook (\d+) must be walled/i))) return t('workshop.problems.nook_walls', { n: m[1] });

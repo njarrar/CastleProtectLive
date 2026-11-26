@@ -204,6 +204,79 @@ def overlap_wrap(x, tail_samples):
     return out
 
 
+def align_loop_seam(samples, sr=SR, search_ms=250.0, min_rms_ratio=0.78, max_edge_db=1.5):
+    """Circularly rotate a seamless loop so sample 0 lands on a minimal-step, balanced-RMS seam.
+
+    Preserves exact sample length, pitch, and circular continuity while ensuring minimal wrap-around
+    sample jump, steady local RMS (`winRMS > 0.78`), and matched 5 ms left/right edge loudness.
+    """
+    arr = np.asarray(samples, dtype=float)
+    is_1d = arr.ndim == 1
+    y = arr[None, :] if is_1d else arr
+    n = y.shape[1]
+    if n < 16:
+        return arr.copy()
+    mono = y.mean(axis=0)
+    g_rms = float(np.sqrt(np.mean(mono ** 2)))
+    if g_rms < 1e-12:
+        return arr.copy()
+
+    # Local 2 ms circular window RMS centered on every candidate seam index k
+    win = max(1, min(n // 4, int(round(0.001 * sr))))
+    sq = np.concatenate([mono[-win:], mono, mono[:win]]) ** 2
+    cs = np.concatenate([[0.0], np.cumsum(sq)])
+    w_rms = np.sqrt(np.maximum((cs[2 * win:2 * win + n] - cs[:n]) / (2 * win), 0.0))
+
+    # 5 ms left-vs-right edge RMS balance (matches qa.loop_seam 5 ms edge dB check)
+    k5 = max(1, min(n // 4, int(round(0.005 * sr))))
+    sq5 = np.concatenate([mono[-k5:], mono, mono[:k5]]) ** 2
+    cs5 = np.concatenate([[0.0], np.cumsum(sq5)])
+    left_ms = np.maximum((cs5[k5:k5 + n] - cs5[:n]) / k5, 1e-12)
+    right_ms = np.maximum((cs5[2 * k5:2 * k5 + n] - cs5[k5:k5 + n]) / k5, 1e-12)
+    edge_db = np.abs(10.0 * np.log10(right_ms / left_ms))
+
+    search_n = min(n, max(win * 4, int(round(sr * search_ms / 1000.0))))
+    idx = np.arange(search_n)
+    prev = (idx - 1) % n
+    step = np.max(np.abs(y[:, idx] - y[:, prev]), axis=0)
+    amp = np.max(np.abs(y[:, idx]) + np.abs(y[:, prev]), axis=0)
+    # Prioritize minimal wrap-around step first, with gentle low-amplitude tie-breaker
+    score = step + 0.02 * amp
+
+    healthy = (w_rms[:search_n] >= (min_rms_ratio * g_rms)) & (edge_db[:search_n] <= max_edge_db)
+    if not np.any(healthy):
+        healthy = w_rms[:search_n] >= (min_rms_ratio * g_rms)
+    if not np.any(healthy):
+        healthy = w_rms[:search_n] >= (0.5 * min_rms_ratio * g_rms)
+    if np.any(healthy):
+        cand = idx[healthy]
+        best_k = int(cand[int(np.argmin(score[healthy]))])
+    else:
+        best_k = int(np.argmin(score))
+
+    rolled = np.roll(y, -best_k, axis=1)
+    return rolled[0] if is_1d else rolled
+
+
+def make_seamless_loop(samples, sr=SR, fade_ms=50.0, align_zero=True):
+    """Equal-power overlap-add circular loop crossfade (default 50 ms).
+
+    Overlaps the final `fade_ms` tail onto the opening `fade_ms` head using equal-power
+    sin/cos weights (`w_head^2 + w_tail^2 == 1`) and returns `len(samples) - fade_samples`.
+    When `align_zero` is True, circularly rotates the welded ring so sample 0 sits on a
+    clean low-step zero-crossing with steady local RMS (preventing Opus/AAC seam clicks).
+    """
+    arr = np.asarray(samples, dtype=float)
+    total = arr.shape[-1]
+    fade_samples = max(1, int(round(sr * fade_ms / 1000.0)))
+    if total <= 2 * fade_samples:
+        fade_samples = max(1, total // 4)
+    out = overlap_wrap(arr, fade_samples)
+    if align_zero:
+        out = align_loop_seam(out, sr=sr)
+    return out
+
+
 def noise(dur, r, lo=None, hi=None, order=2):
     return filt(white(n_of(dur), r), lo, hi, order)
 

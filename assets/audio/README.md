@@ -8,8 +8,8 @@ Do not edit these files by hand. Change the code and build again.
 
 | Folder | What | Count |
 |---|---|---|
-| `sfx/` | Sound effects, named as in `docs/design/07-ux-ui-audio.md` section 9.3 | 85 |
-| `music/` | Region 1 theme in three layers, map theme, title jingle, win and lose stings | 7 |
+| `sfx/` | Sound effects, named as in `docs/design/07-ux-ui-audio.md` section 9.3, plus tactile aim and impact layers | 95 |
+| `music/` | Region 1 theme in three layers, map theme, title jingle, win and lose stings, plus optional `mus_r1_boss` | 7 (+1 optional) |
 | `barks/` | Hob-speak: 8 Hobs x 6 barks | 48 |
 | `audio.json` | The manifest: one entry per sound | |
 | `barks.json` | Subtitles for the barks | |
@@ -55,6 +55,7 @@ All of it is built on our own four-bar tune, the Lump Tune.
 | `mus_r1_base` | Puddingstone Downs. Toy tuba, banjolele strum, concertina pad, light washboard. Stereo | 71.1 s loop |
 | `mus_r1_stir` | Tin whistle and music box lead, banjolele, claps, cowbell, hand drum | same |
 | `mus_r1_peril` | Double-time washboard and drum, spoons, high whistle runs, horn pulse | same |
+| `mus_r1_boss` | Optional (`--boss-theme`): Topiary Keep Boss 1-10 march in E minor / E Dorian | 35.6 s loop |
 | `mus_map` | Brickabrac Map and menus. 92 bpm, 6/8. Whistle, concertina, plucked bass, hand drum | 41.7 s loop |
 | `mus_title_jingle` | Title jingle | 4.5 s |
 | `sting_win`, `sting_lose` | Win fanfare and a soft deflate | about 2 s |
@@ -113,8 +114,11 @@ These core events each have their own cue. Do not fall back to a shared thud, `w
 | `shears_jam` | `doo_shears_jam` |
 | `castle_drop`, `thump` | `cas_thump` |
 | `drop` | `hob_tumble_roll` |
+| Aim drag 5% step | `aim_ratchet_tick` (~28 ms wooden-brass ratchet click, bus `ui`, `pitch_var_semitones: 0.3`) |
+| Slingshot release snap | `aim_release_twang` (~145 ms braided-leather snap, bus `launch`, `pitch_var_semitones: 0.6`) |
+| Big blasts and Kettle Pop weight layer | `hit_sub_thud` (~220 ms warm 60 to 110 Hz sub-bass thump with phone-speaker chest body, bus `impact`) |
 
-`wx_squall_bell` is for the Squall only (`squall_warning`, first `squall_round`).
+`wx_squall_bell` is for the Squall only (`squall_warning`, first `squall_round`). Continuous loops (`aim_band_stretch`, `fly_whistle_loop`, `fly_roll_loop`, `wx_wind_loop`, `wx_squall_loop`, `ket_whistle_loop`) are welded through a 50 ms equal-power overlap-add circular crossfade (`dsp.make_seamless_loop`) with seam alignment so loop boundaries stay click-free with steady RMS. All 48 Hob barks in `barks.py` and `barks.json` carry at least one of that Hob's `OWN` signature syllables.
 
 ## Hob-speak
 
@@ -150,9 +154,10 @@ Six events each: `picked`, `fire`, `hit_lands`, `takes_hit`, `bonked`, `win`. Id
 ```
 pip install -r tools/audio-gen/requirements.txt
 python3 tools/audio-gen/build.py
+python3 tools/audio-gen/build.py --boss-theme   # optional: also builds mus_r1_boss (Boss 1-10 march)
 ```
 
-Needs Python 3.11 or newer and ffmpeg with libopus. It takes about two minutes. `--only sfx`, `--only music` or `--only barks` builds one part. Sounds are seeded by id, so the same code gives the same sound.
+Needs Python 3.11 or newer and ffmpeg with libopus. It takes about two minutes. `--only sfx`, `--only music` or `--only barks` builds one part. Sounds are seeded by id, so the same code gives the same sound, and instruments in `music.py` use deterministic per-note velocity and micro-detune takes to prevent synthetic machine-gunning.
 
 | File | Job |
 |---|---|

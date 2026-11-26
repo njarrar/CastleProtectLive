@@ -84,7 +84,10 @@
       "grub"
     ],
     "crew_size": 4,
-    "blueprint": "bp_home_4"
+    "blueprint": "bp_home_4",
+    "doodads": [
+      "mend_bucket"
+    ]
   },
   "rival": {
     "name": "Corporal Fernsby",

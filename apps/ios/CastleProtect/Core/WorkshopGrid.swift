@@ -85,6 +85,7 @@ struct WorkshopGrid: Equatable, Sendable {
                 }
             }
         }
+        compactNooks()
     }
 
     /// The Home fort with three seats (content/blueprints.json `bp_home_3`), where a new fort starts.
@@ -150,12 +151,36 @@ struct WorkshopGrid: Equatable, Sendable {
         for r in 0..<Self.rows { for c in 0..<Self.cols where cells[r][c] == old { cells[r][c] = new } }
     }
 
-    /// Removes Nook `n`; later Nooks move down a number, so they stay 1, 2, 3 with no gaps (the core's rule).
+    /// Removes Nook `n` and compacts all remaining Nooks densely to 1...N with no gaps (the core's rule).
     private mutating func removeNook(_ n: Int) {
         for r in 0..<Self.rows {
             for c in 0..<Self.cols {
-                if case .nook(let k) = cells[r][c] {
-                    if k == n { cells[r][c] = .empty } else if k > n { cells[r][c] = .nook(k - 1) }
+                if case .nook(let k) = cells[r][c], k == n {
+                    cells[r][c] = .empty
+                }
+            }
+        }
+        compactNooks()
+    }
+
+    /// Re-numbers present Nooks densely to 1...N in ascending order so erasing or loading never leaves gaps.
+    mutating func compactNooks() {
+        var present = Set<Int>()
+        for row in cells {
+            for cell in row {
+                if case .nook(let k) = cell { present.insert(k) }
+            }
+        }
+        let sorted = present.sorted()
+        guard !sorted.isEmpty else { return }
+        var remap: [Int: Int] = [:]
+        for (idx, old) in sorted.enumerated() {
+            remap[old] = idx + 1
+        }
+        for r in 0..<Self.rows {
+            for c in 0..<Self.cols {
+                if case .nook(let k) = cells[r][c], let next = remap[k], next != k {
+                    cells[r][c] = .nook(next)
                 }
             }
         }
@@ -188,6 +213,47 @@ struct WorkshopGrid: Equatable, Sendable {
         let c = core[0] + cols.lowerBound, r = core[1] - 1
         guard c >= 0, r >= 0, c < Self.cols, r < Self.rows else { return nil }
         return (c, r)
+    }
+
+    /// Maps a structured core `validate_blueprint` `problem` ID first, falling back to detail text parsing.
+    static func plainWords(problem: String?, detail: String) -> String {
+        if let problem, !problem.isEmpty {
+            let numbers = detail.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+            switch problem {
+            case "too_small":
+                return tx("workshop.problems.too_small")
+            case "too_big":
+                return tx("workshop.problems.too_big", ["cols": cols, "rows": rows])
+            case "no_kettle_room", "missing_kettle_room", "kettle_room_missing":
+                return tx("workshop.problems.no_kettle_room")
+            case "kettle_room_size":
+                return tx("workshop.problems.kettle_room_size")
+            case "kettle_room_edge":
+                return tx("workshop.problems.kettle_room_edge")
+            case "kettle_room_walls":
+                return tx("workshop.problems.kettle_room_walls")
+            case "nook_walls":
+                return tx("workshop.problems.nook_walls", ["n": numbers.first ?? 1])
+            case "no_nook", "missing_nook":
+                return tx("workshop.problems.no_nook")
+            case "nooks_short", "not_enough_nooks":
+                return tx("workshop.problems.nooks_short")
+            case "nooks_max", "too_many_nooks":
+                return tx("workshop.problems.nooks_max", ["n": ContentCatalog.shared.appConfig.workshop.maxNooks])
+            case "over_budget", "block_budget":
+                let used = numbers.first ?? budget
+                return GameText.shared.plural("workshop.problems.over_budget", max(1, used - budget))
+            case "nothing_under", "no_support", "unsupported":
+                return tx("workshop.problems.nothing_under")
+            case "footing_row", "bad_footing":
+                return tx("workshop.problems.footing_row")
+            default:
+                if let line = GameText.shared.complete("workshop.problems.\(problem)") {
+                    return line
+                }
+            }
+        }
+        return plainWords(detail)
     }
 
     /// The core's reason in plain words (`workshop.problems`). The core can say
@@ -333,7 +399,7 @@ final class WorkshopChecker {
         if reply.ok {
             out.words = tx("workshop.ready")
         } else {
-            out.words = WorkshopGrid.plainWords(reply.detail ?? reply.reason ?? "")
+            out.words = WorkshopGrid.plainWords(problem: reply.problem, detail: reply.detail ?? reply.reason ?? "")
             for cell in reply.cells ?? [] {
                 if let at = grid.gridCell(core: cell) { out.marked.insert(at.r * WorkshopGrid.cols + at.c) }
             }

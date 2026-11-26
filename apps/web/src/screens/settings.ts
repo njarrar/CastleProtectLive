@@ -1,12 +1,12 @@
 // S17 Settings. Every change applies at once; there is no Apply button.
 import type { App, Route, Screen } from '../app';
 import { play } from '../audio/sfx';
-import { DEFAULT_PROGRESS, clearBattle } from '../save/db';
+import { DEFAULT_PROGRESS, clearBattle, type ColourSet } from '../save/db';
 import { btn, h, seg, toggle } from '../ui/dom';
 import { t } from '../ui/text';
 
 /** The app's version for About (package.json). */
-const APP_VERSION = '0.1';
+const APP_VERSION = '0.2';
 
 export function settingsScreen(app: App, route: Route): Screen {
   const back = (route as Extract<Route, { to: 'settings' }>).back;
@@ -33,10 +33,12 @@ export function settingsScreen(app: App, route: Route): Screen {
         row(S('sound.voices'), vox),
         toggle(S('sound.mono'), s.mono, (v) => void app.setSettings({ mono: v })),
         toggle(S('sound.mute'), s.mute, (v) => void app.setSettings({ mute: v })),
+        toggle(S('sound.subtitles'), s.subtitles, (v) => void app.setSettings({ subtitles: v })),
         toggle(S('sound.captions'), s.captions, (v) => void app.setSettings({ captions: v })),
       ),
       section(S('help.title'),
         row(S('help.difficulty'), seg([['cozy', t('setup.difficulty.cozy')], ['fair', t('setup.difficulty.fair')], ['stubborn', t('setup.difficulty.stubborn')]], s.difficulty, (v) => void app.setSettings({ difficulty: v }), S('help.difficulty'))),
+        toggle(S('help.more_steam'), s.moreSteam, (v) => void app.setSettings({ moreSteam: v })),
         toggle(S('help.wind_off'), s.windOff, (v) => void app.setSettings({ windOff: v })),
       ),
       section(S('controls.title'),
@@ -44,9 +46,18 @@ export function settingsScreen(app: App, route: Route): Screen {
         row(S('controls.drag_mode'), seg([['pull', S('controls.pull_back')], ['point', S('controls.point')]], s.dragMode, (v) => void app.setSettings({ dragMode: v }), S('controls.drag_mode'))),
         row(S('controls.rotation'), seg([['follow', S('controls.follow')], ['wide', S('controls.wide')], ['tall', S('controls.tall')]], s.rotation, (v) => void app.setSettings({ rotation: v }), S('controls.rotation'))),
         toggle(S('controls.rival_fast'), s.rivalFast, (v) => void app.setSettings({ rivalFast: v })),
+        toggle(S('controls.left_hand'), s.leftHand, (v) => void app.setSettings({ leftHand: v })),
+        toggle(S('controls.taps_only'), s.tapsOnly, (v) => void app.setSettings({ tapsOnly: v })),
       ),
       section(S('comfort.title'),
+        toggle(S('comfort.large_text'), s.largeText, (v) => void app.setSettings({ largeText: v })),
+        row(S('comfort.colour_set'), seg<ColourSet>([
+          ['blue_orange', `${S('comfort.colours.blue')} / ${S('comfort.colours.orange')}`],
+          ['navy_gold', `${S('comfort.colours.navy')} / ${S('comfort.colours.gold')}`],
+          ['white_black', `${S('comfort.colours.white')} / ${S('comfort.colours.black')}`],
+        ], s.colourSet, (v) => void app.setSettings({ colourSet: v }), S('comfort.colour_set'))),
         toggle(S('comfort.reduce_motion'), s.reduceMotion, (v) => void app.setSettings({ reduceMotion: v })),
+        toggle(S('comfort.reduce_flashes'), s.reduceFlashes, (v) => void app.setSettings({ reduceFlashes: v })),
         row(S('comfort.screen_shake'), seg([['100', S('comfort.full')], ['50', '50%'], ['0', t('common.off')]], String(s.reduceShake), (v) => void app.setSettings({ reduceShake: Number(v) as 100 | 50 | 0 }), S('comfort.screen_shake'))),
       ),
       section(S('save.title'),

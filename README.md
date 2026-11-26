@@ -117,7 +117,7 @@ The eight Hobs in the build now:
 
 Before a fight you pick **Trick Shells** in **the Rummage**, or take a **Quick Pick**. The ones in the build: Suet Pudding, Lid Lifter, Bag of Marbles, Nosy Goose, Mole Mail, Old Turnip (a dud, and it says so) and Rubber Radish, with Barrow Load for heaping up dirt.
 
-**Doodads** are kit you bring into a fight. Winning level 1-9 gives you the **Mend Bucket** (mends 3 of your blocks) and your first Doodad slot. The **Pot Lid** (the first shell into a room bounces off) and a second slot come at level 2-1.
+**Doodads** are kit you bring into a fight. From level 1-7 you carry the **Mend Bucket** (mends 3 of your blocks), and from level 1-9 you also carry the **Pot Lid** (the first shell into a room bounces off).
 
 | Block | HP | Cost (Buttons) |
 |---|---|---|

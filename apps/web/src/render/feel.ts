@@ -59,6 +59,7 @@ export class Feel {
   /** View time in ms (stops in a hit stop, slows in slow motion). */
   time = 0;
   reduceMotion = false;
+  reduceFlashes = false;
   you: Side = 0;
   /** The fight's mode (the Rival look is for campaign and Skirmish, orange for a Couch Duel). */
   private mode = 'campaign';
@@ -78,6 +79,7 @@ export class Feel {
   private rooms = new Map<number, TwoState>();
   private lids = new Map<number, TwoState>();
   private pins = new Map<string, AnimPlayer>();
+  private livePinIds = new Set<string>();
   private trails = new Map<number, number>();
   private blockHp = new Map<number, number>();
   private crackAt = new Map<number, number>();
@@ -171,7 +173,7 @@ export class Feel {
         if (e.dmg > 0) {
           if (e.what === 'hob') {
             this.fx.number(`h${e.hob ?? e.x}`, e.x, e.y + 10, e.dmg, 1, type, dir);
-            this.juice.hitStop(hobHitStop(e.dmg));
+            this.juice.hitStop(Math.max(e.dmg >= 25 ? 45 : 0, hobHitStop(e.dmg)));
             const a = e.hob ? this.hobs.get(e.hob) : undefined;
             if (a) a.hurtMs = 650;
             if (a?.clips.hit && a.mode !== 'bonked' && a.mode !== 'tumble') { a.p.play(a.clips.hit); a.mode = 'act'; }
@@ -181,10 +183,12 @@ export class Feel {
             if (sh && a && sh.side !== a.side) this.bark(sh.nm, 'hit_lands', sh.side, this.shotN, sh.id);
           } else if (e.what === 'kettle') {
             this.kettleHitThisShot = true;
+            if (e.dmg >= 20) this.juice.hitStop(45);
             this.fx.number(`k${e.side ?? 0}`, e.x, e.y + 16, e.dmg, 2, type, dir);
             this.fx.spawnName('fx_impact_cobble', e.x, e.y, 1);
             this.sound('hit', 'kettle', 1, pan);
           } else {
+            if ((e.mat === 'cobble' || e.mat === 'brassbound') && e.dmg >= 25) this.juice.hitStop(45);
             this.fx.number(`b${e.side ?? 0}`, e.x, e.y + 8, e.dmg, 0, type, dir);
             this.fx.spawnName(`fx_impact_${matKey(e.mat ?? 'timber')}`, e.x, e.y - 8, 1);
             this.sound('hit', e.mat ?? 'timber', 1, pan);
@@ -295,9 +299,9 @@ export class Feel {
   }
 
   private shakeAt(tr: number, decay: number, x: number, y: number, cx: number, vw: number): void {
-    // Reduce Motion suppresses both screen shake and impact white rim flashes (Web-M17).
+    // Reduce Motion / Fewer flashes suppress impact white rim flashes (Web-M17 / M-W03).
     if (this.reduceMotion) return;
-    if (this.juice.shakeScale <= 0) { this.juice.rimAt(x, y, 30 * tr + 10); return; }
+    if (this.juice.shakeScale <= 0) { if (!this.reduceFlashes) this.juice.rimAt(x, y, 30 * tr + 10); return; }
     const d = vw > 0 ? Math.abs(x - cx) / vw : 0;
     this.juice.shake(tr, decay, d, cx - x, 0);
     void y;
@@ -614,7 +618,8 @@ export class Feel {
   }
 
   private stepPins(dt: number, snap: Snapshot): void {
-    const liveIds = new Set<string>();
+    const liveIds = this.livePinIds;
+    liveIds.clear();
     for (const p of snap.pins) {
       liveIds.add(p.id);
       let a = this.pins.get(p.id);

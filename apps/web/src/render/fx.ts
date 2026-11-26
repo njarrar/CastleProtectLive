@@ -307,19 +307,30 @@ export class FxPool {
           ctx.font = n.font;
           const hw = Math.max(measure(ctx, n) / 2 + 4, n.burst ? n.size * (0.55 + 0.11 * n.str.length) * 1.3 : 0) * k;
           const hh = (n.burst ? n.size * 0.9 : n.size * 0.6) * k;
-          let ox = 0;
-          for (let tries = 0; tries < 6; tries++) {
-            const cx = x + ox;
+          // Clamp X into the lens BEFORE dodging so right-edge speech barks detect overlap and stack vertically first (M-W05b).
+          x = Math.max(r.x + hw + 2, Math.min(r.x + r.w - hw - 2, x));
+          for (let tries = 0; tries < 8; tries++) {
             let hit = -1;
             for (let i = 0; i < nb; i++) {
-              if (cx + hw > BOX[i * 4] && cx - hw < BOX[i * 4 + 2] && y + hh > BOX[i * 4 + 1] && y - hh < BOX[i * 4 + 3]) { hit = i; break; }
+              if (x + hw > BOX[i * 4] && x - hw < BOX[i * 4 + 2] && y + hh > BOX[i * 4 + 1] && y - hh < BOX[i * 4 + 3]) { hit = i; break; }
             }
             if (hit < 0) break;
-            const bx = (BOX[hit * 4] + BOX[hit * 4 + 2]) / 2;
-            ox += cx <= bx ? BOX[hit * 4] - (cx + hw) - 6 : BOX[hit * 4 + 2] - (cx - hw) + 6;
+            const above = BOX[hit * 4 + 1] - hh - 6;
+            if (above >= r.y + hh + 4) {
+              y = above;
+            } else {
+              const below = BOX[hit * 4 + 3] + hh + 6;
+              if (below <= r.y + r.h - hh - 4) {
+                y = below;
+              } else {
+                const bx = (BOX[hit * 4] + BOX[hit * 4 + 2]) / 2;
+                x += x <= bx ? BOX[hit * 4] - (x + hw) - 6 : BOX[hit * 4 + 2] - (x - hw) + 6;
+                x = Math.max(r.x + hw + 2, Math.min(r.x + r.w - hw - 2, x));
+              }
+            }
           }
-          x += ox;
           x = Math.max(r.x + hw + 2, Math.min(r.x + r.w - hw - 2, x));
+          y = Math.max(r.y + hh + 2, Math.min(r.y + r.h - hh - 2, y));
           if (nb < 64) {
             BOX[nb * 4] = x - hw; BOX[nb * 4 + 1] = y - hh; BOX[nb * 4 + 2] = x + hw; BOX[nb * 4 + 3] = y + hh;
             nb++;

@@ -361,11 +361,11 @@ pub struct Battle {
     pub think_ms: [Option<i32>; 2],
     pub last_ai: Vec<Value>,
     pub turns_taken: [i32; 2],
-    pub ai_shots: [i32; 2],
-    pub ai_misses: [i32; 2],
     pub fire_x: i32,
     pub self_target: Option<(i32, i32)>,
     pub root_round: i32,
+    /// True once side 0 has damaged a Rescue captive (guards the `captive_safe` Pennant).
+    pub captive_hit_by_player: bool,
     pub snap_full: bool,
     /// An aim changed since the last snapshot (lean snapshots carry it).
     pub snap_aim: bool,
@@ -773,6 +773,12 @@ impl Battle {
                 .map(|x| terrain.surface(x))
                 .min()
                 .unwrap_or(level.height);
+            // Cozy Campaign scales Rival Heartkettle to 75% (150 HP) for brisker, kinder fights.
+            if mode == "campaign" && s == 1 && control[s] == Control::Ai(Preset::Cozy) {
+                let kmax = (crate::castle::KETTLE_HP * 75 / 100).max(1);
+                cs.kettle_max = kmax;
+                cs.kettle_hp = kmax;
+            }
             // the level's grade for this AI preset (Skirmish maps)
             let grade = match control[s] {
                 Control::Ai(p) => ls.grades.as_ref().and_then(|g| g.get(p.name())),
@@ -993,11 +999,10 @@ impl Battle {
             think_ms,
             last_ai: vec![],
             turns_taken: [0; 2],
-            ai_shots: [0; 2],
-            ai_misses: [0; 2],
             fire_x: 0,
             self_target: None,
             root_round: 0,
+            captive_hit_by_player: false,
             snap_full: true,
             snap_aim: false,
             soft_falls: false,
@@ -1461,7 +1466,7 @@ impl Battle {
         let Some(bd) = self.rules.boss.clone() else {
             return;
         };
-        let kpct = self.castles[1].kettle_hp.max(0) * 100 / crate::castle::KETTLE_HP;
+        let kpct = self.castles[1].kettle_hp.max(0) * 100 / self.castles[1].kettle_max.max(1);
         // a phase passed during the Squall is skipped
         let squall = self.squall_round() > 0;
         let mut want = 1;
@@ -1624,6 +1629,20 @@ impl Battle {
         });
         self.boss.hinge = Some(id);
         self.ev(json!({"t": "shears", "x": x, "y": y, "hp": sh.hp}));
+    }
+
+    /// Keeps the Grand Fort's roof-mounted shears hinge anchored on side 1's
+    /// fort whenever the fort drops into a crater or walks.
+    pub(crate) fn anchor_hinge(&mut self) {
+        let cs = &self.castles[1];
+        let x = cs.x + cs.width_cells() / 2;
+        let y = cs.top_y() - 1;
+        for p in &mut self.props {
+            if p.tag == "hinge" {
+                p.x = x;
+                p.y = y;
+            }
+        }
     }
 
     /// The Big Snip: a turn with the cut line shown, then the snip. A broken
@@ -1881,8 +1900,14 @@ impl Battle {
         cs.kettle_hp.max(0) as i64 + hobs + cs.standing_hp(&self.content)
     }
 
+    /// True when the player faces a Cozy AI rival in Campaign mode.
+    fn cozy_campaign(&self) -> bool {
+        self.mode == "campaign" && self.control[1] == Control::Ai(Preset::Cozy)
+    }
+
     fn squall_hit(&mut self, n: i32) {
         let pre = [self.total_hp(0), self.total_hp(1)];
+        let cozy = self.cozy_campaign();
         let kettle_loss = 50 * n;
         let block_loss = 10 * n;
         self.ev(json!({"t": "squall", "n": n, "kettle": kettle_loss, "blocks": block_loss}));
@@ -1890,11 +1915,21 @@ impl Battle {
         self.cur = None;
         self.field_source = Some("squall");
         for s in 0..2 {
+            let k_loss = if cozy && s == 0 {
+                kettle_loss * 75 / 100
+            } else {
+                kettle_loss
+            };
+            let b_loss = if cozy && s == 0 {
+                block_loss * 75 / 100
+            } else {
+                block_loss
+            };
             let mut broke = vec![];
             let (cracked_now, khp) = {
                 let cs = &mut self.castles[s];
                 let was_cracked = cs.kettle_cracked();
-                cs.kettle_hp -= kettle_loss;
+                cs.kettle_hp -= k_loss;
                 let khp = cs.kettle_hp;
                 for r in 0..cs.rows {
                     for c in 0..cs.cols {
@@ -1902,7 +1937,7 @@ impl Battle {
                             if content.materials.blocks[b.mat as usize].never_falls {
                                 continue;
                             }
-                            b.hp -= block_loss;
+                            b.hp -= b_loss;
                             if b.hp <= 0 {
                                 broke.push((c, r));
                             }
@@ -1914,9 +1949,9 @@ impl Battle {
             for &(c, r) in &broke {
                 self.remove_block(s, c, r);
             }
-            self.stats[s].kettle_lost += kettle_loss as i64;
+            self.stats[s].kettle_lost += k_loss as i64;
             self.stats[s].blocks_lost += broke.len() as i32;
-            self.note_taken(s as u8, kettle_loss);
+            self.note_taken(s as u8, k_loss);
             if cracked_now {
                 self.ev(json!({"t": "kettle_crack", "side": s, "hp": khp}));
             }
@@ -2010,7 +2045,8 @@ impl Battle {
         }
         if let Some(obj) = &self.rules.objective {
             if !lost[0] && self.props.iter().any(|p| p.kind == "captive" && p.hp <= 0) {
-                self.end_battle(1, "captive_bonked");
+                let blamed = self.cur.as_ref().map(|c| c.side).unwrap_or(self.side);
+                self.end_battle(1 - blamed, "captive_bonked");
                 return true;
             }
             let broken = self
@@ -2101,11 +2137,16 @@ impl Battle {
         match self.mode.as_str() {
             "campaign" => {
                 if !won {
+                    if how == "give_up" && self.round <= 1 && self.stats[0].shots == 0 {
+                        return 0;
+                    }
                     return c.reward("loss");
                 }
-                let _ = how;
                 if self.progress.cleared {
-                    let base = c.reward(if gf { "replay_grand_fort" } else { "replay" });
+                    let mut base = c.reward(if gf { "replay_grand_fort" } else { "replay" });
+                    if !gf && self.cozy_campaign() {
+                        base = base.max(125);
+                    }
                     base + c.reward("per_new_pennant") * new.iter().filter(|x| **x).count() as i32
                 } else {
                     let base = c.reward(if gf {
@@ -2198,7 +2239,7 @@ impl Battle {
                     "win_by_round" => self.round <= p.value,
                     "no_hob_bonked" => st.own_bonked == 0,
                     "kettle_above_pct" => {
-                        self.castles[0].kettle_hp * 100 > p.value * crate::castle::KETTLE_HP
+                        self.castles[0].kettle_hp * 100 > p.value * self.castles[0].kettle_max
                     }
                     "hits_in_a_row" => st.best_streak >= p.value,
                     "kettle_pop" => how == "kettle_pop",
@@ -2215,11 +2256,14 @@ impl Battle {
                     "bonk_with_trick" => st.bonk_with_trick,
                     "use_tricks" => st.tricks_used >= p.value,
                     "hits_from_spots" => st.hit_spots.len() as i32 >= p.value,
-                    "captive_safe" => self
-                        .props
-                        .iter()
-                        .filter(|x| x.kind == "captive")
-                        .all(|x| x.hp >= x.max),
+                    "captive_safe" => {
+                        !self.captive_hit_by_player
+                            && self
+                                .props
+                                .iter()
+                                .filter(|x| x.kind == "captive")
+                                .all(|x| x.hp > 0)
+                    }
                     "root_by_round" => self.root_round > 0 && self.root_round <= p.value,
                     "hill_half" => {
                         let now =
@@ -2259,18 +2303,36 @@ impl Battle {
             };
             let cs = &self.castles[h.side as usize];
             let (x0, y0, x1, y1) = cs.loophole_rect(&cs.nooks[n as usize]);
-            let mut solid = 0;
-            let mut total = 0;
+            let mut solid_in = 0;
+            let mut total_in = 0;
             // only ground Shove Off can clear counts as a burial
             for y in y0..=y1 {
                 for x in x0..=x1 {
-                    total += 1;
+                    total_in += 1;
                     if self.terrain.diggable(x, y) {
-                        solid += 1;
+                        solid_in += 1;
                     }
                 }
             }
-            let buried = solid * 2 >= total;
+            // also inspect the exterior Loophole apron directly outside the fort
+            // face so an exterior Sod Sack mound cleanly marks the Hob buried
+            let d = cs.front_dir();
+            let (ax, bx) = if d > 0 {
+                (x1 + 1, x1 + 6)
+            } else {
+                (x0 - 6, x0 - 1)
+            };
+            let mut solid_out = 0;
+            let mut total_out = 0;
+            for y in y0..=y1 {
+                for x in ax..=bx {
+                    total_out += 1;
+                    if self.terrain.diggable(x, y) {
+                        solid_out += 1;
+                    }
+                }
+            }
+            let buried = solid_in * 2 >= total_in || solid_out * 2 >= total_out;
             let was = self.hobs[i].buried;
             let side = self.hobs[i].side as usize;
             self.hobs[i].buried = buried;
@@ -2287,11 +2349,33 @@ impl Battle {
         let h = &self.hobs[hob as usize];
         let mut n = 0;
         if let Some(nk) = h.nook {
-            let cs = &self.castles[h.side as usize];
+            let cs = self.castles[h.side as usize].clone();
             let (x0, y0, x1, y1) = cs.loophole_rect(&cs.nooks[nk as usize]);
             let d = cs.front_dir();
-            let (ax, bx) = if d > 0 { (x0, x1 + 24) } else { (x0 - 24, x1) };
-            n = self.terrain.clear_rect(ax, y0 - 4, bx, y1 + 4);
+            let (ax, bx) = if d > 0 { (x0, x1 + 36) } else { (x0 - 36, x1) };
+            let lo_x = ax.max(0);
+            let hi_x = bx.min(self.terrain.w - 1);
+            let bot = (y1 + 4).min(self.terrain.h - 1);
+            for x in lo_x..=hi_x {
+                // Clear upward from the chute floor until a standing fort block
+                // shields the column (or sky), so overhead Loam never floats and
+                // collapses back into the Loophole when ground settles.
+                let mut y = bot;
+                while y >= 0 {
+                    if y < y0 - 4 && cs.slot_at(x, y).is_some_and(|(c, r)| cs.has_block(c, r)) {
+                        break;
+                    }
+                    if self.terrain.diggable(x, y) {
+                        self.terrain.set(x, y, crate::terrain::AIR);
+                        n += 1;
+                    }
+                    y -= 1;
+                }
+            }
+            if n > 0 {
+                self.terrain.mark_dirty(lo_x, 0, hi_x, bot);
+            }
+            self.settle_ground(ax - 2, bx + 2);
         }
         self.update_buried();
         n
@@ -2626,11 +2710,29 @@ impl Battle {
         let Some(ix) = self.shot_index(&id) else {
             return Err("unknown_shot");
         };
-        if self.content.shots[ix].weight == Weight::H
-            && self.turns_taken[s] == 0
-            && side == self.first_side
-        {
+        let def = &self.content.shots[ix];
+        if def.weight == Weight::H && self.turns_taken[s] == 0 && side == self.first_side {
             return Err("no_heavy_first_turn");
+        }
+        if def.flight.kind == FlightKind::SelfTarget {
+            let base: Vec<Effect> = def
+                .triggers
+                .iter()
+                .filter(|t| t.on == TriggerOn::Fire && t.dial.is_none())
+                .flat_map(|t| t.effects.iter().cloned())
+                .collect();
+            if let Some(why) = self.self_shot_useless(side, &base, None) {
+                let any_dial = def.triggers.iter().any(|t| {
+                    t.on == TriggerOn::Fire
+                        && t.dial.as_deref().is_some_and(|d| {
+                            d != "puff_up" || (self.puff_up_allowed[s] && !self.puff_up_used[s])
+                        })
+                        && self.self_shot_useless(side, &t.effects, None).is_none()
+                });
+                if !any_dial {
+                    return Err(why);
+                }
+            }
         }
         Ok(())
     }
@@ -2657,6 +2759,12 @@ impl Battle {
             "no_actions_left" => "No Actions left".into(),
             "not_planning" => "Not your turn".into(),
             "hob_cannot_fire" => format!("{name} cannot fire"),
+            "nothing_to_mend" => "Nothing needs mending right now".into(),
+            "no_one_to_puff_up" => "No Bonked Hob can Puff Up right now".into(),
+            "puff_up_not_allowed" => "Puff Up is not ready this battle".into(),
+            "bad_target" => "Pick a valid block or room first".into(),
+            "already_lidded" => "That room already wears a Pot Lid".into(),
+            "room_destroyed" => "That room has no intact walls left".into(),
             _ => format!("{shot} cannot fire now"),
         }
     }
@@ -2684,6 +2792,14 @@ impl Battle {
         let s = side as usize;
         let sel = self.sel[s].clone();
         if let Err(why) = self.shot_ready(side, sel.hob, &sel.shot) {
+            let why = if why == "nothing_to_mend"
+                && dial.as_deref() == Some("puff_up")
+                && (!self.puff_up_allowed[s] || self.puff_up_used[s])
+            {
+                "puff_up_not_allowed"
+            } else {
+                why
+            };
             return self.refusal(side, sel.hob, &sel.shot, why);
         }
         let Some(shot_id) = self.shot_for(sel.hob, &sel.shot) else {
@@ -2702,7 +2818,7 @@ impl Battle {
                 return err("bad_dial");
             }
             if d == "puff_up" && (!self.puff_up_allowed[s] || self.puff_up_used[s]) {
-                return err("puff_up_not_allowed");
+                return self.refusal(side, sel.hob, &sel.shot, "puff_up_not_allowed");
             }
         }
         // a self shot that would do nothing is refused before anything is paid
@@ -2719,7 +2835,7 @@ impl Battle {
             };
             self.cur = None;
             if let Some(why) = self.self_shot_useless(side, &effs, target) {
-                return err(why);
+                return self.refusal(side, sel.hob, &sel.shot, why);
             }
         }
         let is_match =
@@ -2892,9 +3008,20 @@ impl Battle {
                     if !cs.in_grid(c, r) {
                         return Some("bad_target");
                     }
-                    if cs.block(c, r).is_some_and(|b| b.hp < b.max)
+                    let buries_target = self.hobs.iter().any(|h| {
+                        h.side == side
+                            && h.alive()
+                            && h.buried
+                            && h.nook.is_some_and(|n| {
+                                cs.room_walls(&cs.nooks[n as usize])
+                                    .iter()
+                                    .flatten()
+                                    .any(|&p| p == (c, r))
+                            })
+                    });
+                    if cs.block(c, r).is_some_and(|b| b.hp < b.max || b.peephole)
                         || rebuildable(cs.idx(c, r), *restore_pct)
-                        || self.hobs.iter().any(|h| h.side == side && h.buried)
+                        || buries_target
                     {
                         return None;
                     }
@@ -2930,6 +3057,9 @@ impl Battle {
 
     fn walk(&mut self, dx: i32) -> Value {
         if self.phase != Phase::Plan || self.acted {
+            return err("cannot_walk_now");
+        }
+        if self.mode == "campaign" && !self.content.campaign_walk_allowed(&self.level.id) {
             return err("cannot_walk_now");
         }
         let s = self.side as usize;
@@ -3012,6 +3142,9 @@ impl Battle {
             return err("cannot_walk_there");
         }
         let end = (self.castles[s].x, self.castles[s].base_y);
+        if s == 1 {
+            self.anchor_hinge();
+        }
         self.update_buried();
         self.ai_mem[s].own_walked = true;
         self.ai_mem[1 - s].target_walked += moved.abs();
@@ -3128,13 +3261,14 @@ impl Battle {
                     }
                 }
                 let cs = &self.castles[s];
-                targets.retain(|&(c, r)| cs.block(c, r).is_some_and(|b| b.hp < b.max));
+                targets
+                    .retain(|&(c, r)| cs.block(c, r).is_some_and(|b| b.hp < b.max || b.peephole));
                 if targets.is_empty() && v.get("targets").is_none() {
                     let mut hurt: Vec<(i32, i32, i32)> = vec![];
                     for r in 0..cs.rows {
                         for c in 0..cs.cols {
                             if let Some(b) = cs.block(c, r) {
-                                if b.hp < b.max {
+                                if b.hp < b.max || b.peephole {
                                     hurt.push((b.hp - b.max, c, r));
                                 }
                             }
@@ -3160,6 +3294,13 @@ impl Battle {
             DoodadEffect::Lid => {
                 let room = v["room"].as_str().unwrap_or("kettle");
                 if room == "kettle" {
+                    let cs = &self.castles[s];
+                    if cs.kettle.lid {
+                        return err("already_lidded");
+                    }
+                    if !cs.room_intact(&cs.kettle, false) {
+                        return err("bad_target");
+                    }
                     self.castles[s].kettle.lid = true;
                 } else {
                     let n: usize = room
@@ -3168,6 +3309,13 @@ impl Battle {
                         .unwrap_or(usize::MAX);
                     if n >= self.castles[s].nooks.len() {
                         return err("bad_room");
+                    }
+                    let cs = &self.castles[s];
+                    if cs.nooks[n].lid {
+                        return err("already_lidded");
+                    }
+                    if !cs.room_intact(&cs.nooks[n], false) {
+                        return err("bad_target");
                     }
                     self.castles[s].nooks[n].lid = true;
                 }
@@ -3293,12 +3441,6 @@ impl Battle {
                 }
             } else if c.kind.is_some() {
                 self.stats[s].streak = 0;
-                if let Control::Ai(_) = self.control[s] {
-                    self.ai_misses[s] += 1;
-                }
-            }
-            if let Control::Ai(_) = self.control[s] {
-                self.ai_shots[s] += 1;
             }
             if let Some(g) = self.ghosts.iter_mut().rev().find(|g| g.side == c.side) {
                 g.pin = c.pin;
@@ -3666,13 +3808,14 @@ impl Battle {
                 };
                 let (cost, used, cells) = crate::castle::blueprint_report(&self.content, &bp);
                 let cells: Vec<Value> = cells.iter().map(|p| json!([p.0, p.1])).collect();
-                match crate::castle::validate_blueprint_with(&self.content, &bp, seats, false) {
+                match crate::castle::validate_blueprint_problem(&self.content, &bp, seats, false) {
                     Ok(()) => {
                         json!({"ok": true, "cost": cost, "used": used, "budget": crate::castle::BUDGET})
                     }
-                    Err(e) => {
-                        json!({"ok": false, "reason": "invalid_blueprint", "detail": e, "cells": cells,
-                                     "cost": cost, "used": used, "budget": crate::castle::BUDGET})
+                    Err((problem, e)) => {
+                        json!({"ok": false, "reason": "invalid_blueprint", "problem": problem,
+                               "detail": e, "cells": cells, "cost": cost, "used": used,
+                               "budget": crate::castle::BUDGET})
                     }
                 }
             }
@@ -4059,13 +4202,14 @@ impl Battle {
             hs.i32(r.winner as i32);
             hs.str(&r.how);
         }
+        hs.i32(self.captive_hit_by_player as i32);
         hs.finish()
     }
 }
 
 /// Commands that change the battle. `ai_turn` logs itself (see `ai_turn`);
 /// the commands it plays are not logged.
-fn is_logged(cmd: &str) -> bool {
+pub(crate) fn is_logged(cmd: &str) -> bool {
     matches!(
         cmd,
         "pick_shell"

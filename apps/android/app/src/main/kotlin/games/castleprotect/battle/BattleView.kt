@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.RectF
 import android.os.SystemClock
 import android.util.Log
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -59,6 +60,9 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     @Volatile var tall = false
     /** Space the Wide HUD covers on each edge, in px: left, top, right, bottom. */
     @Volatile var hudPad = floatArrayOf(0f, 0f, 0f, 0f)
+    /** Space the Portrait (Tall) TopStrip and bottom dock cover, in px, while BattleView stays full-screen (H-A02). */
+    @Volatile var tallTopInset = 0f
+    @Volatile var tallBottomInset = 0f
 
     /** True while an Aim Drag is in progress; the HUD fades its clusters. */
     val dragging = mutableStateOf(false)
@@ -111,10 +115,17 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     @Volatile private var fingerX = 0f
     @Volatile private var fingerY = 0f
     private var prevAngle = 0; private var prevPower = 0
-    /** The angle the pull had before the finger met the screen edge (QA playtest 1, m3). */
-    private var heldAngle = -1
+    /** The angle the pull had before the finger met the screen edge (QA playtest 1, m3, M-A01). */
+    @Volatile private var heldAngle = -1
+    /** Monotonic drag generation so queued edge-assist posts never overshoot after a drag ends or restarts (M-A01). */
+    @Volatile private var dragGen = 0
+    /** Virtual edge-assist pull bonus (px) so the Cancel Halo stays 100% anchored on-screen (H-A03). */
+    @Volatile private var edgeBonusPx = 0f
+    @Volatile private var edgeEnteredAt = 0L
+    @Volatile private var inCancelFlag = false
     @Volatile private var sentAngle = -1
     @Volatile private var sentPower = -1
+    private var lastRatchetStep = -1
     private var lastX = 0f; private var lastY = 0f
     private var pinchDist = 0f; private var pinchX = 0f; private var pinchY = 0f
     private var lastTapAt = 0L
@@ -248,9 +259,6 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
 
     private val drag = FloatArray(4)
 
-    private var readout: String? = null
-    private var readoutA = -1; private var readoutP = -1
-
     // Camera state for the Wide layout (docs/design/07 section 3.5).
     private var hadShells = false
     private var lastShellX = 0f; private var lastShellY = 0f
@@ -261,6 +269,7 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     private fun drawFrame(c: Canvas, f: Frame, dt: Float, viewDt: Float) {
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0 || h <= 0) return
+        val now = SystemClock.uptimeMillis()
         if (f.phase != lastPhase) {
             if (f.phase == Phase.RESOLVE && manualFlag) post { reframe() } // on Fire the camera snaps back to auto-frame
             lastPhase = f.phase
@@ -272,6 +281,8 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         renderer.teachRing = session.teachRing
         renderer.mendTarget = session.mendTargetCell
         renderer.mendSide = f.side
+        renderer.quickFire = session.settings.quickFire
+        renderer.hudTopPad = hudPad[1]
         session.peek.onFrame(f.hud.turn, f.phase == Phase.RESOLVE || f.shells.isNotEmpty())
         renderer.syncTerrain(f.terrain)
         while (true) { val e = session.fxFrames.poll() ?: break; fieldFx.onFrame(e) }
@@ -279,40 +290,48 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         session.collapseShowing = fieldFx.collapseShowing
         // Suppress shake only while aiming calmly; allow Round 10 Fatigue and post-settle collapse shakes (Android-M2).
         session.juice.shake(dt * 1000f, aiming = draggingFlag || (f.phase == Phase.PLAN && !session.fatigueShaking && !fieldFx.collapseShowing), shakeOut)
-        // Edge help: a finger held on the screen edge under power 100 slides the anchor away, about
-        // 2.5 s from 0 to 100. Done on the UI thread, where the aim and its sounds live.
-        if (draggingFlag && heldAngle >= 0 && sentPower in 0..99 && Aim.onEdge(fingerX, fingerY, w, h, dp)) {
-            val step = Aim.fullPull(0f, 0f, 0f, 0f, w, h, dp) * dt / 2.5f
-            post {
-                if (draggingFlag && heldAngle >= 0) {
-                    val s = Aim.slideAnchor(anchorX, anchorY, heldAngle, session.settings.pointMode, step)
-                    anchorX = s[0]; anchorY = s[1]
-                    updateAim()
+        // Safe on-screen edge-assist (H-A03, M-A01): after 220 ms dwell at screen edge, grow virtual pull
+        // tension at fullPull * dt / 2.5f while keeping the Home-Return Cancel Halo anchored 100% on-screen.
+        val gen = dragGen
+        if (draggingFlag && !inCancelFlag && heldAngle >= 0 && sentPower in 0..99 && Aim.onEdge(fingerX, fingerY, w, h, dp)) {
+            val entered = edgeEnteredAt
+            if (entered == 0L) {
+                edgeEnteredAt = now
+            } else if (now - entered >= Aim.EDGE_DWELL_MS) {
+                val step = Aim.fullPull(0f, 0f, 0f, 0f, w, h, dp) * dt / 2.5f
+                post {
+                    val vw = width.toFloat(); val vh = height.toFloat()
+                    if (dragGen == gen && draggingFlag && !inCancelFlag && heldAngle >= 0 && sentPower in 0..99 && Aim.onEdge(fingerX, fingerY, vw, vh, dp)) {
+                        val maxBonus = Aim.fullPull(0f, 0f, 0f, 0f, vw, vh, dp)
+                        edgeBonusPx = (edgeBonusPx + step).coerceAtMost(maxBonus)
+                        updateAim()
+                    }
                 }
             }
+        } else {
+            edgeEnteredAt = 0L
         }
         renderer.aimFull = Aim.fullPull(0f, 0f, 0f, 0f, w, h, dp)
         renderer.pointMode = session.settings.pointMode
         val dragNow = if (draggingFlag) drag.also { it[0] = anchorX; it[1] = anchorY; it[2] = fingerX; it[3] = fingerY } else null
-        val hob = f.selectedHob
-        if (dragNow != null && hob != null && (hob.angle != readoutA || hob.power != readoutP)) {
-            readoutA = hob.angle; readoutP = hob.power
-            readout = String.format(java.util.Locale.ROOT, "%.1f° | %d", hob.angle / 10f, hob.power)
-        }
-        val shown = if (dragNow != null) readout else null
         val me = if (f.hud.human(f.side)) f.side else if (f.hud.human(0)) 0 else 1
         val flying = f.phase == Phase.RESOLVE || f.phase == Phase.SETTLE
         var mv = false
         if (f.castles.size < 2) { renderer.drawEmpty(c); renderer.tick(viewDt); moving = false; return }
-        val now = SystemClock.uptimeMillis()
         val sh = f.shells.firstOrNull()
         if (sh != null) { hadShells = true; lastShellX = sh.x.toFloat(); lastShellY = sh.y.toFloat(); impactAt = 0L }
         else if (hadShells) { hadShells = false; impactAt = now; impactX = lastShellX; impactY = lastShellY }
         if (tall) {
             val stripH = 32f * dp
+            val topIn = tallTopInset.coerceIn(0f, h * 0.35f)
+            val botIn = tallBottomInset.coerceIn(0f, h * 0.55f)
+            val fieldBottom = (h - botIn).coerceIn(topIn + stripH + 80f * dp, h)
+            val fieldH = fieldBottom - topIn
+            // Sky backdrop behind translucent Tier-3 TopStrip so top safe area is never unpainted.
+            c.drawColor(0xFF9AD3EA.toInt())
             if (flying) {
                 // The two lenses join into one tall view that rides with the shell; the Field Strip slides to its foot.
-                main.rect.set(0f, 0f, w, h - stripH); strip.set(0f, h - stripH, w, h)
+                main.rect.set(0f, topIn, w, fieldBottom - stripH); strip.set(0f, fieldBottom - stripH, w, fieldBottom)
                 val scale = max(Camera.minBlockScale(dp), 0.62f * dp * zoom)
                 if (sh != null && !manualFlag) {
                     val ground = f.groundAt(sh.x).toFloat()
@@ -326,8 +345,12 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 top.live = false; bottom.live = false
                 renderer.drawStrip(c, strip, f, main, null)
             } else {
-                val topH = ((h - stripH) * 0.39f)
-                top.rect.set(0f, 0f, w, topH); strip.set(0f, topH, w, topH + stripH); bottom.rect.set(0f, topH + stripH, w, h)
+                val topH = (fieldH - stripH) * 0.39f
+                // Bottom lens draws meadow earth behind the bottom dock (which fades while dragging, H-A02),
+                // while frameFort plants your fort cleanly 56 dp above the dock's top edge.
+                top.rect.set(0f, topIn, w, topIn + topH)
+                strip.set(0f, topIn + topH, w, topIn + topH + stripH)
+                bottom.rect.set(0f, topIn + topH + stripH, w, h)
                 // Auto-frame Rescue objectives (1-7 Cage + Hetty) in the Top Lens until cleared (Part 2 §1.5).
                 val rescueProp = if (f.hud.rules.objectiveTag == "cage") {
                     f.props.firstOrNull { it.kind == "captive" } ?: f.props.firstOrNull { it.kind == "cage_bar" }
@@ -340,12 +363,15 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 } else {
                     frameFort(top, f, 1 - me, 0.75f * dp * topZoom, 36f * dp, topPan, dt) // target fort, blocks about 12 pt
                 }
-                // Walk rail moved into stitched bottom dock -> lower fort & 3 Stompers sit cleanly unobstructed (Part 2 Plate 2).
-                mv = frameFort(bottom, f, me, 1.0f * dp * bottomZoom, 56f * dp, bottomPan, dt) || mv
+                // Walk rail lives in stitched bottom dock -> lower fort & 3 Stompers sit cleanly above fieldBottom.
+                mv = frameFort(bottom, f, me, 1.0f * dp * bottomZoom, 56f * dp + (h - fieldBottom), bottomPan, dt) || mv
                 renderer.drawLens(c, top, f, me, null, null, shakeOut)
-                renderer.drawLens(c, bottom, f, me, dragNow, shown, null) // never shake under the aiming thumb
+                renderer.drawLens(c, bottom, f, me, null, null, null) // never shake under the aiming thumb
                 main.live = false
                 renderer.drawStrip(c, strip, f, top, bottom)
+                if (dragNow != null) {
+                    renderer.drawAimOverlay(c, bottom, f, dragNow, sentAngle, sentPower, inCancelFlag, tall = true, viewW = w, viewH = h)
+                }
             }
             updateRivalPeek(false, rivalPeekRightFlag, false)
         } else {
@@ -361,7 +387,10 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
             val cx = fitOut[0] - ((p[0] - p[2]) / 2f) / scale + (if (peeking) 0f else panX)
             val cy = fitOut[1] - ((p[1] - p[3]) / 2f) / scale + (if (peeking) 0f else panY)
             mv = ease(main, cx, cy, scale, f, dt)
-            renderer.drawLens(c, main, f, me, dragNow, shown, shakeOut)
+            renderer.drawLens(c, main, f, me, null, null, shakeOut)
+            if (dragNow != null) {
+                renderer.drawAimOverlay(c, main, f, dragNow, sentAngle, sentPower, inCancelFlag, tall = false, viewW = w, viewH = h)
+            }
             top.live = false; bottom.live = false
             // Your fort is framed and the Rival's does not fit: expose Rival Peek button to Compose (M3, N3, Android-L1, Android-L8).
             var showMark = false
@@ -412,7 +441,8 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         val tw = nudgeText.measureText(text)
         val pw = tw + 24f * dp; val ph = 30f * dp
         val x = l.sx(k.x + k.cols * k.block / 2f).coerceIn(l.rect.left + pw / 2 + 4f * dp, l.rect.right - pw / 2 - 4f * dp)
-        val y = (l.sy(k.topY.toFloat()) - 40f * dp).coerceIn(l.rect.top + ph, l.rect.bottom - ph)
+        val visBottom = if (tall) min(l.rect.bottom, height.toFloat() - tallBottomInset) else l.rect.bottom
+        val y = (l.sy(k.topY.toFloat()) - 40f * dp).coerceIn(l.rect.top + ph, max(l.rect.top + ph, visBottom - ph))
         c.drawRoundRect(x - pw / 2, y - ph / 2, x + pw / 2, y + ph / 2, ph / 2, ph / 2, nudgeFill)
         markPath.reset(); markPath.moveTo(x - 8f * dp, y + ph / 2 - 1); markPath.lineTo(x + 8f * dp, y + ph / 2 - 1); markPath.lineTo(x, y + ph / 2 + 9f * dp); markPath.close()
         c.drawPath(markPath, nudgeFill)
@@ -513,7 +543,8 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
 
     // ---- input -----------------------------------------------------------
 
-    private fun inAimLens(x: Float, y: Float): Boolean = if (!tall) true else bottomLive && y > topBottomEdge + 32f * dp
+    private fun inAimLens(x: Float, y: Float): Boolean =
+        if (!tall) true else bottomLive && y > topBottomEdge + 32f * dp && y < height.toFloat() - tallBottomInset
 
     /** True when a press at screen [x], [y] may start an Aim Drag: on the side on turn's fort (plus two blocks) or within 48 dp of the picked Hob. */
     private fun onOwnFort(x: Float, y: Float): Boolean {
@@ -546,6 +577,9 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
         redraw = true
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                // Full-screen Portrait BattleView never starts a new touch underneath TopStrip or bottom dock (H-A02, Rule 4);
+                // drags that began on the fort still receive ACTION_MOVE/ACTION_UP across the faded dock.
+                if (tall && (e.y < tallTopInset || e.y > height.toFloat() - tallBottomInset)) return false
                 downX = e.x; downY = e.y; fingerX = e.x; fingerY = e.y; lastX = e.x; lastY = e.y
                 blocked = false; panning = false
                 // In the Tall layout an Aim Drag starts in the Bottom lens; a finger in the Top lens pans it.
@@ -593,8 +627,18 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
                 else if (candidate && travel >= 8f * dp) {
                     // A drag needs 8 pt of travel, not time. Read real aim from session.aimBase (Android-H1).
                     val (baseAngle, basePower) = session.aimBase(u)
-                    anchorX = downX; anchorY = downY
-                    prevAngle = baseAngle; prevPower = basePower; sentAngle = -1; sentPower = -1; heldAngle = -1
+                    val safeMargin = (Aim.CANCEL_RADIUS_DP + 4f) * dp
+                    val topFloor = if (tall) topBottomEdge + 32f * dp else hudPad[1]
+                    anchorX = downX.coerceIn(safeMargin, max(safeMargin, width.toFloat() - safeMargin))
+                    anchorY = downY.coerceIn(topFloor + safeMargin, max(topFloor + safeMargin, height.toFloat() - safeMargin))
+                    prevAngle = baseAngle; prevPower = basePower
+                    sentAngle = baseAngle; sentPower = basePower
+                    heldAngle = -1
+                    edgeBonusPx = 0f
+                    edgeEnteredAt = 0L
+                    inCancelFlag = false
+                    lastRatchetStep = basePower / 5
+                    dragGen++
                     draggingFlag = true; dragging.value = true
                     session.aimStarted()
                     session.audio.play("aim_drag_start")
@@ -618,8 +662,8 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
             }
             MotionEvent.ACTION_UP -> {
                 if (draggingFlag) {
-                    // Lift within 12 pt of the anchor cancels; otherwise the aim is set and nothing fires (unless Quick Fire is on).
-                    val cancel = hypot(e.x - anchorX, e.y - anchorY) < 12f * dp
+                    // Lift inside the Home-Return Cancel Halo cancels; otherwise the aim is set and nothing fires (unless Quick Fire is on).
+                    val cancel = inCancelFlag || hypot(e.x - anchorX, e.y - anchorY) < Aim.CANCEL_RADIUS_DP * dp
                     endDrag(keep = !cancel, mayFire = !cancel)
                 } else if (!blocked && !panning && hypot(e.x - downX, e.y - downY) < 10f * dp) {
                     val now = SystemClock.uptimeMillis()
@@ -664,11 +708,44 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
      * The values are sent as they are; the core checks and keeps them.
      */
     private fun updateAim() {
-        val r = Aim.pull(anchorX, anchorY, fingerX, fingerY, width.toFloat(), height.toFloat(), session.settings.pointMode, dp, heldAngle)
-        val angle = r[0]; val power = r[1]
-        if (r[2] == 0) heldAngle = angle
+        val w = width.toFloat(); val h = height.toFloat()
+        // Inside Home-Return Cancel Halo: hold prevAim silently without noisy power-2 core spam (Rule 4).
+        if (hypot(fingerX - anchorX, fingerY - anchorY) < Aim.CANCEL_RADIUS_DP * dp) {
+            inCancelFlag = true
+            edgeBonusPx = 0f
+            edgeEnteredAt = 0L
+            session.audio.loop("aim_band_stretch", false)
+            if (sentAngle != prevAngle || sentPower != prevPower) {
+                sentAngle = prevAngle; sentPower = prevPower
+                lastRatchetStep = prevPower / 5
+                session.aim(prevAngle, prevPower)
+            }
+            return
+        }
+        inCancelFlag = false
+        val r = Aim.pull(anchorX, anchorY, fingerX, fingerY, w, h, session.settings.pointMode, dp, heldAngle, edgeBonusPx)
+        val angle = r[0]; val power = r[1]; val onEdge = r[2] == 1
+        if (!onEdge) {
+            heldAngle = angle
+            edgeBonusPx = 0f
+            edgeEnteredAt = 0L
+        } else if (heldAngle < 0) {
+            // Drag began on the screen edge: lock initial angle so edge-assist works cleanly (M-A01).
+            heldAngle = angle
+        }
         if (angle != sentAngle || power != sentPower) {
-            if (power == 100 && sentPower != 100 && sentPower >= 0) session.buzz(8)
+            val step5 = power / 5
+            if (step5 != lastRatchetStep && lastRatchetStep >= 0) {
+                if (session.settings.haptics > 0) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                if (session.audio.hasSound("aim_ratchet_tick")) {
+                    session.audio.play("aim_ratchet_tick", semis = ((step5 - 10) * 0.4f).coerceIn(-4f, 6f))
+                }
+            }
+            lastRatchetStep = step5
+            if (power == 100 && sentPower != 100 && sentPower >= 0) {
+                session.buzz(8)
+                session.audio.play("aim_limit")
+            }
             sentAngle = angle; sentPower = power
             session.aim(angle, power)
             // The band's pitch follows power. Started and stopped on the UI thread only (review 2 N-L6).
@@ -677,16 +754,25 @@ class BattleView(ctx: Context, private val session: GameSession) : SurfaceView(c
     }
 
     private fun endDrag(keep: Boolean, mayFire: Boolean) {
+        dragGen++
         draggingFlag = false
+        inCancelFlag = false
+        edgeBonusPx = 0f
+        edgeEnteredAt = 0L
+        heldAngle = -1
+        lastRatchetStep = -1
         dragging.value = false
         candidate = false
         dragEndedAt = SystemClock.uptimeMillis()
         session.audio.loop("aim_band_stretch", false)
         session.audio.play("aim_set", semis = if (keep) 0f else -5f)
-        if (!keep) session.aim(prevAngle, prevPower)
-        else if (mayFire && session.settings.quickFire) {
+        if (!keep) {
+            sentAngle = prevAngle; sentPower = prevPower
+            session.aim(prevAngle, prevPower)
+        } else if (mayFire && session.settings.quickFire) {
             val cur = session.ui.value
-            if (FireLight.ready(cur.hud, cur.humanTurn, cur.selected)) {
+            val mustPass = FireLight.mustPass(cur.hud, cur.humanTurn, cur.hobs, cur.side)
+            if (!mustPass && FireLight.ready(cur.hud, cur.humanTurn, cur.selected)) {
                 session.fire(dial = session.activeDial, target = session.mendTarget)
             } else {
                 session.fireRefusedHere()
@@ -737,19 +823,45 @@ object Aim {
         return floatArrayOf(ax + ux * px, ay + uy * px)
     }
 
-    /** The finger is on the screen edge (within 2 dp). */
-    fun onEdge(x: Float, y: Float, w: Float, h: Float, dp: Float): Boolean = x <= 2f * dp || y <= 2f * dp || x >= w - 2f * dp || y >= h - 2f * dp
+    /** Unified Home-Return Cancel Halo radius (dp): identical for drawing and lift-to-cancel hit-test. */
+    const val CANCEL_RADIUS_DP = 20f
+    /** Screen-edge trigger margin (dp) for safe on-screen edge-assist. */
+    const val EDGE_MARGIN_DP = 8f
+    /** Dwell grace (ms) at screen edge before virtual edge-assist tension begins climbing. */
+    const val EDGE_DWELL_MS = 220L
+
+    /** The finger is on the screen edge (within 8 dp). */
+    fun onEdge(x: Float, y: Float, w: Float, h: Float, dp: Float): Boolean =
+        x <= EDGE_MARGIN_DP * dp || y <= EDGE_MARGIN_DP * dp || x >= w - EDGE_MARGIN_DP * dp || y >= h - EDGE_MARGIN_DP * dp
 
     /**
      * Aim from a pull from anchor [ax], [ay] to finger [fx], [fy] on a [w] x [h] screen. While the finger
      * is on the screen edge the angle keeps [heldAngle] (the last one off the edge, -1 for none) and
-     * only power follows (m3): the edge never bends the angle. Returns angle, power and 1 when on the edge.
+     * power projects along [heldAngle] plus any virtual [bonusPx] edge-assist climb (H-A03, M-A01).
+     * Returns angle, power and 1 when on the edge.
      */
-    fun pull(ax: Float, ay: Float, fx: Float, fy: Float, w: Float, h: Float, pointMode: Boolean, dp: Float, heldAngle: Int): IntArray {
+    fun pull(
+        ax: Float, ay: Float, fx: Float, fy: Float,
+        w: Float, h: Float, pointMode: Boolean, dp: Float, heldAngle: Int,
+        bonusPx: Float = 0f,
+    ): IntArray {
         val full = fullPull(ax, ay, fx - ax, fy - ay, w, h, dp)
-        val (angle, power) = fromDrag(ax - fx, ay - fy, pointMode, full)
+        val (rawAngle, _) = fromDrag(ax - fx, ay - fy, pointMode, full)
         val edge = onEdge(fx, fy, w, h, dp)
-        return intArrayOf(if (edge && heldAngle >= 0) heldAngle else angle, power, if (edge) 1 else 0)
+        val effAngle = if (edge && heldAngle >= 0) heldAngle else rawAngle
+        var dx = ax - fx
+        var dy = ay - fy
+        if (pointMode) { dx = -dx; dy = -dy }
+        val pullPx = if (edge && heldAngle >= 0) {
+            val rad = Math.toRadians(effAngle / 10.0)
+            val ux = cos(rad).toFloat()
+            val uy = -sin(rad).toFloat()
+            max(0f, dx * ux + dy * uy) + max(0f, bonusPx)
+        } else {
+            hypot(dx, dy) + max(0f, bonusPx)
+        }
+        val power = (pullPx / max(1f, full) * 100f).roundToInt().coerceIn(0, 100)
+        return intArrayOf(effAngle, power, if (edge) 1 else 0)
     }
 
     /** Fort margin in cells for an aim start: about two blocks. */
@@ -770,11 +882,11 @@ object Aim {
 
     /**
      * One finger gesture from [down] to [up] (screen px) against the current aim [prev]. The aim changes
-     * only when the press [startsOnFort] (see [startsOnOwnFort]) and lifts 12 dp or more from it; otherwise it pans and [prev] is kept.
+     * only when the press [startsOnFort] (see [startsOnOwnFort]) and lifts outside [CANCEL_RADIUS_DP]; otherwise [prev] is kept.
      */
     fun afterDrag(startsOnFort: Boolean, downX: Float, downY: Float, upX: Float, upY: Float, prev: Pair<Int, Int>, pointMode: Boolean, fullPx: Float, dp: Float): Pair<Int, Int> {
-        // No fort start: the finger pans. A lift within 12 dp of the anchor cancels (8 dp starts the drag).
-        if (!startsOnFort || hypot(upX - downX, upY - downY) < 12f * dp) return prev
+        // No fort start: the finger pans. A lift inside the Cancel Halo cancels (8 dp starts the drag).
+        if (!startsOnFort || hypot(upX - downX, upY - downY) < CANCEL_RADIUS_DP * dp) return prev
         return fromDrag(downX - upX, downY - upY, pointMode, fullPx)
     }
 }

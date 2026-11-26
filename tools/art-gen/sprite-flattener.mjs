@@ -71,64 +71,73 @@ export function squareSnoozeBalloon(x, y, o = {}) {
 }
 
 function flatFaceSvg(kind, skin, type) {
-  const nose = ell(10, -58, 4, 3, shade(skin, -.12), { stroke: ink, sw: 2 });
+  const nose = ell(10, -64, 4, 3, shade(skin, -.12), { stroke: ink, sw: 2 });
   const moustache = (type === 'tamper' || type === 'snipper')
-    ? rr(0, -55.5, 21, 6, 3, '#7A5A48', { stroke: ink, sw: 1.8 })
+    ? rr(0, -61.5, 21, 6, 3, '#7A5A48', { stroke: ink, sw: 1.8 })
     : '';
-  const flatEyes = rr(-3, -71, 10, 2.6, 1.3, ink) + rr(10, -71, 10, 2.6, 1.3, ink)
-    + rr(-1, -65, 7, 2.8, 1.4, ink) + rr(12, -65, 7, 2.8, 1.4, ink);
+  const flatEyes = rr(-3, -77, 10, 2.6, 1.3, ink) + rr(10, -77, 10, 2.6, 1.3, ink)
+    + rr(-1, -71, 7, 2.8, 1.4, ink) + rr(12, -71, 7, 2.8, 1.4, ink);
   let fsvg = '';
   switch (kind) {
     case 'bonk':
-      fsvg = path('M-1 -66 m-3 -3 l6 6 m0 -6 l-6 6 M12 -66 m-3 -3 l6 6 m0 -6 l-6 6', 'none', { stroke: ink, sw: 2.5 })
-        + nose + moustache + rr(5, -50, 9, 3, 1.5, ink);
+      fsvg = path('M-1 -72 m-3 -3 l6 6 m0 -6 l-6 6 M12 -72 m-3 -3 l6 6 m0 -6 l-6 6', 'none', { stroke: ink, sw: 2.5 })
+        + nose + moustache + rr(5, -56, 9, 3, 1.5, ink);
       break;
     case 'grit':
-      fsvg = path('M-3 -72 L7 -69 M20 -72 L10 -69', 'none', { stroke: ink, sw: 2.6 })
-        + rr(-1, -65, 7, 2.8, 1.4, ink) + rr(12, -65, 7, 2.8, 1.4, ink)
-        + nose + moustache + rr(4, -49.5, 13, 2.6, 1.2, ink);
+      fsvg = path('M-3 -78 L7 -75 M20 -78 L10 -75', 'none', { stroke: ink, sw: 2.6 })
+        + rr(-1, -71, 7, 2.8, 1.4, ink) + rr(12, -71, 7, 2.8, 1.4, ink)
+        + nose + moustache + rr(4, -55.5, 13, 2.6, 1.2, ink);
+      break;
+    case 'strain':
+      // Bureaucratic full-draw strain: ruler-rigid furrowed brow, tightly slit eyes, clamped jaw
+      fsvg = path('M-3 -78.5 L7.5 -74.5 M20 -78.5 L9.5 -74.5', 'none', { stroke: ink, sw: 2.8 })
+        + path('M-1 -71.5 L6.5 -70.5 M12 -70.5 L19.5 -71.5', 'none', { stroke: ink, sw: 2.6 })
+        + nose + moustache + rr(3.5, -55.5, 14, 2.8, 1.2, ink)
+        + line(5, -54.1, 16, -54.1, '#FFFFFF', 1.0, { op: .55 });
       break;
     case 'shout':
-      fsvg = path('M-3 -72 L7 -70 M20 -72 L10 -70', 'none', { stroke: ink, sw: 2.4 })
-        + rr(-1, -65, 7, 3, 1.4, ink) + rr(12, -65, 7, 3, 1.4, ink)
-        + nose + moustache + rr(5, -51.5, 10, 6.5, 2, ink);
+      fsvg = path('M-3 -78 L7 -76 M20 -78 L10 -76', 'none', { stroke: ink, sw: 2.4 })
+        + rr(-1, -71, 7, 3, 1.4, ink) + rr(12, -71, 7, 3, 1.4, ink)
+        + nose + moustache + rr(5, -57.5, 10, 6.5, 2, ink);
       break;
     case 'blink':
-      fsvg = line(-2, -65, 6, -65, ink, 2.4) + line(11, -65, 19, -65, ink, 2.4)
-        + nose + moustache + rr(5, -49.5, 10, 2.4, 1.2, ink);
+      fsvg = line(-2, -71, 6, -71, ink, 2.4) + line(11, -71, 19, -71, ink, 2.4)
+        + nose + moustache + rr(5, -55.5, 10, 2.4, 1.2, ink);
       break;
     case 'ouch':
-      fsvg = path('M-2 -68 L5 -65 L-2 -62 M19 -68 L12 -65 L19 -62', 'none', { stroke: ink, sw: 2.5 })
-        + nose + moustache + path('M3 -49.5 q3 -2.5 6 0 t6 0', 'none', { stroke: ink, sw: 2.4 });
+      fsvg = path('M-2 -74 L5 -71 L-2 -68 M19 -74 L12 -71 L19 -68', 'none', { stroke: ink, sw: 2.5 })
+        + nose + moustache + path('M3 -55.5 q3 -2.5 6 0 t6 0', 'none', { stroke: ink, sw: 2.4 });
       break;
     case 'cheer':
-      fsvg = rr(-3, -72, 10, 2.4, 1.2, ink) + rr(10, -72, 10, 2.4, 1.2, ink)
-        + path('M-1 -64 L6 -65 M12 -65 L19 -64', 'none', { stroke: ink, sw: 2.5 })
-        + nose + moustache + path('M4 -50 Q10 -46 16 -51', 'none', { stroke: ink, sw: 2.4 });
+      fsvg = rr(-3, -78, 10, 2.4, 1.2, ink) + rr(10, -78, 10, 2.4, 1.2, ink)
+        + path('M-1 -70 L6 -71 M12 -71 L19 -70', 'none', { stroke: ink, sw: 2.5 })
+        + nose + moustache + path('M4 -56 Q10 -52 16 -57', 'none', { stroke: ink, sw: 2.4 });
       break;
     case 'dizzy': {
-      const sw = (x) => path(`M${x} -65 m0 -1.2 a1.4 1.4 0 0 1 1.4 1.4 a2.6 2.6 0 0 1 -2.6 2.6 a3.8 3.8 0 0 1 -3.8 -3.8 a5 5 0 0 1 5 -5`, 'none', { stroke: ink, sw: 1.9 });
-      fsvg = sw(1.5) + sw(14.5) + nose + moustache + rr(5, -50, 9, 2.6, 1.3, ink);
+      const sw = (x) => path(`M${x} -71 m0 -1.2 a1.4 1.4 0 0 1 1.4 1.4 a2.6 2.6 0 0 1 -2.6 2.6 a3.8 3.8 0 0 1 -3.8 -3.8 a5 5 0 0 1 5 -5`, 'none', { stroke: ink, sw: 1.9 });
+      fsvg = sw(1.5) + sw(14.5) + nose + moustache + rr(5, -56, 9, 2.6, 1.3, ink);
       break;
     }
     case 'wide':
-      fsvg = rr(-3, -70, 9, 9, 2, '#FFFFFF', { stroke: ink, sw: 2 }) + rr(10, -70, 9, 9, 2, '#FFFFFF', { stroke: ink, sw: 2 })
-        + circ(2, -65.5, 1.8, ink) + circ(15, -65.5, 1.8, ink)
-        + nose + moustache + rr(6, -51.5, 8, 5.5, 2, ink);
+      fsvg = rr(-3, -76, 9, 9, 2, '#FFFFFF', { stroke: ink, sw: 2 }) + rr(10, -76, 9, 9, 2, '#FFFFFF', { stroke: ink, sw: 2 })
+        + circ(2, -71.5, 1.8, ink) + circ(15, -71.5, 1.8, ink)
+        + nose + moustache + rr(6, -57.5, 8, 5.5, 2, ink);
       break;
     default:
-      fsvg = flatEyes + nose + moustache + (moustache ? rr(5, -48, 10, 2.4, 1.2, ink) : rr(4, -50, 12, 2.6, 1.3, ink));
+      fsvg = flatEyes + nose + moustache + (moustache ? rr(5, -54, 10, 2.4, 1.2, ink) : rr(4, -56, 12, 2.6, 1.3, ink));
       break;
   }
   if (type === 'clerk') {
-    fsvg += rr(-4, -70, 11, 9, 2, '#DDF4FF', { stroke: ink, sw: 2, op: .85 })
-      + rr(10, -70, 11, 9, 2, '#DDF4FF', { stroke: ink, sw: 2, op: .85 })
-      + line(7, -66, 10, -66, ink, 2);
+    fsvg += rr(-4, -76, 11, 9, 2, '#DDF4FF', { stroke: ink, sw: 2, op: .85 })
+      + rr(10, -76, 11, 9, 2, '#DDF4FF', { stroke: ink, sw: 2, op: .85 })
+      + line(7, -72, 10, -72, ink, 2)
+      + line(-2, -74, 2, -74, '#FFFFFF', 1.4, { op: .8 }) + line(12, -74, 16, -74, '#FFFFFF', 1.4, { op: .8 });
   }
   if (type === 'sniper') {
-    fsvg += rr(-4, -71, 26, 10, 2, '#3A3F4E', { stroke: ink, sw: 2 })
-      + rr(0, -69, 7, 6, 1, '#DDF4FF', { op: .6 })
-      + rr(12, -69, 7, 6, 1, '#DDF4FF', { op: .6 });
+    fsvg += rr(-4, -77, 26, 10, 2, '#3A3F4E', { stroke: ink, sw: 2 })
+      + rr(0, -75, 7, 6, 1, '#DDF4FF', { op: .68 })
+      + rr(12, -75, 7, 6, 1, '#DDF4FF', { op: .68 })
+      + line(1, -74, 5, -74, '#FFFFFF', 1.4, { op: .8 }) + line(13, -74, 17, -74, '#FFFFFF', 1.4, { op: .8 });
   }
   return fsvg;
 }
@@ -190,82 +199,95 @@ export function posedFlattener(type, p = {}) {
   const {
     face = 'happy', toolRot = 0, hf = [20, -27], hb = [-21, -28], dx = 0, dy = 0, sx = 1, sy = 1,
     lean = 0, hatDy = 0, tool = true, stars = null, balloon = null, puff = false, shadow = true,
-    hatRot = 0, boots = '', flash = false, lines = false, dust = 0, dirt = null,
+    hatRot = 0, boots = '', flash = false, lines = false, dust = 0, dirt = null, strain = false,
   } = p;
   const skin = def.skin;
   let b = '';
-  // Square-toed pressed rigid boots (rectilinear silhouette, strong espresso contour)
+  // Square-toed pressed rigid boots with polished toe-cap specular gleam
   const bootC = type === 'pump' ? '#3B5674' : '#2E3138';
   if (boots === 'dangle') {
-    b += g(rr(-16, -10, 15, 10, 1.5, bootC, { stroke: ink, sw: OUTER_SW }), 'translate(-2 1) rotate(12 -9 -10)')
-      + g(rr(2, -10, 16, 10, 1.5, bootC, { stroke: ink, sw: OUTER_SW }), 'translate(2 2) rotate(-10 10 -10)');
+    b += g(rr(-16, -10, 15, 10, 1.5, bootC, { stroke: ink, sw: OUTER_SW }) + line(-13, -7, -6, -7, '#FFF4DE', 1.6, { op: .38 }), 'translate(-2 1) rotate(12 -9 -10)')
+      + g(rr(2, -10, 16, 10, 1.5, bootC, { stroke: ink, sw: OUTER_SW }) + line(5, -7, 13, -7, '#FFF4DE', 1.6, { op: .38 }), 'translate(2 2) rotate(-10 10 -10)');
   } else {
-    b += rr(-16, -10, 15, 10, 1.5, bootC, { stroke: ink, sw: OUTER_SW }) + rr(2, -10, 16, 10, 1.5, bootC, { stroke: ink, sw: OUTER_SW });
+    b += rr(-16, -10, 15, 10, 1.5, bootC, { stroke: ink, sw: OUTER_SW }) + line(-13, -7, -6, -7, '#FFF4DE', 1.6, { op: .38 })
+      + rr(2, -10, 16, 10, 1.5, bootC, { stroke: ink, sw: OUTER_SW }) + line(5, -7, 13, -7, '#FFF4DE', 1.6, { op: .38 });
     if (type === 'pump') b += rr(-15, -19, 13, 10, 1.5, bootC, { stroke: ink, sw: 2.8 }) + rr(3, -19, 13, 10, 1.5, bootC, { stroke: ink, sw: 2.8 });
   }
   // Back tool + stark white square-cuffed back glove
   if (tool) b += backToolSvg(type);
-  b += rr(hb[0] - 6.5, hb[1] - 6.5, 13, 13, 3, GLOVE, { stroke: ink, sw: 3.2 });
-  // Stark vertical rectilinear slate suit (#5A6572) — sharply distinct from plump curved Hob bean body
-  const bodyD = 'M-18 -51 L18 -51 L19 -48 L17 -10 L-17 -10 L-19 -48 Z';
+  b += rr(hb[0] - 6.5, hb[1] - 6.5, 13, 13, 3, GLOVE, { stroke: ink, sw: 3.2 })
+    + line(hb[0] - 4, hb[1] - 4, hb[0] + 3, hb[1] - 4, '#FFF8EC', 1.4, { op: .8 });
+  // Taller, stiffer rectilinear slate coat (#5A6572): strong architectural vertical contrast vs plump Hobs
+  const bodyD = 'M-19 -57 L19 -57 L20 -53 L18 -10 L-18 -10 L-20 -53 Z';
   b += path(bodyD, SLATE, { stroke: ink, sw: OUTER_SW });
-  let inner = rr(6, -52, 16, 44, 0, SLATE_D, { op: .38 })
-    + rr(-19, -52, 6, 44, 0, SLATE_L, { op: .32 })
-    + line(-9, -48, -9, -11, '#FFFFFF', 1.6, { op: .6 })
-    + line(9, -48, 9, -11, '#FFFFFF', 1.6, { op: .6 })
-    + rr(-22, -23, 44, 5.5, 0, SLATE_D)
-    + rr(-3.5, -23.5, 7, 6.5, 1, C.br, { stroke: ink, sw: 1.5 });
+  let inner = rr(6, -58, 16, 50, 0, SLATE_D, { op: .42 })
+    + rr(-20, -58, 7, 50, 0, SLATE_L, { op: .38 })
+    + line(-17, -55, -17, -12, '#FFF4DE', 1.8, { op: .38 })
+    + line(-9, -54, -9, -11, '#FFFFFF', 1.6, { op: .55 })
+    + line(9, -54, 9, -11, '#FFFFFF', 1.6, { op: .55 })
+    + rr(-22, -24, 44, 5.5, 0, SLATE_D)
+    + rr(-4, -24.5, 8, 6.8, 1, C.br, { stroke: ink, sw: 1.5 })
+    + line(-2.5, -23, 2, -23, '#FFF4DE', 1.3, { op: .85 });
   if (type === 'snipper' || type === 'filler') {
-    inner += rr(-12, -40, 24, 30, 1, type === 'snipper' ? '#548244' : C.fcream, { stroke: ink, sw: 1.8 })
-      + (type === 'filler' ? rr(-9, -27, 18, 4, 1.5, BUBBLE, { stroke: ink, sw: 1 }) : '');
+    inner += rr(-12, -44, 24, 34, 1, type === 'snipper' ? '#548244' : C.fcream, { stroke: ink, sw: 1.8 })
+      + (type === 'filler' ? rr(-9, -30, 18, 4, 1.5, BUBBLE, { stroke: ink, sw: 1 }) : '');
   }
   b += clipped(path(bodyD, '#000'), inner) + path(bodyD, 'none', { stroke: ink, sw: OUTER_SW });
-  // Crisp lapel lines + brass tunic buttons
-  b += path('M-13 -50 L-5 -36 M13 -50 L5 -36', 'none', { stroke: SLATE_D, sw: 2 })
-    + circ(-4.5, -31, 1.8, C.brL, { stroke: ink, sw: .9 }) + circ(4.5, -31, 1.8, C.brL, { stroke: ink, sw: .9 });
+  // Crisp tailored lapels + double-breasted brass tunic buttons with warm specular dots
+  b += path('M-14 -56 L-5 -40 M14 -56 L5 -40', 'none', { stroke: SLATE_D, sw: 2.2 })
+    + line(-13, -55, -7, -44, '#FFF4DE', 1.2, { op: .4 })
+    + circ(-5, -35, 1.9, C.br, { stroke: ink, sw: .9 }) + circ(-5.6, -35.6, .65, '#FFF4DE')
+    + circ(5, -35, 1.9, C.br, { stroke: ink, sw: .9 }) + circ(4.4, -35.6, .65, '#FFF4DE')
+    + circ(-5, -28, 1.9, C.br, { stroke: ink, sw: .9 }) + circ(-5.6, -28.6, .65, '#FFF4DE')
+    + circ(5, -28, 1.9, C.br, { stroke: ink, sw: .9 }) + circ(4.4, -28.6, .65, '#FFF4DE');
   // Pressed crisp white collar + sharp hatched #E8730C rival tie
-  b += path('M-14 -50 L0 -40 L14 -50 L10 -53 L-10 -53 Z', '#FFFFFF', { stroke: ink, sw: 2.2 });
-  const tieD = 'M-4.2 -44 L4.2 -44 L6 -23 L0 -16 L-6 -23 Z';
+  b += path('M-15 -56 L0 -45 L15 -56 L11 -59 L-11 -59 Z', '#FFFFFF', { stroke: ink, sw: 2.2 });
+  const tieD = 'M-4.2 -49 L4.2 -49 L6 -26 L0 -19 L-6 -26 Z';
   let tieHatch = '';
-  for (let y = -44; y < -15; y += 5.2) tieHatch += line(-8, y + 4, 8, y - 3, '#FFFFFF', 1.5, { op: .88 });
+  for (let y = -49; y < -18; y += 5.2) tieHatch += line(-8, y + 4, 8, y - 3, '#FFFFFF', 1.5, { op: .88 });
   b += path(tieD, TIE_COL) + clipped(path(tieD, '#000'), tieHatch) + path(tieD, 'none', { stroke: ink, sw: 2.2 });
-  // Squared rectilinear head (strong visual contrast vs circular Hob heads at 12-18 px mobile scale)
-  b += rr(-22, -68, 6, 11, 2, skin, { stroke: ink, sw: 3 });
-  const headRect = rr(-18, -82, 37, 32, 6.5, skin, { stroke: ink, sw: OUTER_SW });
+  // Squared rectilinear head elevated cleanly above the stiffer coat collar (with warm left rim highlight)
+  b += rr(-22, -74, 6, 11, 2, skin, { stroke: ink, sw: 3 });
+  const headRect = rr(-18, -88, 37, 32, 6, skin, { stroke: ink, sw: OUTER_SW });
   b += headRect;
-  b += clipped(rr(-18, -82, 37, 32, 6.5, '#000'), rr(10, -83, 12, 35, 0, ink, { op: .14 }));
-  b += rr(-18, -82, 37, 32, 6.5, 'none', { stroke: ink, sw: OUTER_SW });
+  b += clipped(rr(-18, -88, 37, 32, 6, '#000'),
+    rr(10, -89, 12, 35, 0, ink, { op: .15 })
+    + line(-15.5, -85, -15.5, -60, '#FFF4DE', 2.4, { op: .5 }));
+  b += rr(-18, -88, 37, 32, 6, 'none', { stroke: ink, sw: OUTER_SW });
   b += flatFaceSvg(face, skin, type);
-  // Razor-flat wide spirit-level pancake cap with bright #4ADE80 green level bubble
+  // Crisp bowler / peaked spirit-level cap rim with warm sunlit rim sheen & gleaming green level bubble
   const offCenter = (face === 'ouch' || face === 'bonk' || face === 'dizzy' || face === 'wide') ? 4.8 : Math.max(-4, Math.min(4, lean * .4));
-  let cap = rr(-33, -86, 68, 6.5, 2, SLATE_D, { stroke: ink, sw: 3.2 })
-    + rr(-21, -94, 44, 9, 2, SLATE, { stroke: ink, sw: 3.2 })
-    + line(-18, -92, 18, -92, SLATE_L, 1.5, { op: .65 })
-    + rr(-9, -92.5, 22, 6, 3, '#E8FFE8', { stroke: ink, sw: 1.7 })
-    + line(-2, -92.5, -2, -86.5, ink, 1.1, { op: .55 }) + line(6, -92.5, 6, -86.5, ink, 1.1, { op: .55 })
-    + ell(2 + offCenter, -89.5, 4.4, 2.2, BUBBLE, { stroke: '#1F6B29', sw: .8 })
-    + circ(0.8 + offCenter, -90.2, .9, '#FFFFFF', { op: .9 });
-  if (type === 'snipper') cap += path('M2 -94 C-4 -105 8 -111 12 -103 C10 -99 6 -97 2 -94 Z', '#58A855', { stroke: ink, sw: 2.2 });
-  if (type === 'rake') cap += ell(-10, -97, 6, 3, '#E0A030', { stroke: ink, sw: 1.6 }) + ell(14, -98, 5, 3, '#C9603A', { stroke: ink, sw: 1.6 });
-  if (type === 'clerk') cap += g(rr(-2, -14, 4, 22, 1, C.gold, { stroke: ink, sw: 1.6 }), 'translate(-22 -66) rotate(-30)');
-  b += g(cap, hatRot ? `translate(0 ${f(hatDy)}) rotate(${hatRot} 0 -86)` : hatDy ? `translate(0 ${f(hatDy)})` : '');
-  // Front straight-edged tool and stark #FFFFFF white square-cuffed front glove
+  let cap = rr(-34, -92.5, 70, 6.8, 2.2, SLATE_D, { stroke: ink, sw: 3.2 })
+    + line(-30, -90.8, 30, -90.8, '#FFF4DE', 1.8, { op: .62 })
+    + path('M-22 -92.5 C-22 -102.5 -14 -103.5 0 -103.5 C14 -103.5 23 -102.5 23 -92.5 Z', SLATE, { stroke: ink, sw: 3.2 })
+    + path('M-16 -100.5 C-9 -102.2 2 -102.2 10 -100.8', 'none', { stroke: '#FFF4DE', sw: 2.0, op: .65 })
+    + rr(-10, -99.5, 23, 6.2, 3, '#E8FFE8', { stroke: ink, sw: 1.7 })
+    + line(-2.5, -99.5, -2.5, -93.3, ink, 1.1, { op: .55 }) + line(5.5, -99.5, 5.5, -93.3, ink, 1.1, { op: .55 })
+    + ell(1.8 + offCenter, -96.4, 4.4, 2.2, BUBBLE, { stroke: '#1F6B29', sw: .8 })
+    + circ(0.6 + offCenter, -97.1, 1.0, '#FFFFFF', { op: .95 });
+  if (type === 'snipper') cap += path('M2 -103 C-4 -114 8 -120 12 -112 C10 -108 6 -106 2 -103 Z', '#58A855', { stroke: ink, sw: 2.2 });
+  if (type === 'rake') cap += ell(-10, -106, 6, 3, '#E0A030', { stroke: ink, sw: 1.6 }) + ell(14, -107, 5, 3, '#C9603A', { stroke: ink, sw: 1.6 });
+  if (type === 'clerk') cap += g(rr(-2, -14, 4, 22, 1, C.gold, { stroke: ink, sw: 1.6 }), 'translate(-22 -72) rotate(-30)');
+  b += g(cap, hatRot ? `translate(0 ${f(hatDy)}) rotate(${hatRot} 0 -92)` : hatDy ? `translate(0 ${f(hatDy)})` : '');
+  // Front straight-edged tool and stark #FFFFFF white square-cuffed front glove with warm edge polish
   if (tool) {
     const ft = frontToolSvg(type);
     if (ft) b += g(ft, `translate(${f(hf[0] - 20)} ${f(hf[1] + 27)}) rotate(${toolRot} 20 -27)`);
   }
   b += rr(hf[0] - 7, hf[1] - 6.5, 13.5, 13, 3, GLOVE, { stroke: ink, sw: 3.2 })
+    + line(hf[0] - 5, hf[1] - 4, hf[0] + 4, hf[1] - 4, '#FFF8EC', 1.4, { op: .85 })
     + line(hf[0] - 5, hf[1] + 2, hf[0] + 4, hf[1] + 2, SLATE_L, 1.2, { op: .5 });
   // pose FX
   let fx = '';
+  if (strain) fx += path('M-28 -84 l-6 -4 M-30 -74 l-7 0 M-27 -64 l-6 4', 'none', { stroke: ink, sw: 2.1, op: .6 });
   if (puff) fx += path('M50 -62 l9 -6 M54 -50 l11 -1 M50 -38 l9 5', 'none', { stroke: ink, sw: 2.5 }) + star4(46, -50, 5, C.gold, { stroke: ink, sw: 1.5 });
   if (flash) fx += star4(52, -44, 11, '#FFF3C4', { stroke: C.gold, sw: 2 }) + star4(52, -44, 4.5, '#FFFFFF');
   if (lines) fx += path('M-34 -96 v-20 M-29 -72 v-14 M40 -98 v-20 M35 -74 v-14', 'none', { stroke: ink, sw: 2.5, op: .55 });
   if (stars !== null) {
-    const pts = stars === 3 ? [[-26, -98, 6.5], [0, -110, 5], [27, -100, 7], [36, -80, 4.5]]
-      : stars === 2 ? [[-38, -100, 4.5], [42, -92, 5.5], [12, -116, 4]]
-        : stars ? [[-30, -92, 6], [34, -86, 7.5], [8, -104, 5]]
-          : [[-24, -84, 7.5], [30, -92, 6], [2, -98, 5]];
+    const pts = stars === 3 ? [[-26, -104, 6.5], [0, -116, 5], [27, -106, 7], [36, -86, 4.5]]
+      : stars === 2 ? [[-38, -106, 4.5], [42, -98, 5.5], [12, -122, 4]]
+        : stars ? [[-30, -98, 6], [34, -92, 7.5], [8, -110, 5]]
+          : [[-24, -90, 7.5], [30, -98, 6], [2, -104, 5]];
     for (const [x, y, r] of pts) fx += star4(x, y, r, C.gold, { stroke: ink, sw: 1.8 });
   }
   const body = `<g transform="translate(${f(dx)} ${f(dy)}) rotate(${lean}) scale(${sx.toFixed(3)} ${sy.toFixed(3)})">${b}${fx}</g>`;
@@ -284,7 +306,7 @@ export function posedFlattener(type, p = {}) {
   }
   if (balloon !== null) {
     const bo = typeof balloon === 'object' ? balloon : { sway: balloon ? 5 : -2, str: balloon ? 50 : 40 };
-    out += squareSnoozeBalloon(-4 + dx, dy - 92, { tag: true, ...bo });
+    out += squareSnoozeBalloon(-4 + dx, dy - 99, { tag: true, ...bo });
   }
   return out;
 }

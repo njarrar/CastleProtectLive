@@ -70,18 +70,18 @@ enum Theme {
 
     /// Text size steps (UX 7.2): the system text size, capped so the HUD still
     /// fits, times 1.2 with the Large text setting. Set from AppModel.
-    nonisolated(unsafe) static var largeText = false
+    @MainActor static var largeText = false
 
     /// A point size scaled for the reader's text size, never under the 12 pt floor.
-    static func scaled(_ size: CGFloat) -> CGFloat {
+    @MainActor static func scaled(_ size: CGFloat) -> CGFloat {
         let system = UIFontMetrics.default.scaledValue(for: size)
         let capped = min(system, size * 1.4)
         return max(12, capped * (largeText ? 1.2 : 1))
     }
 
-    static func title(_ size: CGFloat) -> Font { .system(size: scaled(size), weight: .heavy, design: .rounded) }
-    static func label(_ size: CGFloat) -> Font { .system(size: scaled(size), weight: .semibold, design: .rounded) }
-    static func number(_ size: CGFloat) -> Font { .system(size: scaled(size), weight: .bold, design: .rounded).monospacedDigit() }
+    @MainActor static func title(_ size: CGFloat) -> Font { .system(size: scaled(size), weight: .heavy, design: .rounded) }
+    @MainActor static func label(_ size: CGFloat) -> Font { .system(size: scaled(size), weight: .semibold, design: .rounded) }
+    @MainActor static func number(_ size: CGFloat) -> Font { .system(size: scaled(size), weight: .bold, design: .rounded).monospacedDigit() }
 }
 
 /// Places a view at a rect given in the parent's coordinate space and provides the 3-tier HUD chrome.
@@ -172,7 +172,7 @@ struct GoldButtonStyle: ButtonStyle {
     var height: CGFloat = 56
     var minWidth: CGFloat = 160
 
-    func makeBody(configuration: Configuration) -> some View {
+    @MainActor func makeBody(configuration: Configuration) -> some View {
         let clampedHeight: CGFloat = max(48, height)
         let clampedWidth: CGFloat = max(48, minWidth)
         return configuration.label
@@ -212,7 +212,7 @@ struct GoldButtonStyle: ButtonStyle {
 struct PaperButtonStyle: ButtonStyle {
     var height: CGFloat = 48
 
-    func makeBody(configuration: Configuration) -> some View {
+    @MainActor func makeBody(configuration: Configuration) -> some View {
         let clampedHeight: CGFloat = max(48, height)
         return configuration.label
             .font(Theme.label(16))

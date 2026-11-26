@@ -8,7 +8,7 @@
 import fs from 'fs';
 import path_ from 'path';
 import * as L from './lib.mjs';
-import { posedHob, snoozeBalloon, HOBS, POSES, TEAMS, V01_FRAMES, SCARF_OVERLAYS, scarfOverlaySvg, HAT_PATCH_OVERLAYS, hatPatchSvg } from './sprite-hob.mjs';
+import { posedHob, snoozeBalloon, HOBS, POSES, TEAMS, V01_FRAMES, SCARF_OVERLAYS, scarfOverlaySvg, HAT_PATCH_OVERLAYS, hatPatchSvg, HAT_DEDUP_HOBS, HOB_HAT_OVERLAYS, hobHatSvg } from './sprite-hob.mjs';
 import { posedFlattener, squareSnoozeBalloon, FLATTENERS, FLATTENER_POSES } from './sprite-flattener.mjs';
 import { addRedesignAssets } from './gen-redesign-ui.mjs';
 import { buildDedupTables } from './atlas-pack.mjs';
@@ -122,10 +122,14 @@ for (const tk of ['blue', 'orange']) {
 
 // ================================================================ Hobs
 const HOB_NAME = { marge: 'Marge Dumpling', quill: 'Quill Needlesworth', jax: 'Jax Peppercorn', grub: 'Grub Mudgett', bobbin: 'Bobbin Springheel', hetty: 'Hetty Mortarboard', thumper: 'Old Thumper Grumbleby', nan: 'Nan Clatterpot' };
-// 'rival' is a real baked look (slate hat with a level vial, hatched orange scarf), not an alias: Rival Hobs never wear your class hats.
-const HOB_TEAMS = DEDUP_HOBS ? ['neutral', 'rival'] : ['blue', 'orange', 'rival'];
+// In --dedup-hobs / --v2 mode, the 7 Hobs without behind-body hatBack share one hatless Retina @2x
+// neutral base across blue, orange, and rival teams (compositing scarf + class/rival hat overlays).
+// Old Thumper keeps a baked rival frame because his striped nightcap tail drapes behind his back.
+const PORTRAIT_TEAMS = DEDUP_HOBS ? ['neutral', 'rival'] : ['blue', 'orange', 'rival'];
 for (const hk of Object.keys(HOB_NAME)) {
-  for (const tk of HOB_TEAMS) {
+  const bodyTeams = DEDUP_HOBS ? (HAT_DEDUP_HOBS.includes(hk) ? ['neutral'] : ['neutral', 'rival']) : ['blue', 'orange', 'rival'];
+  for (const tk of bodyTeams) {
+    const omitHat = DEDUP_HOBS && tk === 'neutral' && HAT_DEDUP_HOBS.includes(hk);
     for (const [pose, n] of Object.entries(V01_FRAMES)) {
       // the v0.1 frames. The extra frames for smoother play are made in sprite-anim.mjs
       POSES[pose].slice(0, n).forEach((p, i) => {
@@ -134,25 +138,28 @@ for (const hk of Object.keys(HOB_NAME)) {
         const desc = tk === 'rival'
           ? `${HOB_NAME[hk]}, Rival look (slate hat with a green level vial, hatched orange scarf), ${pose} frame ${i}${tall ? ', with Snooze Balloon' : ''}. Faces right. Anchor is the feet`
           : tk === 'neutral'
-          ? `${HOB_NAME[hk]}, neutral base (composite 16x16 hob_scarf_* overlay), ${pose} frame ${i}. Faces right. Anchor is the feet`
+          ? `${HOB_NAME[hk]}, neutral base (composite scarf${omitHat ? ' and hat' : ''} overlays), ${pose} frame ${i}. Faces right. Anchor is the feet`
           : `${HOB_NAME[hk]}, ${tk} team${tk === 'orange' ? ' (hatched scarf, diamond patch)' : ''}, ${pose} frame ${i}${tall ? ', with Snooze Balloon' : ''}. Faces right. Anchor is the feet`;
-        add(`hob_${hk}_${tk}_${pose}_${i}`, 'hobs', 72, vb[3] / 2, vb, posedHob(hk, tk, p), desc,
+        add(`hob_${hk}_${tk}_${pose}_${i}`, 'hobs', 72, vb[3] / 2, vb, posedHob(hk, tk, omitHat ? { ...p, omitHat: true } : p), desc,
           { anchor: [30, -vb[1] / 2] });
       });
     }
   }
-  // portrait: head and hat, for crew rings
-  for (const tk of HOB_TEAMS) {
+  // portrait: head and hat, for crew rings (hats stay baked so the circular disc clip stays exact)
+  for (const tk of PORTRAIT_TEAMS) {
     add(`portrait_${hk}_${tk}`, 'portraits', 48, 48, [-46, -122, 96, 96], clipped(circ(2, -74, 47, '#000'), circ(2, -74, 48, C.cream) + g(posedHob(hk, tk, { face: 'happy' }), 'translate(2 -70) scale(.8) translate(-2 78)')),
       `${HOB_NAME[hk]} portrait disc, ${tk === 'neutral' ? 'neutral base' : tk === 'rival' ? 'Rival look (slate hat)' : `${tk} team`}. Sits inside a crew ring`);
   }
 }
-// Compact 16x16 team scarf & pennant badge overlays (always generated so both legacy and --dedup-hobs builds can inspect them)
+// Compact 16x16 team scarf, 8x8 diamond patch, and 48x46 class/rival hat overlays
 for (const [sname, spec] of Object.entries(SCARF_OVERLAYS)) {
   add(sname, 'hobs', 16, 16, [-16, -16, 32, 32], scarfOverlaySvg(sname), spec.purpose, { anchor: [8, 8] });
 }
 for (const [pname, spec] of Object.entries(HAT_PATCH_OVERLAYS)) {
   add(pname, 'hobs', 8, 8, [-8, -8, 16, 16], hatPatchSvg(), spec.purpose, { anchor: [4, 4] });
+}
+for (const [hname, spec] of Object.entries(HOB_HAT_OVERLAYS)) {
+  add(hname, 'hobs', 48, 46, [-48, -140, 96, 92], hobHatSvg(spec.hob, spec.rival), spec.purpose, { anchor: [24, 31] });
 }
 
 // ================================================================ Flatteners (enemy faction)
@@ -169,7 +176,7 @@ for (const [fk, fdef] of Object.entries(FLATTENERS)) {
     });
   }
   add(`portrait_flattener_${fk}`, 'portraits', 48, 48, [-46, -122, 96, 96],
-    clipped(circ(2, -74, 47, '#000'), circ(2, -74, 48, C.indigoL) + g(posedFlattener(fk, { face: 'happy' }), 'translate(2 -70) scale(.82) translate(-2 78)')),
+    clipped(circ(2, -74, 47, '#000'), circ(2, -74, 48, C.indigoL) + g(posedFlattener(fk, { face: 'happy' }), 'translate(2 -70) scale(.8) translate(-2 83)')),
     `${fdef.name} portrait disc (Flattener rival). Sits inside a crew ring`);
 }
 

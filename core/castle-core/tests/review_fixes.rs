@@ -473,6 +473,10 @@ fn m4_every_state_field_moves_the_hash() {
             }),
         ),
         ("draft pool", Box::new(|b| b.draft.pool.push("pan".into()))),
+        (
+            "captive_hit_by_player",
+            Box::new(|b| b.captive_hit_by_player = true),
+        ),
         ("terrain", Box::new(|b| b.terrain.set(5, 5, 1))),
     ];
     for (name, f) in changes {

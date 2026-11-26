@@ -27,8 +27,45 @@ export function titleScreen(app: App): Screen {
     } else app.go({ to: 'map' });
   }, 'primary big play silent', { 'data-autofocus': true, 'data-testid': 'play', title: first ? t('home.play_hint') : undefined });
   const bounceT = first ? window.setTimeout(() => play_.classList.add('bounce'), 6000) : 0;
+  const backdropHills = h('div', { class: 'sky-hills', 'aria-hidden': 'true' });
+  // Living storybook Puddingstone Downs backdrop: sunlit hills, drifting clouds, dry-stone wall,
+  // and a charming animated walking fort silhouette (M-W05 / Live QA M5).
+  backdropHills.innerHTML = `<svg viewBox="0 0 1200 420" preserveAspectRatio="xMidYMax slice">`
+    + `<defs>`
+    + `<linearGradient id="thill1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#A8D4B8"/><stop offset="100%" stop-color="#7BB68D"/></linearGradient>`
+    + `<linearGradient id="thill2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#87CE72"/><stop offset="100%" stop-color="#5AA555"/></linearGradient>`
+    + `<linearGradient id="thill3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#71BC5D"/><stop offset="100%" stop-color="#4A8E43"/></linearGradient>`
+    + `</defs>`
+    + `<g class="title-clouds" fill="#FFFFFF" opacity="0.74">`
+    + `<g class="tcloud c1"><ellipse cx="170" cy="72" rx="64" ry="24"/><ellipse cx="215" cy="68" rx="46" ry="20"/><ellipse cx="132" cy="76" rx="38" ry="16"/></g>`
+    + `<g class="tcloud c2"><ellipse cx="940" cy="64" rx="74" ry="26"/><ellipse cx="992" cy="60" rx="50" ry="21"/><ellipse cx="892" cy="68" rx="42" ry="17"/></g>`
+    + `<g class="tcloud c3"><ellipse cx="560" cy="96" rx="52" ry="18"/><ellipse cx="596" cy="94" rx="34" ry="15"/></g>`
+    + `</g>`
+    + `<path d="M0 245 Q180 155 390 212 T810 185 T1200 215 V420 H0 Z" fill="url(#thill1)"/>`
+    + `<path d="M0 282 Q240 205 480 258 T960 228 L1200 255 V420 H0 Z" fill="url(#thill2)"/>`
+    // Animated walking starter fort silhouette trundling along Puddingstone Downs
+    + `<g class="title-fort" transform="translate(215 186)">`
+    + `<g class="tf-steam" fill="#FFF4DE" opacity="0.82"><circle cx="40" cy="-10" r="6"/><circle cx="48" cy="-22" r="8"/><circle cx="58" cy="-34" r="6"/></g>`
+    + `<g class="tf-legs" stroke="#2C221E" stroke-width="3" stroke-linejoin="round">`
+    + `<g class="tf-leg-a"><rect x="14" y="64" width="10" height="18" rx="3" fill="#C88A2E"/><rect x="7" y="79" width="24" height="9" rx="4" fill="#2F6FDE"/></g>`
+    + `<g class="tf-leg-b"><rect x="54" y="64" width="10" height="18" rx="3" fill="#C88A2E"/><rect x="47" y="79" width="24" height="9" rx="4" fill="#2F6FDE"/></g>`
+    + `</g>`
+    + `<g class="tf-body" stroke="#2C221E" stroke-width="3" stroke-linejoin="round">`
+    + `<rect x="6" y="54" width="68" height="13" rx="3" fill="#5A4A42"/>`
+    + `<rect x="10" y="18" width="60" height="38" rx="4" fill="#B9733A"/>`
+    + `<rect x="14" y="22" width="22" height="16" rx="2" fill="#3B2D24"/><circle cx="25" cy="30" r="5" fill="#FFE08A" stroke="none"/>`
+    + `<rect x="42" y="22" width="22" height="16" rx="2" fill="#3B2D24"/><circle cx="53" cy="30" r="5" fill="#4FE3C1" stroke="none"/>`
+    + `<rect x="28" y="4" width="24" height="15" rx="3" fill="#A9A39A"/>`
+    + `<line x1="60" y1="18" x2="60" y2="-8" stroke="#2C221E" stroke-width="2.5"/>`
+    + `<polygon class="tf-flag" points="60,-7 86,0 60,7" fill="#2F6FDE"/>`
+    + `</g></g>`
+    // Foreground sunlit meadow & stone fence line
+    + `<path d="M0 330 Q260 286 560 326 T1200 308 V420 H0 Z" fill="url(#thill3)"/>`
+    + `<path d="M680 322 Q860 302 1040 318" fill="none" stroke="#8C7E74" stroke-width="7" stroke-linecap="round" stroke-dasharray="16 6" opacity="0.65"/>`
+    + `</svg>`;
+
   const el = h('main', { class: 'screen title' },
-    h('div', { class: 'sky-hills', 'aria-hidden': 'true' }),
+    backdropHills,
     h('div', { class: 'logo', role: 'heading', 'aria-level': 1, 'aria-label': t('app.title') }, ...t('app.title').split(' ').map((w) => h('span', { 'aria-hidden': 'true' }, w))),
     h('p', { class: 'tagline' }, t('app.tagline')),
     first ? h('label', { class: 'row slider' }, h('span', {}, t('home.sound')), slider) : '',
@@ -40,8 +77,8 @@ export function titleScreen(app: App): Screen {
   let resumeKey: ((e: KeyboardEvent) => void) | null = null;
   void loadBattleSave().then((save) => {
     if (!save || !alive) return;
-    // A save from another rules engine is never replayed; it is put aside, not kept forever.
-    if (save.coreName !== app.core.name) { void dropBattleSave(); return; }
+    // A save from another rules engine or incompatible rules version is put aside (H-W13a).
+    if (save.coreName !== app.core.name || (save.rules !== undefined && save.rules !== app.core.rules)) { void dropBattleSave(); return; }
     const setSiblingsInert = (on: boolean) => {
       for (const child of Array.from(el.children)) if (child !== sheet) (child as HTMLElement).inert = on;
     };
@@ -62,11 +99,7 @@ export function titleScreen(app: App): Screen {
       }, 'primary silent', { 'data-autofocus': true, 'data-testid': 'resume' }),
       btn(t('home.carry_on.no'), () => {
         play('back');
-        // Abandoning a saved campaign battle grants the 40-Button loss payout (07 §4.5 / Web-L8).
-        if (save.setup.mode === 'campaign') {
-          app.progress.buttons += 40;
-          void app.saveProgress();
-        }
+        // Rule 1 (H-W13): Button payouts come strictly from Rust core battle outcomes, never TS UI hacks.
         void clearBattle();
         closeSheet();
       }, 'secondary silent'),
@@ -159,9 +192,11 @@ export function mapScreen(app: App, r: Route): Screen {
     + `<ellipse cx="86" cy="16" rx="6" ry="3.5" fill="#FFFFFF" opacity="0.58"/>`
     + `<path d="M0 44 Q14 26 28 38 T58 32 T86 36 L100 30 V100 H0 Z" fill="url(#mhill1)"/>`
     + `<path d="M0 54 Q18 36 36 48 T72 42 T100 46 V100 H0 Z" fill="url(#mhill2)"/>`
+    // Sculpted clipped topiary hedges behind the foreground meadow so bottom blends naturally into mhill3 (M-W05).
+    + `<path d="M84 48 Q87 30 91 34 Q95 26 99 38 V100 H84 Z" fill="#2F7A46" opacity="0.58"/>`
     + `<path d="M0 70 Q20 56 42 66 T82 60 L100 66 V100 H0 Z" fill="url(#mhill3)"/>`
-    // Sculpted clipped topiary hedges framing Boss 1-10 on the far right
-    + `<path d="M84 48 Q87 30 91 34 Q95 26 99 38 V62 H84 Z" fill="#2F7A46" opacity="0.55"/>`
+    // Grounded shadow beneath Big Smoothie Jr. resting on the far-right hillside
+    + `<ellipse cx="92" cy="70" rx="4.2" ry="1.6" fill="#2C221E" opacity="0.24"/>`
     // Curved cobbled storybook road connecting nodes 1-10
     + `<path class="road-edge" d="${roadD}"/>`
     + `<path class="road-fill" d="${roadD}"/>`

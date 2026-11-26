@@ -56,7 +56,7 @@
     },
     "fire": {
      "sound": "bark_marge_fire",
-     "hob_speak": "hoop",
+     "hob_speak": "hoop dum",
      "subtitles": [
       "In the oven it goes.",
       "Mind your heads.",
@@ -78,7 +78,7 @@
     },
     "takes_hit": {
      "sound": "bark_marge_takes_hit",
-     "hob_speak": "oof",
+     "hob_speak": "oof mop",
      "subtitles": [
       "Who slammed the door?",
       "That was my wall.",
@@ -123,7 +123,7 @@
    "barks": {
     "picked": {
      "sound": "bark_thumper_picked",
-     "hob_speak": "hem",
+     "hob_speak": "humf",
      "subtitles": [
       "Eh? Speak up.",
       "Me? Fine.",
@@ -132,7 +132,7 @@
     },
     "fire": {
      "sound": "bark_thumper_fire",
-     "hob_speak": "hup",
+     "hob_speak": "grum hup",
      "subtitles": [
       "We threw rocks. Proper ones.",
       "Hup.",
@@ -235,7 +235,7 @@
     },
     "bonked": {
      "sound": "bark_quill_bonked",
-     "hob_speak": "pip fen",
+     "hob_speak": "pin fen",
      "subtitles": [
       "Unpicked...",
       "Oh. How untidy.",
@@ -299,7 +299,7 @@
     },
     "takes_hit": {
      "sound": "bark_jax_takes_hit",
-     "hob_speak": "ha ha oof",
+     "hob_speak": "pep ha oof",
      "subtitles": [
       "Achoo. Who threw that?",
       "No refunds.",
@@ -442,7 +442,7 @@
     },
     "takes_hit": {
      "sound": "bark_grub_takes_hit",
-     "hob_speak": "mumf",
+     "hob_speak": "mub",
      "subtitles": [
       "Mmf.",
       "My hat."
@@ -517,7 +517,7 @@
     },
     "takes_hit": {
      "sound": "bark_bobbin_takes_hit",
-     "hob_speak": "wub oof",
+     "hob_speak": "dib oof",
      "subtitles": [
       "Whoops-a-daisy.",
       "Not the boots.",

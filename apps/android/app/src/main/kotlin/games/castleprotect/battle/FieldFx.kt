@@ -319,19 +319,27 @@ class FieldFx(
             "hit" -> when (e.target) {
                 "block" -> blockAt(p ?: f, e.side, e.c, e.r)?.let { b ->
                     spawn("fx_impact_${b.third}", b.first + 8f, b.second + 8f, sound = false)
+                    // 45 ms tactile hit-stop on heavy Cobble impacts.
+                    if (b.third == "cobble" && e.dmg >= 20) beat("hit_stop", HIT_STOP_MS, b.first + 8f, b.second + 8f)
                     // Wall/block breaks: crisp cream (#FFF4DE) with espresso stroke (Part 2 Plate 2).
                     if (e.dmg > 0) spawnFloat(b.first + 8f, b.second, dmgText(e.dmg), 0xFFFFF4DE.toInt(), false)
                 }
                 "hob" -> if (e.dmg > 0) {
                     pose(f, e.hob, "hit")
-                    // Hob hits: rich amber-gold (#FFC23D) with espresso stroke (Part 2 Plate 2).
-                    f.hobs.firstOrNull { it.id == e.hob }?.let { h -> spawnFloat(h.x.toFloat(), h.y - 26f, dmgText(e.dmg), 0xFFFFC23D.toInt(), false) }
+                    // Hob hits: rich amber-gold (#FFC23D) with espresso stroke (Part 2 Plate 2) + 45 ms hit-stop.
+                    f.hobs.firstOrNull { it.id == e.hob }?.let { h ->
+                        if (e.dmg >= 15) beat("hit_stop", HIT_STOP_MS, h.x.toFloat(), h.y.toFloat())
+                        spawnFloat(h.x.toFloat(), h.y - 26f, dmgText(e.dmg), 0xFFFFC23D.toInt(), false)
+                    }
                 }
                 "kettle" -> f.castles.getOrNull(e.side)?.kettle?.let { k ->
                     if (k.box.size >= 4) {
                         val kx = (k.box[0] + k.box[2]) / 2f; val ky = (k.box[1] + k.box[3]) / 2f
                         spawn("fx_impact_footing", kx, ky, sound = false)
-                        if (e.dmg > 0) spawnFloat(kx, k.box[1] - 8f, dmgText(e.dmg), 0xFFFF5A5F.toInt(), false)
+                        if (e.dmg > 0) {
+                            beat("hit_stop", HIT_STOP_MS, kx, ky)
+                            spawnFloat(kx, k.box[1] - 8f, dmgText(e.dmg), 0xFFFF5A5F.toInt(), false)
+                        }
                     }
                 }
                 "prop" -> if (e.dmg > 0) spawnFloat(e.x.toFloat(), e.y - 10f, dmgText(e.dmg), 0xFFFFD23F.toInt(), false)
@@ -420,7 +428,20 @@ class FieldFx(
 
     private fun hobPose(id: Int): HobPose? { for (i in hobs.indices) if (hobs[i].id == id) return hobs[i]; return null }
 
-    private fun newPose(f: Frame, h: Hob): HobPose = HobPose(h.id, "hob_${Sprites.hobKey(h.def)}_${team(f, h.side)}_").also { hobs.add(it) }
+    private fun isFlattener(f: Frame, h: Hob): Boolean {
+        if (h.dummy) return false
+        if (h.def in FLATTENER_DEFS) return true
+        return f.mode != "couch" && h.side == 1 && !f.hud.human(1) && !hasAnim("hob_${Sprites.hobKey(h.def)}_rival_idle")
+    }
+
+    private fun newPose(f: Frame, h: Hob): HobPose {
+        val prefix = if (isFlattener(f, h)) {
+            "flattener_${Sprites.flattenerKey(h.def, h.cls)}_"
+        } else {
+            "hob_${Sprites.hobKey(h.def)}_${team(f, h.side)}_"
+        }
+        return HobPose(h.id, prefix).also { hobs.add(it) }
+    }
 
     /** The def for [pose] of this Hob, looked up once (no name is built per frame). */
     private fun HobPose.def(f: Frame?, pose: String): AnimDef? {
@@ -687,7 +708,7 @@ class FieldFx(
     private fun basePose(f: Frame, h: Hob): String = when {
         h.bonked -> "bonked"
         f.phase == Phase.ENDED && f.result?.winner == h.side -> "cheer"
-        f.phase == Phase.PLAN && h.side == f.side && h.id == f.hud.selectedHob && f.hud.human(f.side) -> "aim"
+        f.phase == Phase.PLAN && h.side == f.side && h.id == f.hud.selectedHob -> "aim"
         h.grudge || h.clatter -> if (hobPose(h.id)?.def(f, "nextdoor") != null) "nextdoor" else "idle"
         else -> "idle"
     }
@@ -896,7 +917,10 @@ class FieldFx(
     companion object {
         /** Gravity for view falls, in cells per ms squared (16 cells in about 150 ms). */
         const val FALL_G = 0.0014f
+        /** Tactile 45 ms hit-stop on direct Cobble/Hob/Kettle impacts. */
+        const val HIT_STOP_MS = 45
         const val MAX_FX = 160
+        private val FLATTENER_DEFS = setOf("hedge_snipper", "rake_hand", "mower_minder", "pebble_pitcher")
         private const val MAX_FLOATS = 24
         private val DMG_LABELS = Array(301) { "-$it" }
         /** Room ids per side kept for flaps and lids. */

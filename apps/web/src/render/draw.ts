@@ -18,15 +18,72 @@ const KETTLE_SCALE = 0.72;
 const STOMPERS = true;
 
 export const INK = '#2C221E';
-export const TEAM = ['#2F6FDE', '#E8730C'];
-export const TEAM_LIGHT = ['#9DBDF5', '#FFB070'];
+export const TEAM: [string, string] = ['#2F6FDE', '#E8730C'];
+export const TEAM_LIGHT: [string, string] = ['#9DBDF5', '#FFB070'];
 
-/** Aim colour by power: cool blue at 0, warm orange near 89, red only from 90. Shape and numbers
- *  carry power too, so colour-blind players lose nothing. */
+export function setTeamPalette(set: 'blue_orange' | 'navy_gold' | 'white_black'): void {
+  if (set === 'navy_gold') {
+    TEAM[0] = '#1D3E8A'; TEAM[1] = '#D99B16';
+    TEAM_LIGHT[0] = '#8FA8E3'; TEAM_LIGHT[1] = '#FFE08A';
+  } else if (set === 'white_black') {
+    TEAM[0] = '#F5F0E6'; TEAM[1] = '#2C221E';
+    TEAM_LIGHT[0] = '#FFFFFF'; TEAM_LIGHT[1] = '#7A6E68';
+  } else {
+    TEAM[0] = '#2F6FDE'; TEAM[1] = '#E8730C';
+    TEAM_LIGHT[0] = '#9DBDF5'; TEAM_LIGHT[1] = '#FFB070';
+  }
+}
+
+/**
+ * Storybook hammered-brass aim tension colour: Soft Cobalt -> Warm Gold -> Burnished Amber -> Forged Crimson.
+ * Zero neon green anywhere along 0..100% so it reads vividly against Puddingstone Downs hills.
+ */
+const HEAT_STOPS: readonly [number, number, number, number][] = [
+  [0, 74, 143, 226],     // Soft Cobalt Slate
+  [28, 143, 180, 217],   // Mist Steel Blue
+  [52, 242, 198, 94],    // Warm Honey Gold
+  [78, 232, 132, 36],    // Burnished Amber
+  [92, 214, 63, 46],     // Forged Crimson
+  [100, 196, 37, 37],    // Deep Ember Crimson
+];
 export function aimHeat(power: number, alpha = 1): string {
   const p = Math.max(0, Math.min(100, power));
-  const hue = p >= 90 ? 4 : Math.round(205 - (175 * p) / 89);
-  return `hsla(${hue}, 82%, 52%, ${alpha})`;
+  let i = 0;
+  while (i < HEAT_STOPS.length - 2 && p > HEAT_STOPS[i + 1][0]) i++;
+  const a = HEAT_STOPS[i], b = HEAT_STOPS[i + 1];
+  const t = b[0] > a[0] ? (p - a[0]) / (b[0] - a[0]) : 0;
+  const r = Math.round(a[1] + (b[1] - a[1]) * t);
+  const g = Math.round(a[2] + (b[2] - a[2]) * t);
+  const bl = Math.round(a[3] + (b[3] - a[3]) * t);
+  return alpha >= 1 ? `rgb(${r},${g},${bl})` : `rgba(${r},${g},${bl},${alpha})`;
+}
+
+/** Pre-baked 64x64 radial lantern glow sprites (zero per-frame createRadialGradient allocations, M-W15). */
+let nookGlowTex: HTMLCanvasElement | null = null;
+let kettleGlowTex: HTMLCanvasElement | null = null;
+function glowSprite(kind: 'nook' | 'kettle'): HTMLCanvasElement {
+  if (kind === 'nook' && nookGlowTex) return nookGlowTex;
+  if (kind === 'kettle' && kettleGlowTex) return kettleGlowTex;
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 64;
+  const g = ctx2d(c);
+  const grad = kind === 'nook'
+    ? g.createRadialGradient(32, 22, 1, 32, 22, 40)
+    : g.createRadialGradient(32, 35, 2, 32, 35, 44);
+  if (kind === 'nook') {
+    grad.addColorStop(0, 'rgba(255, 214, 122, 0.36)');
+    grad.addColorStop(0.55, 'rgba(255, 196, 98, 0.16)');
+    grad.addColorStop(1, 'rgba(255, 196, 98, 0)');
+    nookGlowTex = c;
+  } else {
+    grad.addColorStop(0, 'rgba(79, 227, 193, 0.34)');
+    grad.addColorStop(0.55, 'rgba(255, 194, 61, 0.14)');
+    grad.addColorStop(1, 'rgba(79, 227, 193, 0)');
+    kettleGlowTex = c;
+  }
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  return c;
 }
 /** Reusable 16x16 occupancy grid for double-weight fort outer silhouette contour (zero per-frame allocs). */
 const FORT_OCC = new Uint8Array(256);
@@ -61,6 +118,16 @@ export interface DrawOpts {
   /** Seconds since the fight view opened (wall time, for clouds). */
   time: number;
   reduceMotion: boolean;
+  reduceFlashes?: boolean;
+  /** Portrait Bottom Lens: omit the duplicate sun from the sky backdrop (M-W04). */
+  skipSun?: boolean;
+  /** Side whose Flatteners are broadly in the player's aiming cone (subtle startled bounce). */
+  threatenedSide?: Side | -1;
+  /** True while the player is actively pulling back an aim drag. */
+  aiming?: boolean;
+  aimPower?: number;
+  /** Out-flag: set true when missTag painted inside this lens. */
+  missDrawn?: boolean;
   label?: string;
   /** Lean Lines: blocks that would fall, as "c,r", and the held block. */
   lean?: { side: Side; c: number; r: number; falls: Set<string> };
@@ -184,7 +251,8 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
   ctx.clip();
   const j = feel.juice;
   const shaking = j.ox !== 0 || j.oy !== 0 || j.roll !== 0;
-  const st = !shaking && cache ? cache.state(r, cam, terr.rev, sprites.scale, o.dpr, o.reduceMotion) : 0;
+  const artKey = sprites.scale + sprites.bgVersion * 100 + (o.skipSun ? 50 : 0);
+  const st = !shaking && cache ? cache.state(r, cam, terr.rev, artKey, o.dpr, o.reduceMotion) : 0;
   if (st === 2) { const c = cache!.build(r, o.dpr); backdrop(c, r, cam, cache, o); terrainLayer(c, r, cam, terr, o.dpr, cache); }
   if (st) {
     // The CSS sky shows through: the lens must be cleared first, or every frame's preview and
@@ -216,7 +284,6 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     else if (p.side !== o.you && rivalN < 2) { ghost(ctx, r, cam, p, 0.3, DASH_RIVAL); rivalN++; }
   }
   if (pickedLast && o.showPreview) ghostDots(ctx, r, cam, pickedLast, feel, o.reduceMotion);
-  if (pickedLast && o.showPreview) missTag(ctx, r, cam, snap, pickedLast);
 
   feel.fx.draw(ctx, r, cam, 1);
 
@@ -225,6 +292,8 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     const isBossFort = side === 1 && !!snap.hud.boss;
     // Grounded contact shadow beneath the fort and its 3 Stomper feet.
     fortShadow(ctx, r, cam, f);
+    // Stomper legs draw BEFORE the fort blocks so hips tuck cleanly behind the stone Footing (H-W08).
+    if (STOMPERS) stompers(ctx, r, cam, f, side, feel);
     const dy = feel.bobDy(side), tilt = feel.bobTilt(side);
     const moved = dy !== 0 || tilt !== 0;
     if (moved) {
@@ -237,12 +306,10 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     }
     // 1-10 Boss: sculpted clipped-hedge Peacock tail fanning behind the boss fort.
     if (isBossFort) bossPeacockTail(ctx, r, cam, f);
-    // Opaque cutaway room backing (#3B2D24) + warm lantern glow keeps background trees from
-    // bleeding through your fort, while solid walls stay 100% opaque (alpha = 1).
+    // Opaque interior room backing (#3B2D24) + warm lantern glow for BOTH forts on ALL phases (H-W07):
+    // prevents Rival Nooks from bleeding sky and stops own cutaway from popping out during flight.
     const cutaway = o.seeThrough === side;
-    if (cutaway) {
-      fortCutawayBack(ctx, r, cam, snap, f, side, o.reduceMotion ? 0 : o.time);
-    }
+    fortCutawayBack(ctx, r, cam, snap, f, side, o.reduceMotion ? 0 : o.time, cutaway);
     const fatigue = snap.fatigue?.[side] ?? false;
     for (const b of snap.blocks) if (b.side === side) block(ctx, r, cam, b, 1, o, fatigue, feel);
     // Double-weight 3px dark espresso outer silhouette contour for crisp figure-ground pop.
@@ -251,16 +318,7 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     for (const rm of snap.rooms ?? []) if (rm.side === side) room(ctx, r, cam, rm, feel);
     if (isBossFort) bossPeacockCrest(ctx, r, cam, snap, f, o.reduceMotion ? 0 : o.time);
     fortFlag(ctx, r, cam, snap, f, side, o.reduceMotion ? 0 : o.time);
-    if (moved) ctx.restore();
-    if (STOMPERS) stompers(ctx, r, cam, f, side, feel);
-    if (moved) {
-      ctx.save();
-      const bx = sx(r, cam, f.x + f.w / 2), by = sy(r, cam, f.y);
-      ctx.translate(bx, by + dy * cam.s);
-      ctx.rotate(tilt * DEG);
-      ctx.translate(-bx, -by);
-    }
-    for (const hb of snap.hobs) if (hb.side === side) hob(ctx, r, cam, hb, snap, hb.id === o.pickedHob, o.reduceMotion ? 0 : o.time, feel);
+    for (const hb of snap.hobs) if (hb.side === side) hob(ctx, r, cam, hb, snap, hb.id === o.pickedHob, o.reduceMotion ? 0 : o.time, feel, o);
     // Subtle 0.16 window glaze sheen over occupied cutaway Nooks (Plate 1).
     if (cutaway) fortCutawayGlaze(ctx, r, cam, snap, side);
     if (moved) ctx.restore();
@@ -287,9 +345,13 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     else { if (p1 >= 2) continue; p1++; }
     pin(ctx, r, cam, p, feel);
   }
+  // Draw missTag ABOVE forts, props, and pins so it is never buried behind castle walls (M-W01).
+  if (pickedLast && o.showPreview) {
+    if (missTag(ctx, r, cam, snap, pickedLast)) o.missDrawn = true;
+  }
 
-  // preview arc (already cut to the preview share by the core): a beam that thins out, then beads
-  if (o.showPreview && snap.hud.preview.length > 1) aimBeam(ctx, r, cam, snap.hud.preview, snap.hud.aim?.power ?? 0);
+  // preview arc (already cut to the preview share by the core): painterly pearl trajectory beads (H-W06)
+  if (o.showPreview && snap.hud.preview.length > 1) aimBeam(ctx, r, cam, snap.hud.preview, snap.hud.aim?.power ?? 0, snap.wind, o.reduceMotion ? 0 : o.time);
 
   // shells in flight, at their carried-on positions
   for (let i = 0; i < snap.shells.length; i++) {
@@ -313,9 +375,9 @@ export function drawLens(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
   }
 
   feel.fx.draw(ctx, r, cam, 0);
-  // Shake at 0%: a 2 pt white rim on the blast in its place [07 §6.2].
+  // Shake at 0%: a 2 pt white rim on the blast in its place [07 §6.2] (suppressed by Fewer flashes).
   const rim = j.rim;
-  if (rim.left > 0) {
+  if (rim.left > 0 && !o.reduceFlashes) {
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -346,11 +408,19 @@ function backdrop(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, lc: LensCach
   const sky = sprites.texture('bg_downs_sky');
   // The wide lens shows the sky as the canvas's CSS background (the compositor draws it for free).
   if (o.cssSky) ctx.clearRect(r.x, r.y, r.w, r.h);
-  else if (sky) {
+  else if (o.skipSun) {
+    // Portrait Bottom Lens: seamless sun-free sunlit sky continuing from the Top Lens (M-W04).
+    const sg = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
+    sg.addColorStop(0, '#B6E1EE');
+    sg.addColorStop(0.75, '#FFF1D0');
+    sg.addColorStop(1, '#FFF1D0');
+    ctx.fillStyle = sg;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+  } else if (sky) {
     // Cover the lens and keep the art's aspect (no stretched sun); pinned to the top edge.
     const k = Math.max(r.w / sky.width, r.h / sky.height);
     const w = sky.width * k, hh = sky.height * k;
-    const pre = lc?.sky.get(sky, 0, w * o.dpr, hh * o.dpr, true);
+    const pre = lc?.sky.get(sky, sprites.bgVersion, w * o.dpr, hh * o.dpr, true);
     ctx.drawImage(pre ?? sky, r.x + (r.w - w) / 2, r.y, w, hh);
   } else {
     ctx.fillStyle = '#9ED8EC';
@@ -367,7 +437,7 @@ function backdrop(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, lc: LensCach
       // Reduce motion: parallax off (the hills sit still).
       const off = o.reduceMotion ? 0 : ((-(cam.cx * cam.s * par)) % ww + ww) % ww;
       const yb = Math.min(r.y + r.h, baseY + hh * 0.35);
-      const pre = lc?.hills[li].get(img, 0, (ww + 1) * o.dpr, hh * o.dpr, true);
+      const pre = lc?.hills[li].get(img, sprites.bgVersion, (ww + 1) * o.dpr, hh * o.dpr, true);
       for (let x = r.x - ww + off; x < r.x + r.w; x += ww) ctx.drawImage(pre ?? img, x, yb - hh, ww + 1, hh);
     }
     // Subtle atmospheric sky-tint haze glaze (15-20%) over distant hills so foreground forts pop cleanly.
@@ -478,9 +548,9 @@ function ghostDots(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, p: PinView,
 /** Grounded contact shadow beneath each fort & its Stomper feet. */
 function fortShadow(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, f: { x: number; y: number; w: number }) {
   const cx = sx(r, cam, f.x + f.w * 0.5);
-  const cy = sy(r, cam, f.y) + 2.5 * cam.s;
-  const rx = Math.max(12, f.w * cam.s * 0.56);
-  const ry = Math.max(3, 5.5 * cam.s);
+  const cy = sy(r, cam, f.y) + 9.5 * cam.s;
+  const rx = Math.max(12, f.w * cam.s * 0.54);
+  const ry = Math.max(3, 5.2 * cam.s);
   ctx.save();
   ctx.fillStyle = 'rgba(44, 34, 30, 0.28)';
   ctx.beginPath();
@@ -489,10 +559,12 @@ function fortShadow(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, f: { x: nu
   ctx.restore();
 }
 
-/** Opaque cutaway room backing (#3B2D24) + warm amber lantern glow + brass steam pipe to Stompers (Plate 1). */
-function fortCutawayBack(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap: Snapshot, f: { x: number; y: number; w: number }, side: Side, t: number) {
+/** Opaque interior room backing (#3B2D24) + cached lantern glow + brass steam pipe for BOTH forts on ALL phases (H-W07, M-W15). */
+function fortCutawayBack(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap: Snapshot, f: { x: number; y: number; w: number }, side: Side, t: number, showPipe: boolean) {
   ctx.save();
-  // 1. Intact Nook rooms: recessed warm timber backing + soft amber lantern glow + tiny hanging lantern.
+  const nookGlow = glowSprite('nook');
+  const kettleGlow = glowSprite('kettle');
+  // 1. Intact Nook rooms: opaque recessed warm timber backing + cached soft amber lantern glow + tiny hanging lantern.
   for (const rm of snap.rooms ?? []) {
     if (rm.side !== side || !rm.intact) continue;
     const rx = sx(r, cam, rm.x), ry = sy(r, cam, rm.y + rm.h);
@@ -512,17 +584,14 @@ function fortCutawayBack(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
       ctx.moveTo(rx + rw * 0.5, ry); ctx.lineTo(rx + rw * 0.5, ry + rh * 0.78);
       ctx.stroke();
     }
-    // Warm radial lantern halo inside Nook
-    const lx = rx + rw * 0.5, ly = ry + rh * 0.34;
-    const pulse = 1 + (t > 0 ? Math.sin(t * 2.8 + rm.id * 1.7) * 0.05 : 0);
-    const grad = ctx.createRadialGradient(lx, ly, 1, lx, ly, Math.max(8, rw * 0.65 * pulse));
-    grad.addColorStop(0, 'rgba(255, 214, 122, 0.34)');
-    grad.addColorStop(0.55, 'rgba(255, 196, 98, 0.16)');
-    grad.addColorStop(1, 'rgba(255, 196, 98, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(rx, ry, rw, rh);
+    // Cached warm radial lantern halo inside Nook (0 gradient allocations/frame)
+    const pulse = t > 0 ? 0.92 + 0.08 * Math.sin(t * 2.8 + rm.id * 1.7) : 1;
+    ctx.globalAlpha = pulse;
+    ctx.drawImage(nookGlow, rx, ry, rw, rh);
+    ctx.globalAlpha = 1;
     // Tiny hanging brass ceiling lantern
     if (rw >= 14) {
+      const lx = rx + rw * 0.5;
       ctx.strokeStyle = INK;
       ctx.lineWidth = Math.max(1, cam.s);
       ctx.beginPath(); ctx.moveTo(lx, ry); ctx.lineTo(lx, ry + rh * 0.16); ctx.stroke();
@@ -530,7 +599,7 @@ function fortCutawayBack(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
       ctx.beginPath(); ctx.arc(lx, ry + rh * 0.19, Math.max(1.8, 2.2 * cam.s), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
   }
-  // 2. Heartkettle Room: recessed boiler bay + glowing brass steam pipe feeding down to the 3 Stompers.
+  // 2. Heartkettle Room: recessed boiler bay + cached emerald-gold glow + brass steam pipe feeding down to the 3 Stompers.
   for (const k of snap.kettles) {
     if (k.side !== side || !k.room) continue;
     const rx = sx(r, cam, k.room.x), ry = sy(r, cam, k.room.y + k.room.h);
@@ -538,13 +607,9 @@ function fortCutawayBack(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap:
     ctx.fillStyle = '#342720';
     ctx.fillRect(rx, ry, rw, rh);
     if (k.hp > 0) {
-      const grad = ctx.createRadialGradient(rx + rw * 0.5, ry + rh * 0.55, 2, rx + rw * 0.5, ry + rh * 0.55, Math.max(10, rw * 0.72));
-      grad.addColorStop(0, 'rgba(79, 227, 193, 0.32)');
-      grad.addColorStop(0.55, 'rgba(255, 194, 61, 0.14)');
-      grad.addColorStop(1, 'rgba(79, 227, 193, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(rx, ry, rw, rh);
+      ctx.drawImage(kettleGlow, rx, ry, rw, rh);
     }
+    if (!showPipe) continue;
     // Glowing brass steam manifold running from the Heartkettle base to the 3 Stomper legs
     const kx = sx(r, cam, k.room.x + k.room.w * 0.5);
     const ky = sy(r, cam, k.room.y);
@@ -727,15 +792,16 @@ function bossPeacockCrest(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap
   ctx.restore();
 }
 
-/** Three planted Stomper legs under the Footing: planted at rest, marching gait when walking (Plate 1 & 2). */
+/** Three planted Stomper legs tucked beneath the Footing: planted on turf at rest, marching gait when walking (H-W08). */
 function stompers(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, f: { x: number; y: number; w: number }, side: number, feel: Feel) {
   const walking = feel.walking(side);
   const c = walking ? anims.get(side === 0 ? 'stomper_blue_walk' : 'stomper_orange_walk') : undefined;
   const restFrame = side === 0 ? 'stomper_blue_0' : 'stomper_orange_0';
   const hasSprite = !!(c || sprites.has(restFrame));
   const t = feel.walkTime(side);
-  const k = cam.s * (16 / 30); // the whole leg fits the Footing row
-  const by = sy(r, cam, f.y) - (30 - 4.57) * k;
+  const k = cam.s * (16 / 30);
+  // Hip pivot tucks 2 cells inside the bottom of the Footing masonry so boots plant below onto the turf shadow.
+  const by = sy(r, cam, f.y) - 2 * cam.s;
   const pos = [0.18, 0.5, 0.82];
   for (let i = 0; i < 3; i++) {
     const lx = sx(r, cam, f.x + f.w * pos[i]);
@@ -743,10 +809,10 @@ function stompers(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, f: { x: numb
       const frame = c ? frameAt(c, t + i * 220) : restFrame;
       sprites.draw(ctx, frame, lx, by, k, side === 1);
     } else {
-      // Crisp Canvas2D fallback: brass steam piston leg + riveted knee + iron stomper foot
+      // Crisp Canvas2D fallback: brass steam piston leg + riveted knee + iron stomper foot extending beneath Footing
       const step = walking ? Math.sin(t * 0.018 + i * 2.1) : 0;
       const lift = walking ? Math.max(0, Math.cos(t * 0.018 + i * 2.1)) * 4 * cam.s : 0;
-      const fy = sy(r, cam, f.y);
+      const fy = sy(r, cam, f.y) + 10 * cam.s;
       const lh = Math.max(7, 13 * cam.s);
       const pw = Math.max(3, 5 * cam.s);
       ctx.save();
@@ -758,9 +824,9 @@ function stompers(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, f: { x: numb
       ctx.strokeRect(lx - pw * 0.5 + step * 2 * cam.s, fy - lh, pw, lh - lift);
       // Riveted knee joint
       ctx.fillStyle = '#FFE08A';
-      ctx.beginPath(); ctx.arc(lx + step * 2 * cam.s, fy - lh * 0.55 - lift * 0.5, Math.max(2, 2.8 * cam.s), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(lx + step * 2 * cam.s, fy - lh * 0.45 - lift * 0.5, Math.max(2, 2.8 * cam.s), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       // Planted iron stomper foot pad with team trim
-      ctx.fillStyle = side === 0 ? '#2F6FDE' : '#5A6572';
+      ctx.fillStyle = side === 0 ? TEAM[0] : '#5A6572';
       roundRect(ctx, lx - pw * 1.15 + step * 3 * cam.s, fy - Math.max(3, 4.5 * cam.s) - lift, pw * 2.3, Math.max(3.5, 5.2 * cam.s), Math.max(1.5, 2 * cam.s));
       ctx.fill(); ctx.stroke();
       ctx.restore();
@@ -1314,21 +1380,30 @@ function kettle(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, k: KettleView,
   ctx.stroke();
 }
 
-function hob(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, h: HobView, snap: Snapshot, picked: boolean, t: number, feel: Feel) {
+function hob(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, h: HobView, snap: Snapshot, picked: boolean, t: number, feel: Feel, o: DrawOpts) {
   const s = Math.max(10, 24 * cam.s);
-  const x = sx(r, cam, h.x), y = sy(r, cam, h.y);
+  let x = sx(r, cam, h.x), y = sy(r, cam, h.y);
   if (x < r.x - s || x > r.x + r.w + s || y < r.y - s * 3 || y > r.y + r.h + s) return;
   // Rival units are Flatteners; a crew Hob on the Rival side wears the Rival look (its own frames).
   const isFlattener = h.side === 1 && snap.mode !== 'duel' && !isCrewHob(h.def ?? h.id);
+  const bonked = h.state === 'bonked';
+  // High-tension micro-tremor at 92..100% aim power on the active Hob (tactile slingshot strain).
+  if (picked && !bonked && o.aiming && (o.aimPower ?? 0) >= 92 && t > 0) {
+    x += Math.sin(t * 48) * 1.2;
+    y += Math.cos(t * 42) * 0.7;
+  }
+  // Subtle Enemy Flattener startled bounce when player's preview vector aims broadly toward their fort.
+  const startled = isFlattener && !bonked && o.threatenedSide === h.side && t > 0;
+  const startleDy = startled ? Math.abs(Math.sin(t * 10 + h.x * 0.09)) * 3 * Math.min(1.2, cam.s) : 0;
   const frame = feel.hobSprite(h);
-  const lift = feel.outDy * cam.s;
+  const lift = feel.outDy * cam.s + startleDy;
   // Squashed (crushed by a fall): drawn flattened, never as Bonked; it pops back up (N2).
   const sq = h.state === 'squashed' ? 0.62 : 1;
   if (isFlattener) {
     // Campaign/Skirmish enemy units: try packed flattener_* sprite first, else render unmistakable
     // rigid tall rectilinear Slate-Grey Flattener (Plate 3: "Round vs Flat"), never cloned orange Hobs.
     const staticFlattener = !frame
-      ? `flattener_${flattenerSpriteName(h.def ?? h.id, h.cls)}_${h.state === 'bonked' ? 'bonked' : 'idle'}_0`
+      ? `flattener_${flattenerSpriteName(h.def ?? h.id, h.cls)}_${bonked ? 'bonked' : 'idle'}_0`
       : undefined;
     const useFrame = frame && frame.startsWith('flattener_') && sprites.has(frame)
       ? frame
@@ -1340,6 +1415,20 @@ function hob(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, h: HobView, snap:
     } else {
       flattenerBody(ctx, h, t, s, x, y - lift, feel.hobHurt(h.id));
       hobMarks(ctx, cam, h, picked, s, x, y);
+    }
+    if (startled) {
+      // Tiny startled alarm pip over the Flattener's flat spirit-level cap.
+      const ay = y - lift - Math.max(22, 34 * cam.s);
+      ctx.save();
+      ctx.font = `700 ${Math.max(10, Math.round(13 * Math.max(0.75, cam.s)))}px Fredoka, system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = INK;
+      ctx.fillStyle = '#FFC23D';
+      ctx.strokeText('!', x, ay);
+      ctx.fillText('!', x, ay);
+      ctx.restore();
     }
   } else if (frame && sprites.drawEx(ctx, frame, x, y - lift, cam.s * HOB_SCALE, h.side === 1, 1, 0, sq)) {
     hobMarks(ctx, cam, h, picked, s, x, y);
@@ -1628,62 +1717,109 @@ function pin(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, p: PinView, feel:
   ctx.textAlign = 'center';
   ctx.fillText(roundLabel(p.round), x, y - 16);
 }
-/** How far the newest shot of the picked Hob missed the other fort, in blocks, by its Pin. */
-function missTag(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap: Snapshot, p: PinView) {
+/** Compute the miss readout ("3 blocks short" / "2 blocks long"), honoring core `missBlocks` first and ignoring self-hits (M-W01). */
+export function missTextOf(snap: Snapshot, p: PinView): string | null {
+  if (p.selfHit) return null;
+  if (typeof p.missBlocks === 'number') {
+    if (p.missBlocks === 0) return null;
+    const short = p.missBlocks < 0;
+    const n = Math.max(1, Math.abs(Math.round(p.missBlocks)));
+    return t(short ? (n === 1 ? 'hud.miss_short_one' : 'hud.miss_short') : (n === 1 ? 'hud.miss_long_one' : 'hud.miss_long'), { n });
+  }
   const mine = snap.forts[p.side], rival = snap.forts[p.side === 0 ? 1 : 0];
-  if (!mine || !rival) return;
-  if (p.x >= rival.x && p.x <= rival.x + rival.w) return; // it landed on the fort
+  if (!mine || !rival) return null;
+  if (p.x >= rival.x && p.x <= rival.x + rival.w) return null; // landed on the fort
+  const blockSize = rival.block || 16;
   const toward = rival.x + rival.w / 2 > mine.x + mine.w / 2 ? 1 : -1;
   const edge = p.x < rival.x ? rival.x : rival.x + rival.w;
-  const n = Math.max(1, Math.round(Math.abs(p.x - edge) / 16));
+  const n = Math.max(1, Math.round(Math.abs(p.x - edge) / blockSize));
   const short = (p.x - edge) * toward < 0;
-  const text = t(short ? (n === 1 ? 'hud.miss_short_one' : 'hud.miss_short') : (n === 1 ? 'hud.miss_long_one' : 'hud.miss_long'), { n });
-  const x = sx(r, cam, p.x), y = sy(r, cam, p.y) - 44;
-  if (x < r.x - 40 || x > r.x + r.w + 40 || y < r.y - 20 || y > r.y + r.h) return;
-  ctx.save();
-  ctx.font = '600 13px system-ui, sans-serif';
-  const w = ctx.measureText(text).width + 12;
-  const bx = Math.max(r.x + 4, Math.min(r.x + r.w - w - 4, x - w / 2)), by = Math.max(r.y + 4, y - 10);
-  ctx.fillStyle = 'rgba(255,244,222,0.94)'; roundRect(ctx, bx, by, w, 20, 6); ctx.fill();
-  ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.fillStyle = INK; ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillText(text, bx + 6, by + 10.5);
-  ctx.restore();
+  return t(short ? (n === 1 ? 'hud.miss_short_one' : 'hud.miss_short') : (n === 1 ? 'hud.miss_long_one' : 'hud.miss_long'), { n });
 }
 
-/** The aim preview as a beam: thick and bright at the Loophole, thinner and fainter along the
- *  path, then three small beads. Same length as the dots it replaces (00 §2.4). */
-function aimBeam(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, pts: [number, number][], power: number) {
+/** How far the newest shot of the picked Hob missed the other fort, in blocks, by its Pin. Returns true if drawn inside `r`. */
+function missTag(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, snap: Snapshot, p: PinView): boolean {
+  const text = missTextOf(snap, p);
+  if (!text) return false;
+  const x = sx(r, cam, p.x), y = sy(r, cam, p.y) - 44;
+  if (x < r.x - 16 || x > r.x + r.w + 16 || y < r.y - 12 || y > r.y + r.h + 6) return false;
+  ctx.save();
+  ctx.font = '700 12.5px Nunito, system-ui, sans-serif';
+  const w = ctx.measureText(text).width + 14;
+  const bx = Math.max(r.x + 6, Math.min(r.x + r.w - w - 6, x - w / 2));
+  const by = Math.max(r.y + 6, Math.min(r.y + r.h - 26, y - 10));
+  ctx.fillStyle = 'rgba(250,243,227,0.96)'; roundRect(ctx, bx, by, w, 22, 8); ctx.fill();
+  ctx.strokeStyle = '#C88A2E'; ctx.lineWidth = 2.4; ctx.stroke();
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.fillStyle = INK; ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillText(text, bx + 7, by + 11.5);
+  ctx.restore();
+  return true;
+}
+
+/**
+ * Painterly Glowing Pearl Trajectory (Award-Winning Aim Pillar 3 & H-W06):
+ * Renders ONLY Rust core's `snap.hud.preview` (zero fabricated client gravity beads!) as a subtle
+ * batched sunlit guide thread + 10..14 tapering parchment-pearl beads (6.5 px -> 2.5 px) ringed
+ * in warm espresso ink with pure-white sunlit specular centers and subtle wind wisps.
+ */
+function aimBeam(ctx: CanvasRenderingContext2D, r: Rect, cam: Cam, pts: [number, number][], power: number, wind = 0, time = 0) {
   const n = pts.length;
-  const k0 = Math.max(0.7, Math.min(1.2, cam.s * 1.4));
+  if (n < 2) return;
+  const k0 = Math.max(0.74, Math.min(1.15, cam.s * 1.15));
+  // Subtle warm pearl tint: cream 1-80%, burnished gold 81-93%, warm ember 94-100% (zero green!).
+  const beadFill = power >= 94 ? '#FFAE5C' : power >= 81 ? '#FFE08A' : '#FFF8E7';
+  const haloCol = power >= 94 ? 'rgba(214, 63, 46, 0.30)' : power >= 81 ? 'rgba(232, 132, 36, 0.26)' : 'rgba(255, 244, 222, 0.34)';
   ctx.save();
   ctx.lineCap = 'round';
-  const col = aimHeat(power);
-  for (let pass = 0; pass < 2; pass++) {
-    for (let i = 1; i < n; i += 2) {
-      const f = i / n;
-      const w = (10 * (1 - f) + 2) * k0;
-      ctx.globalAlpha = (pass ? 0.95 : 0.4) * (1 - f * 0.6);
-      ctx.strokeStyle = pass ? col : INK;
-      ctx.lineWidth = pass ? w : w + 3;
-      const a = pts[Math.max(0, i - 2)], b = pts[i];
-      ctx.beginPath(); ctx.moveTo(sx(r, cam, a[0]), sy(r, cam, a[1])); ctx.lineTo(sx(r, cam, b[0]), sy(r, cam, b[1])); ctx.stroke();
+  ctx.lineJoin = 'round';
+  // 1. One single batched hairline ribbon connecting the core preview (zero scalloped round-cap knots).
+  ctx.beginPath();
+  ctx.moveTo(sx(r, cam, pts[0][0]), sy(r, cam, pts[0][1]));
+  for (let i = 1; i < n; i++) ctx.lineTo(sx(r, cam, pts[i][0]), sy(r, cam, pts[i][1]));
+  ctx.strokeStyle = 'rgba(44, 34, 30, 0.24)';
+  ctx.lineWidth = 4.2 * k0;
+  ctx.stroke();
+  ctx.strokeStyle = power >= 94 ? 'rgba(255, 174, 92, 0.55)' : 'rgba(255, 248, 231, 0.62)';
+  ctx.lineWidth = 2.0 * k0;
+  ctx.stroke();
+
+  // 2. Sample 10..14 evenly spaced pearl beads strictly on core-supplied preview points (always including pts[n - 1]).
+  const beadCount = Math.min(n, Math.max(8, Math.min(14, Math.round(n * 0.45))));
+  const strokeW = Math.max(1.2, 1.5 * k0);
+  const wispLen = Math.min(18, Math.abs(wind) * 2.2) * k0;
+  const wispDir = wind >= 0 ? 1 : -1;
+  for (let b = 0; b < beadCount; b++) {
+    const f = beadCount > 1 ? b / (beadCount - 1) : 0;
+    const idx = b === beadCount - 1 ? n - 1 : Math.min(n - 1, Math.round(f * (n - 1)));
+    const pt = pts[idx];
+    const x = sx(r, cam, pt[0]), y = sy(r, cam, pt[1]);
+    if (x < r.x - 16 || x > r.x + r.w + 16 || y < r.y - 16 || y > r.y + r.h + 16) continue;
+    const rad = (6.5 - 4.0 * f) * k0;
+    const alpha = 0.98 - 0.34 * f;
+    ctx.globalAlpha = alpha;
+    // Soft sunlit glow halo behind each pearl
+    ctx.fillStyle = haloCol;
+    ctx.beginPath(); ctx.arc(x, y, rad * 1.48, 0, Math.PI * 2); ctx.fill();
+    // Subtle wind-streak wisps drifting off the last 3 core preview beads
+    if (wispLen >= 2.5 && b >= beadCount - 3) {
+      const drift = time > 0 ? Math.sin(time * 4 + b) * 1.2 : 0;
+      ctx.strokeStyle = 'rgba(255, 248, 231, 0.68)';
+      ctx.lineWidth = Math.max(1, 1.3 * k0);
+      ctx.beginPath();
+      ctx.moveTo(x + wispDir * rad * 0.9, y + drift);
+      ctx.lineTo(x + wispDir * (rad + wispLen * (0.7 + 0.15 * (b - (beadCount - 3)))), y + drift * 0.6);
+      ctx.stroke();
     }
-  }
-  // A white shine down the thick half of the beam.
-  ctx.globalAlpha = 1; ctx.strokeStyle = '#ffffff';
-  for (let i = 1; i < n / 2; i += 2) {
-    const a = pts[Math.max(0, i - 2)], b = pts[i];
-    ctx.lineWidth = Math.max(1.5, (10 * (1 - i / n) + 2) * k0 * 0.22);
-    ctx.beginPath(); ctx.moveTo(sx(r, cam, a[0]), sy(r, cam, a[1])); ctx.lineTo(sx(r, cam, b[0]), sy(r, cam, b[1])); ctx.stroke();
-  }
-  if (n >= 6) {
-    const last = pts[n - 1], prev = pts[n - 6];
-    const vx = last[0] - prev[0], vy = last[1] - prev[1], vl = Math.hypot(vx, vy) || 1;
-    ctx.fillStyle = col; ctx.strokeStyle = INK; ctx.lineWidth = 1;
-    for (let j = 1; j <= 3; j++) {
-      const x = sx(r, cam, last[0] + (vx / vl) * j * 28), y = sy(r, cam, last[1] + (vy / vl) * j * 28 - j * j * 3);
-      ctx.globalAlpha = 0.85 - j * 0.2;
-      ctx.beginPath(); ctx.arc(x, y, (3.4 - j * 0.6) * k0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // Parchment-pearl bead body + crisp espresso ink ring
+    ctx.fillStyle = beadFill;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = strokeW;
+    ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // Crisp sunlit white specular dot inside upper-left of each pearl
+    if (rad >= 2.0) {
+      ctx.globalAlpha = Math.min(1, alpha + 0.08);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(x - rad * 0.28, y - rad * 0.28, Math.max(1.1, rad * 0.38), 0, Math.PI * 2); ctx.fill();
     }
   }
   ctx.restore();

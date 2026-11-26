@@ -5,7 +5,7 @@
 //! unit is one actor tick), never in time.
 
 use crate::battle::{Battle, Control, Phase};
-use crate::content::{FlightKind, ShotKind, Weight};
+use crate::content::{Effect, FlightKind, ShotDef, ShotKind, Weight};
 use crate::math::*;
 use serde_json::{json, Value};
 
@@ -170,6 +170,7 @@ struct Weights {
     self_block_mult: i64,
     mend_mult: i64,
     lid_best_cap: i64,
+    top_hob_bonus: i64,
 }
 
 fn weights_for(t: &Tuning, preset: Preset, habit: Habit) -> Weights {
@@ -183,6 +184,7 @@ fn weights_for(t: &Tuning, preset: Preset, habit: Habit) -> Weights {
         self_block_mult: 2,
         mend_mult: if preset == Preset::Cozy { 4 } else { 6 },
         lid_best_cap: 300,
+        top_hob_bonus: 0,
     };
     match habit {
         Habit::Balanced => {}
@@ -200,6 +202,7 @@ fn weights_for(t: &Tuning, preset: Preset, habit: Habit) -> Weights {
             w.focus_pct = w.focus_pct * 140 / 100;
             w.bonk_bonus = w.bonk_bonus * 130 / 100;
             w.kettle = 20;
+            w.top_hob_bonus = 12;
         }
         Habit::CautiousMender => {
             w.mend_mult += 4;
@@ -323,6 +326,16 @@ fn score_result(before: &Battle, after: &Battle, side: u8, t: &Tuning, w: &Weigh
         .map(|h| h.hp)
         .max()
         .unwrap_or(0);
+    let top_enemy_hob = if w.top_hob_bonus > 0 {
+        before
+            .hobs
+            .iter()
+            .filter(|h| h.side as usize == o && h.alive() && !h.dummy)
+            .min_by_key(|h| (before.hob_feet(h.id).1, h.id))
+            .map(|h| h.id)
+    } else {
+        None
+    };
     for (hb, ha) in before.hobs.iter().zip(after.hobs.iter()) {
         let lost = (hb.hp - ha.hp.max(0)) as i64;
         if hb.side as usize == o {
@@ -336,6 +349,9 @@ fn score_result(before: &Battle, after: &Battle, side: u8, t: &Tuning, w: &Weigh
                     let gone = (ha.max - ha.hp.max(0)) as i64 * 100 / ha.max.max(1) as i64;
                     sc += lost * 10 + lost * 10 * w.focus_pct / 100 * gone / 100;
                 }
+                if top_enemy_hob == Some(hb.id) {
+                    sc += lost * w.top_hob_bonus;
+                }
                 if hb.alive() && !ha.alive() {
                     sc += if sporting_hold {
                         w.bonk_bonus / 2
@@ -348,6 +364,22 @@ fn score_result(before: &Battle, after: &Battle, side: u8, t: &Tuning, w: &Weigh
             }
         } else if t.self_care {
             sc -= lost * 20;
+        }
+    }
+    // Avoid harming Rescue captives so the Rival does not throw the battle.
+    for pb in &before.props {
+        if pb.kind != "captive" {
+            continue;
+        }
+        let after_hp = after
+            .props
+            .iter()
+            .find(|pa| pa.id == pb.id)
+            .map(|pa| pa.hp.max(0))
+            .unwrap_or(0);
+        let lost = (pb.hp.max(0) - after_hp).max(0) as i64;
+        if lost > 0 {
+            sc -= lost * 50;
         }
     }
     let kb = before.castles[o].kettle_hp.max(0) as i64;
@@ -474,6 +506,19 @@ fn targets(
         roofs.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
         for (r, c) in roofs.into_iter().take(2) {
             walls.push((c, r));
+        }
+    }
+    if habit == Habit::HobSniper {
+        if let Some(h) = k
+            .hobs
+            .iter()
+            .filter(|h| h.side == o && h.alive() && !h.dummy && h.nook.is_some())
+            .min_by_key(|h| (k.hob_feet(h.id).1, h.id))
+        {
+            if let Some(n) = h.nook {
+                let nw = cs.room_walls(&cs.nooks[n as usize]);
+                walls.extend(nw[3].iter().copied());
+            }
         }
     }
     for (c, r) in walls {
@@ -606,6 +651,27 @@ fn sim_candidate(
     Some(w)
 }
 
+/// Deterministic blast-size weight for draft scoring (KettleHunter prefers big blasts).
+fn shot_blast_score(d: &ShotDef) -> i64 {
+    let max_radius = d
+        .triggers
+        .iter()
+        .flat_map(|t| t.effects.iter())
+        .map(|e| match e {
+            Effect::Explode { band, .. } => band.radius() as i64,
+            Effect::Mound { radius, .. } => *radius as i64,
+            _ => 0,
+        })
+        .max()
+        .unwrap_or(0);
+    let w_bonus = match d.weight {
+        Weight::H => 16,
+        Weight::M => 8,
+        Weight::L => 0,
+    };
+    max_radius + w_bonus
+}
+
 pub fn draft_choice(b: &mut Battle, side: u8) -> Option<String> {
     let preset = match b.control[side as usize] {
         Control::Ai(p) => p,
@@ -616,6 +682,8 @@ pub fn draft_choice(b: &mut Battle, side: u8) -> Option<String> {
         Preset::Fair => 30,
         Preset::Stubborn => 60,
     };
+    let big_blast =
+        habit_for(b, side) == Habit::KettleHunter && b.control[side as usize] != Control::Human;
     // the Rival takes its wish at its first chance
     if let Some(w) = &b.draft.wish {
         if b.control[side as usize] != Control::Human
@@ -653,7 +721,10 @@ pub fn draft_choice(b: &mut Battle, side: u8) -> Option<String> {
                 }
                 v
             };
-            let sc = val(&mine) * 100 + val(&theirs) * deny;
+            let mut sc = val(&mine) * 100 + val(&theirs) * deny;
+            if big_blast && !d.dud {
+                sc += shot_blast_score(d) * 50;
+            }
             out.push((sc, d.dud, id.clone()));
         }
         out.sort_by(|a, b| b.0.cmp(&a.0).then(a.2.cmp(&b.2)));
@@ -729,9 +800,18 @@ fn plan_turn_with(
         }
     }
 
-    // world used to solve aims: Cozy only half reads the wind
+    // world used to solve aims: Cozy only half reads the wind, and a grade-1
+    // campaign Rival facing scheduled wind fronts under-corrects on the first
+    // shot after each front change.
     let mut solve_world = k.clone();
     solve_world.wind = solve_world.wind * t.wind_use / 100;
+    if k.mode == "campaign"
+        && !k.rules.wind.fronts.is_empty()
+        && k.aim_grade[s] == 1
+        && k.ai_mem[s].last_wind != Some(k.wind)
+    {
+        solve_world.wind /= 3;
+    }
     let front = k.castles[s].front_dir();
     let habit = habit_for(&k, side);
     let weights = weights_for(&t, preset, habit);
@@ -1149,11 +1229,14 @@ fn doodad_choice(k: &Battle, side: u8, best: i64, w: &Weights) -> Option<Value> 
                     .find(|g| g.side as usize == o)
                     .and_then(|g| g.pin);
                 if let Some((px, py)) = pin {
-                    let (x0, y0, x1, y1) = k.castles[s].room_box(&k.castles[s].kettle);
+                    let cs = &k.castles[s];
+                    let (x0, y0, x1, y1) = cs.room_box(&cs.kettle);
                     let near = px >= x0 - 32 && px <= x1 + 32 && py >= y0 - 32 && py <= y1 + 32;
                     if near
                         && best < w.lid_best_cap
-                        && k.castles[s].kettle_hp < crate::castle::KETTLE_HP
+                        && !cs.kettle.lid
+                        && cs.room_intact(&cs.kettle, false)
+                        && cs.kettle_hp < cs.kettle_max
                     {
                         return Some(json!({"cmd": "doodad", "doodad": d, "room": "kettle"}));
                     }

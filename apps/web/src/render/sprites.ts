@@ -40,8 +40,10 @@ function blitLocal(ctx: CanvasRenderingContext2D, f: Frame, m: Meta | undefined)
 
 class SpriteBank {
   ready = false;
-  /** 1 or 2: the best atlas scale loaded so far. */
+  /** 1 or 2: the best atlas scale loaded so far (bumps to 2 only after @2x BGs also finish). */
   scale = 0;
+  /** Increments whenever background textures swap (invalidates LensCache cleanly). */
+  bgVersion = 0;
   private frames = new Map<string, Frame>();
   private meta = new Map<string, Meta>();
   private aliases = new Map<string, string>();
@@ -52,6 +54,7 @@ class SpriteBank {
   /** Names asked for that the atlas does not have (debug builds read it to check every path resolves). */
   readonly misses = new Set<string>();
   private waiters: (() => void)[] = [];
+  private upgradeWaiters = new Set<() => void>();
   private root = '';
   private upgrading = false;
   /** Background name (bg_x, bg_x@2x) -> file with its content hash, from bg.json. */
@@ -101,6 +104,9 @@ class SpriteBank {
             }
           }
           this.urls.clear();
+          this.scale = 2;
+          this.bgVersion++;
+          for (const w of this.upgradeWaiters) w();
         } catch (e) {
           console.info('[castle] @2x art not loaded:', (e as Error).message);
           this.upgrading = false; // try again at the next fight
@@ -144,7 +150,7 @@ class SpriteBank {
       this.overlays.clear();
       for (const k in list.overlays) this.overlays.set(k, list.overlays[k]);
     }
-    this.scale = scale;
+    if (scale === 1) this.scale = 1;
     // An @1x page no frame points at any more is closed (its decoded pixels freed).
     const used = new Set<Pix>();
     for (const f of this.frames.values()) used.add(f.img);
@@ -152,6 +158,12 @@ class SpriteBank {
   }
 
   whenLoaded(f: () => void): void { if (this.ready) f(); else this.waiters.push(f); }
+  /** Notified when @2x art and backgrounds finish loading; returns an unsubscribe fn. */
+  onUpgrade(f: () => void): () => void {
+    if (this.scale >= 2) f();
+    this.upgradeWaiters.add(f);
+    return () => { this.upgradeWaiters.delete(f); };
+  }
 
   private resolve(name: string): string { return this.aliases.get(name) ?? name; }
 
@@ -197,7 +209,7 @@ class SpriteBank {
       ctx.save();
       ctx.translate(x, y);
       ctx.scale(flip ? -scale : scale, scale);
-      if (alpha !== 1) ctx.globalAlpha = alpha;
+      if (alpha !== 1) ctx.globalAlpha *= alpha;
       blitLocal(ctx, f, m);
       if (ovs && ovs.length > 0) this.drawOverlays(ctx, ovs);
       ctx.restore();
@@ -205,7 +217,8 @@ class SpriteBank {
     }
     const ax = m ? m.ax : 0;
     const ay = m ? m.ay : 0;
-    if (alpha !== 1) ctx.globalAlpha = alpha;
+    const prevAlpha = ctx.globalAlpha;
+    if (alpha !== 1) ctx.globalAlpha = prevAlpha * alpha;
     if (f.trim) {
       const inv = scale / f.scale;
       ctx.drawImage(f.img, f.x, f.y, f.w, f.h, x + f.trim[0] * inv - ax * scale, y + f.trim[1] * inv - ay * scale, f.trim[2] * inv, f.trim[3] * inv);
@@ -214,7 +227,7 @@ class SpriteBank {
       const mh = m ? m.h : f.h / f.scale;
       ctx.drawImage(f.img, f.x, f.y, f.w, f.h, x - ax * scale, y - ay * scale, mw * scale, mh * scale);
     }
-    if (alpha !== 1) ctx.globalAlpha = 1;
+    if (alpha !== 1) ctx.globalAlpha = prevAlpha;
     return true;
   }
 
@@ -233,7 +246,7 @@ class SpriteBank {
     ctx.translate(x, y);
     if (rot) ctx.rotate(rot);
     ctx.scale(flip ? -scale : scale, scale * sy);
-    if (alpha !== 1) ctx.globalAlpha = alpha;
+    if (alpha !== 1) ctx.globalAlpha *= alpha;
     blitLocal(ctx, f, m);
     if (ovs && ovs.length > 0) this.drawOverlays(ctx, ovs);
     ctx.restore();
@@ -273,6 +286,8 @@ class SpriteBank {
       }
     }
     const u = c.toDataURL('image/png');
+    c.width = 0;
+    c.height = 0;
     this.urls.set(name, u);
     return u;
   }

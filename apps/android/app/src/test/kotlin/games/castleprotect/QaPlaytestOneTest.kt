@@ -75,7 +75,7 @@ class QaPlaytestOneTest {
         val none = Reply.parse("""{"ok":false,"reason":"no_knack_uses","detail":"No Knack uses left","ready_shot":null}""")
         assertEquals("Grand Dumpling is used up." to null, FireLight.onRefusal(none, "Marge", "Grand Dumpling"))
         // An id the table does not know never shows the core's English.
-        assertEquals("That did not go through. Nothing is lost. Try again." to null, FireLight.onRefusal(Reply.parse("""{"ok":false,"reason":"bad_value","detail":"angle 0 to 1800"}""")))
+        assertEquals("That did not go through. Nothing is lost. Try again." to null, FireLight.onRefusal(Reply.parse("""{"ok":false,"reason":"unknown_future_reason","detail":"angle 0 to 1800"}""")))
         assertNull(FireLight.onRefusal(Reply.parse("""{"ok":true}""")))
         // In an array the first refusal speaks for it.
         val arr = Reply.parse("""[{"ok":true},{"ok":false,"reason":"bad_value","detail":"angle 0 to 1800"}]""")

@@ -244,6 +244,14 @@ jobs:
             echo "::error::Release bundle contains @1x atlas files; iOS ships @2x only."
             exit 1
           fi
+          if [ -d "$app/content/schema" ] || find "$app/content" -name '*.md' -print -quit 2>/dev/null | grep -q .; then
+            echo "::error::Release bundle contains content/schema or markdown files."
+            exit 1
+          fi
+          if ls "$app"/sprites/prop_* "$app"/sprites/flattener_* >/dev/null 2>&1; then
+            echo "::error::Release bundle contains redundant loose prop_* or flattener_* PNGs."
+            exit 1
+          fi
           nm -u "$bin" | sed 's/^ *U *//' | sort -u > build/undefined-symbols.txt
           otool -v -s __TEXT __objc_methname "$bin" 2>/dev/null | sed 's/^[0-9a-fA-F]*[[:space:]]*//' | sort -u > build/objc-selectors.txt || true
           manifest="$app/PrivacyInfo.xcprivacy"
@@ -352,6 +360,11 @@ jobs:
             -only-testing:CastleProtectTests/LandscapeFrameTests \
             -only-testing:CastleProtectTests/WorkshopTests \
             -only-testing:CastleProtectTests/LeanHudTests \
+            -only-testing:CastleProtectTests/PanAndEdgeTests \
+            -only-testing:CastleProtectTests/PlanFrameTests \
+            -only-testing:CastleProtectTests/DuelLandscapeTests \
+            -only-testing:CastleProtectTests/FireStateTests \
+            -only-testing:CastleProtectTests/AuditFixTests \
             CODE_SIGNING_ALLOWED=NO > build/xcodebuild-ipad.log 2>&1
           status=$?
           set -e

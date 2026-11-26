@@ -39,7 +39,7 @@ This doc sets the rules, names and numbers that every other design doc builds on
 21. Pacing maths redone with the new numbers (section 9.6).
 22. Audit rulings applied: Cover wording (C09, C10), shot caps (C27, C28), Point blast band (C40), foreign blocks (C15), Burn downwind (C23), Brittle rules (C24, C25), grid and Block Budget (C04, C65), level caps (C70, C71), economy lines (C59 to C64).
 23. Final verification pass [review 05]: the Sudden Squall now hits both sides at once at round end, and a double pop goes to the side with more total HP. The full-HP clamp is now "no single shot Bonks a Hob from full HP" (clamped to its HP minus 1). The per-shot Thwack cap is 110, as the weapons doc sets it. A Beam through a block deals half to the kettle. Duds are always labeled. If every Hob is dug in, the newest burial clears. Level 1-1 has a cap of 8 and no Squall. Onboarding order follows the campaign and UX docs (wind at 1-4, the Knack at 1-5). Launch maps (59) and enemy unit types (14) added to the scope table.
-24. **Owner decisions applied** [R04 D]. The game is free with no monetization: no price, no trial, no unlock, no in-app purchases, no ads. Couch Duel (two players on one device) ships at launch (section 6.1). Portrait and landscape both ship at launch; the UX and art docs own the layouts. Final art is by human artists. A Sudden Squall double pop goes to more total HP. Gentle wind from 1-4 with a Wind off assist. The first Doodad comes at 1-9.
+24. **Owner decisions applied** [R04 D]. The game is free with no monetization: no price, no trial, no unlock, no in-app purchases, no ads. Couch Duel (two players on one device) ships at launch (section 6.1). Portrait and landscape both ship at launch; the UX and art docs own the layouts. Final art is by human artists. A Sudden Squall double pop goes to more total HP. Gentle wind from 1-4 with a Wind off assist. The first Doodad (Mend Bucket) comes at 1-7, and Pot Lid joins at 1-9.
 25. **Lessons from the reference games applied** [review 06, sections A and B]. Items 26 to 36 list them.
 26. **Couch Duel house rules** (G2, section 6.1): everything is open, Molehill included; player-only rules such as Puff Up apply to both sides; a **Hand-off card** between turns shows the last shot and a Ready button; an optional **Kind Clock**, off by default, nudges but never fires; a **Starter Box** of even loaner forts plays from first launch; handicaps show openly; **Table mode** in portrait. The Couch Duel Rummage rule is now one rule, the same as `01 §1.9`.
 27. **Pacing redone at real speed** (G3, sections 2.12 and 9.6). A round is about 32 s (two shots), not 16 to 20. The vertical slice gates on median seconds per round. Round cap 12 is the fallback if fights run long.
@@ -448,13 +448,13 @@ Roles follow `02b §7` (Slayers, Demolishers, Tacticians) in original form. Ever
 
 | Type | Wicker | Timber | Cobble | Brassbound | Mossbrick [U3] | Footing | vs Hob | Kettle |
 |---|---|---|---|---|---|---|---|---|
-| Blast | 1.2 | 1.0 | 0.8 | 0.7 | 0.6 | 0.25 | 1.0 | 0.5 |
+| Blast | 1.2 | 1.0 | 0.8 | 0.7 | 0.6 | 0.25 | 1.0 | 0.75 |
 | Pierce | 1.0 | 1.0 | 0.6 | 0.5 | 0.5 | 0.1 | 1.5 | 1.0 |
 | Dig | 1.0 | 1.0 | 0.7 | 0.5 | 0.7 | 0 | 0.5 | 0 |
 | Fire | 1.5 + Burn | 1.5 + Burn | 0.2 | 0 | 0.3 | 0 | 1.0 + Burn | 0 |
 | Frost [U2] | 0.5 + Brittle | 0.5 + Brittle | 0.5 + Brittle | 0.5 + Brittle | 0.5 + Brittle | 0 | 0.5 + Rest 1 | 0 |
 | Zap [U3] | 0.3 | 0.3 | 0.3 | 1.0 + chain | 0.5 | 0 | 1.2 | 1.0 |
-| Crush | 1.0 | 1.0 | 1.0 | 1.0 | 1.0 | 0 | 1.0 | 0.5 |
+| Crush | 1.0 | 1.0 | 1.0 | 1.0 | 1.0 | 0 | 1.0 | 1.0 |
 
 **Statuses (fixed list, numbers tune):**
 
@@ -465,7 +465,7 @@ Roles follow `02b §7` (Slayers, Demolishers, Tacticians) in original form. Ever
 
 Combo rules from `02c §6`: Fire lights wood, Water stops fire and makes mud, Frost makes things brittle, Tunnelers beat walls, Footing beats tunnelers, Bounce beats direct fire, sticky ground beats bounce and rollers. Every counter must be visible before the shot [02c §6].
 
-**Cover rule (fixed).** A Hob in an intact Nook takes 50% damage from **area payloads** (blast band Tiny or larger, any damage type) centred outside its Nook. A Nook is intact while every block on all four of its sides stands: floor, ceiling, front and back, up to 8 blocks. A Footing floor counts. Block HP does not matter. Point hits, Threads through a Loophole, Burn ticks, crush and fall damage are never halved [audit C09, C10]. No line-of-sight math [03 §11.1].
+**Cover rule (fixed).** A Hob in an intact Nook takes 65% damage (35% Cover cut; `cover_pct: 65` in `materials.json`) from **area payloads** (blast band Tiny or larger, any damage type) centred outside its Nook. A Nook is intact while every block on all four of its sides stands: floor, ceiling, front and back, up to 8 blocks. A Footing floor counts. Block HP does not matter. Point hits, Threads through a Loophole, Burn ticks, crush and fall damage are never reduced [audit C09, C10]. No line-of-sight math [03 §11.1].
 
 **Loophole Flap (fixed rule)** [review 06 G6]. When a Thread passes a Loophole (the game calls "Threaded!"), a flap drops over that Loophole. Until the Weather Front changes, Threads cannot pass it: a point shot that reaches the slot hits the wall block instead. The Hob inside still fires as normal, and area shots, Beams through blocks and Burn are not changed. The flap shows on the fort with the rounds left in the front, for both sides, and lifts when the new front starts. It applies to every side, player and AI, on every preset, and in Couch Duel. **Why.** A kept aim plus a Loophole Thread could Bonk a 120 HP Lobber in two turns, again and again. Now each Loophole takes at most one Thread per front, and each new Thread needs a new aim. This replaces the old hidden AI rule "one Thread per battle on Fair" [D04 §6.5].
 
@@ -867,7 +867,7 @@ An optional rule set for Skirmish and Couch Duel only, never the campaign [revie
 | **Thread** | A point shot that enters a Loophole and hits the Hob with no Cover |
 | **Loophole Flap** | After a Thread passes a Loophole, that Loophole takes no Threads until the Weather Front changes |
 | **Next door** | The Nooks touching a Hob's Nook left, right, above and below, sharing a wall with no room between. Used by positional Passives |
-| **Cover** | The 50% cut a Hob in an intact Nook gets from area payloads centred outside |
+| **Cover** | The 35% cut (65% taken, `cover_pct: 65`) a Hob in an intact Nook gets from area payloads centred outside |
 | **Block** | One 16 x 16 cell castle piece |
 | **Block Budget** | Grid cells above the Footing row, 72 at the cap |
 | **Footing** | The bottom row of every castle |
@@ -1005,7 +1005,7 @@ A new player reaches about the end of 1-3 in the first 10 minutes [review 02 §1
 
 **Loose Trick Shells** [review 06 G8]. Levels 1-3 and 1-4 each lend one fixed Trick Shell for that level only: one use, no draft, no unlock. Lid Lifter (1-3) points at the kettle lesson; Bag of Marbles (1-4) fits Jax, its Match. The first four levels would otherwise be Plain Shots only. Neither adds a prompt, so the count stays at 11 (12 for a fast player). Both join the pool with the start six when the Rummage opens at 1-8.
 
-Winning 1-9 gives the first Doodad, Mend Bucket, and one Doodad slot, so the 1-10 boss has a gadget turn without 1-9 teaching two things [PLAN decision 14]. The second slot, Pot Lid and Fire on Timber (2-1), Training and Thump (2-2) come in Region 2. The campaign doc owns the level list.
+Level 1-7 introduces the first Doodad (Mend Bucket), and 1-9 adds the second slot with Pot Lid, so both are live for the 1-10 Grand Fort [PLAN decision 14]. Fire on Timber (2-1) and Training and Thump (2-2) come in Region 2. The campaign doc owns the level list.
 
 Fail-safe: if the player misses 5 times in a row in levels 1-1 to 1-5, the preview grows by 10% for that battle and a hint suggests the ghost pin.
 
@@ -1188,7 +1188,7 @@ The default cap stays 15 until the slice data says otherwise. Round cap 12 is th
 11. **Age rating target.** 9+ / Everyone 10+ assumed.
 12. **Sudden Squall double pop. Decided:** more total HP left wins (2.11).
 13. **Wind. Decided:** gentle wind from 1-4, with a Wind off assist (8.1).
-14. **First Doodad. Decided:** Mend Bucket and one slot on the 1-9 win.
+14. **First Doodad. Decided:** Mend Bucket from 1-7, and Pot Lid in the second slot from 1-9.
 
 ### 10.2 Questions research could not close
 
@@ -1230,7 +1230,7 @@ Cut for good from the launch plan and all updates [R04 A, review 02 §2.3]. Kept
 | Crowded, Perched, Porch, Rattled and Skylight states | Nine states to learn | Five: Open, Fell a floor, Tumbled, Squashed, Bonked |
 | Knack tiers at Hob levels 4 and 8 | 56 extra rule variants | Quirk options |
 | Ten Hob levels at +1.5% HP each | Six of nine level-ups gave nothing you could see | Three Ranks, each a Quirk pick |
-| Tumble skipping the Hob's next shot | A lost turn in a one-Action game | 20 damage and the climb back |
+| Tumble skipping the Hob's next shot | A lost turn in a one-Action game | 45 to 70 fall damage and the climb back |
 | A buried Loophole bursting the Hob's own shot | Self-harm from a UI miss | The Fire button greys |
 | Chill as its own status | A second word for "sits out" | Rest |
 | Separate Reload and Chill counts | Two ideas for one cog | Rest, extra cap 1 |
@@ -1241,7 +1241,7 @@ Cut for good from the launch plan and all updates [R04 A, review 02 §2.3]. Kept
 | Take Back as its own toggle | One more switch | Part of the Cosy preset |
 | Enemy crew hidden after a 2 s Muster at launch | A memory test on a phone | Icons stay shown; hidden crew returns with the Lookout in U2 |
 | Mossbrick healing 10% a turn | A Plain Shot did less than nothing | Heal 7, none after a hit |
-| Boss kettles at 400 | Longer boss fights for no new idea | Kettle 300 everywhere; phases gate bosses |
+| Boss kettles at 400 | Longer boss fights for no new idea | Kettle 200 everywhere (150 on Cozy Campaign Rivals); phases gate bosses |
 | Raid Rehearsal as a mode | A mode for one button | Test Yard Raid button |
 | Trick-shot Challenge and Defend a Cart as their own mission types | Two more rule sets | Merged into Puzzle and Escort |
 | Last Level in three Stages | 15 to 25 minutes and an empty hand at the end | Two Stages with a crate |

@@ -41,10 +41,12 @@ export class TerrainLayer {
     const c = document.createElement('canvas');
     c.width = img.width;
     c.height = img.height;
-    const x = c.getContext('2d')!;
+    const x = ctx2d(c, true);
     x.drawImage(img, 0, 0);
     this.soil = x.getImageData(0, 0, img.width, img.height).data;
     this.soilW = img.width;
+    c.width = 0;
+    c.height = 0;
     if (this.w) this.paint(0, 0, this.w, this.h);
   }
 

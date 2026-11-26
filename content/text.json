@@ -22,6 +22,7 @@
     "back": "Back",
     "close": "Close",
     "done": "Done",
+    "ok": "OK",
     "cancel": "Cancel",
     "next": "Next",
     "play": "Play",
@@ -267,7 +268,7 @@
       "win_title": "Tuft has gone to report",
       "goals": {
         "win": "Send Tuft packing",
-        "bonk_nook": "Bonk the Hob up the tower",
+        "bonk_nook": "Bonk the Hob up the tower first",
         "bonk_with_each_hob": "Every Hob bags one"
       }
     },
@@ -311,8 +312,8 @@
       "win_title": "Snedd has hedges to do",
       "goals": {
         "win": "See Snedd off the slope",
-        "bonk_nook": "Bonk the Hob atop the Stamp Tower",
-        "kettle_above_pct": "Kettle barely scratched"
+        "bonk_nook": "Bonk the Hob atop the Stamp Tower first",
+        "kettle_above_pct": "Kettle over {n}%"
       }
     },
     "1-7": {
@@ -384,7 +385,7 @@
     "root_by_round": "Break the Sprinkler Root by Round {n}",
     "hill_half": "Save the hill",
     "ground_kept": "Leave the hill standing",
-    "bonk_nook": "Bonk the Hob in the top Nook",
+    "bonk_nook": "Bonk the Hob in the top Nook first",
     "count": "{n} of {total} Pennants",
     "label": "Pennant {n}",
     "got": "{goal}. Got it.",
@@ -646,6 +647,7 @@
     "power_down": "Power down",
     "aim_readout": "Angle {angle}, power {power}",
     "cancel_aim": "Let go to cancel",
+    "release_to_cancel": "Release to cancel",
     "miss_short": "{n} blocks short",
     "miss_short_one": "1 block short",
     "miss_long": "{n} blocks long",
@@ -783,6 +785,18 @@
       "no_ghost": "No shot to bring back yet.",
       "own_block": "Pick one of your own blocks.",
       "over": "The fight is over.",
+      "not_enough_steam": "Not enough Steam.",
+      "cannot_walk_now": "Cannot walk now.",
+      "cannot_walk_there": "Cannot walk there.",
+      "battle_over": "The fight is over.",
+      "bad_value": "That value is out of range.",
+      "bad_target": "Pick a valid block or room.",
+      "no_shot": "No shot picked.",
+      "nothing_to_mend": "Nothing to mend. Your fort is whole.",
+      "no_one_to_puff_up": "Nobody to Puff Up.",
+      "puff_up_not_allowed": "Puff Up is not ready.",
+      "already_lidded": "That room already has a lid on.",
+      "no_doodad": "You do not have that Doodad.",
       "default": "{shot} cannot fire now."
     },
     "why_short": {
@@ -793,7 +807,10 @@
       "not_in_hand": "None left",
       "no_heavy_first_turn": "Not yet",
       "no_actions_left": "No shots",
-      "not_planning": "Not ready"
+      "not_planning": "Not ready",
+      "nothing_to_mend": "Whole",
+      "no_one_to_puff_up": "None down",
+      "puff_up_not_allowed": "Used"
     },
     "switched_plain": "Switched to the Plain Shot",
     "falls": {

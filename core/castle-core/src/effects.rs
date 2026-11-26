@@ -224,6 +224,9 @@ impl Battle {
                         a.skip = Some((side, c, r));
                         self.damage_block_direct(a.side, side, c, r, f.pass_dmg, DType::Pierce);
                         self.after_damage();
+                        if self.phase == Phase::Ended {
+                            a.done = true;
+                        }
                         return;
                     }
                 }
@@ -307,11 +310,19 @@ impl Battle {
                             self.damage_hob_direct(a.side, h, f.block_dmg, DType::Dig);
                             if effs.is_empty() {
                                 self.after_damage();
+                                if self.phase == Phase::Ended {
+                                    a.done = true;
+                                    return;
+                                }
                             }
                         }
                         Hit::Kettle(_) | Hit::Prop(_) if effs.is_empty() => {
                             self.blast(a, cx, cy, 0, f.block_dmg, DType::Dig, &[], 100, Some(hit));
                             self.after_damage();
+                            if self.phase == Phase::Ended {
+                                a.done = true;
+                                return;
+                            }
                         }
                         _ => {}
                     }
@@ -505,6 +516,10 @@ impl Battle {
                     }
                     self.damage_block_direct(a.side, side, c, r, f.block_dmg, DType::Dig);
                     self.after_damage();
+                    if self.phase == Phase::Ended {
+                        a.done = true;
+                        return;
+                    }
                     if a.blocks_bored >= f.max_blocks.max(1) {
                         return self.bore_stop(a, x, y, None, false);
                     }
@@ -513,6 +528,10 @@ impl Battle {
                     if f.block_dmg > 0 {
                         self.damage_hob_direct(a.side, h, f.block_dmg, DType::Dig);
                         self.after_damage();
+                        if self.phase == Phase::Ended {
+                            a.done = true;
+                            return;
+                        }
                     }
                     return self.bore_stop(a, x, y, Some(Hit::Hob(h)), false);
                 }
@@ -540,6 +559,10 @@ impl Battle {
                     if f.block_dmg > 0 && effs.is_empty() {
                         self.blast(a, x, y, 0, f.block_dmg, DType::Dig, &[], 100, Some(hit));
                         self.after_damage();
+                        if self.phase == Phase::Ended {
+                            a.done = true;
+                            return;
+                        }
                         return self.bore_stop(a, x, y, None, false);
                     }
                     return self.bore_stop(a, x, y, Some(hit), false);
@@ -550,6 +573,10 @@ impl Battle {
                     if f.block_dmg > 0 && effs.is_empty() {
                         self.blast(a, x, y, 0, f.block_dmg, DType::Dig, &[], 100, Some(hit));
                         self.after_damage();
+                        if self.phase == Phase::Ended {
+                            a.done = true;
+                            return;
+                        }
                         return self.bore_stop(a, x, y, None, false);
                     }
                     return self.bore_stop(a, x, y, Some(hit), false);
@@ -575,6 +602,10 @@ impl Battle {
     }
 
     fn bore_stop(&mut self, a: &mut Actor, x: i32, y: i32, hit: Option<Hit>, half: bool) {
+        if self.phase == Phase::Ended {
+            a.done = true;
+            return;
+        }
         if a.in_ground {
             let r = (self.content.shots[a.shot].flight.tunnel / 2).max(1);
             let (x0, x1) = if let Mode::Bore { dx, .. } = a.mode {
@@ -870,24 +901,27 @@ impl Battle {
                             self.ev(json!({"t": "mend", "side": s, "blocks": [[c, r]], "restored": true}));
                         }
                     }
-                    // mending the Nook wall also digs out its Loophole
-                    let nook_hob = self
+                    // mending a Nook wall also digs out every buried ally sharing that wall
+                    let nook_hobs: Vec<u8> = self
                         .hobs
                         .iter()
-                        .find(|h| h.side == a.side && h.buried)
-                        .map(|h| h.id);
-                    if let Some(h) = nook_hob {
-                        let near = self.hobs[h as usize].nook.is_some_and(|n| {
-                            let room = &self.castles[s].nooks[n as usize];
-                            self.castles[s]
-                                .room_walls(room)
-                                .iter()
-                                .flatten()
-                                .any(|p| *p == (c, r))
-                        });
-                        if near {
-                            self.clear_loophole(h);
-                        }
+                        .filter(|h| {
+                            h.side == a.side
+                                && h.alive()
+                                && h.buried
+                                && h.nook.is_some_and(|n| {
+                                    let room = &self.castles[s].nooks[n as usize];
+                                    self.castles[s]
+                                        .room_walls(room)
+                                        .iter()
+                                        .flatten()
+                                        .any(|p| *p == (c, r))
+                                })
+                        })
+                        .map(|h| h.id)
+                        .collect();
+                    for h in nook_hobs {
+                        self.clear_loophole(h);
                     }
                     self.refresh_hob_states();
                 }
@@ -960,7 +994,7 @@ impl Battle {
             .any(|cs| cs.slot_at(x, y).is_some_and(|(c, r)| cs.has_block(c, r)))
     }
 
-    fn settle_ground(&mut self, x0: i32, x1: i32) {
+    pub(crate) fn settle_ground(&mut self, x0: i32, x1: i32) {
         let castles = self.castles.clone();
         let blocked = |x: i32, y: i32| {
             castles
@@ -998,6 +1032,9 @@ impl Battle {
                 continue;
             }
             self.castles[s].base_y = ny;
+            if s == 1 {
+                self.anchor_hinge();
+            }
             self.ev(json!({"t": "castle_drop", "side": s, "cells": drop}));
             if drop > THUMP_DROP {
                 self.ev(json!({"t": "thump", "side": s}));
@@ -1527,6 +1564,9 @@ impl Battle {
             );
             if hp <= 0 {
                 self.ev(json!({"t": "prop_break", "kind": kind, "x": px, "y": py}));
+            }
+            if kind == "captive" && shooter == 0 && dd > 0 {
+                self.captive_hit_by_player = true;
             }
             if (shooter == 0 && kind == "cage_bar")
                 || ((kind == "roller" || kind == "shears") && prop_side != shooter)

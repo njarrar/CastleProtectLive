@@ -196,6 +196,9 @@ export interface PinView {
   power: number;
   path: [number, number][]; // ghost line, world points
   windAt: number;
+  selfHit?: boolean;
+  /** Core-computed miss distance in blocks (negative = short, positive = long), when provided. */
+  missBlocks?: number;
 }
 
 export interface ShotChip {
@@ -356,7 +359,7 @@ export interface Snapshot {
   fatigue: [boolean, boolean];
   /** Rounds until Fatigue starts (core v0.3 hud.fatigue_in), when the core sends it. */
   fatigueIn?: number;
-  forts: [{ x: number; y: number; w: number; h: number }, { x: number; y: number; w: number; h: number }];
+  forts: [{ x: number; y: number; w: number; h: number; block?: number }, { x: number; y: number; w: number; h: number; block?: number }];
   events: BattleEvent[]; // since the last snapshot
   hud: HudView;
   draft?: DraftView;
@@ -399,7 +402,7 @@ export interface BlueprintCheck {
   blocks: number;
   budget: number;
   cost: number;
-  problems: { col: number; row: number; why: string }[];
+  problems: { col: number; row: number; why: string; problem?: string }[];
 }
 
 export interface CoreFeatures {

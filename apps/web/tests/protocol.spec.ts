@@ -74,7 +74,7 @@ const KNOWN: Record<string, string[]> = {
   '.castles[].blocks[]': ['battered', 'c', 'hp', 'mat', 'max', 'peephole', 'r', 'root', 'x', 'y'],
   '.castles[].kettle': ['box', 'c', 'hp', 'intact', 'lid', 'max', 'r', 'room'],
   '.castles[].rooms[]': ['box', 'c', 'flap', 'id', 'intact', 'kind', 'lid', 'loophole', 'r'],
-  '.ghosts[]': ['angle', 'hob', 'index', 'pin', 'points', 'power', 'recalled', 'round', 'self_hit', 'shot', 'side'],
+  '.ghosts[]': ['angle', 'hob', 'index', 'miss_blocks', 'pin', 'points', 'power', 'recalled', 'round', 'self_hit', 'shot', 'side'],
   // not shown yet on purpose: cover, grudge, clatter (passives), dummy, nook
   '.hobs[]': ['aim', 'buried', 'can_fire', 'class', 'clatter', 'cover', 'def', 'dummy', 'grudge', 'hp', 'id', 'knack', 'knack_uses', 'max', 'name', 'nook', 'plain', 'rest', 'side', 'state', 'x', 'y'],
   '.hobs[].aim': ['angle', 'power'],
