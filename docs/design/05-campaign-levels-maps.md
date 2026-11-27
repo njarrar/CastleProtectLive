@@ -467,7 +467,7 @@ Each Rival states one habit on its card, in plain words [rulings B17]. A habit i
 | 1-5 | *Sergeant Posy Rake* (Bully) | "Goes for your hurt Hob." | Spread the shooting; keep a hurt Hob resting |
 | 1-6 | *Warden Snedd*, keeper of the Stamp Tower | "Aims at roofs." | Put the 3 Cobble blocks over a Nook or over the Kettle Room |
 | 1-7 | Corporal Fernsby (acting), promoted for caging Hetty (Sniper) | Rescue; no habit line | |
-| 1-8 | Sergeant Rake again | "Grabs the biggest shell in the Rummage." | Take it first, or leave it and plan for it |
+| 1-8 | Sergeant Rake again | "Grabs the biggest shell in the Rummage. Fires it fast." | Take it first, or leave it and plan for it |
 | 1-9 | Lance Corporal Dibber again | "Slow to find his range. Starts over when you move." | Walk when his shots get close |
 | 1-10 | Marshal Trimm | Grand Fort; phases are on the card | |
 

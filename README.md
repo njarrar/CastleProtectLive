@@ -147,7 +147,7 @@ Region 1, Puddingstone Downs:
 | 1-5 | Under the Roof | Sergeant Posy Rake | Goes for your hurt Hob |
 | 1-6 | Roof Trouble | Warden Snedd | Aims at roofs |
 | 1-7 | Hetty in a Jam | Corporal Fernsby | Plays it straight. Proud of his new stripe |
-| 1-8 | Rummage Sale | Sergeant Posy Rake | Grabs the biggest shell in the Rummage |
+| 1-8 | Rummage Sale | Sergeant Posy Rake | Grabs the biggest shell in the Rummage. Fires it fast |
 | 1-9 | Over Loaf Hill | Corporal Dibber | Slow to find his range. Starts over when you move |
 | 1-10 | The Topiary Keep (boss) | Marshal Mowbray Trimm | Hedges regrow while the Sprinkler Root stands |
 

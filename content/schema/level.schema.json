@@ -138,7 +138,8 @@
             "kettle_hunter",
             "roof_wrecker",
             "hob_sniper",
-            "cautious_mender"
+            "cautious_mender",
+            "reckless"
           ]
         },
         "think_ms": {
@@ -351,7 +352,8 @@
             "kettle_hunter",
             "roof_wrecker",
             "hob_sniper",
-            "cautious_mender"
+            "cautious_mender",
+            "reckless"
           ]
         },
         "think_ms": {

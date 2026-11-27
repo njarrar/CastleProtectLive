@@ -136,6 +136,9 @@ enum Habit {
     RoofWrecker,
     HobSniper,
     CautiousMender,
+    /// Loves big shells, spends them fast, cares little for its own fort and
+    /// fires from its top few ideas, not always the best one.
+    Reckless,
 }
 
 /// The habit this side plays with, read from the level's `habit_id`. The
@@ -155,6 +158,7 @@ fn habit_from_id(id: &str) -> Habit {
         "roof_wrecker" => Habit::RoofWrecker,
         "hob_sniper" => Habit::HobSniper,
         "cautious_mender" => Habit::CautiousMender,
+        "reckless" => Habit::Reckless,
         _ => Habit::Balanced,
     }
 }
@@ -171,6 +175,10 @@ struct Weights {
     mend_mult: i64,
     lid_best_cap: i64,
     top_hob_bonus: i64,
+    /// Percent of own Hob harm charged (self care); Reckless shrugs it off.
+    self_hob_pct: i64,
+    /// Percent of the usual shell cost; Reckless spends shells fast.
+    shell_cost_pct: i64,
 }
 
 fn weights_for(t: &Tuning, preset: Preset, habit: Habit) -> Weights {
@@ -185,6 +193,8 @@ fn weights_for(t: &Tuning, preset: Preset, habit: Habit) -> Weights {
         mend_mult: if preset == Preset::Cozy { 4 } else { 6 },
         lid_best_cap: 300,
         top_hob_bonus: 0,
+        self_hob_pct: 100,
+        shell_cost_pct: 100,
     };
     match habit {
         Habit::Balanced => {}
@@ -210,6 +220,15 @@ fn weights_for(t: &Tuning, preset: Preset, habit: Habit) -> Weights {
             w.kettle = 25;
             w.self_block_mult = 4;
         }
+        Habit::Reckless => {
+            w.drop = 160;
+            w.block = 2;
+            w.focus_pct = w.focus_pct * 40 / 100;
+            w.self_block_mult = 1;
+            w.mend_mult = 2;
+            w.self_hob_pct = 40;
+            w.shell_cost_pct = 70;
+        }
     }
     w
 }
@@ -228,18 +247,45 @@ fn grade_pct(g: i32) -> i32 {
 /// How fast a Rival corrects from its last Pin, percent of the preset's
 /// correction. A grade 1 or 2 Rival (Region 1) finds its range slowly, so
 /// "Aim 1 of 5" plays as a weak shooter, not only a wide first shot.
-fn grade_correct_pct(g: i32) -> i32 {
-    match g {
+fn grade_correct_pct(g: i32, preset: Preset) -> i32 {
+    let slow = match g {
         1 => 45,
         2 => 70,
         _ => 100,
+    };
+    // A Stubborn Rival may start as wide as the card says, but it finds its
+    // range one grade faster.
+    if preset == Preset::Stubborn {
+        match g {
+            1 => 70,
+            _ => 100,
+        }
+    } else {
+        slow
     }
+}
+
+/// A new aim point this close (world units, 3 blocks) to one the Rival has
+/// already ranged in on keeps what it learned there: it knows the spot.
+const NEAR_TARGET: i32 = 3 * crate::castle::BLOCK;
+
+/// What the Rival learned about one aim point: where it was and how far off
+/// its last shot there was.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AimOffset {
+    pub target: i32,
+    pub x: i32,
+    pub y: i32,
+    /// angle offset, tenths of a degree
+    pub angle: i32,
+    /// power offset, tenths of a power point
+    pub power: i32,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct AiMemory {
-    /// (target key, angle offset tenths, power offset tenths)
-    pub offsets: Vec<(i32, i32, i32)>,
+    /// One entry per aim point the Rival has fired at.
+    pub offsets: Vec<AimOffset>,
     pub own_walked: bool,
     pub target_walked: i32,
     pub last_wind: Option<i32>,
@@ -263,6 +309,8 @@ struct Cand {
     shot: String,
     shot_ix: usize,
     target: i32,
+    tx: i32,
+    ty: i32,
     angle: i32,
     power: i32,
     miss: i32,
@@ -363,7 +411,7 @@ fn score_result(before: &Battle, after: &Battle, side: u8, t: &Tuning, w: &Weigh
                 sc += lost * 2;
             }
         } else if t.self_care {
-            sc -= lost * 20;
+            sc -= lost * 20 * w.self_hob_pct / 100;
         }
     }
     // Avoid harming Rescue captives so the Rival does not throw the battle.
@@ -406,7 +454,7 @@ fn score_result(before: &Battle, after: &Battle, side: u8, t: &Tuning, w: &Weigh
     sc
 }
 
-fn shell_cost(b: &Battle, c: &Cand) -> i64 {
+fn shell_cost(b: &Battle, c: &Cand, w: &Weights) -> i64 {
     let def = &b.content.shots[c.shot_ix];
     let late = b.round >= b.rules.round_cap - 2 || b.squall_round() > 0;
     let mut cost: i64 = match def.kind {
@@ -423,7 +471,7 @@ fn shell_cost(b: &Battle, c: &Cand) -> i64 {
     } else {
         def.weight.rest()
     };
-    cost + rest as i64 * REST_COST
+    (cost + rest as i64 * REST_COST) * w.shell_cost_pct / 100
 }
 
 // Pacing numbers (bot tuned, see examples/pacing.rs): what the AI charges
@@ -682,8 +730,8 @@ pub fn draft_choice(b: &mut Battle, side: u8) -> Option<String> {
         Preset::Fair => 30,
         Preset::Stubborn => 60,
     };
-    let big_blast =
-        habit_for(b, side) == Habit::KettleHunter && b.control[side as usize] != Control::Human;
+    let big_blast = matches!(habit_for(b, side), Habit::KettleHunter | Habit::Reckless)
+        && b.control[side as usize] != Control::Human;
     // the Rival takes its wish at its first chance
     if let Some(w) = &b.draft.wish {
         if b.control[side as usize] != Control::Human
@@ -865,6 +913,8 @@ fn plan_turn_with(
                     shot: sh.clone(),
                     shot_ix: ix,
                     target: -1,
+                    tx: 0,
+                    ty: 0,
                     angle: hob.angle,
                     power: hob.power,
                     miss: 0,
@@ -962,6 +1012,8 @@ fn plan_turn_with(
                         shot: sh.clone(),
                         shot_ix: *ix,
                         target: r.key,
+                        tx: r.tx,
+                        ty: r.ty,
                         angle: r.angle,
                         power: r.power,
                         miss: r.miss,
@@ -974,7 +1026,7 @@ fn plan_turn_with(
     }
     // most likely first: small miss, cheap shells; then the best of each Hob
     // goes to the front so every Hob gets at least one real sim
-    cands.sort_by_key(|c| (c.miss / 16, shell_cost(&k, c), c.hob, c.target));
+    cands.sort_by_key(|c| (c.miss / 16, shell_cost(&k, c, &weights), c.hob, c.target));
     let mut order: Vec<Cand> = vec![];
     for &h in &hobs {
         if let Some(p) = cands.iter().position(|c| c.hob == h) {
@@ -1012,7 +1064,8 @@ fn plan_turn_with(
                 continue;
             }
         }
-        let mut sc = score_result(sim_world, &after, side, &t, &weights) - shell_cost(&k, &c);
+        let mut sc =
+            score_result(sim_world, &after, side, &t, &weights) - shell_cost(&k, &c, &weights);
         let mut n = 1;
         for j in 0..t.jitter {
             if units > budget {
@@ -1031,7 +1084,8 @@ fn plan_turn_with(
             if let Some(w2) =
                 sim_candidate(sim_world, side, &c, c.angle + da, c.power + dp, &mut units)
             {
-                sc += score_result(sim_world, &w2, side, &t, &weights) - shell_cost(&k, &c);
+                sc +=
+                    score_result(sim_world, &w2, side, &t, &weights) - shell_cost(&k, &c, &weights);
                 n += 1;
             }
         }
@@ -1085,11 +1139,11 @@ fn plan_turn_with(
         }
     }
 
-    let Some(choice) = pick(&scored, &t, b, s) else {
+    let Some(choice) = pick(&scored, &t, habit, b, s) else {
         out.push(json!({"cmd": "pass"}));
         return out;
     };
-    let (angle, power) = apply_error(b, side, &choice, &t);
+    let (angle, power) = apply_error(b, side, &choice, &t, preset, habit);
     let mut fire = json!({"cmd": "fire"});
     if let Some(d) = &choice.dial {
         fire["dial"] = json!(d);
@@ -1104,7 +1158,7 @@ fn plan_turn_with(
     out
 }
 
-fn pick(scored: &[Cand], t: &Tuning, b: &mut Battle, s: usize) -> Option<Cand> {
+fn pick(scored: &[Cand], t: &Tuning, habit: Habit, b: &mut Battle, s: usize) -> Option<Cand> {
     if scored.is_empty() {
         return None;
     }
@@ -1112,28 +1166,55 @@ fn pick(scored: &[Cand], t: &Tuning, b: &mut Battle, s: usize) -> Option<Cand> {
     if t.lethal_override && scored[0].score >= 5_000 {
         return Some(scored[0].clone());
     }
-    let n = scored.len().min(t.pick_from).max(1);
+    let from = if habit == Habit::Reckless {
+        t.pick_from.max(3)
+    } else {
+        t.pick_from
+    };
+    let n = scored.len().min(from).max(1);
     let i = b.rng.ai[s].range(0, n as i32 - 1) as usize;
     Some(scored[i].clone())
 }
 
-fn apply_error(b: &mut Battle, side: u8, c: &Cand, t: &Tuning) -> (i32, i32) {
+fn apply_error(
+    b: &mut Battle,
+    side: u8,
+    c: &Cand,
+    t: &Tuning,
+    preset: Preset,
+    habit: Habit,
+) -> (i32, i32) {
     let s = side as usize;
     let def = &b.content.shots[c.shot_ix];
     if def.flight.kind == FlightKind::SelfTarget {
         return (c.angle, c.power);
     }
     let b_grade = b.aim_grade[s];
-    let g = grade_pct(b_grade);
+    // a Reckless Rival fires before it looks: a quarter wider
+    let g = grade_pct(b_grade) * if habit == Habit::Reckless { 125 } else { 100 } / 100;
     let sa = (t.angle_sigma * g / 100) as i64;
     let sp = (t.power_sigma * g / 100) as i64;
     let fa = (t.angle_floor * g / 100) as i64;
     let fp = (t.power_floor * g / 100) as i64;
     let wind = b.wind;
     let mem = b.ai_mem[s].clone();
+    // what it learned here: this aim point, else the nearest one within
+    // three blocks (it knows that spot, not only the range)
+    let known = mem
+        .offsets
+        .iter()
+        .find(|o| o.target == c.target)
+        .or_else(|| {
+            mem.offsets
+                .iter()
+                .map(|o| ((o.x - c.tx).abs().max((o.y - c.ty).abs()), o))
+                .filter(|(d, _)| *d <= NEAR_TARGET)
+                .min_by_key(|(d, o)| (*d, o.target))
+                .map(|(_, o)| o)
+        });
     let rng = &mut b.rng.ai[s];
     let nrm = |rng: &mut crate::rng::Sfc32, sigma: i64| -> i64 { rng.normal_q16() * sigma / 65536 };
-    let (mut ba, mut bp) = match mem.offsets.iter().find(|o| o.0 == c.target) {
+    let (mut ba, mut bp) = match known {
         None => {
             let k = if mem.offsets.is_empty() {
                 100
@@ -1142,11 +1223,12 @@ fn apply_error(b: &mut Battle, side: u8, c: &Cand, t: &Tuning) -> (i32, i32) {
             } as i64;
             (nrm(rng, sa * k / 100), nrm(rng, sp * k / 100))
         }
-        Some(&(_, oa, op)) => {
-            let cpct = (rng.range(t.c_low, t.c_high) * grade_correct_pct(b_grade) / 100) as i64;
+        Some(o) => {
+            let cpct =
+                (rng.range(t.c_low, t.c_high) * grade_correct_pct(b_grade, preset) / 100) as i64;
             (
-                oa as i64 * (100 - cpct) / 100 + nrm(rng, fa),
-                op as i64 * (100 - cpct) / 100 + nrm(rng, fp),
+                o.angle as i64 * (100 - cpct) / 100 + nrm(rng, fa),
+                o.power as i64 * (100 - cpct) / 100 + nrm(rng, fp),
             )
         }
     };
@@ -1166,26 +1248,38 @@ fn apply_error(b: &mut Battle, side: u8, c: &Cand, t: &Tuning) -> (i32, i32) {
     }
     ba = ba.clamp(-sa * 5 / 2, sa * 5 / 2);
     bp = bp.clamp(-sp * 5 / 2, sp * 5 / 2);
-    let mem = &mut b.ai_mem[s];
-    mem.offsets.retain(|o| o.0 != c.target);
-    mem.offsets.push((c.target, ba as i32, bp as i32));
-    mem.own_walked = false;
-    mem.target_walked = 0;
-    mem.last_wind = Some(wind);
-    let mut angle = (c.angle + ba as i32).clamp(0, 1800);
-    let mut power = (c.power + (bp / 10) as i32).clamp(1, 100);
-    // no self harm by error: redraw once if the errored shot lands on our own fort
-    if t.self_care {
+    // no self harm by error: redraw once (halve the error) if the errored
+    // shot lands on our own fort. A Reckless Rival fires anyway.
+    if t.self_care && habit != Habit::Reckless {
+        let angle = (c.angle + ba as i32).clamp(0, 1800);
+        let power = (c.power + (bp / 10) as i32).clamp(1, 100);
         let a = b.aim_probe(side, c.hob, c.shot_ix, angle, power);
         let mut u = 0;
         let (_, end, _) = b.probe_path(a, 700, false, &mut u);
         let cs = &b.castles[s];
         if end.0 >= cs.x - 16 && end.0 <= cs.x + cs.width_cells() + 16 {
-            angle = (c.angle + (ba / 2) as i32).clamp(0, 1800);
-            power = (c.power + (bp / 20) as i32).clamp(1, 100);
+            ba /= 2;
+            bp /= 2;
         }
     }
-    (angle, power)
+    // remember the error it really fired with, so the next shot corrects
+    // from the true miss
+    let mem = &mut b.ai_mem[s];
+    mem.offsets.retain(|o| o.target != c.target);
+    mem.offsets.push(AimOffset {
+        target: c.target,
+        x: c.tx,
+        y: c.ty,
+        angle: ba as i32,
+        power: bp as i32,
+    });
+    mem.own_walked = false;
+    mem.target_walked = 0;
+    mem.last_wind = Some(wind);
+    (
+        (c.angle + ba as i32).clamp(0, 1800),
+        (c.power + (bp / 10) as i32).clamp(1, 100),
+    )
 }
 
 fn doodad_choice(k: &Battle, side: u8, best: i64, w: &Weights) -> Option<Value> {
@@ -1245,4 +1339,85 @@ fn doodad_choice(k: &Battle, side: u8, best: i64, w: &Weights) -> Option<Value> 
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn battle() -> Battle {
+        let content = Arc::new(crate::embedded::content());
+        Battle::new(
+            content,
+            r#"{"level":"d1","first_turn":1,"rummage":{"pool":0,"picks":0}}"#,
+            8,
+        )
+        .unwrap()
+    }
+
+    fn cand(b: &Battle, target: i32, tx: i32, ty: i32) -> Cand {
+        let hob = b.hobs.iter().find(|h| h.side == 1 && h.alive()).unwrap().id;
+        Cand {
+            hob,
+            shot: "plain".into(),
+            shot_ix: b.shot_index(&b.shot_for(hob, "plain").unwrap()).unwrap(),
+            target,
+            tx,
+            ty,
+            angle: 1350,
+            power: 60,
+            miss: 0,
+            score: 0,
+            dial: None,
+        }
+    }
+
+    fn learned(target: i32, x: i32, y: i32) -> AimOffset {
+        AimOffset {
+            target,
+            x,
+            y,
+            angle: 120,
+            power: 300,
+        }
+    }
+
+    fn fire_at(mut b: Battle, old: AimOffset) -> AimOffset {
+        b.ai_mem[1].offsets = vec![old];
+        let c = cand(&b, 7, 400, 300);
+        let t = tuning(Preset::Fair);
+        apply_error(&mut b, 1, &c, &t, Preset::Fair, Habit::Balanced);
+        *b.ai_mem[1].offsets.iter().find(|o| o.target == 7).unwrap()
+    }
+
+    #[test]
+    fn a_near_aim_point_keeps_what_was_learned() {
+        let b = battle();
+        let same = fire_at(b.clone(), learned(7, 400, 300));
+        let near = fire_at(b.clone(), learned(5, 400 + NEAR_TARGET, 300));
+        let far = fire_at(b, learned(5, 400 + NEAR_TARGET + 1, 300));
+        assert_eq!(same.angle, near.angle);
+        assert_eq!(same.power, near.power);
+        assert_ne!((same.angle, same.power), (far.angle, far.power));
+    }
+
+    #[test]
+    fn stubborn_finds_its_range_one_grade_faster() {
+        assert_eq!(grade_correct_pct(1, Preset::Cozy), 45);
+        assert_eq!(grade_correct_pct(1, Preset::Fair), 45);
+        assert_eq!(grade_correct_pct(1, Preset::Stubborn), 70);
+        assert_eq!(grade_correct_pct(2, Preset::Stubborn), 100);
+    }
+
+    #[test]
+    fn reckless_spends_shells_and_shrugs_off_self_harm() {
+        assert_eq!(habit_from_id("reckless"), Habit::Reckless);
+        let t = tuning(Preset::Fair);
+        let calm = weights_for(&t, Preset::Fair, Habit::Balanced);
+        let wild = weights_for(&t, Preset::Fair, Habit::Reckless);
+        assert!(wild.shell_cost_pct < calm.shell_cost_pct);
+        assert!(wild.self_hob_pct < calm.self_hob_pct);
+        assert!(wild.drop > calm.drop);
+    }
 }
