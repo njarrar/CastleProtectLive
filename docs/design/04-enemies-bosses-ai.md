@@ -597,6 +597,8 @@ clamp |b| <= 2.5 * sigma0
 
 **Rival aim grade.** Each Rival card shows "Aim N of 5" [00 §3]. Grade 3 uses the preset's table values. Grades scale `sigma0` and `sigmaFloor`: grade 1 x1.4, grade 2 x1.2, grade 4 x0.85, grade 5 x0.7. The card's number is honest.
 
+**Learning speed.** Grade 1 and 2 Rivals find their range slowly (they fix 45% and 70% of the usual share each shot). On Stubborn the same Rival learns one grade faster (70% and 100%): it starts as wide as its card says, then closes in quicker. A new aim point within 3 blocks of one it already fired at keeps what it learned there. When the no-self-harm redraw halves an error, the halved error is what it remembers.
+
 ### 6.5 The fair miss policy
 
 1. **No miracle first shots.** On a new target, the chance of a direct hit on a Nook is capped by preset (table 6.13). Bots check it (section 7).
@@ -639,6 +641,7 @@ A personality is a set of score weights plus a few habits. Each Rival blends a m
 - **Sapper.** Digs under the player's castle, drops ground for Thumps, cuts cliffs, buries Loopholes. Weak on Rock maps and against high Footing forts.
 - **Tidy** (Flattener special). Shoots the tallest column of the player's castle ("height tax": +20% on blocks in the top row). Flattens the hill between forts when it has a terrain shot. Repairs crooked damage on its own fort.
 - **Kettle Hunter.** Opens a lane to the kettle and keeps pushing it. Ignores crew unless a Hob threatens a win.
+- **Reckless** (`habit_id: reckless`, a Gambler in play). Takes the biggest blast in the Rummage, spends Trick Shells fast, fires from its top three ideas instead of the best one, aims a quarter wider, and skips the no-self-harm redraw. Big swings both ways. Sergeant Posy Rake plays it on 1-8.
 
 ### 6.7 Weapon choice smarts
 

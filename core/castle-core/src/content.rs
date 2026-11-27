@@ -1382,6 +1382,7 @@ pub const HABIT_IDS: &[&str] = &[
     "roof_wrecker",
     "hob_sniper",
     "cautious_mender",
+    "reckless",
 ];
 
 /// Rival think time bounds, in milliseconds (presentation only).

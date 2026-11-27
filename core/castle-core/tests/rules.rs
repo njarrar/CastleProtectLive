@@ -592,7 +592,7 @@ fn ai_error_narrows_shot_by_shot() {
             let o = b.ai_mem[1]
                 .offsets
                 .last()
-                .map(|o| (o.1.abs() + o.2.abs() / 2) as i64)
+                .map(|o| (o.angle.abs() + o.power.abs() / 2) as i64)
                 .unwrap_or(0);
             sizes.push(o);
         }

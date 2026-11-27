@@ -87,8 +87,8 @@
   },
   "rival": {
     "name": "Sergeant Posy Rake",
-    "habit": "Grabs the biggest shell in the Rummage.",
-    "habit_id": "kettle_hunter",
+    "habit": "Grabs the biggest shell in the Rummage. Fires it fast.",
+    "habit_id": "reckless",
     "think_ms": 900,
     "blueprint": "bp_r1_orchard",
     "crew": [

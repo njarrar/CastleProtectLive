@@ -3989,9 +3989,11 @@ impl Battle {
         for m in &self.ai_mem {
             hs.i32(m.offsets.len() as i32);
             for o in &m.offsets {
-                hs.i32(o.0);
-                hs.i32(o.1);
-                hs.i32(o.2);
+                hs.i32(o.target);
+                hs.i32(o.x);
+                hs.i32(o.y);
+                hs.i32(o.angle);
+                hs.i32(o.power);
             }
             hs.i32(m.own_walked as i32);
             hs.i32(m.walks);

@@ -234,7 +234,7 @@ fn rival_habits_come_from_ids() {
         ("1-5", "hob_sniper"),
         ("1-6", "roof_wrecker"),
         ("1-7", "balanced"),
-        ("1-8", "kettle_hunter"),
+        ("1-8", "reckless"),
         ("1-9", "cautious_mender"),
         ("1-10", "roof_wrecker"),
         ("d1", "balanced"),
